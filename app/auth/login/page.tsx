@@ -21,74 +21,48 @@ export default function LoginPage() {
     setLoading(true);
 
     const inputEmail = email.trim();
-    const targetPath = role === "admin" ? "/admin" : role === "institution" ? "/institusi" : "/umkm";
 
     try {
-      // 1. Authenticate with Supabase Auth
-      const { data: signInData, error: authError } = await supabase.auth.signInWithPassword({
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: inputEmail,
         password,
       });
 
-      if (!authError && signInData?.user) {
-        let userRole = signInData.user.user_metadata?.role || role;
+      if (authError) {
+        let msg = "Email atau kata sandi salah. Silakan periksa kembali.";
+        const rawMsg = authError.message || "";
+        if (rawMsg && rawMsg !== "{}" && rawMsg !== "Invalid login credentials") {
+          if (rawMsg.includes("Email not confirmed")) {
+            msg = "Email belum dikonfirmasi. Silakan periksa kotak masuk email Anda.";
+          } else {
+            msg = rawMsg;
+          }
+        }
+        setError(msg);
+        setLoading(false);
+        return;
+      }
+
+      if (data?.user) {
+        let userRole = data.user.user_metadata?.role || role;
         try {
           const { data: profile } = await supabase
             .from("profiles")
             .select("role")
-            .eq("id", signInData.user.id)
+            .eq("id", data.user.id)
             .maybeSingle();
 
           if (profile?.role) {
             userRole = profile.role;
           }
         } catch (err) {
-          console.warn("Profiles optional lookup:", err);
+          console.warn("Profiles optional lookup skipped:", err);
         }
 
         const dest = userRole === "admin" ? "/admin" : userRole === "institution" ? "/institusi" : "/umkm";
         router.push(dest);
         return;
       }
-
-      // 2. If account does not exist in Supabase Auth yet, create account in Supabase
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: inputEmail,
-        password: password,
-        options: {
-          data: {
-            nama_usaha: role === "admin" ? "Administrator Utama" : role === "institution" ? "Institusi Mitra" : "Warung Usaha UMKM",
-            sektor_usaha: role === "admin" ? "Internal Admin" : role === "institution" ? "Finansial" : "Kuliner",
-            lokasi: "Indonesia",
-            role: role,
-          },
-        },
-      });
-
-      if (!signUpError && signUpData?.user) {
-        try {
-          await supabase.from("profiles").insert({
-            id: signUpData.user.id,
-            email: inputEmail,
-            role: role,
-            nama_usaha: role === "admin" ? "Administrator Utama" : role === "institution" ? "Institusi Mitra" : "Warung Usaha UMKM",
-          });
-        } catch (e) {
-          console.warn("Profiles insert optional:", e);
-        }
-
-        router.push(targetPath);
-        return;
-      }
-
-      // 3. Display clean error
-      let msg = "Email atau kata sandi tidak valid. Silakan periksa kembali.";
-      const rawMsg = authError?.message || signUpError?.message || "";
-      if (rawMsg && rawMsg !== "{}" && rawMsg !== "Invalid login credentials") {
-        msg = rawMsg;
-      }
-      setError(msg);
-      setLoading(false);
     } catch (err: any) {
       console.error("Login catch error:", err);
       setError("Terjadi kesalahan koneksi saat masuk.");
