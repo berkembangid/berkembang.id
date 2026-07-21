@@ -3,11 +3,22 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRef, useState } from "react";
-import { Home, Mic, Target, User, LogOut, Sparkles, Bell } from "lucide-react";
+import { Home, Mic, Target, User, LogOut, Sparkles, Bell, BarChart3 } from "lucide-react";
 
-const TABS = [
+const SIDEBAR_TABS = [
   { label: "Beranda", href: "/umkm", Icon: Home },
-  { label: "Catat", href: "/umkm/catat", Icon: Mic },
+  { label: "Pencatatan AI", href: "/umkm/catat", Icon: Mic },
+  { label: "Laporan Keuangan", href: "/umkm/laporan", Icon: BarChart3 },
+  { label: "Journey Naik Kelas", href: "/umkm/journey", Icon: Target },
+  { label: "Profil Usaha", href: "/umkm/profil", Icon: User },
+];
+
+const MOBILE_TABS_LEFT = [
+  { label: "Beranda", href: "/umkm", Icon: Home },
+  { label: "Laporan", href: "/umkm/laporan", Icon: BarChart3 },
+];
+
+const MOBILE_TABS_RIGHT = [
   { label: "Journey", href: "/umkm/journey", Icon: Target },
   { label: "Profil", href: "/umkm/profil", Icon: User },
 ];
@@ -62,7 +73,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
 
         {/* Navigation Items */}
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {TABS.map((item) => {
+          {SIDEBAR_TABS.map((item) => {
             const isActive =
               item.href === "/umkm" ? pathname === "/umkm" : pathname.startsWith(item.href);
             return (
@@ -99,7 +110,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       {/* MOBILE BOTTOM NAVIGATION: visible only on mobile/tablet (< md) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#c5c5d7] z-40">
         <div className="max-w-[480px] mx-auto flex items-end justify-around px-2 h-16 relative">
-          {TABS.slice(0, 2).map((tab) => {
+          {MOBILE_TABS_LEFT.map((tab) => {
             const isActive =
               tab.href === "/umkm" ? pathname === "/umkm" : pathname.startsWith(tab.href);
             return (
@@ -125,7 +136,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
             <div className="w-[72px]" />
           </div>
 
-          {TABS.slice(2).map((tab) => {
+          {MOBILE_TABS_RIGHT.map((tab) => {
             const isActive = pathname.startsWith(tab.href);
             return (
               <Link
