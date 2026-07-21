@@ -263,7 +263,7 @@ export default function ProfilPage() {
               <div className="p-3.5 rounded-xl bg-[#f3f2ff] border border-[#e5e7ff] flex items-center justify-between">
                 <div>
                   <p className="font-semibold text-sm text-[#141a34]">Bank Mandiri Wirausaha</p>
-                  <p className="text-xs text-[#444655]">Status: Terhubung ke Supabase</p>
+                  <p className="text-xs text-[#444655]">Status: Terhubung</p>
                 </div>
                 <span className="text-xs font-bold text-green-700 bg-green-100 px-2.5 py-1 rounded-full">✓ Aktif</span>
               </div>

@@ -107,7 +107,7 @@ export default function BerandaPage() {
           setRecentActivities(formattedActs);
         } else {
           setRecentActivities([
-            { Icon: CheckCircle2, color: "#15803d", bg: "#dcfce7", title: "Akun Supabase terhubung & aktif", time: "Baru saja" },
+            { Icon: CheckCircle2, color: "#15803d", bg: "#dcfce7", title: "Akun terhubung & aktif", time: "Baru saja" },
             { Icon: Trophy, color: "#854d0e", bg: "#fef3c7", title: "Siap untuk mencatat transaksi pertama", time: "Hari ini" },
           ]);
         }
