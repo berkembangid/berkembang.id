@@ -324,8 +324,16 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
 
         {/* Laporan & Riwayat Sub-branch Popover Tab on Mobile */}
         <div className="flex-1 relative flex flex-col items-center justify-center py-1">
+          {/* Backdrop to close sub-menu when clicking outside */}
+          {showMobileLaporanBranch && (
+            <div 
+              className="fixed inset-0 z-40 bg-transparent" 
+              onClick={() => setShowMobileLaporanBranch(false)} 
+            />
+          )}
+
           {/* Branch Sub-menu Popup above Laporan Tab */}
-          {(showMobileLaporanBranch || isLaporanRouteActive) && (
+          {showMobileLaporanBranch && (
             <div className="absolute bottom-14 left-1/2 -translate-x-1/2 bg-white border border-[#001b85]/20 shadow-xl rounded-2xl p-2 w-44 space-y-1 animate-fade-in-up z-50">
               <p className="text-[9px] font-bold text-[#001b85] px-2 py-0.5 uppercase tracking-wider font-mono">Kelompok Laporan</p>
               <Link 
@@ -352,13 +360,12 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
           <button 
             type="button"
             onClick={() => {
-              if (pathname === "/umkm/laporan") {
-                setShowMobileLaporanBranch(!showMobileLaporanBranch);
-              } else {
+              if (pathname !== "/umkm/laporan" && pathname !== "/umkm/riwayat") {
                 router.push("/umkm/laporan");
               }
+              setShowMobileLaporanBranch(!showMobileLaporanBranch);
             }}
-            className="flex flex-col items-center justify-center w-full"
+            className="flex flex-col items-center justify-center w-full z-45"
           >
             <BarChart3 size={20} className={isLaporanRouteActive ? "text-[#001b85]" : "text-[#757686]"} />
             <span className={`text-[10px] font-bold mt-1 ${isLaporanRouteActive ? "text-[#001b85]" : "text-[#757686]"}`}>
