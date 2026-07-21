@@ -123,7 +123,7 @@ export default function CatatPage() {
     }
 
     setSaving(false);
-    setToastMessage("✓ Catatan berhasil disimpan ke Supabase!");
+    setToastMessage("✓ Catatan berhasil disimpan!");
     setStep("idle");
     setItems(MOCK_EXTRACTED);
     setTranscription("");
@@ -354,7 +354,7 @@ export default function CatatPage() {
                   disabled={saving || items.length === 0}
                   className="flex-1 bg-[#001b85] text-white font-bold py-3 rounded-xl text-xs hover:bg-[#0e32c2] transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
-                  {saving ? "Menyimpan ke Supabase..." : "Simpan Catatan ke Supabase 🚀"}
+                  {saving ? "Menyimpan catatan..." : "Simpan Catatan 🚀"}
                 </button>
               </div>
             </div>

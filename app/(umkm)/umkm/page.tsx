@@ -225,7 +225,7 @@ export default function BerandaPage() {
                   <div className="flex items-end gap-1">
                     <span className="text-2xl font-bold text-[#006a6a]">Live</span>
                   </div>
-                  <p className="text-[10px] text-[#444655] mt-1">Terkoneksi Supabase</p>
+                  <p className="text-[10px] text-[#444655] mt-1">Terkoneksi Sistem</p>
                 </div>
 
                 <Link href="/umkm/profil" className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-all">
@@ -326,7 +326,7 @@ export default function BerandaPage() {
             {/* G. Aktivitas Terbaru */}
             <section className="animate-fade-in-up">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-bold text-[#141a34]">Aktivitas Terbaru Supabase</h2>
+                <h2 className="text-sm font-bold text-[#141a34]">Aktivitas Terbaru</h2>
                 <Link href="/umkm/riwayat">
                   <span className="text-xs font-bold text-[#001b85]">Lihat Semua →</span>
                 </Link>

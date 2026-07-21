@@ -41,8 +41,8 @@ export default function JourneyPage() {
 
   // Dynamic Level Missions based on live Supabase user data
   const level1Missions = [
-    { label: "Catat minimal 1 transaksi di Supabase", done: txCount > 0 },
-    { label: "Lengkapi Nama Usaha di Supabase", done: Boolean(businessName) },
+    { label: "Catat minimal 1 transaksi pertama", done: txCount > 0 },
+    { label: "Lengkapi Nama Usaha di profil", done: Boolean(businessName) },
     { label: "Lengkapi Lokasi & Kota Usaha", done: hasLokasi },
   ];
 
@@ -51,7 +51,7 @@ export default function JourneyPage() {
   const isLevel1Complete = level1Progress === 100;
 
   const level2Missions = [
-    { label: "Catat minimal 5 transaksi di Supabase", done: txCount >= 5 },
+    { label: "Catat minimal 5 transaksi", done: txCount >= 5 },
     { label: "Sektor usaha terisi di profil", done: hasSektor },
     { label: "Readiness Score ≥ 50", done: true },
   ];
@@ -72,7 +72,7 @@ export default function JourneyPage() {
     {
       id: 2,
       title: "Level 2: Urus NIB & Kesiapan Legalitas",
-      subtitle: "Legalitas resmi usaha & integrasi Supabase",
+      subtitle: "Legalitas resmi usaha & integrasi profil",
       state: (!isLevel1Complete ? "locked" : level2Progress === 100 ? "completed" : "active") as LevelState,
       progress: isLevel1Complete ? level2Progress : 0,
       missions: level2Missions,

@@ -98,7 +98,7 @@ export default function ProfilPage() {
 
           setReadinessScore(totalScore);
           setBreakdown([
-            { label: "Konsistensi", score: konsistensi, desc: `${count} transaksi tercatat di Supabase`, color: "#15803d" },
+            { label: "Konsistensi", score: konsistensi, desc: `${count} transaksi tercatat`, color: "#15803d" },
             { label: "Kas & Omzet", score: kas, desc: `Total Pemasukan Rp${masuk.toLocaleString("id-ID")}`, color: "#1e40af" },
             { label: "Legalitas", score: legalitas, desc: legalitas === 100 ? "NIB telah terverifikasi" : "Belum melengkapi NIB", color: "#dc2626" },
             { label: "Stabilitas", score: stabilitas, desc: count >= 5 ? "Frekuensi catatan baik" : "Mulai tingkatkan catatan harian", color: "#7c3aed" },
@@ -153,7 +153,7 @@ export default function ProfilPage() {
         <div className="hidden md:flex justify-between items-center mb-2">
           <div>
             <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#141a34]">Profil Usaha</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Informasi akun dan tingkat kesiapan usaha terintegrasi Supabase</p>
+            <p className="text-xs text-slate-500 mt-0.5">Informasi akun dan tingkat kesiapan usaha terintegrasi sistem</p>
           </div>
           <button onClick={handleSignOut} className="text-xs font-bold text-red-600 border border-red-200 bg-red-50 px-4 py-2 rounded-xl hover:bg-red-100 flex items-center gap-1.5 transition-colors cursor-pointer">
             <LogOut size={14} /> Keluar dari Akun
@@ -177,7 +177,7 @@ export default function ProfilPage() {
             </div>
           </div>
           <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-            <Sparkles size={12} /> Akun Terverifikasi Supabase
+            <Sparkles size={12} /> Akun Terverifikasi
           </span>
         </section>
 
@@ -198,9 +198,9 @@ export default function ProfilPage() {
                 </div>
               </div>
               <h2 className="font-headline text-lg font-bold text-[#141a34] mt-3">Readiness Score Live</h2>
-              <p className="text-sm text-[#444655] text-center px-4">Tingkat kesiapan usaha untuk pembiayaan formal berdasarkan data Supabase</p>
+              <p className="text-sm text-[#444655] text-center px-4">Tingkat kesiapan usaha untuk pembiayaan formal berdasarkan data transaksi</p>
               <span className="mt-3 text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300">
-                📈 Terkalkulasi dari {txCount} transaksi Supabase
+                📈 Terkalkulasi dari {txCount} transaksi tercatat
               </span>
             </section>
 
