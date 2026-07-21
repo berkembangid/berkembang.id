@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Check, Circle, Lock, Star, Trophy, Award, Sparkles, CheckCircle2, ArrowLeft } from "lucide-react";
+import { Check, Circle, Lock, Star, Trophy, Award, Sparkles, CheckCircle2, ArrowLeft, Mic } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type LevelState = "completed" | "active" | "locked";
@@ -10,6 +10,7 @@ type LevelState = "completed" | "active" | "locked";
 export default function JourneyPage() {
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState<any>(null);
+  const [dbProfile, setDbProfile] = useState<any>(null);
   const [txCount, setTxCount] = useState(0);
 
   useEffect(() => {
@@ -19,6 +20,15 @@ export default function JourneyPage() {
         setUserData(user);
 
         if (user) {
+          try {
+            const { data: prof } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", user.id)
+              .maybeSingle();
+            setDbProfile(prof);
+          } catch (e) {}
+
           const { count } = await supabase
             .from("transactions")
             .select("*", { count: "exact", head: true })
@@ -35,29 +45,48 @@ export default function JourneyPage() {
     loadJourneyData();
   }, []);
 
-  const businessName = userData?.user_metadata?.nama_usaha || "Warung Anda";
-  const hasLokasi = Boolean(userData?.user_metadata?.lokasi);
-  const hasSektor = Boolean(userData?.user_metadata?.sektor_usaha);
+  const businessName = dbProfile?.name || dbProfile?.nama_usaha || userData?.user_metadata?.nama_usaha || "";
+  const hasName = Boolean(businessName && businessName !== "Pengusaha UMKM");
+  const hasLokasi = Boolean(dbProfile?.lokasi || userData?.user_metadata?.lokasi);
+  const hasSektor = Boolean(dbProfile?.sektor_usaha || userData?.user_metadata?.sektor_usaha);
+  const hasNib = Boolean(dbProfile?.nib || userData?.user_metadata?.nib);
 
-  // Dynamic Level Missions based on live Supabase user data
+  // Dynamic Level 1 Missions
   const level1Missions = [
-    { label: "Catat minimal 1 transaksi pertama", done: txCount > 0 },
-    { label: "Lengkapi Nama Usaha di profil", done: Boolean(businessName) },
-    { label: "Lengkapi Lokasi & Kota Usaha", done: hasLokasi },
+    { label: "Catat minimal 1 transaksi pertama", done: txCount > 0, action: { label: "Mulai Catat Transaksi Pertama 🎙️", href: "/umkm/catat" } },
+    { label: "Lengkapi Nama Usaha di profil", done: hasName, action: { label: "Isi Nama Usaha di Profil →", href: "/umkm/profil" } },
+    { label: "Lengkapi Lokasi & Kota Usaha", done: hasLokasi, action: { label: "Isi Lokasi Toko di Profil →", href: "/umkm/profil" } },
   ];
 
   const level1DoneCount = level1Missions.filter(m => m.done).length;
   const level1Progress = Math.round((level1DoneCount / level1Missions.length) * 100);
   const isLevel1Complete = level1Progress === 100;
 
+  // Dynamic Level 2 Missions
   const level2Missions = [
-    { label: "Catat minimal 5 transaksi", done: txCount >= 5 },
-    { label: "Sektor usaha terisi di profil", done: hasSektor },
-    { label: "Readiness Score ≥ 50", done: true },
+    { label: "Catat minimal 5 transaksi tercatat", done: txCount >= 5, action: { label: `Catat Transaksi (${5 - Math.min(5, txCount)} Lagi) 🎙️`, href: "/umkm/catat" } },
+    { label: "Sektor usaha terisi di profil", done: hasSektor, action: { label: "Pilih Sektor Usaha di Profil →", href: "/umkm/profil" } },
+    { label: "Isi NIB (Nomor Induk Berusaha)", done: hasNib, action: { label: "Lengkapi NIB di Profil Usaha →", href: "/umkm/profil" } },
   ];
 
   const level2DoneCount = level2Missions.filter(m => m.done).length;
   const level2Progress = Math.round((level2DoneCount / level2Missions.length) * 100);
+  const isLevel2Complete = level2Progress === 100;
+
+  // Determine dynamic CTA button for active level
+  const getActiveLevelAction = (levelId: number) => {
+    if (levelId === 1) {
+      const firstUncompleted = level1Missions.find((m) => !m.done);
+      if (firstUncompleted) return firstUncompleted.action;
+      return { label: "Lanjut ke Level 2: Legalitas & NIB →", href: "/umkm/journey" };
+    }
+    if (levelId === 2) {
+      const firstUncompleted = level2Missions.find((m) => !m.done);
+      if (firstUncompleted) return firstUncompleted.action;
+      return { label: "Lihat Status Kesiapan Pembiayaan →", href: "/umkm/readiness" };
+    }
+    return { label: "Buka Analisis Kesiapan →", href: "/umkm/readiness" };
+  };
 
   const levels = [
     {
@@ -73,7 +102,7 @@ export default function JourneyPage() {
       id: 2,
       title: "Level 2: Urus NIB & Kesiapan Legalitas",
       subtitle: "Legalitas resmi usaha & integrasi profil",
-      state: (!isLevel1Complete ? "locked" : level2Progress === 100 ? "completed" : "active") as LevelState,
+      state: (!isLevel1Complete ? "locked" : isLevel2Complete ? "completed" : "active") as LevelState,
       progress: isLevel1Complete ? level2Progress : 0,
       missions: level2Missions,
       tips: "💡 NIB dapat diurus secara gratis di OSS.go.id!",
@@ -87,7 +116,7 @@ export default function JourneyPage() {
       missions: [
         { label: "Selesaikan Level 2 terlebih dahulu", done: false },
         { label: "Readiness Score ≥ 70", done: false },
-        { label: "Catat transaksi 60 hari", done: false },
+        { label: "Catat transaksi berkala", done: false },
       ],
     },
   ];
@@ -113,7 +142,7 @@ export default function JourneyPage() {
       {/* Progress overview */}
       <div className="p-4">
         <div className="bg-white rounded-2xl p-5 border border-slate-200/60 shadow-sm">
-          <p className="text-[9px] text-slate-400 font-mono-label font-bold uppercase tracking-wider">Total Perjalanan Usaha ({businessName})</p>
+          <p className="text-[9px] text-slate-400 font-mono-label font-bold uppercase tracking-wider">Total Perjalanan Usaha ({businessName || "UMKM Anda"})</p>
           <div className="flex items-center gap-4 mt-2">
             <div className="flex-1">
               <div className="flex justify-between text-xs text-slate-500 mb-1.5 font-medium">
@@ -141,6 +170,7 @@ export default function JourneyPage() {
             const isCompleted = level.state === "completed";
             const isActive = level.state === "active";
             const isLocked = level.state === "locked";
+            const actionBtn = getActiveLevelAction(level.id);
 
             return (
               <div key={level.id} className="relative pl-12">
@@ -210,7 +240,7 @@ export default function JourneyPage() {
                         </div>
                         <p className={`text-xs leading-normal ${
                           mission.done ? "line-through text-slate-400 font-medium" :
-                          isLocked ? "text-slate-400" : "text-slate-700"
+                          isLocked ? "text-slate-400" : "text-slate-700 font-semibold"
                         }`}>
                           {mission.label}
                         </p>
@@ -226,15 +256,15 @@ export default function JourneyPage() {
 
                   {isCompleted && level.completedDate && (
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] text-emerald-600 font-semibold">
-                      <span>Lencana Diserahkan</span>
+                      <span>Lencana Level {level.id} Diserahkan</span>
                       <span>Selesai pada {level.completedDate}</span>
                     </div>
                   )}
 
-                  {isActive && (
-                    <Link href="/umkm/profil">
-                      <button className="mt-4 w-full bg-[#001b85] text-white font-bold py-3 rounded-xl text-xs hover:bg-[#0e32c2] transition-colors shadow-sm">
-                        Lanjutkan Pengisian Profil →
+                  {isActive && actionBtn && (
+                    <Link href={actionBtn.href}>
+                      <button className="mt-4 w-full bg-[#001b85] text-white font-bold py-3 rounded-xl text-xs hover:bg-[#0e32c2] transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5">
+                        {actionBtn.label}
                       </button>
                     </Link>
                   )}
