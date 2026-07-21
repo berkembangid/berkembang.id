@@ -16,45 +16,111 @@ const timeGreeting = () => {
   return "Selamat malam";
 };
 
-const PROFILE_ITEMS = [
-  { label: "Nama usaha", done: true },
-  { label: "Jenis usaha", done: true },
-  { label: "Lokasi", done: true },
-  { label: "Foto usaha", done: false },
-  { label: "7 hari catat", done: false },
-  { label: "NIB terisi", done: false },
-  { label: "Rekening bank", done: false },
-];
-
-const ACTIVITIES = [
-  { Icon: CheckCircle2, color: "#15803d", bg: "#dcfce7", title: "Catatan tersimpan: Ayam geprek 47 porsi", time: "2 jam lalu" },
-  { Icon: Trophy, color: "#854d0e", bg: "#fef3c7", title: "Level naik! Anda sekarang Level 2: Urus NIB", time: "Kemarin" },
-  { Icon: BarChart2, color: "#1e40af", bg: "#dbeafe", title: "Ada institusi yang tertarik melihat profil Anda", time: "3 hari lalu" },
-  { Icon: TrendingUp, color: "#065f46", bg: "#d1fae5", title: "Readiness Score naik dari 45 ke 58", time: "5 hari lalu" },
-];
-
-const WEEKLY_PROFIT = [120000, 90000, 150000, 80000, 200000, 130000, 150000];
-const MAX_PROFIT = Math.max(...WEEKLY_PROFIT);
-
 export default function BerandaPage() {
   const [copied, setCopied] = useState(false);
-  const [businessName, setBusinessName] = useState("Ibu Sari");
+  const [businessName, setBusinessName] = useState("Pengusaha UMKM");
+  const [todayProfit, setTodayProfit] = useState(0);
+  const [todayTxCount, setTodayTxCount] = useState(0);
+  const [weeklyData, setWeeklyData] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [profilePct, setProfilePct] = useState(40);
+  const [profileItems, setProfileItems] = useState([
+    { label: "Nama usaha", done: false },
+    { label: "Jenis usaha", done: false },
+    { label: "Lokasi", done: false },
+    { label: "Kontak HP", done: false },
+    { label: "Catatan transaksi", done: false },
+    { label: "5 hari aktif", done: false },
+    { label: "NIB terisi", done: false },
+  ]);
 
   useEffect(() => {
-    async function loadUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const name = user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Ibu Sari";
+    async function loadDashboardData() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const name = user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Pengusaha UMKM";
         setBusinessName(name);
+
+        const hasName = Boolean(user.user_metadata?.nama_usaha);
+        const hasSektor = Boolean(user.user_metadata?.sektor_usaha);
+        const hasLokasi = Boolean(user.user_metadata?.lokasi);
+        const hasPhone = Boolean(user.user_metadata?.phone);
+
+        // Fetch user transactions from Supabase
+        const { data: txs } = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        const allTxs = txs || [];
+        const todayStr = new Date().toISOString().split("T")[0];
+
+        // Today's stats
+        const todayItems = allTxs.filter((t: any) => t.tanggal === todayStr || t.created_at?.startsWith(todayStr));
+        setTodayTxCount(todayItems.length);
+
+        const todayMasuk = todayItems.filter((t: any) => t.type === "masuk").reduce((acc: number, cur: any) => acc + Number(cur.nominal), 0);
+        const todayKeluar = todayItems.filter((t: any) => t.type === "keluar").reduce((acc: number, cur: any) => acc + Number(cur.nominal), 0);
+        setTodayProfit(todayMasuk - todayKeluar);
+
+        // Weekly profit chart logic
+        const dayProfits = [0, 0, 0, 0, 0, 0, 0];
+        allTxs.forEach((t: any) => {
+          if (t.tanggal) {
+            const d = new Date(t.tanggal);
+            const dayIdx = (d.getDay() + 6) % 7; // Monday = 0
+            const amount = t.type === "masuk" ? Number(t.nominal) : -Number(t.nominal);
+            dayProfits[dayIdx] += amount;
+          }
+        });
+        setWeeklyData(dayProfits.map(v => Math.max(v, 0)));
+
+        // Profile completion calculation
+        const hasTxs = allTxs.length > 0;
+        const has5Txs = allTxs.length >= 5;
+
+        const updatedItems = [
+          { label: "Nama usaha", done: hasName },
+          { label: "Jenis usaha", done: hasSektor },
+          { label: "Lokasi", done: hasLokasi },
+          { label: "Kontak HP", done: hasPhone },
+          { label: "Catatan transaksi", done: hasTxs },
+          { label: "5 hari aktif", done: has5Txs },
+          { label: "NIB terisi", done: false },
+        ];
+        setProfileItems(updatedItems);
+        const doneCount = updatedItems.filter(i => i.done).length;
+        setProfilePct(Math.round((doneCount / updatedItems.length) * 100));
+
+        // Format recent activities from real Supabase data
+        if (allTxs.length > 0) {
+          const formattedActs = allTxs.slice(0, 4).map((t: any) => ({
+            Icon: t.type === "masuk" ? CheckCircle2 : BarChart2,
+            color: t.type === "masuk" ? "#15803d" : "#1e40af",
+            bg: t.type === "masuk" ? "#dcfce7" : "#dbeafe",
+            title: `${t.type === "masuk" ? "Pemasukan" : "Pengeluaran"}: ${t.item} (Rp${Number(t.nominal).toLocaleString("id-ID")})`,
+            time: t.tanggal || "Terbaru",
+          }));
+          setRecentActivities(formattedActs);
+        } else {
+          setRecentActivities([
+            { Icon: CheckCircle2, color: "#15803d", bg: "#dcfce7", title: "Akun Supabase terhubung & aktif", time: "Baru saja" },
+            { Icon: Trophy, color: "#854d0e", bg: "#fef3c7", title: "Siap untuk mencatat transaksi pertama", time: "Hari ini" },
+          ]);
+        }
+      } catch (err) {
+        console.error("Error loading dashboard from Supabase:", err);
       }
     }
-    loadUser();
+    loadDashboardData();
   }, []);
 
-  const doneCount = PROFILE_ITEMS.filter((i) => i.done).length;
-  const pct = Math.round((doneCount / PROFILE_ITEMS.length) * 100);
+  const maxWeekly = Math.max(...weeklyData, 100000);
   const circumference = 2 * Math.PI * 28;
-  const dashOffset = circumference - (pct / 100) * circumference;
+  const dashOffset = circumference - (profilePct / 100) * circumference;
 
   const handleCopy = () => {
     setCopied(true);
@@ -87,7 +153,7 @@ export default function BerandaPage() {
             {timeGreeting()},
           </p>
           <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#001b85] mt-0.5">Halo, {businessName}! 👋</h1>
-          <p className="text-sm text-[#444655] mt-0.5">Sudah 5 hari berturut-turut! 🔥</p>
+          <p className="text-sm text-[#444655] mt-0.5">Semoga usahamu makin maju & berkah hari ini! 🔥</p>
         </section>
 
         {/* Responsive Grid Layout */}
@@ -98,13 +164,13 @@ export default function BerandaPage() {
             {/* D. Kartu Untung Hari Ini */}
             <section className="animate-fade-in-up">
               <div className="bg-profit-gradient rounded-2xl p-5 border border-green-200 shadow-card">
-                <p className="text-[10px] font-bold text-[#166534] uppercase tracking-widest font-mono-label">Untung Hari Ini</p>
+                <p className="text-[10px] font-bold text-[#166534] uppercase tracking-widest font-mono-label">Estimasi Untung Hari Ini</p>
                 <div className="flex items-center justify-between mt-2">
                   <div>
-                    <p className="text-3xl font-bold text-[#166534] font-headline">Rp150.000</p>
+                    <p className="text-3xl font-bold text-[#166534] font-headline">Rp{todayProfit.toLocaleString("id-ID")}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <ArrowUp size={14} className="text-green-600" />
-                      <span className="text-sm text-green-700 font-semibold">+Rp20.000 dari kemarin</span>
+                      <span className="text-sm text-green-700 font-semibold">{todayTxCount} transaksi hari ini</span>
                     </div>
                   </div>
                   <Link href="/umkm/riwayat">
@@ -113,10 +179,12 @@ export default function BerandaPage() {
                     </button>
                   </Link>
                 </div>
+
+                {/* Weekly chart dynamically computed from Supabase */}
                 <div className="mt-6 flex items-end gap-1 h-14">
-                  {WEEKLY_PROFIT.map((val, i) => {
-                    const height = Math.round((val / MAX_PROFIT) * 50);
-                    const isToday = i === 6;
+                  {weeklyData.map((val, i) => {
+                    const height = Math.max(Math.round((val / maxWeekly) * 50), 6);
+                    const isToday = i === (new Date().getDay() + 6) % 7;
                     return (
                       <div key={i} className="flex-1 flex flex-col items-center gap-1">
                         <span className="text-[9px] text-[#166534] font-semibold hidden md:block">Rp{Math.round(val/1000)}k</span>
@@ -126,17 +194,16 @@ export default function BerandaPage() {
                   })}
                 </div>
                 <div className="flex justify-between mt-2">
-                  {["Sen", "Sel", "Rab", "Kam", "Jum", "Sab"].map((d) => (
+                  {["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"].map((d) => (
                     <span key={d} className="text-[10px] text-[#444655]">{d}</span>
                   ))}
-                  <span className="text-[10px] font-bold text-[#166534]">Hari</span>
                 </div>
               </div>
             </section>
 
             {/* C. Stat Cards */}
             <section className="space-y-2 animate-fade-in-up">
-              <h2 className="text-xs font-bold text-[#444655] uppercase tracking-widest font-mono-label px-1">Rangkuman Bisnis</h2>
+              <h2 className="text-xs font-bold text-[#444655] uppercase tracking-widest font-mono-label px-1">Rangkuman Bisnis Live</h2>
               <div className="grid grid-cols-3 gap-4">
                 <Link href="/umkm/riwayat" className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-all">
                   <div className="flex items-center gap-1.5 mb-1">
@@ -144,7 +211,7 @@ export default function BerandaPage() {
                     <p className="text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label">Catatan</p>
                   </div>
                   <div className="flex items-end gap-1">
-                    <span className="text-2xl font-bold text-[#001b85]">3</span>
+                    <span className="text-2xl font-bold text-[#001b85]">{todayTxCount}</span>
                     <span className="text-[10px] text-[#444655] mb-0.5">hari ini</span>
                   </div>
                   <p className="text-[10px] text-[#444655] mt-1">Transaksi tercatat</p>
@@ -153,13 +220,12 @@ export default function BerandaPage() {
                 <div className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Flame size={14} className="text-[#006a6a]" />
-                    <p className="text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label">Streak</p>
+                    <p className="text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label">Aktif</p>
                   </div>
                   <div className="flex items-end gap-1">
-                    <span className="text-2xl font-bold text-[#006a6a]">5</span>
-                    <span className="text-[10px] text-[#444655] mb-0.5">hari 🔥</span>
+                    <span className="text-2xl font-bold text-[#006a6a]">Live</span>
                   </div>
-                  <p className="text-[10px] text-[#444655] mt-1">Berturut-turut mencatat</p>
+                  <p className="text-[10px] text-[#444655] mt-1">Terkoneksi Supabase</p>
                 </div>
 
                 <Link href="/umkm/profil" className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-all">
@@ -168,10 +234,10 @@ export default function BerandaPage() {
                     <p className="text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label">Readiness</p>
                   </div>
                   <div className="flex items-end gap-1">
-                    <span className="text-2xl font-bold text-[#166534]">+12</span>
-                    <ArrowUp size={14} className="text-[#166534] mb-0.5" />
+                    <span className="text-2xl font-bold text-[#166534]">{profilePct}</span>
+                    <span className="text-[10px] text-[#166534] mb-0.5">/100</span>
                   </div>
-                  <p className="text-[10px] text-[#444655] mt-1">Naik dari minggu lalu</p>
+                  <p className="text-[10px] text-[#444655] mt-1">Skor Kesiapan Usaha</p>
                 </Link>
               </div>
             </section>
@@ -184,9 +250,11 @@ export default function BerandaPage() {
                     <Lightbulb size={24} className="text-yellow-700" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-yellow-800 uppercase tracking-widest font-mono-label">Saran dari Asisten</p>
+                    <p className="text-xs font-bold text-yellow-800 uppercase tracking-widest font-mono-label">Saran AI untuk {businessName}</p>
                     <p className="text-sm md:text-base text-yellow-900 mt-1 leading-relaxed">
-                      Pengeluaran bahan naik 30% hari Jumat. Cek stok sebelum weekend ya!
+                      {todayTxCount === 0
+                        ? "Belum ada transaksi hari ini. Gunakan fitur Pencatatan AI Suara untuk mencatat omzetmu hari ini dalam hitungan detik!"
+                        : `Bagus! Kamu sudah mencatat ${todayTxCount} transaksi hari ini. Pertahankan pencatatan agar skor readiness usahamu makin tinggi!`}
                     </p>
                   </div>
                 </div>
@@ -203,7 +271,7 @@ export default function BerandaPage() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <p className="text-[10px] text-white/70 uppercase tracking-widest font-bold font-mono-label">Kelengkapan Profil</p>
-                    <h3 className="text-white font-bold text-base mt-0.5">Profil Anda {pct}% lengkap</h3>
+                    <h3 className="text-white font-bold text-base mt-0.5">Profil Anda {profilePct}% lengkap</h3>
                     <p className="text-white/70 text-xs mt-0.5">Lengkapi data untuk naik kelas lebih cepat!</p>
                   </div>
                   <div className="relative w-16 h-16 flex items-center justify-center flex-shrink-0 ml-3">
@@ -212,19 +280,19 @@ export default function BerandaPage() {
                       <circle cx="32" cy="32" r="28" fill="none" stroke="white" strokeWidth="5"
                         strokeDasharray={circumference} strokeDashoffset={dashOffset} strokeLinecap="round" />
                     </svg>
-                    <span className="absolute text-white text-sm font-bold">{pct}%</span>
+                    <span className="absolute text-white text-sm font-bold">{profilePct}%</span>
                   </div>
                 </div>
 
                 <div className="flex gap-2 flex-wrap mt-1">
-                  {PROFILE_ITEMS.map((item) => (
+                  {profileItems.map((item) => (
                     <div key={item.label} title={item.label} className={`w-7 h-7 rounded-full flex items-center justify-center ${item.done ? "bg-green-400" : "bg-white/20"}`}>
                       {item.done ? <CheckCircle2 size={14} className="text-white" fill="white" color="#166534" /> : <Circle size={14} className="text-white/40" />}
                     </div>
                   ))}
                 </div>
                 <Link href="/umkm/profil">
-                  <button className="mt-4 bg-white text-[#001b85] text-sm font-bold px-4 py-2 rounded-full hover:bg-[#f0f0ff] transition-colors w-full">
+                  <button className="mt-4 bg-white text-[#001b85] text-sm font-bold px-4 py-2 rounded-full hover:bg-[#f0f0ff] transition-colors w-full cursor-pointer">
                     Lengkapi Profil →
                   </button>
                 </Link>
@@ -242,13 +310,13 @@ export default function BerandaPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <input readOnly value="https://berkembang.id/daftar?ref=ibu_sari" className="flex-1 text-xs bg-[#f3f2ff] rounded-lg px-3 py-2 text-[#444655] border border-[#e5e7ff] outline-none" />
-                  <button onClick={handleCopy} className="bg-[#db2777] text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-[#be185d] transition-colors flex-shrink-0 flex items-center gap-1">
+                  <input readOnly value={`https://berkembang.id/daftar?ref=${businessName.toLowerCase().replace(/\s+/g, '_')}`} className="flex-1 text-xs bg-[#f3f2ff] rounded-lg px-3 py-2 text-[#444655] border border-[#e5e7ff] outline-none" />
+                  <button onClick={handleCopy} className="bg-[#db2777] text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-[#be185d] transition-colors flex-shrink-0 flex items-center gap-1 cursor-pointer">
                     <Copy size={12} />
                     {copied ? "Disalin!" : "Salin"}
                   </button>
                 </div>
-                <button className="mt-2 w-full flex items-center justify-center gap-2 bg-green-600 text-white text-sm font-bold py-2.5 rounded-lg hover:bg-green-700 transition-colors">
+                <button className="mt-2 w-full flex items-center justify-center gap-2 bg-green-600 text-white text-sm font-bold py-2.5 rounded-lg hover:bg-green-700 transition-colors cursor-pointer">
                   <Send size={14} />
                   Bagikan ke WhatsApp
                 </button>
@@ -258,13 +326,13 @@ export default function BerandaPage() {
             {/* G. Aktivitas Terbaru */}
             <section className="animate-fade-in-up">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-bold text-[#141a34]">Aktivitas Terbaru</h2>
-                <Link href="/umkm/aktivitas">
+                <h2 className="text-sm font-bold text-[#141a34]">Aktivitas Terbaru Supabase</h2>
+                <Link href="/umkm/riwayat">
                   <span className="text-xs font-bold text-[#001b85]">Lihat Semua →</span>
                 </Link>
               </div>
               <div className="space-y-3">
-                {ACTIVITIES.map((act, i) => (
+                {recentActivities.map((act, i) => (
                   <div key={i} className="flex items-center gap-3 bg-white rounded-xl p-3 shadow-card border border-[#e5e7ff]">
                     <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: act.bg }}>
                       <act.Icon size={18} style={{ color: act.color }} />
