@@ -52,10 +52,42 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const userRole = user?.user_metadata?.role || "umkm";
+  if (!user) {
+    return response;
+  }
+
+  // Determine user role with profile fallback and email fallback
+  let userRole = user.user_metadata?.role;
+
+  if (!userRole && user.email) {
+    if (user.email.startsWith("admin@")) {
+      userRole = "admin";
+    } else if (user.email.startsWith("institusi@")) {
+      userRole = "institution";
+    }
+  }
+
+  if (!userRole) {
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profile?.role) {
+        userRole = profile.role;
+      }
+    } catch (err) {
+      console.warn("Proxy profile lookup skipped:", err);
+    }
+  }
+
+  // Fallback default
+  userRole = userRole || "umkm";
 
   // 2. Authenticated users trying to access auth pages -> Redirect to their portal
-  if (user && isAuthPath) {
+  if (isAuthPath) {
     const targetPath =
       userRole === "admin" ? "/admin" : userRole === "institution" ? "/institusi" : "/umkm";
     const url = request.nextUrl.clone();
@@ -63,8 +95,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 3. Strict Role Access Control: Prevent cross-role access
-  if (user && isProtectedPath) {
+  // 3. Strict Role Access Control: Block & Redirect cross-role access
+  if (isProtectedPath) {
     const isAccessingUmkm = pathname.startsWith("/umkm");
     const isAccessingAdmin = pathname.startsWith("/admin");
     const isAccessingInstitusi = pathname.startsWith("/institusi");
