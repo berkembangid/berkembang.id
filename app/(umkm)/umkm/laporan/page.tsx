@@ -30,7 +30,7 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
 ];
 
 export default function LaporanPage() {
-  const [period, setPeriod] = useState<"hari" | "bulan" | "tahun">("bulan");
+  const [period, setPeriod] = useState<"hari" | "bulan" | "tahun">("hari");
   const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
   const [showModal, setShowModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
