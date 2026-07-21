@@ -3,58 +3,101 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, Mail, AlertCircle, Building2, MapPin } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, AlertCircle, Building2, MapPin, Store, Building } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
+const UMKM_SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
+const INSTITUSI_TYPES = ["Bank / Koperasi", "Lembaga Pemerintah", "Investor / VC", "NGO / Yayasan", "Universitas", "Lainnya"];
 
-export default function RegisterUMKMPage() {
+type Role = "umkm" | "institution";
+
+export default function RegisterPage() {
   const router = useRouter();
+  const [role, setRole] = useState<Role>("umkm");
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({
+
+  // UMKM form fields
+  const [umkmForm, setUmkmForm] = useState({
     namaUsaha: "",
-    jenisUsaha: "",
-    lokasi: "",
     sektor: "Kuliner",
+    lokasi: "",
     email: "",
     password: "",
   });
+
+  // Institusi form fields
+  const [institusiForm, setInstitusiForm] = useState({
+    namaInstitusi: "",
+    jenisInstitusi: "Bank / Koperasi",
+    kota: "",
+    namaContact: "",
+    email: "",
+    password: "",
+  });
+
+  const handleRoleChange = (r: Role) => {
+    setRole(r);
+    setStep(1);
+    setError("");
+  };
+
+  const validateStep1 = () => {
+    if (role === "umkm") {
+      if (!umkmForm.namaUsaha.trim() || !umkmForm.lokasi.trim()) {
+        setError("Silakan isi nama usaha dan kota/kabupaten Anda.");
+        return false;
+      }
+    } else {
+      if (!institusiForm.namaInstitusi.trim() || !institusiForm.kota.trim() || !institusiForm.namaContact.trim()) {
+        setError("Silakan isi nama institusi, nama kontak, dan kota.");
+        return false;
+      }
+    }
+    return true;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
     if (step < 2) {
-      if (!form.namaUsaha.trim() || !form.lokasi.trim()) {
-        setError("Silakan isi nama usaha dan kota/kabupaten Anda.");
-        return;
-      }
+      if (!validateStep1()) return;
       setStep(2);
       return;
     }
 
     setLoading(true);
+    const email = role === "umkm" ? umkmForm.email.trim() : institusiForm.email.trim();
+    const password = role === "umkm" ? umkmForm.password : institusiForm.password;
+
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: form.email.trim(),
-        password: form.password,
-        options: {
-          data: {
-            nama_usaha: form.namaUsaha,
-            sektor_usaha: form.sektor,
-            lokasi: form.lokasi,
-            role: "umkm"
+      const metadata = role === "umkm"
+        ? {
+            nama_usaha: umkmForm.namaUsaha,
+            sektor_usaha: umkmForm.sektor,
+            lokasi: umkmForm.lokasi,
+            role: "umkm",
           }
-        }
+        : {
+            nama_institusi: institusiForm.namaInstitusi,
+            jenis_institusi: institusiForm.jenisInstitusi,
+            lokasi: institusiForm.kota,
+            nama_contact: institusiForm.namaContact,
+            role: "institution",
+          };
+
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: metadata },
       });
 
       if (signUpError) {
-        let msg = "Terjadi kesalahan pendaftaran. Silakan coba lagi dengan email lain.";
+        let msg = "Terjadi kesalahan pendaftaran. Silakan coba lagi.";
         const rawMsg = signUpError.message || "";
-
         if (rawMsg && rawMsg !== "{}") {
           if (rawMsg.includes("User already registered")) {
             msg = "Email sudah terdaftar. Silakan gunakan email lain atau masuk ke akun Anda.";
@@ -64,7 +107,6 @@ export default function RegisterUMKMPage() {
             msg = rawMsg;
           }
         }
-        
         setError(msg);
         setLoading(false);
         return;
@@ -74,36 +116,36 @@ export default function RegisterUMKMPage() {
         try {
           await supabase.from("profiles").insert({
             id: data.user.id,
-            email: form.email.trim(),
-            role: "umkm",
-            nama_usaha: form.namaUsaha,
-            sektor: form.sektor,
-            lokasi: form.lokasi
+            email,
+            role: role === "umkm" ? "umkm" : "institution",
+            nama_usaha: role === "umkm" ? umkmForm.namaUsaha : institusiForm.namaInstitusi,
+            sektor: role === "umkm" ? umkmForm.sektor : institusiForm.jenisInstitusi,
+            lokasi: role === "umkm" ? umkmForm.lokasi : institusiForm.kota,
           });
         } catch (err) {
           console.warn("Profiles insert optional:", err);
         }
       }
 
-      router.push("/umkm");
+      router.push(role === "umkm" ? "/umkm" : "/institusi");
     } catch (err: any) {
       console.error("Register catch error:", err);
-      let errorMessage = "Terjadi kesalahan pendaftaran.";
-      if (typeof err === "string" && err !== "{}") {
-        errorMessage = err;
-      } else if (err?.message && err.message !== "{}") {
-        errorMessage = err.message;
-      }
-      setError(errorMessage);
+      let msg = "Terjadi kesalahan pendaftaran.";
+      if (err?.message && err.message !== "{}") msg = err.message;
+      setError(msg);
       setLoading(false);
     }
   };
 
+  const passwordValue = role === "umkm" ? umkmForm.password : institusiForm.password;
+  const emailValue = role === "umkm" ? umkmForm.email : institusiForm.email;
+
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="font-headline text-xl font-bold text-[#141a34]">Daftar UMKM</h1>
+          <h1 className="font-headline text-xl font-bold text-[#141a34]">Daftar Akun</h1>
           <p className="text-xs text-[#444655] mt-0.5">Langkah {step} dari 2</p>
         </div>
         <div className="flex gap-1.5">
@@ -113,6 +155,25 @@ export default function RegisterUMKMPage() {
         </div>
       </div>
 
+      {/* Role Tab Selector (Step 1 only) */}
+      {step === 1 && (
+        <div className="flex gap-2 mb-5 p-1 bg-[#f3f2ff] rounded-xl">
+          {(["umkm", "institution"] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => handleRoleChange(r)}
+              className={`flex-1 text-xs font-bold py-2.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                role === r ? "bg-white text-[#001b85] shadow-sm" : "text-[#444655]"
+              }`}
+            >
+              {r === "umkm" ? <Store size={13} /> : <Building size={13} />}
+              {r === "umkm" ? "UMKM / Usaha" : "Institusi / Mitra"}
+            </button>
+          ))}
+        </div>
+      )}
+
       {error && (
         <div className="bg-red-50 text-red-600 text-xs font-semibold p-3.5 rounded-xl border border-red-100 mb-4 flex items-start gap-2 animate-fade-in">
           <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
@@ -121,37 +182,34 @@ export default function RegisterUMKMPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {step === 1 && (
+        {/* ───────── STEP 1 ───────── */}
+        {step === 1 && role === "umkm" && (
           <>
             <div>
               <label className="block text-xs font-bold text-[#444655] mb-1.5">Nama Usaha</label>
               <div className="relative">
                 <input
-                  value={form.namaUsaha}
+                  value={umkmForm.namaUsaha}
                   disabled={loading}
-                  onChange={(e) => setForm({ ...form, namaUsaha: e.target.value })}
+                  onChange={(e) => setUmkmForm({ ...umkmForm, namaUsaha: e.target.value })}
                   placeholder="Contoh: Warung Ayam Geprek Ibu Sari"
-                  className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                  className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50"
                   required
                 />
-                <Building2 size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <Store size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
             </div>
             <div>
               <label className="block text-xs font-bold text-[#444655] mb-1.5">Sektor Usaha</label>
               <div className="flex flex-wrap gap-2">
-                {SECTORS.map((s) => (
+                {UMKM_SECTORS.map((s) => (
                   <button
-                    key={s}
-                    type="button"
-                    disabled={loading}
-                    onClick={() => setForm({ ...form, sektor: s })}
+                    key={s} type="button" disabled={loading}
+                    onClick={() => setUmkmForm({ ...umkmForm, sektor: s })}
                     className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
-                      form.sektor === s ? "bg-[#001b85] text-white border-[#001b85]" : "bg-white text-[#444655] border-[#c5c5d7]"
+                      umkmForm.sektor === s ? "bg-[#001b85] text-white border-[#001b85]" : "bg-white text-[#444655] border-[#c5c5d7]"
                     } disabled:opacity-50`}
-                  >
-                    {s}
-                  </button>
+                  >{s}</button>
                 ))}
               </div>
             </div>
@@ -159,34 +217,110 @@ export default function RegisterUMKMPage() {
               <label className="block text-xs font-bold text-[#444655] mb-1.5">Kota / Kabupaten</label>
               <div className="relative">
                 <input
-                  value={form.lokasi}
-                  disabled={loading}
-                  onChange={(e) => setForm({ ...form, lokasi: e.target.value })}
+                  value={umkmForm.lokasi} disabled={loading}
+                  onChange={(e) => setUmkmForm({ ...umkmForm, lokasi: e.target.value })}
                   placeholder="Contoh: Jakarta Selatan"
-                  className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                  className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50"
                   required
                 />
-                <MapPin size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <MapPin size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
             </div>
           </>
         )}
 
+        {step === 1 && role === "institution" && (
+          <>
+            <div>
+              <label className="block text-xs font-bold text-[#444655] mb-1.5">Nama Institusi</label>
+              <div className="relative">
+                <input
+                  value={institusiForm.namaInstitusi} disabled={loading}
+                  onChange={(e) => setInstitusiForm({ ...institusiForm, namaInstitusi: e.target.value })}
+                  placeholder="Contoh: BRI KUR, Dinas Koperasi Kota X"
+                  className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50"
+                  required
+                />
+                <Building size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-[#444655] mb-1.5">Jenis Institusi</label>
+              <div className="flex flex-wrap gap-2">
+                {INSTITUSI_TYPES.map((t) => (
+                  <button
+                    key={t} type="button" disabled={loading}
+                    onClick={() => setInstitusiForm({ ...institusiForm, jenisInstitusi: t })}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
+                      institusiForm.jenisInstitusi === t ? "bg-[#001b85] text-white border-[#001b85]" : "bg-white text-[#444655] border-[#c5c5d7]"
+                    } disabled:opacity-50`}
+                  >{t}</button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-[#444655] mb-1.5">Nama Kontak</label>
+                <input
+                  value={institusiForm.namaContact} disabled={loading}
+                  onChange={(e) => setInstitusiForm({ ...institusiForm, namaContact: e.target.value })}
+                  placeholder="Nama PIC / Petugas"
+                  className="w-full px-4 py-3 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#444655] mb-1.5">Kota</label>
+                <div className="relative">
+                  <input
+                    value={institusiForm.kota} disabled={loading}
+                    onChange={(e) => setInstitusiForm({ ...institusiForm, kota: e.target.value })}
+                    placeholder="Jakarta"
+                    className="w-full px-4 py-3 pl-9 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50"
+                    required
+                  />
+                  <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ───────── STEP 2 ───────── */}
         {step === 2 && (
           <>
+            {/* Summary box */}
+            <div className="bg-[#f3f2ff] rounded-xl p-3 text-xs text-[#444655] space-y-0.5 border border-[#e5e7ff]">
+              <p className="font-bold text-[#141a34] mb-1">Ringkasan {role === "umkm" ? "Usaha" : "Institusi"}:</p>
+              {role === "umkm" ? (
+                <>
+                  <p>Usaha: <span className="font-semibold text-slate-800">{umkmForm.namaUsaha}</span></p>
+                  <p>Sektor: <span className="font-semibold text-slate-800">{umkmForm.sektor}</span></p>
+                  <p>Lokasi: <span className="font-semibold text-slate-800">{umkmForm.lokasi}</span></p>
+                </>
+              ) : (
+                <>
+                  <p>Institusi: <span className="font-semibold text-slate-800">{institusiForm.namaInstitusi}</span></p>
+                  <p>Jenis: <span className="font-semibold text-slate-800">{institusiForm.jenisInstitusi}</span></p>
+                  <p>Kontak: <span className="font-semibold text-slate-800">{institusiForm.namaContact}</span></p>
+                  <p>Kota: <span className="font-semibold text-slate-800">{institusiForm.kota}</span></p>
+                </>
+              )}
+            </div>
+
             <div>
               <label className="block text-xs font-bold text-[#444655] mb-1.5">Email</label>
               <div className="relative">
                 <input
-                  type="email"
-                  value={form.email}
-                  disabled={loading}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  type="email" value={emailValue} disabled={loading}
+                  onChange={(e) => role === "umkm"
+                    ? setUmkmForm({ ...umkmForm, email: e.target.value })
+                    : setInstitusiForm({ ...institusiForm, email: e.target.value })}
                   placeholder="email@contoh.com"
-                  className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                  className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50"
                   required
                 />
-                <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <Mail size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
             </div>
             <div>
@@ -194,51 +328,44 @@ export default function RegisterUMKMPage() {
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
-                  value={form.password}
-                  disabled={loading}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  value={passwordValue} disabled={loading}
+                  onChange={(e) => role === "umkm"
+                    ? setUmkmForm({ ...umkmForm, password: e.target.value })
+                    : setInstitusiForm({ ...institusiForm, password: e.target.value })}
                   placeholder="Minimal 8 karakter"
-                  className="w-full px-4 py-3 pl-10 pr-11 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
                   minLength={8}
+                  className="w-full px-4 py-3 pl-10 pr-11 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50"
                   required
                 />
-                <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <Lock size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-[#600] transition-colors p-1 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer"
                   aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
-            </div>
-            <div className="bg-[#f3f2ff] rounded-xl p-3 text-xs text-[#444655] space-y-1">
-              <strong className="text-[#141a34]">Ringkasan pendaftaran:</strong><br />
-              <span>Usaha: <span className="font-semibold text-slate-800">{form.namaUsaha}</span></span><br />
-              <span>Sektor: <span className="font-semibold text-slate-800">{form.sektor}</span></span><br />
-              <span>Lokasi: <span className="font-semibold text-slate-800">{form.lokasi}</span></span>
             </div>
           </>
         )}
 
+        {/* Action Buttons */}
         <div className="flex gap-2 pt-2">
           {step === 2 && (
             <button
-              type="button"
-              onClick={() => setStep(1)}
-              disabled={loading}
+              type="button" onClick={() => setStep(1)} disabled={loading}
               className="border border-slate-200 text-slate-600 font-bold px-4 py-3.5 rounded-xl text-sm hover:bg-slate-50 transition-colors cursor-pointer"
             >
               ← Kembali
             </button>
           )}
           <button
-            type="submit"
-            disabled={loading}
+            type="submit" disabled={loading}
             className="flex-1 bg-[#001b85] text-white font-bold py-3.5 rounded-xl text-sm hover:bg-[#0e32c2] transition-colors disabled:bg-[#001b85]/50 flex items-center justify-center cursor-pointer disabled:cursor-not-allowed shadow-sm"
           >
-            {loading ? "Memproses..." : step === 1 ? "Lanjut →" : "Daftar Sekarang 🚀"}
+            {loading ? "Memproses..." : step === 1 ? "Lanjut →" : `Daftar ${role === "umkm" ? "UMKM" : "Institusi"} 🚀`}
           </button>
         </div>
       </form>
