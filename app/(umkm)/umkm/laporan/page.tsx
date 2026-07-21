@@ -15,23 +15,9 @@ interface Transaction {
   tanggal: string; // YYYY-MM-DD
 }
 
-const INITIAL_TRANSACTIONS: Transaction[] = [
-  // Today's
-  { id: 1, item: "Ayam geprek 47 porsi", qty: "47 porsi", type: "masuk", nominal: 470000, kategori: "Penjualan", tanggal: "2026-07-21" },
-  { id: 2, item: "Bahan baku ayam & bumbu", qty: "1 paket", type: "keluar", nominal: 200000, kategori: "Bahan", tanggal: "2026-07-21" },
-  // This month
-  { id: 3, item: "Jual nasi goreng 15 porsi", qty: "15 porsi", type: "masuk", nominal: 225000, kategori: "Penjualan", tanggal: "2026-07-19" },
-  { id: 4, item: "Bayar token listrik kios", qty: "1 bulan", type: "keluar", nominal: 150000, kategori: "Operasional", tanggal: "2026-07-15" },
-  { id: 5, item: "Beli gas elpiji 3kg", qty: "2 tabung", type: "keluar", nominal: 44000, kategori: "Bahan", tanggal: "2026-07-10" },
-  // Earlier this year
-  { id: 6, item: "Jual catering arisan", qty: "1 paket", type: "masuk", nominal: 1200000, kategori: "Penjualan", tanggal: "2026-06-25" },
-  { id: 7, item: "Sewa kios bulanan", qty: "1 bulan", type: "keluar", nominal: 800000, kategori: "Sewa", tanggal: "2026-06-01" },
-  { id: 8, item: "Renovasi meja kayu", qty: "1 unit", type: "keluar", nominal: 350000, kategori: "Lain-lain", tanggal: "2026-05-12" },
-];
-
 export default function LaporanPage() {
   const [period, setPeriod] = useState<"hari" | "bulan" | "tahun">("hari");
-  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [user, setUser] = useState<any>(null);

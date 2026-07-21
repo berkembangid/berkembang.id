@@ -16,17 +16,11 @@ interface Transaction {
   time: string;
 }
 
-const MOCK_INITIAL: Transaction[] = [
-  { id: "1", date: "Hari ini", item: "Ayam geprek", qty: "47 porsi", nominal: 470000, type: "masuk", kategori: "Penjualan", time: "08:30" },
-  { id: "2", date: "Hari ini", item: "Bahan baku ayam", qty: "1 paket", nominal: 200000, type: "keluar", kategori: "Bahan", time: "07:00" },
-  { id: "3", date: "Hari ini", item: "Sayuran & bumbu", qty: "1 set", nominal: 50000, type: "keluar", kategori: "Bahan", time: "06:30" },
-];
-
 const FILTERS = ["Semua", "Hari ini", "Minggu ini", "Bulan ini"];
 
 export default function RiwayatPage() {
   const [activeFilter, setActiveFilter] = useState("Semua");
-  const [transactions, setTransactions] = useState<Transaction[]>(MOCK_INITIAL);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,7 +34,7 @@ export default function RiwayatPage() {
             .eq("user_id", user.id)
             .order("created_at", { ascending: false });
 
-          if (!error && data && data.length > 0) {
+          if (!error && data) {
             const mapped: Transaction[] = data.map((t: any) => ({
               id: t.id,
               date: t.tanggal || "Hari ini",

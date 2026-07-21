@@ -122,15 +122,37 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         {/* Navigation Items */}
         <nav className="flex-1 px-3 py-4 space-y-1">
           {SIDEBAR_TABS.map((item) => {
-            const isActive =
-              item.href === "/umkm" ? pathname === "/umkm" : pathname.startsWith(item.href);
+            const isLaporanGroup = item.href === "/umkm/laporan";
+            const isLaporanActive = pathname === "/umkm/laporan" || pathname === "/umkm/riwayat";
+            const isActive = isLaporanGroup
+              ? isLaporanActive
+              : (item.href === "/umkm" ? pathname === "/umkm" : pathname.startsWith(item.href));
+            
             return (
-              <Link key={item.href} href={item.href}>
-                <div className={`sidebar-nav-item ${isActive ? "active" : ""}`}>
-                  <item.Icon size={18} className={isActive ? "text-[#001b85]" : "text-[#757686]"} />
-                  <span>{item.label}</span>
-                </div>
-              </Link>
+              <div key={item.href} className="space-y-1">
+                <Link href={item.href}>
+                  <div className={`sidebar-nav-item ${isActive ? "active" : ""}`}>
+                    <item.Icon size={18} className={isActive ? "text-[#001b85]" : "text-[#757686]"} />
+                    <span>{item.label}</span>
+                  </div>
+                </Link>
+
+                {/* Sub-branch for Laporan Keuangan -> Riwayat Transaksi (Only visible when Laporan group is active) */}
+                {isLaporanGroup && isLaporanActive && (
+                  <div className="ml-5 pl-3 border-l-2 border-[#c5c5d7]/50 space-y-1 my-1 animate-fade-in">
+                    <Link href="/umkm/riwayat">
+                      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                        pathname === "/umkm/riwayat"
+                          ? "bg-[#001b85] text-white font-bold shadow-sm"
+                          : "text-[#444655] hover:bg-[#ececff] hover:text-[#001b85]"
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${pathname === "/umkm/riwayat" ? "bg-white" : "bg-[#001b85]"}`} />
+                        <span>Riwayat Transaksi</span>
+                      </div>
+                    </Link>
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
