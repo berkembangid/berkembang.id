@@ -242,70 +242,71 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         </div>
       </div>
 
-      {/* NOTIFICATION MODAL POPUP (DESKTOP & MOBILE) */}
+      {/* SMART NOTIFICATION POPOVER DROPDOWN (COMPACT & ANCHORED) */}
       {showNotifModal && (
         <div 
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-[100] flex items-center justify-center p-4 animate-fade-in"
+          className="fixed inset-0 bg-slate-950/20 backdrop-blur-[1px] z-[100]"
           onClick={() => setShowNotifModal(false)}
         >
           <div 
-            className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-5 w-full max-w-md animate-fade-in-up space-y-4"
+            className="absolute top-16 left-4 md:left-64 w-80 max-w-[calc(100vw-2rem)] bg-white border border-[#e5e7ff] shadow-2xl rounded-2xl p-4 animate-fade-in-up space-y-3 z-[101]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-[#001b85]/10 text-[#001b85] flex items-center justify-center">
-                  <Bell size={18} />
+                <div className="w-7 h-7 rounded-lg bg-[#001b85]/10 text-[#001b85] flex items-center justify-center">
+                  <Bell size={15} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-[#141a34]">Notifikasi Transaksi Live</h3>
-                  <p className="text-[11px] text-slate-500">Pemberitahuan aktivitas keuangan terbaru</p>
+                  <h3 className="font-bold text-xs text-[#141a34]">Notifikasi Transaksi</h3>
+                  <p className="text-[10px] text-slate-400">Aktivitas real-time</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowNotifModal(false)}
-                className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="w-6 h-6 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
               >
-                <X size={16} />
+                <X size={14} />
               </button>
             </div>
 
-            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
               {notifications.length === 0 ? (
-                <div className="py-8 text-center space-y-2">
-                  <CheckCircle2 size={32} className="text-emerald-500 mx-auto" />
-                  <p className="text-xs font-bold text-[#141a34]">Belum Ada Notifikasi Transaksi Baru</p>
-                  <p className="text-[11px] text-slate-400">Catat transaksi pertamamu untuk menerima pemberitahuan live!</p>
+                <div className="py-6 text-center space-y-1">
+                  <CheckCircle2 size={26} className="text-emerald-500 mx-auto" />
+                  <p className="text-xs font-bold text-[#141a34]">Belum Ada Notifikasi Baru</p>
+                  <p className="text-[10px] text-slate-400">Catat transaksi pertamamu sekarang!</p>
                 </div>
               ) : (
                 notifications.map((n) => (
-                  <div key={n.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                  <div key={n.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs hover:bg-[#f3f2ff] transition-colors">
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
                         n.type === "masuk" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"
                       }`}>
-                        {n.type === "masuk" ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
+                        {n.type === "masuk" ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
                       </div>
-                      <div>
-                        <p className="font-bold text-[#141a34]">
-                          {n.type === "masuk" ? "Pemasukan" : "Pengeluaran"}: Rp{Number(n.nominal).toLocaleString("id-ID")}
+                      <div className="overflow-hidden">
+                        <p className="font-bold text-xs text-[#141a34] truncate">
+                          {n.type === "masuk" ? "+" : "-"}Rp{Number(n.nominal).toLocaleString("id-ID")}
                         </p>
-                        <p className="text-[11px] text-slate-500">{n.item} · {n.kategori || "Umum"}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{n.item}</p>
                       </div>
                     </div>
-                    <span className="text-[10px] text-slate-400 font-medium">{n.tanggal || "Baru saja"}</span>
+                    <span className="text-[9px] text-slate-400 font-medium flex-shrink-0 ml-1">{n.tanggal || "Hari ini"}</span>
                   </div>
                 ))
               )}
             </div>
 
-            <div className="pt-2 border-t border-slate-100 flex justify-end">
+            <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[11px]">
+              <span className="text-slate-400">{notifications.length} item</span>
               <Link 
                 href="/umkm/riwayat" 
                 onClick={() => setShowNotifModal(false)}
-                className="text-xs font-bold text-[#001b85] hover:underline flex items-center gap-1"
+                className="font-bold text-[#001b85] hover:underline"
               >
-                Lihat Selengkapnya di Riwayat →
+                Riwayat Lengkap →
               </Link>
             </div>
           </div>
