@@ -41,8 +41,8 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       <aside className="hidden md:flex w-64 bg-white border-r border-[#e5e7ff] flex-col fixed h-screen z-30">
         {/* Logo */}
         <div className="px-6 py-5 border-b border-[#e5e7ff]">
-          <span className="font-headline text-lg font-extrabold text-[#001b85]">BERKEMBANG.ID</span>
-          <p className="text-xs text-emerald-600 mt-0.5 font-bold flex items-center gap-1">
+          <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-8 w-auto object-contain" />
+          <p className="text-xs text-emerald-600 mt-2 font-bold flex items-center gap-1">
             <Sparkles size={10} /> UMKM Portal
           </p>
         </div>

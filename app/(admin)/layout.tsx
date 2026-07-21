@@ -24,9 +24,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="w-64 bg-[#0a0d24] border-r border-[#1a1e3f] flex flex-col fixed h-screen z-30 shadow-xl">
         {/* Brand/Logo Header */}
         <div className="px-6 py-6 border-b border-[#1a1e3f]">
-          <div className="flex items-center gap-2">
-            <span className="font-headline text-lg font-extrabold text-white tracking-tight">BERKEMBANG.ID</span>
-            <span className="text-[9px] font-bold text-[#56f9f9] bg-[#56f9f9]/10 px-2 py-0.5 rounded-full border border-[#56f9f9]/20 uppercase tracking-widest">
+          <div className="flex items-center gap-3">
+            <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-8 w-auto object-contain brightness-125" />
+            <span className="text-[9px] font-bold text-[#56f9f9] bg-[#56f9f9]/10 px-2 py-0.5 rounded-full border border-[#56f9f9]/20 uppercase tracking-widest flex-shrink-0">
               Admin
             </span>
           </div>

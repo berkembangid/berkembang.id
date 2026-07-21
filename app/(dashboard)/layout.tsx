@@ -17,8 +17,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen flex bg-[#f8f8ff]">
       <aside className="w-64 bg-white border-r border-[#e5e7ff] flex flex-col fixed h-screen z-30">
         <div className="px-6 py-5 border-b border-[#e5e7ff]">
-          <span className="font-headline text-lg font-extrabold text-[#001b85]">BERKEMBANG.ID</span>
-          <p className="text-xs text-[#444655] mt-0.5 font-semibold">Institution Portal</p>
+          <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-8 w-auto object-contain" />
+          <p className="text-xs text-[#444655] mt-2 font-semibold">Institution Portal</p>
         </div>
 
         <div className="px-4 py-4 border-b border-[#e5e7ff]">

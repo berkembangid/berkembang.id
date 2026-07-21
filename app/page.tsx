@@ -15,10 +15,7 @@ export default function LandingPage() {
       {/* Navigation Pill */}
       <nav className="fixed top-4 left-1/2 -translate-x-1/2 w-[92%] max-w-6xl z-50 bg-white/90 backdrop-blur-md border border-slate-200/80 shadow-lg rounded-full px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#001b85] to-[#0ea5e9] flex items-center justify-center">
-            <TrendingUp size={18} className="text-white" />
-          </div>
-          <span className="font-headline text-xl font-extrabold text-[#001b85] tracking-tight">BERKEMBANG.ID</span>
+          <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-8 w-auto object-contain" />
         </div>
 
         <div className="hidden md:flex items-center gap-8">
