@@ -179,7 +179,7 @@ export default function LoginPage() {
 
       <p className="text-xs text-center text-[#444655] mt-4">
         Belum punya akun UMKM?{" "}
-        <Link href="/auth/register/umkm" className="text-[#001b85] font-bold hover:underline">
+        <Link href="/auth/register" className="text-[#001b85] font-bold hover:underline">
           Daftar Gratis
         </Link>
       </p>
