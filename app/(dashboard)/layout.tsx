@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart2, FolderOpen, TrendingUp, LogOut, Building2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 const NAV_ITEMS = [
   { href: "/institusi", label: "Portofolio UMKM", Icon: TrendingUp },
@@ -12,6 +13,15 @@ const NAV_ITEMS = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn("Sign out warning:", e);
+    }
+    window.location.href = "/auth/login";
+  };
 
   return (
     <div className="min-h-screen flex bg-[#f8f8ff]">
@@ -48,12 +58,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         <div className="px-4 py-4 border-t border-[#e5e7ff]">
-          <Link href="/">
-            <div className="sidebar-nav-item">
-              <LogOut size={18} />
-              <span>Keluar</span>
-            </div>
-          </Link>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full sidebar-nav-item border-none bg-transparent cursor-pointer"
+          >
+            <LogOut size={18} />
+            <span>Keluar</span>
+          </button>
         </div>
       </aside>
 

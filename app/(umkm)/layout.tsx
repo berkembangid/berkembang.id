@@ -68,8 +68,12 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
   }, []);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push("/auth/login");
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn("Sign out warning:", e);
+    }
+    window.location.href = "/auth/login";
   };
 
   function handleFabPress(e: React.MouseEvent<HTMLButtonElement>) {

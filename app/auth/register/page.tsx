@@ -118,8 +118,12 @@ export default function RegisterPage() {
             id: data.user.id,
             email,
             role: role === "umkm" ? "umkm" : "institution",
-            nama_usaha: role === "umkm" ? umkmForm.namaUsaha : institusiForm.namaInstitusi,
-            sektor: role === "umkm" ? umkmForm.sektor : institusiForm.jenisInstitusi,
+            name: role === "umkm" ? umkmForm.namaUsaha : institusiForm.namaInstitusi,
+            nama_usaha: role === "umkm" ? umkmForm.namaUsaha : null,
+            sektor_usaha: role === "umkm" ? umkmForm.sektor : null,
+            nama_institusi: role === "institution" ? institusiForm.namaInstitusi : null,
+            jenis_institusi: role === "institution" ? institusiForm.jenisInstitusi : null,
+            nama_contact: role === "institution" ? institusiForm.namaContact : null,
             lokasi: role === "umkm" ? umkmForm.lokasi : institusiForm.kota,
           });
         } catch (err) {

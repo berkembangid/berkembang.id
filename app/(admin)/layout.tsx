@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, Building2, Handshake, Sliders, BarChart2, History, LogOut, Sparkles } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", Icon: LayoutDashboard },
@@ -16,6 +17,15 @@ const NAV_ITEMS = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn("Sign out warning:", e);
+    }
+    window.location.href = "/auth/login";
+  };
 
   return (
     <div className="min-h-screen flex bg-[#f5f7fb]">
@@ -69,12 +79,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* Logout */}
         <div className="px-4 py-4 border-t border-[#1a1e3f]">
-          <Link href="/">
-            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 cursor-pointer transition-all">
-              <LogOut size={18} className="text-slate-400" />
-              <span>Keluar</span>
-            </div>
-          </Link>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 cursor-pointer transition-all border-none bg-transparent"
+          >
+            <LogOut size={18} className="text-slate-400" />
+            <span>Keluar</span>
+          </button>
         </div>
       </aside>
 
