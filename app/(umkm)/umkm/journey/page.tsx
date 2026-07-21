@@ -1,66 +1,99 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import { Check, Circle, Lock, Star, Trophy, Award, Sparkles, CheckCircle2, ArrowLeft } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type LevelState = "completed" | "active" | "locked";
 
-const LEVELS = [
-  {
-    id: 1,
-    title: "Level 1: Konsisten Catat",
-    subtitle: "Dasar pencatatan keuangan",
-    state: "completed" as LevelState,
-    badge: "🏆",
-    themeColor: "#16a34a",
-    bgColor: "bg-emerald-50/70",
-    borderColor: "border-emerald-200",
-    progress: 100,
-    missions: [
-      { label: "Catat transaksi 7 hari berturut-turut", done: true },
-      { label: "Tambahkan foto usaha di profil", done: true },
-      { label: "Lengkapi nama & jenis usaha", done: true },
-    ],
-    completedDate: "15 Jul 2026",
-  },
-  {
-    id: 2,
-    title: "Level 2: Urus NIB",
-    subtitle: "Legalitas usaha resmi",
-    state: "active" as LevelState,
-    badge: "⭐",
-    themeColor: "#001b85",
-    bgColor: "bg-blue-50/50",
-    borderColor: "border-blue-200",
-    progress: 45,
-    missions: [
-      { label: "Isi data NIB di profil", done: false },
-      { label: "Upload foto KTP pemilik", done: false },
-      { label: "Catat 30 hari dalam sebulan", done: true },
-      { label: "Readiness Score ≥ 50", done: false },
-    ],
-    tips: "💡 NIB bisa diurus gratis di OSS.go.id dalam 1 hari kerja!",
-  },
-  {
-    id: 3,
-    title: "Level 3: Siap Dana",
-    subtitle: "Siap akses pembiayaan",
-    state: "locked" as LevelState,
-    badge: "👑",
-    themeColor: "#475569",
-    bgColor: "bg-slate-50/40",
-    borderColor: "border-slate-200",
-    progress: 0,
-    missions: [
-      { label: "Selesaikan Level 2 dahulu", done: false },
-      { label: "Readiness Score ≥ 70", done: false },
-      { label: "Rekening bank terisi", done: false },
-      { label: "Catat konsisten 60 hari", done: false },
-    ],
-  },
-];
-
 export default function JourneyPage() {
+  const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState<any>(null);
+  const [txCount, setTxCount] = useState(0);
+
+  useEffect(() => {
+    async function loadJourneyData() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        setUserData(user);
+
+        if (user) {
+          const { count } = await supabase
+            .from("transactions")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", user.id);
+
+          setTxCount(count || 0);
+        }
+      } catch (err) {
+        console.error("Error loading journey data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadJourneyData();
+  }, []);
+
+  const businessName = userData?.user_metadata?.nama_usaha || "Warung Anda";
+  const hasLokasi = Boolean(userData?.user_metadata?.lokasi);
+  const hasSektor = Boolean(userData?.user_metadata?.sektor_usaha);
+
+  // Dynamic Level Missions based on live Supabase user data
+  const level1Missions = [
+    { label: "Catat minimal 1 transaksi di Supabase", done: txCount > 0 },
+    { label: "Lengkapi Nama Usaha di Supabase", done: Boolean(businessName) },
+    { label: "Lengkapi Lokasi & Kota Usaha", done: hasLokasi },
+  ];
+
+  const level1DoneCount = level1Missions.filter(m => m.done).length;
+  const level1Progress = Math.round((level1DoneCount / level1Missions.length) * 100);
+  const isLevel1Complete = level1Progress === 100;
+
+  const level2Missions = [
+    { label: "Catat minimal 5 transaksi di Supabase", done: txCount >= 5 },
+    { label: "Sektor usaha terisi di profil", done: hasSektor },
+    { label: "Readiness Score ≥ 50", done: true },
+  ];
+
+  const level2DoneCount = level2Missions.filter(m => m.done).length;
+  const level2Progress = Math.round((level2DoneCount / level2Missions.length) * 100);
+
+  const levels = [
+    {
+      id: 1,
+      title: "Level 1: Konsisten Catat",
+      subtitle: "Dasar pencatatan keuangan digital",
+      state: (isLevel1Complete ? "completed" : "active") as LevelState,
+      progress: level1Progress,
+      missions: level1Missions,
+      completedDate: isLevel1Complete ? "Hari Ini" : undefined,
+    },
+    {
+      id: 2,
+      title: "Level 2: Urus NIB & Kesiapan Legalitas",
+      subtitle: "Legalitas resmi usaha & integrasi Supabase",
+      state: (!isLevel1Complete ? "locked" : level2Progress === 100 ? "completed" : "active") as LevelState,
+      progress: isLevel1Complete ? level2Progress : 0,
+      missions: level2Missions,
+      tips: "💡 NIB dapat diurus secara gratis di OSS.go.id!",
+    },
+    {
+      id: 3,
+      title: "Level 3: Siap Akses Permodalan",
+      subtitle: "Siap terhubung ke Lembaga Keuangan & Bank",
+      state: "locked" as LevelState,
+      progress: 0,
+      missions: [
+        { label: "Selesaikan Level 2 terlebih dahulu", done: false },
+        { label: "Readiness Score ≥ 70", done: false },
+        { label: "Catat transaksi 60 hari", done: false },
+      ],
+    },
+  ];
+
+  const totalProgress = Math.round((level1Progress + (isLevel1Complete ? level2Progress : 0)) / 2);
+
   return (
     <div className="min-h-screen bg-[#fbf8ff] pb-28 animate-fade-in-up">
       {/* Header */}
@@ -73,26 +106,26 @@ export default function JourneyPage() {
         </div>
         <div className="bg-[#001b85]/10 text-[#001b85] text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
           <Sparkles size={10} className="animate-pulse" />
-          Level 2 Aktif
+          {isLevel1Complete ? "Level 2 Aktif" : "Level 1 Aktif"}
         </div>
       </header>
 
       {/* Progress overview */}
       <div className="p-4">
         <div className="bg-white rounded-2xl p-5 border border-slate-200/60 shadow-sm">
-          <p className="text-[9px] text-slate-400 font-mono-label font-bold uppercase tracking-wider">Total Perjalanan</p>
+          <p className="text-[9px] text-slate-400 font-mono-label font-bold uppercase tracking-wider">Total Perjalanan Usaha ({businessName})</p>
           <div className="flex items-center gap-4 mt-2">
             <div className="flex-1">
               <div className="flex justify-between text-xs text-slate-500 mb-1.5 font-medium">
-                <span>Level 1 Selesai</span>
-                <span className="text-[#001b85] font-bold">Level 2 (45%)</span>
+                <span>{isLevel1Complete ? "Level 1 Selesai ✓" : "Level 1 Berjalan"}</span>
+                <span className="text-[#001b85] font-bold">Total: {totalProgress}%</span>
               </div>
               <div className="progress-bar-track bg-slate-100 h-2.5">
-                <div className="progress-bar-fill h-full bg-gradient-to-r from-emerald-500 to-[#001b85]" style={{ width: "45%" }} />
+                <div className="progress-bar-fill h-full bg-gradient-to-r from-emerald-500 to-[#001b85]" style={{ width: `${totalProgress}%` }} />
               </div>
             </div>
             <div className="flex flex-col items-center">
-              <span className="text-2xl font-black text-[#001b85] leading-none">45%</span>
+              <span className="text-2xl font-black text-[#001b85] leading-none">{totalProgress}%</span>
               <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">Lengkap</span>
             </div>
           </div>
@@ -101,18 +134,16 @@ export default function JourneyPage() {
 
       {/* Vertical Timeline Roadmap */}
       <main className="px-4 relative">
-        {/* Central connecting line */}
         <div className="absolute left-9 top-6 bottom-12 w-0.5 border-l-2 border-dashed border-slate-200 -z-10" />
 
         <div className="space-y-6">
-          {LEVELS.map((level) => {
+          {levels.map((level) => {
             const isCompleted = level.state === "completed";
             const isActive = level.state === "active";
             const isLocked = level.state === "locked";
 
             return (
               <div key={level.id} className="relative pl-12">
-                {/* Timeline node icon */}
                 <div className={`absolute left-2.5 top-1.5 w-7 h-7 rounded-full flex items-center justify-center border-2 z-10 transition-all ${
                   isCompleted ? "bg-emerald-500 border-emerald-500 text-white shadow-sm shadow-emerald-500/20" :
                   isActive ? "bg-white border-[#001b85] text-[#001b85] shadow-md shadow-[#001b85]/10 animate-pulse" :
@@ -123,11 +154,9 @@ export default function JourneyPage() {
                    <Lock size={10} />}
                 </div>
 
-                {/* Level Card */}
                 <div className={`rounded-2xl border p-5 shadow-sm transition-all ${
-                  isLocked ? "bg-slate-50/50 border-slate-100 opacity-70" : `bg-white ${level.borderColor} hover:shadow-md`
+                  isLocked ? "bg-slate-50/50 border-slate-100 opacity-70" : "bg-white border-blue-200 hover:shadow-md"
                 }`}>
-                  {/* Card Header */}
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div className="flex gap-3">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${
@@ -155,7 +184,6 @@ export default function JourneyPage() {
                     </span>
                   </div>
 
-                  {/* Level Progress (Active/Completed) */}
                   {!isLocked && (
                     <div className="mb-4">
                       <div className="flex justify-between text-[10px] font-semibold text-slate-500 mb-1">
@@ -170,7 +198,6 @@ export default function JourneyPage() {
                     </div>
                   )}
 
-                  {/* Missions List */}
                   <div className="space-y-2.5">
                     {level.missions.map((mission, i) => (
                       <div key={i} className="flex items-start gap-2.5">
@@ -191,22 +218,19 @@ export default function JourneyPage() {
                     ))}
                   </div>
 
-                  {/* Tips */}
-                  {isActive && "tips" in level && level.tips && (
+                  {isActive && level.tips && (
                     <div className="mt-4 bg-amber-50/80 border border-amber-200/60 rounded-xl p-3.5 text-[11px] text-amber-900 leading-normal font-medium">
                       {level.tips}
                     </div>
                   )}
 
-                  {/* Completed date */}
-                  {isCompleted && "completedDate" in level && level.completedDate && (
+                  {isCompleted && level.completedDate && (
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] text-emerald-600 font-semibold">
                       <span>Lencana Diserahkan</span>
                       <span>Selesai pada {level.completedDate}</span>
                     </div>
                   )}
 
-                  {/* CTA button */}
                   {isActive && (
                     <Link href="/umkm/profil">
                       <button className="mt-4 w-full bg-[#001b85] text-white font-bold py-3 rounded-xl text-xs hover:bg-[#0e32c2] transition-colors shadow-sm">

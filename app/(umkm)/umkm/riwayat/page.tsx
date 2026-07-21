@@ -1,31 +1,83 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { ArrowDownLeft, ArrowUpRight, Plus, Trash2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
-const TRANSACTIONS = [
-  { id: 1, date: "Hari ini", item: "Ayam geprek", qty: "47 porsi", nominal: 470000, type: "masuk" as const, kategori: "Penjualan", time: "08:30" },
-  { id: 2, date: "Hari ini", item: "Bahan baku ayam", qty: "1 paket", nominal: 200000, type: "keluar" as const, kategori: "Bahan", time: "07:00" },
-  { id: 3, date: "Hari ini", item: "Sayuran & bumbu", qty: "1 set", nominal: 50000, type: "keluar" as const, kategori: "Bahan", time: "06:30" },
-  { id: 4, date: "Kemarin", item: "Nasi goreng spesial", qty: "30 porsi", nominal: 300000, type: "masuk" as const, kategori: "Penjualan", time: "09:00" },
-  { id: 5, date: "Kemarin", item: "Gas 3kg", qty: "2 tabung", nominal: 50000, type: "keluar" as const, kategori: "Utilitas", time: "08:00" },
-  { id: 6, date: "Senin", item: "Mie ayam geprek", qty: "25 porsi", nominal: 250000, type: "masuk" as const, kategori: "Penjualan", time: "10:00" },
-  { id: 7, date: "Senin", item: "Bahan baku mie", qty: "1 paket", nominal: 80000, type: "keluar" as const, kategori: "Bahan", time: "06:00" },
+interface Transaction {
+  id: string;
+  date: string;
+  item: string;
+  qty: string;
+  nominal: number;
+  type: "masuk" | "keluar";
+  kategori: string;
+  time: string;
+}
+
+const MOCK_INITIAL: Transaction[] = [
+  { id: "1", date: "Hari ini", item: "Ayam geprek", qty: "47 porsi", nominal: 470000, type: "masuk", kategori: "Penjualan", time: "08:30" },
+  { id: "2", date: "Hari ini", item: "Bahan baku ayam", qty: "1 paket", nominal: 200000, type: "keluar", kategori: "Bahan", time: "07:00" },
+  { id: "3", date: "Hari ini", item: "Sayuran & bumbu", qty: "1 set", nominal: 50000, type: "keluar", kategori: "Bahan", time: "06:30" },
 ];
 
 const FILTERS = ["Semua", "Hari ini", "Minggu ini", "Bulan ini"];
 
 export default function RiwayatPage() {
   const [activeFilter, setActiveFilter] = useState("Semua");
-  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>(MOCK_INITIAL);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = TRANSACTIONS.filter((t) => {
-    if (activeFilter === "Hari ini") return t.date === "Hari ini";
-    if (activeFilter === "Minggu ini") return ["Hari ini", "Kemarin", "Senin"].includes(t.date);
+  useEffect(() => {
+    async function fetchUserTransactions() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data, error } = await supabase
+            .from("transactions")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
+
+          if (!error && data && data.length > 0) {
+            const mapped: Transaction[] = data.map((t: any) => ({
+              id: t.id,
+              date: t.tanggal || "Hari ini",
+              item: t.item,
+              qty: t.qty || "1 barang",
+              nominal: Number(t.nominal),
+              type: t.type,
+              kategori: t.kategori || "Umum",
+              time: t.created_at ? new Date(t.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "12:00",
+            }));
+            setTransactions(mapped);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching transactions:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchUserTransactions();
+  }, []);
+
+  const handleDelete = async (id: string) => {
+    try {
+      await supabase.from("transactions").delete().eq("id", id);
+    } catch (e) {
+      console.warn("Delete transaction error:", e);
+    }
+    setTransactions(transactions.filter(t => t.id !== id));
+  };
+
+  const filtered = transactions.filter((t) => {
+    if (activeFilter === "Hari ini") return t.date === "Hari ini" || t.date === new Date().toISOString().split("T")[0];
     return true;
   });
 
-  const grouped: Record<string, typeof TRANSACTIONS> = {};
+  const grouped: Record<string, Transaction[]> = {};
   filtered.forEach((t) => {
     if (!grouped[t.date]) grouped[t.date] = [];
     grouped[t.date].push(t);
@@ -39,8 +91,8 @@ export default function RiwayatPage() {
       <header className="sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-6 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30">
         <h1 className="font-headline text-lg font-bold text-[#141a34]">Riwayat Catatan</h1>
         <Link href="/umkm/catat">
-          <button className="bg-[#001b85] text-white text-xs font-bold px-3 py-1.5 rounded-full">
-            + Catat
+          <button className="bg-[#001b85] text-white text-xs font-bold px-3.5 py-1.5 rounded-full flex items-center gap-1 hover:bg-[#0e32c2]">
+            <Plus size={14} /> Catat
           </button>
         </Link>
       </header>
@@ -63,7 +115,7 @@ export default function RiwayatPage() {
           <button
             key={f}
             onClick={() => setActiveFilter(f)}
-            className={`flex-shrink-0 text-xs font-semibold px-4 py-2 rounded-full border transition-colors ${
+            className={`flex-shrink-0 text-xs font-semibold px-4 py-2 rounded-full border transition-colors cursor-pointer ${
               activeFilter === f
                 ? "bg-[#001b85] text-white border-[#001b85]"
                 : "bg-white text-[#444655] border-[#c5c5d7]"
@@ -81,38 +133,33 @@ export default function RiwayatPage() {
             <p className="text-xs font-bold text-[#444655] uppercase tracking-widest font-mono-label mb-3">{date}</p>
             <div className="space-y-2">
               {txns.map((t) => (
-                <div key={t.id} className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    t.type === "masuk" ? "bg-green-100" : "bg-red-100"
-                  }`}>
-                    <span
-                      className="material-symbols-outlined text-lg"
-                      style={{
-                        color: t.type === "masuk" ? "#166534" : "#dc2626",
-                        fontVariationSettings: "'FILL' 1",
-                        fontSize: 18,
-                      }}
-                    >
-                      {t.type === "masuk" ? "arrow_downward" : "arrow_upward"}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-[#141a34] truncate">{t.item}</p>
-                    <p className="text-xs text-[#444655]">{t.qty} · {t.time} · {t.kategori}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className={`font-bold text-sm ${t.type === "masuk" ? "text-green-700" : "text-red-600"}`}>
-                      {t.type === "masuk" ? "+" : "-"}Rp{t.nominal.toLocaleString("id-ID")}
-                    </p>
-                    <div className="flex gap-1 mt-1 justify-end">
-                      <button className="text-[10px] text-[#444655] hover:text-[#001b85] px-1.5 py-0.5 rounded border border-[#e5e7ff]">Edit</button>
-                      <button
-                        onClick={() => setDeleteId(t.id)}
-                        className="text-[10px] text-red-500 hover:text-red-700 px-1.5 py-0.5 rounded border border-red-200"
-                      >
-                        Hapus
-                      </button>
+                <div key={t.id} className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      t.type === "masuk" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                    }`}>
+                      {t.type === "masuk" ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-[#141a34] truncate">{t.item}</p>
+                      <p className="text-xs text-[#444655]">{t.qty} · <span className="font-semibold">{t.kategori}</span></p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className={`font-bold text-sm ${t.type === "masuk" ? "text-emerald-700" : "text-rose-600"}`}>
+                        {t.type === "masuk" ? "+" : "-"}Rp{t.nominal.toLocaleString("id-ID")}
+                      </p>
+                      <p className="text-[10px] text-[#757686]">{t.time}</p>
+                    </div>
+                    <button
+                      onClick={() => handleDelete(t.id)}
+                      className="text-slate-300 hover:text-red-500 transition-colors p-1 cursor-pointer"
+                      title="Hapus Transaksi"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -120,30 +167,6 @@ export default function RiwayatPage() {
           </div>
         ))}
       </div>
-
-      {/* Delete confirmation modal */}
-      {deleteId !== null && (
-        <div className="fixed inset-0 bg-black/40 z-[60] flex items-end justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm animate-fade-in-up">
-            <h3 className="font-bold text-[#141a34] text-base">Hapus catatan ini?</h3>
-            <p className="text-sm text-[#444655] mt-1">Tindakan ini tidak bisa dibatalkan.</p>
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => setDeleteId(null)}
-                className="flex-1 py-3 rounded-xl border border-[#c5c5d7] text-[#444655] font-semibold text-sm"
-              >
-                Batal
-              </button>
-              <button
-                onClick={() => setDeleteId(null)}
-                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-sm"
-              >
-                Hapus
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

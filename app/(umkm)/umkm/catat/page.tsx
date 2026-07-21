@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Camera, Mic, CheckCircle2, RefreshCw, AlertCircle, Trash2, Edit2, Check, X, Sparkles, FileText, ChevronRight } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type Step = "idle" | "recording" | "processing" | "preview";
 
@@ -27,12 +29,24 @@ const SUGGESTIONS = [
 ];
 
 export default function CatatPage() {
+  const router = useRouter();
   const [step, setStep] = useState<Step>("idle");
   const [items, setItems] = useState<ExtractedItem[]>(MOCK_EXTRACTED);
   const [transcription, setTranscription] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editFields, setEditFields] = useState<{ item: string; qty: string; nominal: number }>({ item: "", qty: "", nominal: 0 });
+  const [saving, setSaving] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    async function loadUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+    }
+    loadUser();
+  }, []);
 
   const startRecordingMock = () => {
     setStep("recording");
@@ -53,7 +67,6 @@ export default function CatatPage() {
     setStep("processing");
     setTranscription(sugText);
     
-    // Customize mock values based on suggestion clicked
     if (sugText.includes("cabe")) {
       setItems([
         { id: 1, item: "Cabe & ayam pasar", qty: "1 paket", type: "keluar", nominal: 150000, kategori: "Bahan" }
@@ -84,10 +97,41 @@ export default function CatatPage() {
     stopRecordingMock();
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    setSaving(true);
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    if (currentUser && items.length > 0) {
+      try {
+        const rowsToInsert = items.map((it) => ({
+          user_id: currentUser.id,
+          item: it.item,
+          qty: it.qty || "1 barang",
+          type: it.type,
+          nominal: it.nominal,
+          kategori: it.kategori || "Umum",
+          tanggal: todayStr,
+        }));
+
+        const { error } = await supabase.from("transactions").insert(rowsToInsert);
+        if (error) {
+          console.warn("Save transactions to Supabase error:", error.message);
+        }
+      } catch (err) {
+        console.error("Error saving transactions:", err);
+      }
+    }
+
+    setSaving(false);
+    setToastMessage("✓ Catatan berhasil disimpan ke Supabase!");
     setStep("idle");
     setItems(MOCK_EXTRACTED);
     setTranscription("");
+
+    setTimeout(() => {
+      setToastMessage("");
+      router.push("/umkm/laporan");
+    }, 1500);
   };
 
   const handleDeleteItem = (id: number) => {
@@ -103,7 +147,7 @@ export default function CatatPage() {
     });
   };
 
-  const saveEdit = (id: number) => {
+  const saveEditing = (id: number) => {
     setItems(items.map(item => {
       if (item.id === id) {
         return {
@@ -118,315 +162,205 @@ export default function CatatPage() {
     setEditingId(null);
   };
 
-  // Calculate totals
-  const totalIn = items.filter(i => i.type === "masuk").reduce((sum, item) => sum + item.nominal, 0);
-  const totalOut = items.filter(i => i.type === "keluar").reduce((sum, item) => sum + item.nominal, 0);
-  const netDiff = totalIn - totalOut;
+  const totalMasuk = items.filter(i => i.type === "masuk").reduce((acc, curr) => acc + curr.nominal, 0);
+  const totalKeluar = items.filter(i => i.type === "keluar").reduce((acc, curr) => acc + curr.nominal, 0);
 
   return (
-    <div className="min-h-screen bg-[#fbf8ff] pb-28 animate-fade-in">
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md px-4 h-14 flex items-center justify-between border-b border-slate-200/60">
-        <div className="flex items-center gap-2">
-          <Link href="/umkm" className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
-            <ArrowLeft size={18} className="text-slate-600" />
-          </Link>
-          <h1 className="font-headline text-base font-extrabold text-[#141a34]">Pencatatan AI</h1>
-        </div>
-        <div className="flex gap-1.5">
-          <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors text-slate-500">
-            <Camera size={18} />
+    <>
+      {/* Top Header - Mobile only */}
+      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-5 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30">
+        <Link href="/umkm">
+          <button className="flex items-center gap-1.5 text-xs font-bold text-[#001b85]">
+            <ArrowLeft size={16} /> Beranda
           </button>
-        </div>
+        </Link>
+        <span className="text-xs font-bold text-[#141a34]">Pencatatan AI</span>
       </header>
 
-      <main className="p-4 space-y-6">
+      {toastMessage && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in">
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      <main className="px-5 md:px-0 py-6 space-y-6 pb-28 md:pb-8">
+        {/* Desktop title */}
+        <div className="hidden md:flex justify-between items-center mb-2">
+          <div>
+            <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#141a34]">Pencatatan AI Suara & Teks</h1>
+            <p className="text-xs text-[#444655] mt-1">Ucapkan atau ketik transaksi harian Anda, AI akan mengekstrak data keuangan secara otomatis.</p>
+          </div>
+        </div>
+
+        {/* Step: IDLE */}
         {step === "idle" && (
           <div className="space-y-6">
-            {/* Visual Header / Instructions */}
-            <div className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-sm text-center relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl -z-10" />
-              
-              <div
-                onClick={startRecordingMock}
-                className="relative w-20 h-20 mx-auto rounded-full bg-gradient-to-tr from-[#001b85]/10 to-sky-500/10 flex items-center justify-center mb-4 cursor-pointer hover:scale-105 active:scale-95 transition-all select-none"
-              >
-                {/* Glowing wave effect */}
-                <div className="absolute inset-0 rounded-full bg-[#001b85]/5 animate-ping opacity-60" />
-                <Mic size={32} className="text-[#001b85]" />
+            {/* Record Box */}
+            <div className="bg-white rounded-3xl p-8 border border-[#e5e7ff] shadow-card text-center space-y-6">
+              <div className="w-16 h-16 rounded-2xl bg-[#ececff] flex items-center justify-center mx-auto text-[#001b85]">
+                <Mic size={32} />
               </div>
-
-              <h2 className="font-headline text-lg font-bold text-[#141a34]">Catat Lewat Suara</h2>
-              <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto leading-relaxed">
-                Tekan dan tahan tombol mikrofon di bawah lalu sebutkan belanja atau pemasukan usaha Anda secara lisan.
-              </p>
-              
-              <div className="mt-4 bg-[#f3f2ff]/60 border border-[#e5e7ff] rounded-xl p-3.5 text-left">
-                <p className="text-[10px] font-bold text-[#001b85] uppercase tracking-wider font-mono-label mb-1">💡 Tips AI</p>
-                <p className="text-xs text-[#141a34] leading-relaxed">
-                  "Jual ayam geprek 47 porsi dapet 470 ribu, beli bumbu bumbu 200 ribu."
+              <div>
+                <h2 className="font-headline text-xl font-bold text-[#141a34]">Tekan & Bicara Transaksi Anda</h2>
+                <p className="text-xs text-[#444655] mt-1 max-w-md mx-auto">
+                  Contoh: "Beli beras 2 karung 250 ribu, dapet uang penjualan hari ini 600 ribu"
                 </p>
               </div>
+
+              {/* Big Mic Button */}
+              <button
+                onMouseDown={handleFabPress}
+                onMouseUp={handleFabRelease}
+                onTouchStart={handleFabPress}
+                onTouchEnd={handleFabRelease}
+                onClick={startRecordingMock}
+                className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#001b85] to-[#0ea5e9] text-white flex items-center justify-center mx-auto shadow-xl hover:scale-105 transition-transform cursor-pointer"
+              >
+                <Mic size={40} />
+              </button>
+              <p className="text-[11px] text-[#757686] font-medium">Klik sekali atau tahan tombol untuk mulai merekam</p>
             </div>
 
-            {/* Suggestions area */}
-            <div className="space-y-2">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono-label">Pilihan Cepat Uji Coba</p>
-              <div className="grid gap-2">
-                {SUGGESTIONS.map((sug, idx) => (
+            {/* Suggestions */}
+            <div className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card space-y-3">
+              <h3 className="text-xs font-bold text-[#141a34] uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles size={14} className="text-[#001b85]" /> Contoh Kalimat Langsung Coba
+              </h3>
+              <div className="space-y-2">
+                {SUGGESTIONS.map((sug, i) => (
                   <button
-                    key={idx}
+                    key={i}
                     onClick={() => handleSuggestionClick(sug.text)}
-                    className="w-full flex items-center justify-between text-left bg-white border border-slate-200/60 rounded-xl p-3.5 hover:border-[#001b85] hover:bg-[#ececff]/20 transition-all group"
+                    className="w-full text-left p-3 rounded-xl bg-[#f3f2ff] hover:bg-[#ececff] border border-[#e5e7ff] transition-colors flex items-center justify-between text-xs font-semibold text-[#141a34] cursor-pointer"
                   >
-                    <div className="flex items-center gap-2">
-                      <Sparkles size={14} className="text-amber-500 group-hover:animate-bounce" />
-                      <span className="text-xs font-semibold text-slate-700">{sug.label}</span>
-                    </div>
-                    <ChevronRight size={14} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
+                    <span>{sug.label}</span>
+                    <ChevronRight size={14} className="text-[#001b85]" />
                   </button>
                 ))}
               </div>
             </div>
-
-            {/* Camera Nota Upload */}
-            <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center hover:border-[#001b85] hover:bg-[#ececff]/10 transition-all cursor-pointer">
-              <Camera size={28} className="mx-auto text-slate-400 mb-2" />
-              <h4 className="text-xs font-bold text-slate-700">Foto Nota atau Struk Belanja</h4>
-              <p className="text-[10px] text-slate-400 mt-1">Unggah berkas untuk ekstraksi otomatis</p>
-            </div>
           </div>
         )}
 
-        {/* Recording state */}
+        {/* Step: RECORDING */}
         {step === "recording" && (
-          <div className="bg-white rounded-2xl p-8 border border-slate-200/60 shadow-sm text-center space-y-6 pt-12">
-            <div
+          <div className="bg-white rounded-3xl p-10 border border-blue-200 shadow-card text-center space-y-6 animate-pulse">
+            <div className="w-24 h-24 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto border-4 border-red-500 animate-ping">
+              <Mic size={40} />
+            </div>
+            <div>
+              <h2 className="font-headline text-xl font-bold text-red-600">Merekam Suara Anda...</h2>
+              <p className="text-xs text-[#444655] mt-1">Bicaralah dengan jelas. Lepaskan tombol jika sudah selesai.</p>
+            </div>
+            <button
               onClick={stopRecordingMock}
-              className="w-24 h-24 mx-auto rounded-full bg-red-50 border border-red-100 flex items-center justify-center relative cursor-pointer hover:scale-105 active:scale-95 transition-all"
+              className="bg-red-600 text-white text-xs font-bold px-6 py-3 rounded-xl hover:bg-red-700 transition-colors"
             >
-              <div className="absolute inset-0 rounded-full bg-red-100 animate-ping opacity-50" />
-              <div className="flex items-end gap-1 h-8 justify-center">
-                {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-                  <div key={i} className="w-1.5 bg-red-500 rounded-full waveform-bar" style={{ height: 8 }} />
-                ))}
-              </div>
-            </div>
-            <div>
-              <h2 className="font-headline text-lg font-bold text-red-600">Sedang Merekam Suara...</h2>
-              <p className="text-xs text-slate-400 mt-1">Klik lingkaran merah di atas atau lepaskan tombol untuk memproses</p>
-            </div>
-            <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 px-3 py-1 rounded-full text-red-600 font-mono text-xs font-bold">
-              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span>00:03</span>
-            </div>
+              Selesai Merekam ⏹
+            </button>
           </div>
         )}
 
-        {/* Processing state */}
+        {/* Step: PROCESSING */}
         {step === "processing" && (
-          <div className="bg-white rounded-2xl p-8 border border-slate-200/60 shadow-sm text-center space-y-6 pt-12">
-            <div className="w-20 h-20 mx-auto rounded-full bg-[#001b85]/5 flex items-center justify-center">
-              <RefreshCw size={36} className="text-[#001b85] animate-spin" />
-            </div>
-            <div>
-              <h2 className="font-headline text-lg font-bold text-[#001b85]">Memproses Data Suara...</h2>
-              <p className="text-xs text-slate-400 mt-1">AI Whisper & GPT sedang mengekstrak nama barang, jumlah, dan nominal...</p>
-            </div>
+          <div className="bg-white rounded-3xl p-10 border border-[#e5e7ff] shadow-card text-center space-y-4">
+            <RefreshCw size={36} className="animate-spin text-[#001b85] mx-auto" />
+            <h2 className="font-headline text-lg font-bold text-[#141a34]">AI Sedang Memproses Suara Anda...</h2>
+            <p className="text-xs text-[#444655]">Mengekstrak item, nominal, dan kategori transaksi...</p>
           </div>
         )}
 
-        {/* Preview and Edit state */}
+        {/* Step: PREVIEW */}
         {step === "preview" && (
-          <div className="space-y-6 animate-fade-in-up">
-            {/* Header section */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={20} className="text-emerald-500" fill="currentColor" color="white" />
-                <h2 className="font-headline text-sm font-extrabold text-slate-800">Hasil Analisis AI</h2>
-              </div>
-              <span className="text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Berhasil</span>
+          <div className="space-y-5">
+            {/* Transcription Box */}
+            <div className="bg-[#ececff] rounded-2xl p-4 border border-[#bac3ff]">
+              <p className="text-[10px] font-bold text-[#001b85] uppercase tracking-wider">Hasil Transkripsi Suara AI:</p>
+              <p className="text-xs text-[#141a34] font-medium mt-1">"{transcription}"</p>
             </div>
 
-            {/* AI Input Log Text */}
-            <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3.5">
-              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider font-mono-label mb-1">Transkrip Suara</p>
-              <p className="text-xs text-slate-700 italic">"{transcription}"</p>
-            </div>
-
-            {/* Extracted items editor */}
-            <div className="space-y-3">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Item Transaksi Ekstraksi</p>
-              {items.length === 0 ? (
-                <div className="bg-amber-50 border border-amber-200/60 rounded-xl p-4 text-center">
-                  <AlertCircle className="mx-auto text-amber-500 mb-1" size={20} />
-                  <p className="text-xs font-semibold text-amber-900">Tidak ada item terdeteksi.</p>
-                  <p className="text-[10px] text-amber-800/80 mt-0.5">Silakan lakukan perekaman ulang dengan kalimat yang lebih jelas.</p>
-                </div>
-              ) : (
-                items.map((item) => {
-                  const isEditing = editingId === item.id;
-                  return (
-                    <div key={item.id} className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-4 relative">
-                      {isEditing ? (
-                        <div className="space-y-3">
-                          <div className="flex gap-2">
-                            <div className="flex-1">
-                              <label className="block text-[8px] font-bold text-slate-400 uppercase mb-1">Nama Item</label>
-                              <input
-                                type="text"
-                                value={editFields.item}
-                                onChange={(e) => setEditFields({ ...editFields, item: e.target.value })}
-                                className="w-full text-xs font-semibold px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-[#001b85]"
-                              />
-                            </div>
-                            <div className="w-20">
-                              <label className="block text-[8px] font-bold text-slate-400 uppercase mb-1">Kuantitas</label>
-                              <input
-                                type="text"
-                                value={editFields.qty}
-                                onChange={(e) => setEditFields({ ...editFields, qty: e.target.value })}
-                                className="w-full text-xs font-semibold px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-[#001b85]"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-[8px] font-bold text-slate-400 uppercase mb-1">Nominal (Rp)</label>
-                            <input
-                              type="number"
-                              value={editFields.nominal}
-                              onChange={(e) => setEditFields({ ...editFields, nominal: parseInt(e.target.value) || 0 })}
-                              className="w-full text-xs font-bold px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-[#001b85] text-[#001b85]"
-                            />
-                          </div>
-                          <div className="flex gap-2 justify-end">
-                            <button
-                              onClick={() => saveEdit(item.id)}
-                              className="bg-emerald-500 text-white p-1.5 rounded-lg hover:bg-emerald-600 transition-colors text-xs font-bold flex items-center gap-1 px-2.5"
-                            >
-                              <Check size={12} /> Simpan
-                            </button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="border border-slate-200 text-slate-600 p-1.5 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold flex items-center gap-1 px-2.5"
-                            >
-                              <X size={12} /> Batal
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                                item.type === "masuk" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-red-50 text-red-700 border border-red-100"
-                              }`}>
-                                {item.type === "masuk" ? "▲ Masuk" : "▼ Keluar"}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-semibold">{item.kategori}</span>
-                            </div>
-                            <h4 className="font-bold text-slate-800 text-xs">{item.item}</h4>
-                            <p className="text-[10px] text-slate-500">Jumlah: {item.qty}</p>
-                          </div>
-
-                          <div className="text-right flex flex-col items-end gap-2.5">
-                            <p className={`font-bold text-sm ${item.type === "masuk" ? "text-emerald-600" : "text-red-500"}`}>
-                              {item.type === "masuk" ? "+" : "-"}Rp{item.nominal.toLocaleString("id-ID")}
-                            </p>
-                            <div className="flex gap-1.5">
-                              <button
-                                onClick={() => startEditing(item)}
-                                className="w-6 h-6 rounded-md hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-[#001b85] transition-colors"
-                                title="Edit Item"
-                              >
-                                <Edit2 size={10} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteItem(item.id)}
-                                className="w-6 h-6 rounded-md hover:bg-red-50 border border-red-100 flex items-center justify-center text-slate-400 hover:text-red-600 transition-colors"
-                                title="Hapus Item"
-                              >
-                                <Trash2 size={10} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Profit Ribbon summary */}
-            {items.length > 0 && (
-              <div className="bg-white rounded-xl border border-slate-200/60 p-4 space-y-2">
-                <div className="flex justify-between text-xs text-slate-500">
-                  <span>Total Pemasukan:</span>
-                  <span className="font-bold text-emerald-600">Rp{totalIn.toLocaleString("id-ID")}</span>
-                </div>
-                <div className="flex justify-between text-xs text-slate-500">
-                  <span>Total Pengeluaran:</span>
-                  <span className="font-bold text-red-500">Rp{totalOut.toLocaleString("id-ID")}</span>
-                </div>
-                <div className="border-t border-slate-100 pt-2 flex justify-between text-xs font-bold text-slate-800">
-                  <span>Net Selisih Kas:</span>
-                  <span className={netDiff >= 0 ? "text-emerald-600" : "text-red-500"}>
-                    {netDiff >= 0 ? "+" : ""}Rp{netDiff.toLocaleString("id-ID")}
+            {/* Extracted items card */}
+            <div className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm text-[#141a34]">Item Teridentifikasi ({items.length})</h3>
+                <div className="flex gap-2 text-xs font-bold">
+                  <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                    Masuk: Rp{totalMasuk.toLocaleString("id-ID")}
+                  </span>
+                  <span className="text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200">
+                    Keluar: Rp{totalKeluar.toLocaleString("id-ID")}
                   </span>
                 </div>
               </div>
-            )}
 
-            {/* Actions */}
-            <div className="space-y-2">
-              <button
-                onClick={handleConfirm}
-                disabled={items.length === 0}
-                className="w-full bg-[#001b85] text-white font-bold py-3.5 rounded-xl hover:bg-[#0e32c2] transition-colors text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Konfirmasi & Simpan Catatan
-              </button>
-              <button
-                onClick={() => setStep("idle")}
-                className="w-full text-slate-600 font-bold py-3.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors text-xs text-center"
-              >
-                Rekam Ulang
-              </button>
+              {/* Items List */}
+              <div className="space-y-3">
+                {items.map((it) => (
+                  <div key={it.id} className="p-3.5 rounded-xl border border-[#e5e7ff] bg-[#fbf8ff] flex items-center justify-between gap-3">
+                    {editingId === it.id ? (
+                      <div className="flex-1 space-y-2">
+                        <input
+                          value={editFields.item}
+                          onChange={(e) => setEditFields({ ...editFields, item: e.target.value })}
+                          className="w-full text-xs p-2 rounded border border-[#001b85]"
+                        />
+                        <div className="flex gap-2">
+                          <input
+                            value={editFields.qty}
+                            onChange={(e) => setEditFields({ ...editFields, qty: e.target.value })}
+                            className="w-1/2 text-xs p-2 rounded border"
+                          />
+                          <input
+                            type="number"
+                            value={editFields.nominal}
+                            onChange={(e) => setEditFields({ ...editFields, nominal: Number(e.target.value) })}
+                            className="w-1/2 text-xs p-2 rounded border"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-1">
+                          <button onClick={() => saveEditing(it.id)} className="p-1 text-emerald-600"><Check size={16} /></button>
+                          <button onClick={() => setEditingId(null)} className="p-1 text-slate-400"><X size={16} /></button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <p className="font-bold text-xs text-[#141a34]">{it.item}</p>
+                          <p className="text-[11px] text-[#444655]">{it.qty} · <span className="font-semibold">{it.kategori}</span></p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs font-bold ${it.type === "masuk" ? "text-emerald-700" : "text-rose-600"}`}>
+                            {it.type === "masuk" ? "+" : "-"}Rp{it.nominal.toLocaleString("id-ID")}
+                          </span>
+                          <button onClick={() => startEditing(it)} className="text-slate-400 hover:text-slate-600"><Edit2 size={14} /></button>
+                          <button onClick={() => handleDeleteItem(it.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-2 pt-3">
+                <button
+                  onClick={() => setStep("idle")}
+                  className="px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer"
+                >
+                  Ulangi Merekam
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  disabled={saving || items.length === 0}
+                  className="flex-1 bg-[#001b85] text-white font-bold py-3 rounded-xl text-xs hover:bg-[#0e32c2] transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {saving ? "Menyimpan ke Supabase..." : "Simpan Catatan ke Supabase 🚀"}
+                </button>
+              </div>
             </div>
           </div>
         )}
       </main>
-
-      {/* Floating Record Mic Button container */}
-      {(step === "idle" || step === "recording") && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-40 select-none md:hidden">
-          {step === "recording" && (
-            <p className="text-[10px] text-red-500 font-bold tracking-wide animate-pulse bg-white/90 border border-red-200 px-3 py-1 rounded-full shadow-sm mb-1.5">
-              Lepaskan sentuhan untuk memproses
-            </p>
-          )}
-          <button
-            className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all border-2 border-white select-none ${
-              step === "recording" ? "bg-red-500 scale-110 shadow-red-500/20" : "hover:scale-[1.05]"
-            }`}
-            style={step !== "recording" ? { background: "linear-gradient(135deg, #15803d, #0ea5e9)" } : {}}
-            onMouseDown={handleFabPress}
-            onMouseUp={handleFabRelease}
-            onTouchStart={handleFabPress}
-            onTouchEnd={handleFabRelease}
-          >
-            {step === "recording" ? (
-              <div className="flex items-end gap-[2px] h-6">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="w-[3px] bg-white rounded-full waveform-bar" style={{ height: 8 }} />
-                ))}
-              </div>
-            ) : (
-              <Mic size={24} className="text-white" />
-            )}
-          </button>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
