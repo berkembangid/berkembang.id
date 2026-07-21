@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Bell, Flame, ArrowUp, CheckCircle2, Circle, TrendingUp,
   Share2, Send, Copy, Trophy, BarChart2, FileText, Lightbulb
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 const timeGreeting = () => {
   const hour = new Date().getHours();
@@ -37,6 +38,18 @@ const MAX_PROFIT = Math.max(...WEEKLY_PROFIT);
 
 export default function BerandaPage() {
   const [copied, setCopied] = useState(false);
+  const [businessName, setBusinessName] = useState("Ibu Sari");
+
+  useEffect(() => {
+    async function loadUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const name = user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Ibu Sari";
+        setBusinessName(name);
+      }
+    }
+    loadUser();
+  }, []);
 
   const doneCount = PROFILE_ITEMS.filter((i) => i.done).length;
   const pct = Math.round((doneCount / PROFILE_ITEMS.length) * 100);
@@ -73,7 +86,7 @@ export default function BerandaPage() {
           <p className="text-xs font-bold text-[#444655] uppercase tracking-widest font-mono-label">
             {timeGreeting()},
           </p>
-          <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#001b85] mt-0.5">Halo, Ibu Sari! 👋</h1>
+          <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#001b85] mt-0.5">Halo, {businessName}! 👋</h1>
           <p className="text-sm text-[#444655] mt-0.5">Sudah 5 hari berturut-turut! 🔥</p>
         </section>
 

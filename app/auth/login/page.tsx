@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<"umkm" | "institution" | "admin">("umkm");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,31 +22,42 @@ export default function LoginPage() {
 
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
       if (authError) {
-        setError(authError.message === "Invalid login credentials" ? "Email atau kata sandi salah." : authError.message);
+        let msg = "Terjadi kesalahan saat masuk. Silakan periksa email dan kata sandi Anda.";
+        if (authError.message === "Invalid login credentials") {
+          msg = "Email atau kata sandi salah. Silakan coba lagi.";
+        } else if (authError.message.includes("Email not confirmed")) {
+          msg = "Email belum dikonfirmasi. Silakan periksa kotak masuk email Anda.";
+        } else if (authError.message) {
+          msg = authError.message;
+        }
+        setError(msg);
         setLoading(false);
         return;
       }
 
       if (data?.user) {
-        // Fetch user profile to get their role
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", data.user.id)
-          .single();
+        let userRole = data.user.user_metadata?.role || role;
 
-        if (profileError) {
-          setError("Gagal mengambil data profil.");
-          setLoading(false);
-          return;
+        // Try to fetch profile table role if exists
+        try {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", data.user.id)
+            .maybeSingle();
+
+          if (profile?.role) {
+            userRole = profile.role;
+          }
+        } catch (err) {
+          console.warn("Profiles table optional lookup skipped:", err);
         }
 
-        const userRole = profile?.role || "umkm";
         if (userRole === "admin") {
           router.push("/admin");
         } else if (userRole === "institution") {
@@ -53,9 +66,10 @@ export default function LoginPage() {
           router.push("/umkm");
         }
       }
-    } catch (err) {
-      console.error(err);
-      setError("Terjadi kesalahan saat masuk. Silakan coba lagi.");
+    } catch (err: any) {
+      console.error("Login catch error:", err);
+      const errorMessage = typeof err === "string" ? err : err?.message || "Terjadi kesalahan koneksi ke server.";
+      setError(errorMessage);
       setLoading(false);
     }
   };
@@ -70,8 +84,9 @@ export default function LoginPage() {
         {(["umkm", "institution", "admin"] as const).map((r) => (
           <button
             key={r}
+            type="button"
             onClick={() => setRole(r)}
-            className={`flex-1 text-xs font-bold py-2 rounded-lg transition-colors capitalize ${
+            className={`flex-1 text-xs font-bold py-2 rounded-lg transition-colors capitalize cursor-pointer ${
               role === r ? "bg-white text-[#001b85] shadow-sm" : "text-[#444655]"
             }`}
           >
@@ -81,40 +96,57 @@ export default function LoginPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-600 text-xs font-semibold p-3.5 rounded-xl border border-red-100 mb-4">
-          {error}
+        <div className="bg-red-50 text-red-600 text-xs font-semibold p-3.5 rounded-xl border border-red-100 mb-4 flex items-start gap-2 animate-fade-in">
+          <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+          <span>{error}</span>
         </div>
       )}
 
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
           <label className="block text-xs font-bold text-[#444655] mb-1.5">Email</label>
-          <input
-            type="email"
-            value={email}
-            disabled={loading}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="email@contoh.com"
-            className="w-full px-4 py-3 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none transition-colors disabled:bg-slate-50 disabled:text-slate-400"
-            required
-          />
+          <div className="relative">
+            <input
+              type="email"
+              value={email}
+              disabled={loading}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="email@contoh.com"
+              className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none transition-colors disabled:bg-slate-50 disabled:text-slate-400"
+              required
+            />
+            <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
         </div>
+
         <div>
           <label className="block text-xs font-bold text-[#444655] mb-1.5">Kata Sandi</label>
-          <input
-            type="password"
-            value={password}
-            disabled={loading}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            className="w-full px-4 py-3 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none transition-colors disabled:bg-slate-50 disabled:text-slate-400"
-            required
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              disabled={loading}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-4 py-3 pl-10 pr-11 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none transition-colors disabled:bg-slate-50 disabled:text-slate-400"
+              required
+            />
+            <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer"
+              aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </div>
+
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#001b85] text-white font-bold py-3.5 rounded-xl text-sm hover:bg-[#0e32c2] transition-colors mt-2 disabled:bg-[#001b85]/50 flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+          className="w-full bg-[#001b85] text-white font-bold py-3.5 rounded-xl text-sm hover:bg-[#0e32c2] transition-colors mt-2 disabled:bg-[#001b85]/50 flex items-center justify-center cursor-pointer disabled:cursor-not-allowed shadow-sm"
         >
           {loading ? "Memproses..." : "Masuk"}
         </button>

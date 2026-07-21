@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useRef, useState, useEffect } from "react";
 import { Home, Mic, Target, User, LogOut, Sparkles, Bell, BarChart3 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 const SIDEBAR_TABS = [
   { label: "Beranda", href: "/umkm", Icon: Home },
@@ -25,9 +26,51 @@ const MOBILE_TABS_RIGHT = [
 
 export default function UMKMLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [fabActive, setFabActive] = useState(false);
   const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([]);
   const rippleIdRef = useRef(0);
+
+  // Supabase User State
+  const [userBusinessName, setUserBusinessName] = useState("Warung Ibu Sari");
+  const [userEmail, setUserEmail] = useState("");
+  const [userInitials, setUserInitials] = useState("WS");
+
+  useEffect(() => {
+    async function loadUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const metaName = user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Warung Ibu Sari";
+        setUserBusinessName(metaName);
+        setUserEmail(user.email || "");
+
+        const words = metaName.trim().split(" ");
+        if (words.length >= 2) {
+          setUserInitials((words[0][0] + words[1][0]).toUpperCase());
+        } else if (words.length === 1 && words[0].length >= 2) {
+          setUserInitials(words[0].substring(0, 2).toUpperCase());
+        } else {
+          setUserInitials("WS");
+        }
+      }
+    }
+    loadUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const metaName = session.user.user_metadata?.nama_usaha || session.user.email?.split("@")[0] || "Warung Ibu Sari";
+        setUserBusinessName(metaName);
+        setUserEmail(session.user.email || "");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push("/auth/login");
+  };
 
   function handleFabPress(e: React.MouseEvent<HTMLButtonElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -61,12 +104,12 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         {/* User Info Quick View */}
         <div className="px-4 py-4 border-b border-[#e5e7ff]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#ececff] flex items-center justify-center font-bold text-[#001b85]">
-              IS
+            <div className="w-10 h-10 rounded-full bg-[#ececff] flex items-center justify-center font-bold text-[#001b85] text-xs">
+              {userInitials}
             </div>
-            <div>
-              <p className="text-sm font-bold text-[#141a34]">Warung Ibu Sari</p>
-              <p className="text-xs text-[#444655]">Readiness Score: 58</p>
+            <div className="overflow-hidden">
+              <p className="text-sm font-bold text-[#141a34] truncate">{userBusinessName}</p>
+              <p className="text-xs text-[#444655] truncate">{userEmail || "Readiness Score: 58"}</p>
             </div>
           </div>
         </div>
@@ -89,19 +132,20 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
 
         {/* Footer Logout */}
         <div className="px-4 py-4 border-t border-[#e5e7ff]">
-          <Link href="/">
-            <div className="sidebar-nav-item text-red-600 hover:bg-red-50 hover:text-red-700">
-              <LogOut size={18} />
-              <span>Keluar</span>
-            </div>
-          </Link>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full sidebar-nav-item text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer"
+          >
+            <LogOut size={18} />
+            <span>Keluar</span>
+          </button>
         </div>
       </aside>
 
       {/* MAIN CONTAINER */}
       <div className="flex-1 flex flex-col md:ml-64 min-h-screen">
         {/* Children content area */}
-        {/* On mobile: max-w-[480px] centered with bottom nav padding. On desktop: expands fully! */}
         <div className="w-full max-w-[480px] md:max-w-7xl mx-auto flex-1 pb-24 md:pb-8 md:px-8">
           {children}
         </div>
@@ -179,23 +223,16 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
             {ripples.map((r) => (
               <span
                 key={r.id}
-                className="absolute rounded-full bg-white/30 pointer-events-none"
-                style={{ width: 20, height: 20, left: r.x - 10, top: r.y - 10, animation: "ripple 0.7s ease-out forwards" }}
+                className="fab-ripple"
+                style={{ left: r.x - 40, top: r.y - 40, width: 80, height: 80 }}
               />
             ))}
-            {fabActive ? (
-              <div className="flex items-end gap-[3px] h-8">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="w-[3px] bg-white rounded-full waveform-bar" style={{ height: 8 }} />
-                ))}
-              </div>
-            ) : (
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
               <Mic size={28} className="text-white" />
-            )}
+            </div>
           </button>
         </Link>
       </div>
-
     </div>
   );
 }
