@@ -29,10 +29,8 @@ export default function BerandaPage() {
     { label: "Nama usaha", done: false },
     { label: "Sektor usaha", done: false },
     { label: "Kota / Lokasi", done: false },
-    { label: "Alamat kios", done: false },
-    { label: "No. Telepon / WA", done: false },
-    { label: "Catatan transaksi", done: false },
-    { label: "NIB terisi", done: false },
+    { label: "Kontak Telepon", done: false },
+    { label: "Pencatatan Transaksi / NIB", done: false },
   ]);
 
   useEffect(() => {
@@ -57,7 +55,6 @@ export default function BerandaPage() {
         const name = dbProfile?.name || dbProfile?.nama_usaha || user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Pengusaha UMKM";
         const sektor = dbProfile?.sektor_usaha || user.user_metadata?.sektor_usaha || "";
         const lokasi = dbProfile?.lokasi || user.user_metadata?.lokasi || "";
-        const alamat = dbProfile?.alamat || user.user_metadata?.alamat || "";
         const phone = dbProfile?.phone || user.user_metadata?.phone || "";
         const nib = dbProfile?.nib || user.user_metadata?.nib || "";
 
@@ -115,19 +112,17 @@ export default function BerandaPage() {
         const calculatedReadiness = Math.round((konsistensi + kas + legalitas + stabilitas) / 4);
         setReadinessScore(calculatedReadiness);
 
-        // ───────── REAL PROFILE COMPLETION CALCULATION ─────────
+        // ───────── INTUITIVE 5-ITEM PROFILE COMPLETION CALCULATION (20% EACH) ─────────
         const updatedItems = [
           { label: "Nama usaha", done: Boolean(name && name !== "Pengusaha UMKM") },
           { label: "Sektor usaha", done: Boolean(sektor) },
           { label: "Kota / Lokasi", done: Boolean(lokasi) },
-          { label: "Alamat kios", done: Boolean(alamat) },
-          { label: "No. Telepon / WA", done: Boolean(phone) },
-          { label: "Catatan transaksi", done: count > 0 },
-          { label: "NIB terisi", done: Boolean(nib) },
+          { label: "Kontak Telepon", done: Boolean(phone) },
+          { label: "Pencatatan Transaksi / NIB", done: count > 0 || Boolean(nib) },
         ];
         setProfileItems(updatedItems);
         const doneCount = updatedItems.filter(i => i.done).length;
-        setProfilePct(Math.round((doneCount / updatedItems.length) * 100));
+        setProfilePct(doneCount * 20);
 
         // Format recent activities from real Supabase data
         if (allTxs.length > 0) {

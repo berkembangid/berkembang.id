@@ -33,17 +33,33 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
   const rippleIdRef = useRef(0);
 
   // Supabase User State
-  const [userBusinessName, setUserBusinessName] = useState("Warung Ibu Sari");
+  const [userBusinessName, setUserBusinessName] = useState("Pengusaha UMKM");
   const [userEmail, setUserEmail] = useState("");
-  const [userInitials, setUserInitials] = useState("WS");
+  const [userInitials, setUserInitials] = useState("UM");
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadUser() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const metaName = user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Warung Ibu Sari";
+        let dbProfile: any = null;
+        try {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", user.id)
+            .maybeSingle();
+          dbProfile = prof;
+        } catch (e) {
+          console.warn("Profile fetch error:", e);
+        }
+
+        const metaName = dbProfile?.name || dbProfile?.nama_usaha || user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Pengusaha UMKM";
+        const avatar = dbProfile?.avatar_url || user.user_metadata?.avatar_url || null;
+
         setUserBusinessName(metaName);
         setUserEmail(user.email || "");
+        setUserAvatarUrl(avatar);
 
         const words = metaName.trim().split(" ");
         if (words.length >= 2) {
@@ -51,17 +67,30 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         } else if (words.length === 1 && words[0].length >= 2) {
           setUserInitials(words[0].substring(0, 2).toUpperCase());
         } else {
-          setUserInitials("WS");
+          setUserInitials("UM");
         }
       }
     }
     loadUser();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        const metaName = session.user.user_metadata?.nama_usaha || session.user.email?.split("@")[0] || "Warung Ibu Sari";
+        let dbProfile: any = null;
+        try {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", session.user.id)
+            .maybeSingle();
+          dbProfile = prof;
+        } catch (e) {}
+
+        const metaName = dbProfile?.name || dbProfile?.nama_usaha || session.user.user_metadata?.nama_usaha || session.user.email?.split("@")[0] || "Pengusaha UMKM";
+        const avatar = dbProfile?.avatar_url || session.user.user_metadata?.avatar_url || null;
+
         setUserBusinessName(metaName);
         setUserEmail(session.user.email || "");
+        setUserAvatarUrl(avatar);
       }
     });
 
@@ -97,30 +126,35 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
     <div className="min-h-screen flex flex-col md:flex-row bg-[#fbf8ff]">
       
       {/* DESKTOP SIDEBAR: visible on md and above */}
-      <aside className="hidden md:flex w-64 bg-white border-r border-[#e5e7ff] flex-col fixed h-screen z-30">
-        {/* Logo */}
-        <div className="px-6 py-5 border-b border-[#e5e7ff]">
-          <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-8 w-auto object-contain" />
-          <p className="text-xs text-emerald-600 mt-2 font-bold flex items-center gap-1">
-            <Sparkles size={10} /> UMKM Portal
-          </p>
+      <aside className="hidden md:flex w-64 bg-white border-r border-[#e5e7ff] flex-col fixed h-screen z-30 shadow-sm">
+        {/* Clean & Bigger Logo Header */}
+        <div className="px-6 py-5 border-b border-[#e5e7ff] flex items-center justify-between">
+          <Link href="/umkm">
+            <img src="/logo/logo berkembang.webp" alt="Berkembang.id" className="h-11 md:h-12 w-auto object-contain hover:opacity-90 transition-opacity" />
+          </Link>
         </div>
 
-        {/* User Info Quick View */}
-        <div className="px-4 py-4 border-b border-[#e5e7ff]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#ececff] flex items-center justify-center font-bold text-[#001b85] text-xs">
-              {userInitials}
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-sm font-bold text-[#141a34] truncate">{userBusinessName}</p>
-              <p className="text-xs text-[#444655] truncate">{userEmail || "Readiness Score: 58"}</p>
+        {/* User Profile Info Quick View with Real Avatar */}
+        <Link href="/umkm/profil">
+          <div className="px-4 py-4 border-b border-[#e5e7ff] hover:bg-slate-50/80 transition-colors cursor-pointer group">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#001b85] text-white flex items-center justify-center font-bold text-sm shadow-sm overflow-hidden flex-shrink-0 border border-[#001b85]/20">
+                {userAvatarUrl ? (
+                  <img src={userAvatarUrl} alt={userBusinessName} className="w-full h-full object-cover" />
+                ) : (
+                  userInitials
+                )}
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-sm font-bold text-[#141a34] group-hover:text-[#001b85] transition-colors truncate">{userBusinessName}</p>
+                <p className="text-xs text-[#757686] truncate">{userEmail || "Kelola profil usaha"}</p>
+              </div>
             </div>
           </div>
-        </div>
+        </Link>
 
         {/* Navigation Items */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {SIDEBAR_TABS.map((item) => {
             const isLaporanGroup = item.href === "/umkm/laporan";
             const isLaporanActive = pathname === "/umkm/laporan" || pathname === "/umkm/riwayat";
@@ -137,7 +171,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
                   </div>
                 </Link>
 
-                {/* Sub-branch for Laporan Keuangan -> Riwayat Transaksi (Only visible when Laporan group is active) */}
+                {/* Sub-branch for Laporan Keuangan -> Riwayat Transaksi */}
                 {isLaporanGroup && isLaporanActive && (
                   <div className="ml-5 pl-3 border-l-2 border-[#c5c5d7]/50 space-y-1 my-1 animate-fade-in">
                     <Link href="/umkm/riwayat">
@@ -170,96 +204,50 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         </div>
       </aside>
 
-      {/* MAIN CONTAINER */}
-      <div className="flex-1 flex flex-col md:ml-64 min-h-screen">
-        {/* Children content area */}
-        <div className="w-full max-w-[480px] md:max-w-7xl mx-auto flex-1 pb-24 md:pb-8 md:px-8">
+      {/* MAIN CONTENT AREA */}
+      <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
+        <div className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl w-full mx-auto">
           {children}
         </div>
       </div>
 
-      {/* MOBILE BOTTOM NAVIGATION: visible only on mobile/tablet (< md) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#c5c5d7] z-40">
-        <div className="max-w-[480px] mx-auto flex items-end justify-around px-2 h-16 relative">
-          {MOBILE_TABS_LEFT.map((tab) => {
-            const isActive =
-              tab.href === "/umkm" ? pathname === "/umkm" : pathname.startsWith(tab.href);
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 min-h-[48px]"
-              >
-                <tab.Icon
-                  size={22}
-                  className={`transition-colors ${isActive ? "text-[#001b85]" : "text-[#757686]"}`}
-                  fill={isActive ? "currentColor" : "none"}
-                />
-                <span className={`text-[10px] font-semibold transition-colors ${isActive ? "text-[#001b85]" : "text-[#757686]"}`}>
-                  {tab.label}
-                </span>
-              </Link>
-            );
-          })}
+      {/* MOBILE BOTTOM NAVIGATION BAR */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#c5c5d7]/40 px-3 py-2 flex items-center justify-around">
+        {MOBILE_TABS_LEFT.map((tab) => {
+          const isActive = pathname === tab.href;
+          return (
+            <Link key={tab.href} href={tab.href} className="flex-1 flex flex-col items-center justify-center py-1">
+              <tab.Icon size={20} className={isActive ? "text-[#001b85]" : "text-[#757686]"} />
+              <span className={`text-[10px] font-bold mt-1 ${isActive ? "text-[#001b85]" : "text-[#757686]"}`}>{tab.label}</span>
+            </Link>
+          );
+        })}
 
-          {/* FAB Placeholder space */}
-          <div className="flex-1 flex justify-center">
-            <div className="w-[72px]" />
-          </div>
-
-          {MOBILE_TABS_RIGHT.map((tab) => {
-            const isActive = pathname.startsWith(tab.href);
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 min-h-[48px]"
-              >
-                <tab.Icon
-                  size={22}
-                  className={`transition-colors ${isActive ? "text-[#001b85]" : "text-[#757686]"}`}
-                  fill={isActive ? "currentColor" : "none"}
-                />
-                <span className={`text-[10px] font-semibold transition-colors ${isActive ? "text-[#001b85]" : "text-[#757686]"}`}>
-                  {tab.label}
-                </span>
-              </Link>
-            );
-          })}
+        {/* FAB Pencatatan AI Button */}
+        <div className="relative -top-5 flex items-center justify-center">
+          <Link href="/umkm/catat">
+            <button
+              onMouseDown={handleFabPress}
+              onMouseUp={handleFabRelease}
+              className={`w-14 h-14 rounded-full bg-gradient-to-tr from-[#001b85] to-[#db2777] text-white flex items-center justify-center shadow-lg shadow-[#001b85]/30 transition-transform ${
+                fabActive ? "scale-95" : "hover:scale-105"
+              }`}
+            >
+              <Mic size={24} />
+            </button>
+          </Link>
         </div>
-      </nav>
 
-      {/* MOBILE FAB: visible only on mobile/tablet (< md) */}
-      <div className="md:hidden">
-        <Link href="/umkm/catat">
-          <button
-            className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-[72px] h-[72px] rounded-full flex items-center justify-center shadow-lg overflow-hidden transition-transform ${
-              fabActive ? "scale-105" : "scale-100"
-            }`}
-            style={{ background: "linear-gradient(135deg, #15803d, #0ea5e9)" }}
-            onMouseDown={handleFabPress}
-            onMouseUp={handleFabRelease}
-            onTouchStart={(e) => {
-              const touch = e.touches[0];
-              const rect = e.currentTarget.getBoundingClientRect();
-              handleFabPress({ clientX: touch.clientX, clientY: touch.clientY, currentTarget: e.currentTarget } as React.MouseEvent<HTMLButtonElement>);
-            }}
-            onTouchEnd={handleFabRelease}
-            aria-label="Rekam suara"
-          >
-            {ripples.map((r) => (
-              <span
-                key={r.id}
-                className="fab-ripple"
-                style={{ left: r.x - 40, top: r.y - 40, width: 80, height: 80 }}
-              />
-            ))}
-            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-              <Mic size={28} className="text-white" />
-            </div>
-          </button>
-        </Link>
-      </div>
+        {MOBILE_TABS_RIGHT.map((tab) => {
+          const isActive = pathname === tab.href;
+          return (
+            <Link key={tab.href} href={tab.href} className="flex-1 flex flex-col items-center justify-center py-1">
+              <tab.Icon size={20} className={isActive ? "text-[#001b85]" : "text-[#757686]"} />
+              <span className={`text-[10px] font-bold mt-1 ${isActive ? "text-[#001b85]" : "text-[#757686]"}`}>{tab.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }
