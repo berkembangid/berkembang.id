@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Plus, BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar, Tag, Trash2, X, PlusCircle, Sparkles, Receipt, Check } from "lucide-react";
+import DateTimePicker from "@/components/DateTimePicker";
 
 interface Transaction {
   id: number;
@@ -398,14 +399,8 @@ export default function LaporanPage() {
 
               {/* Date */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Tanggal</label>
-                <input
-                  type="date"
-                  required
-                  value={txTanggal}
-                  onChange={(e) => setTxTanggal(e.target.value)}
-                  className="w-full text-xs font-semibold px-4 py-3 rounded-xl border border-[#c5c5d7] focus:outline-none focus:border-[#001b85] transition-colors"
-                />
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Tanggal & Waktu</label>
+                <DateTimePicker value={txTanggal} onChange={setTxTanggal} />
               </div>
 
               {/* Actions */}
