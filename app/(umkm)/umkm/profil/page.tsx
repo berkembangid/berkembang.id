@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Check, User, Mail, MapPin, Tag, LogOut, Sparkles, Calendar, Building2, FileCheck } from "lucide-react";
+import { Copy, Check, User, Mail, MapPin, Tag, LogOut, Sparkles, Calendar, Building2, FileCheck, Info } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 function scoreColor(s: number) {
@@ -31,12 +31,12 @@ export default function ProfilPage() {
   // Dynamic calculated scores from Supabase transactions
   const [txCount, setTxCount] = useState(0);
   const [totalProfit, setTotalProfit] = useState(0);
-  const [readinessScore, setReadinessScore] = useState(45);
+  const [readinessScore, setReadinessScore] = useState(0);
   const [breakdown, setBreakdown] = useState([
-    { label: "Konsistensi", score: 40, desc: "Berdasarkan frekuensi pencatatan", color: "#15803d" },
-    { label: "Kas & Omzet", score: 50, desc: "Perhitungan arus kas tercatat", color: "#1e40af" },
-    { label: "Legalitas", score: 30, desc: "Status kelengkapan data NIB", color: "#dc2626" },
-    { label: "Stabilitas", score: 60, desc: "Stabilitas transaksi berkala", color: "#7c3aed" },
+    { label: "Konsistensi (25%)", score: 0, desc: "Frekuensi pencatatan transaksi", color: "#15803d" },
+    { label: "Arus Kas (25%)", score: 0, desc: "Rasio pemasukan vs pengeluaran", color: "#1e40af" },
+    { label: "Legalitas (25%)", score: 0, desc: "Kelengkapan profil & NIB", color: "#dc2626" },
+    { label: "Stabilitas (25%)", score: 0, desc: "Riwayat aktif berturut-turut", color: "#7c3aed" },
   ]);
 
   useEffect(() => {
@@ -87,19 +87,36 @@ export default function ProfilPage() {
           const netProfit = masuk - keluar;
           setTotalProfit(netProfit);
 
-          // Calculate dynamic scores from real data
-          const konsistensi = Math.min(100, Math.max(30, count * 15));
-          const kas = Math.min(100, Math.max(35, Math.round((masuk / Math.max(keluar, 1)) * 30)));
-          const legalitas = dbProfile?.nib ? 100 : 30;
-          const stabilitas = count >= 5 ? 80 : count >= 1 ? 55 : 35;
+          // ───────── MATRIKS PENILAIAN READINESS SCORE (100% REAL) ─────────
+          // 1. Konsistensi (0-100%): 10% per transaksi tercatat (max 100%)
+          const konsistensi = Math.min(100, count * 10);
+
+          // 2. Arus Kas (0-100%): Rasio Omzet vs Pengeluaran
+          let kas = 0;
+          if (masuk > 0) {
+            const marginRatio = netProfit / masuk;
+            kas = Math.min(100, Math.max(20, Math.round(marginRatio * 100)));
+          }
+
+          // 3. Legalitas & Profil (0-100%): Profil dasar terisi (75%), NIB (25%)
+          const hasBaseProfile = Boolean(nama && sektor && lokasi);
+          const legalitas = (hasBaseProfile ? 75 : 40) + (dbProfile?.nib ? 25 : 0);
+
+          // 4. Stabilitas (0-100%): Poin riwayat keaktifan
+          let stabilitas = 0;
+          if (count >= 10) stabilitas = 100;
+          else if (count >= 5) stabilitas = 75;
+          else if (count >= 1) stabilitas = 50;
+
+          // Readiness Score Akhir = Rata-rata dari 4 Pilar
           const totalScore = Math.round((konsistensi + kas + legalitas + stabilitas) / 4);
 
           setReadinessScore(totalScore);
           setBreakdown([
-            { label: "Konsistensi", score: konsistensi, desc: `${count} transaksi tercatat`, color: "#15803d" },
-            { label: "Kas & Omzet", score: kas, desc: `Total Pemasukan Rp${masuk.toLocaleString("id-ID")}`, color: "#1e40af" },
-            { label: "Legalitas", score: legalitas, desc: legalitas === 100 ? "NIB telah terverifikasi" : "Belum melengkapi NIB", color: "#dc2626" },
-            { label: "Stabilitas", score: stabilitas, desc: count >= 5 ? "Frekuensi catatan baik" : "Mulai tingkatkan catatan harian", color: "#7c3aed" },
+            { label: "Konsistensi (25%)", score: konsistensi, desc: `${count} transaksi tercatat`, color: "#15803d" },
+            { label: "Arus Kas (25%)", score: kas, desc: masuk > 0 ? `Omzet Rp${masuk.toLocaleString("id-ID")}` : "Belum ada pemasukan", color: "#1e40af" },
+            { label: "Legalitas & Profil (25%)", score: legalitas, desc: dbProfile?.nib ? "NIB & Profil terverifikasi" : "Profil terisi (NIB opsional)", color: "#dc2626" },
+            { label: "Stabilitas (25%)", score: stabilitas, desc: count >= 5 ? "Riwayat catatan baik" : "Perbanyak riwayat transaksi", color: "#7c3aed" },
           ]);
         }
       } catch (err) {
@@ -195,20 +212,25 @@ export default function ProfilPage() {
                 </div>
               </div>
               <h2 className="font-headline text-lg font-bold text-[#141a34] mt-3">Readiness Score Live</h2>
-              <p className="text-sm text-[#444655] text-center px-4">Tingkat kesiapan usaha untuk pembiayaan formal berdasarkan data transaksi</p>
+              <p className="text-sm text-[#444655] text-center px-4">Tingkat kesiapan usaha untuk pembiayaan formal berdasarkan 4 pilar data</p>
               <span className="mt-3 text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300">
-                📈 Terkalkulasi dari {txCount} transaksi tercatat
+                📈 Terkalkulasi dari {txCount} transaksi & profil
               </span>
             </section>
 
-            {/* Breakdown bars */}
+            {/* Breakdown bars & Matrix Explanation */}
             <section className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card space-y-4">
-              <h3 className="font-bold text-sm text-[#141a34]">Rincian Skor Kesiapan Usaha</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm text-[#141a34]">Matriks 4 Pilar Readiness Score</h3>
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Info size={11} /> Bobot @ 25%
+                </span>
+              </div>
               {breakdown.map((b) => (
                 <div key={b.label}>
                   <div className="flex justify-between mb-1">
                     <span className="text-sm font-semibold text-[#141a34]">{b.label}</span>
-                    <span className="text-sm font-bold" style={{ color: b.color }}>{b.score}</span>
+                    <span className="text-sm font-bold" style={{ color: b.color }}>{b.score}%</span>
                   </div>
                   <div className="progress-bar-track">
                     <div className="h-full rounded-full transition-all duration-700" style={{ width: `${b.score}%`, backgroundColor: b.color }} />
