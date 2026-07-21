@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Copy, Check, User, Mail, Building2, MapPin, Tag, LogOut, Sparkles, Phone, Calendar } from "lucide-react";
+import { Copy, Check, User, Mail, MapPin, Tag, LogOut, Sparkles, Calendar, Building2, FileCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 function scoreColor(s: number) {
@@ -14,14 +14,13 @@ function scoreColor(s: number) {
 
 export default function ProfilPage() {
   const router = useRouter();
-  const [privacyOn, setPrivacyOn] = useState(true);
   const [copied, setCopied] = useState(false);
   const [loadingUser, setLoadingUser] = useState(true);
 
   // Live Supabase User & Profile Data
   const [profileData, setProfileData] = useState({
     email: "",
-    namaUsaha: "Warung Anda",
+    namaUsaha: "Pengusaha UMKM",
     sektor: "Kuliner",
     lokasi: "Indonesia",
     phone: "-",
@@ -45,7 +44,6 @@ export default function ProfilPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          // Fetch extra profile fields from database if available
           let dbProfile: any = null;
           try {
             const { data: prof } = await supabase
@@ -58,7 +56,7 @@ export default function ProfilPage() {
             console.warn("Profile fetch skipped:", e);
           }
 
-          const nama = dbProfile?.name || dbProfile?.nama_usaha || user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Warung Anda";
+          const nama = dbProfile?.name || dbProfile?.nama_usaha || user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Pengusaha UMKM";
           const sektor = dbProfile?.sektor_usaha || user.user_metadata?.sektor_usaha || "Kuliner";
           const lokasi = dbProfile?.lokasi || user.user_metadata?.lokasi || "Indonesia";
           const phone = dbProfile?.phone || user.user_metadata?.phone || "-";
@@ -134,8 +132,7 @@ export default function ProfilPage() {
     { emoji: "🔥", label: "Streak Catat", earned: txCount >= 1 },
     { emoji: "📝", label: "Pencatat Rajin", earned: txCount >= 5 },
     { emoji: "⭐", label: "Level 2 Ready", earned: readinessScore >= 50 },
-    { emoji: "🏆", label: "Siap Dana KUR", earned: readinessScore >= 70 },
-    { emoji: "🤝", label: "Penggerak UMKM", earned: false },
+    { emoji: "🏆", label: "Siap Pembiayaan", earned: readinessScore >= 70 },
   ];
 
   return (
@@ -220,28 +217,9 @@ export default function ProfilPage() {
                 </div>
               ))}
             </section>
-
-            {/* Privacy toggle */}
-            <section className="bg-white rounded-2xl p-4 border border-[#e5e7ff] shadow-card">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Shield size={18} className="text-[#444655]" />
-                  <div>
-                    <p className="font-semibold text-sm text-[#141a34]">Sembunyikan nama saya</p>
-                    <p className="text-xs text-[#444655] mt-0.5">
-                      Ditampilkan sebagai {privacyOn ? `"${profileData.namaUsaha.slice(0, 4)}***"` : `"${profileData.namaUsaha}"`} ke institusi
-                    </p>
-                  </div>
-                </div>
-                <button onClick={() => setPrivacyOn(!privacyOn)}
-                  className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 cursor-pointer ${privacyOn ? "bg-[#001b85]" : "bg-gray-300"}`}>
-                  <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${privacyOn ? "translate-x-6" : "translate-x-0.5"}`} />
-                </button>
-              </div>
-            </section>
           </div>
 
-          {/* Right Column: Badges, Requests & Referral */}
+          {/* Right Column: Badges, Dynamic Dossier Status & Referral */}
           <div className="space-y-6">
             
             {/* Achievements */}
@@ -257,22 +235,35 @@ export default function ProfilPage() {
               </div>
             </section>
 
-            {/* Dossier status */}
+            {/* Dossier status - Live dynamically computed */}
             <section className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card">
-              <h3 className="font-bold text-sm text-[#141a34] mb-3">Pengajuan Dossier Pembiayaan</h3>
+              <h3 className="font-bold text-sm text-[#141a34] mb-1">Status Dossier Pembiayaan</h3>
+              <p className="text-xs text-slate-500 mb-3">Dossier adalah berkas portofolio transaksi & profil usaha otomatis yang disiapkan untuk dinilai institusi perbankan/mitra.</p>
+              
               <div className="p-3.5 rounded-xl bg-[#f3f2ff] border border-[#e5e7ff] flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-sm text-[#141a34]">Bank Mandiri Wirausaha</p>
-                  <p className="text-xs text-[#444655]">Status: Terhubung</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-[#001b85]/10 text-[#001b85] flex items-center justify-center">
+                    <FileCheck size={18} />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-[#141a34]">Portofolio Transaksi Digital</p>
+                    <p className="text-xs text-[#444655]">
+                      {txCount > 0 ? `${txCount} Transaksi Siap Dinilai Institusi` : "Belum Ada Catatan Transaksi"}
+                    </p>
+                  </div>
                 </div>
-                <span className="text-xs font-bold text-green-700 bg-green-100 px-2.5 py-1 rounded-full">✓ Aktif</span>
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                  txCount > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"
+                }`}>
+                  {txCount > 0 ? "✓ Siap Dibagikan" : "Perlu Pencatatan"}
+                </span>
               </div>
             </section>
 
             {/* Referral */}
             <section className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card">
               <h3 className="font-bold text-sm text-[#141a34] mb-2">Link Referral Usaha Saya</h3>
-              <p className="text-xs text-[#444655] mb-3">Ajak pelaku UMKM lain dan raih badge Penggerak Komunitas.</p>
+              <p className="text-xs text-[#444655] mb-3">Ajak pelaku UMKM lain untuk bergabung di Berkembang.id.</p>
               <div className="flex gap-2">
                 <input readOnly value={`https://berkembang.id/daftar?ref=${profileData.namaUsaha.toLowerCase().replace(/\s+/g, '_')}`}
                   className="flex-1 text-xs bg-[#f3f2ff] rounded-lg px-3 py-2 text-[#444655] border border-[#e5e7ff] outline-none font-mono" />
