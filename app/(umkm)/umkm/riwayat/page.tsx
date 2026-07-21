@@ -123,7 +123,7 @@ export default function RiwayatPage() {
 
       {/* Delete confirmation modal */}
       {deleteId !== null && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-[60] flex items-end justify-center p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm animate-fade-in-up">
             <h3 className="font-bold text-[#141a34] text-base">Hapus catatan ini?</h3>
             <p className="text-sm text-[#444655] mt-1">Tindakan ini tidak bisa dibatalkan.</p>

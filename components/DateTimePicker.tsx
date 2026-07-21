@@ -150,97 +150,105 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
         </div>
       </button>
 
-      {/* Popover Card */}
+      {/* Modal Dialog Calendar */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 shadow-xl rounded-2xl p-4 z-50 w-72 mx-auto sm:mx-0 animate-fade-in-up">
-          {/* Calendar Month Header */}
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-xs font-bold text-slate-800 font-headline">
-              {MONTHS[currentMonth]} {currentYear}
-            </h4>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={navigatePrevMonth}
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={navigateNextMonth}
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-
-          {/* Days of Week Header */}
-          <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-2 font-mono-label">
-            {DAYS_OF_WEEK.map((d, i) => (
-              <span key={i}>{d}</span>
-            ))}
-          </div>
-
-          {/* Days Grid */}
-          <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium">
-            {daysArray.map((cell, idx) => {
-              const isSelected = cell.dateString === dateStr;
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleSelectDate(cell.dateString)}
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                    isSelected
-                      ? "bg-[#001b85] text-white font-bold shadow-sm shadow-[#001b85]/20"
-                      : cell.isCurrentMonth
-                      ? "text-slate-800 hover:bg-[#ececff]/50 hover:text-[#001b85]"
-                      : "text-slate-300 hover:bg-slate-50"
-                  }`}
-                >
-                  {cell.day}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Time Picker Divider */}
-          <div className="border-t border-slate-100 my-3.5 pt-3.5 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={hasTime}
-                  onChange={(e) => handleToggleTime(e.target.checked)}
-                  className="rounded border-[#c5c5d7] text-[#001b85] focus:ring-[#001b85] w-4 h-4 cursor-pointer"
-                />
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tambah Jam</span>
-              </label>
-            </div>
-
-            {hasTime && (
-              <div className="flex items-center gap-2 bg-[#f3f2ff]/60 border border-[#e5e7ff] rounded-xl p-2 animate-fade-in">
-                <Clock size={14} className="text-slate-400 flex-shrink-0" />
-                <input
-                  type="time"
-                  value={timeStr}
-                  onChange={(e) => handleTimeChange(e.target.value)}
-                  className="bg-transparent border-none text-xs font-bold text-[#001b85] focus:outline-none w-full cursor-pointer"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Confirm Button */}
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="w-full bg-[#001b85] text-white font-bold py-2 rounded-xl text-[10px] uppercase tracking-wider hover:bg-[#0e32c2] transition-colors mt-1"
+        <div 
+          className="fixed inset-0 bg-slate-950/45 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setIsOpen(false)}
+        >
+          <div 
+            className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-5 w-80 animate-fade-in-up"
+            onClick={(e) => e.stopPropagation()}
           >
-            Selesai
-          </button>
+            {/* Calendar Month Header */}
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-bold text-slate-800 font-headline">
+                {MONTHS[currentMonth]} {currentYear}
+              </h4>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={navigatePrevMonth}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={navigateNextMonth}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Days of Week Header */}
+            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-2 font-mono-label">
+              {DAYS_OF_WEEK.map((d, i) => (
+                <span key={i}>{d}</span>
+              ))}
+            </div>
+
+            {/* Days Grid */}
+            <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium">
+              {daysArray.map((cell, idx) => {
+                const isSelected = cell.dateString === dateStr;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleSelectDate(cell.dateString)}
+                    className={`w-full aspect-square max-h-8 rounded-lg flex items-center justify-center transition-all ${
+                      isSelected
+                        ? "bg-[#001b85] text-white font-bold shadow-sm shadow-[#001b85]/20"
+                        : cell.isCurrentMonth
+                        ? "text-slate-800 hover:bg-[#ececff]/50 hover:text-[#001b85]"
+                        : "text-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    {cell.day}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Time Picker Divider */}
+            <div className="border-t border-slate-100 my-3.5 pt-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hasTime}
+                    onChange={(e) => handleToggleTime(e.target.checked)}
+                    className="rounded border-[#c5c5d7] text-[#001b85] focus:ring-[#001b85] w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tambah Jam</span>
+                </label>
+              </div>
+
+              {hasTime && (
+                <div className="flex items-center gap-2 bg-[#f3f2ff]/60 border border-[#e5e7ff] rounded-xl p-2 animate-fade-in">
+                  <Clock size={14} className="text-slate-400 flex-shrink-0" />
+                  <input
+                    type="time"
+                    value={timeStr}
+                    onChange={(e) => handleTimeChange(e.target.value)}
+                    className="bg-transparent border-none text-xs font-bold text-[#001b85] focus:outline-none w-full cursor-pointer"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Confirm Button */}
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="w-full bg-[#001b85] text-white font-bold py-2.5 rounded-xl text-[10px] uppercase tracking-wider hover:bg-[#0e32c2] transition-colors mt-1"
+            >
+              Selesai
+            </button>
+          </div>
         </div>
       )}
     </div>

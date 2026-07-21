@@ -16,6 +16,11 @@ export const metadata: Metadata = {
   applicationName: "BERKEMBANG.ID",
   keywords: ["UMKM", "catat keuangan", "naik kelas", "pembiayaan", "AI"],
   authors: [{ name: "Tim P0160 — BERKEMBANG.ID" }],
+  icons: {
+    icon: "/logo/favicon.png",
+    shortcut: "/logo/favicon.png",
+    apple: "/logo/favicon.png",
+  },
   openGraph: {
     title: "BERKEMBANG.ID",
     description: "Platform Generatif AI Pendamping Journey UMKM Mikro Naik Kelas",

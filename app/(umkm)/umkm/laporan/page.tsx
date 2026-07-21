@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar, Tag, Trash2, X, PlusCircle, Sparkles, Receipt, Check } from "lucide-react";
 import DateTimePicker from "@/components/DateTimePicker";
+import { supabase } from "@/lib/supabase";
 
 interface Transaction {
   id: number;
@@ -33,6 +34,7 @@ export default function LaporanPage() {
   const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
   const [showModal, setShowModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
   // Form states
   const [txType, setTxType] = useState<"masuk" | "keluar">("masuk");
@@ -42,21 +44,102 @@ export default function LaporanPage() {
   const [txKategori, setTxKategori] = useState("Penjualan");
   const [txTanggal, setTxTanggal] = useState(new Date().toISOString().split("T")[0]);
 
-  const handleAddTransaction = (e: React.FormEvent) => {
+  // Check authentication and fetch transactions from Supabase on mount
+  useEffect(() => {
+    const fetchUserAndTransactions = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
+        
+        if (user) {
+          const { data, error } = await supabase
+            .from("transactions")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("tanggal", { ascending: false });
+
+          if (!error && data) {
+            const mapped: Transaction[] = data.map((t: any) => ({
+              id: t.id,
+              item: t.item,
+              qty: t.qty || "1 barang",
+              type: t.type,
+              nominal: Number(t.nominal),
+              kategori: t.kategori,
+              tanggal: t.tanggal
+            }));
+            setTransactions(mapped);
+          } else if (error) {
+            console.error("Gagal memuat data transaksi dari Supabase:", error.message);
+          }
+        }
+      } catch (err) {
+        console.error("Error checking auth or fetching data:", err);
+      }
+    };
+
+    fetchUserAndTransactions();
+  }, []);
+
+  const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!txName || !txNominal) return;
 
-    const newTransaction: Transaction = {
-      id: Date.now(),
-      item: txName,
-      qty: txQty || "1 barang",
-      type: txType,
-      nominal: Number(txNominal) || 0,
-      kategori: txKategori,
-      tanggal: txTanggal,
-    };
+    const nominalNum = Number(txNominal) || 0;
+    const qtyStr = txQty || "1 barang";
 
-    setTransactions([newTransaction, ...transactions]);
+    if (user) {
+      // Sync to database
+      try {
+        const { data, error } = await supabase
+          .from("transactions")
+          .insert({
+            user_id: user.id,
+            item: txName,
+            qty: qtyStr,
+            type: txType,
+            nominal: nominalNum,
+            kategori: txKategori,
+            tanggal: txTanggal
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error("Gagal menambahkan transaksi di Supabase:", error.message);
+          return;
+        }
+
+        if (data) {
+          const newTransaction: Transaction = {
+            id: data.id,
+            item: data.item,
+            qty: data.qty || "1 barang",
+            type: data.type,
+            nominal: Number(data.nominal),
+            kategori: data.kategori,
+            tanggal: data.tanggal
+          };
+          setTransactions([newTransaction, ...transactions]);
+        }
+      } catch (err) {
+        console.error("Error adding transaction:", err);
+        return;
+      }
+    } else {
+      // Mock fallback
+      const newTransaction: Transaction = {
+        id: Date.now(),
+        item: txName,
+        qty: qtyStr,
+        type: txType,
+        nominal: nominalNum,
+        kategori: txKategori,
+        tanggal: txTanggal,
+      };
+      setTransactions([newTransaction, ...transactions]);
+    }
+
     setShowModal(false);
     
     // Trigger toast
@@ -71,8 +154,28 @@ export default function LaporanPage() {
     setTxTanggal(new Date().toISOString().split("T")[0]);
   };
 
-  const handleDeleteTransaction = (id: number) => {
-    setTransactions(transactions.filter(t => t.id !== id));
+  const handleDeleteTransaction = async (id: number) => {
+    if (user) {
+      try {
+        const { error } = await supabase
+          .from("transactions")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", user.id);
+
+        if (error) {
+          console.error("Gagal menghapus transaksi dari Supabase:", error.message);
+          return;
+        }
+
+        setTransactions(transactions.filter(t => t.id !== id));
+      } catch (err) {
+        console.error("Error deleting transaction:", err);
+      }
+    } else {
+      // Mock fallback
+      setTransactions(transactions.filter(t => t.id !== id));
+    }
   };
 
   // Filter transactions based on selected period (Assuming current date is 2026-07-21)
@@ -280,7 +383,7 @@ export default function LaporanPage() {
 
       {/* Manual Input Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-md relative shadow-2xl animate-fade-in-up">
             {/* Modal Header */}
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
