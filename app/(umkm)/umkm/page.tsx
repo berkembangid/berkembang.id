@@ -159,18 +159,23 @@ export default function BerandaPage() {
   return (
     <>
       {/* Header - Mobile only */}
-      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-6 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30">
-        <div>
-          <p className="text-[10px] font-bold text-[#444655] uppercase tracking-widest font-mono-label">{timeGreeting()}</p>
-          <p className="font-headline text-base font-bold text-[#001b85] leading-tight truncate max-w-[180px]">{businessName}</p>
+      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/95 backdrop-blur-md px-5 py-3 flex items-center justify-between border-b border-[#c5c5d7]/30">
+        <div className="flex-1 pr-3">
+          <p className="text-[10px] font-bold text-[#444655] uppercase tracking-widest font-mono-label">{timeGreeting()},</p>
+          <h1 className="font-headline text-base font-bold text-[#001b85] leading-tight break-words">
+            Halo, {businessName}! 👋
+          </h1>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/umkm/notifikasi">
-            <button className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-[#e5e7ff] text-[#444655] relative cursor-pointer">
-              <Bell size={16} />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-[#db2777] rounded-full" />
-            </button>
-          </Link>
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          <button 
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("openNotifModal"))}
+            className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-[#e5e7ff] text-[#444655] relative cursor-pointer hover:bg-slate-50 transition-colors"
+            title="Notifikasi"
+          >
+            <Bell size={16} />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-[#db2777] rounded-full" />
+          </button>
           <div className="w-8 h-8 rounded-full bg-[#001b85] text-white flex items-center justify-center font-bold text-xs shadow-sm">
             {businessName.charAt(0).toUpperCase()}
           </div>
@@ -178,8 +183,8 @@ export default function BerandaPage() {
       </header>
 
       <main className="px-6 md:px-0 py-5 space-y-6 pb-28 md:pb-8">
-        {/* A. Sapaan */}
-        <section className="animate-fade-in-up">
+        {/* A. Sapaan (Desktop only, as mobile header displays the full greeting) */}
+        <section className="hidden md:block animate-fade-in-up">
           <p className="text-xs font-bold text-[#444655] uppercase tracking-widest font-mono-label">
             {timeGreeting()},
           </p>

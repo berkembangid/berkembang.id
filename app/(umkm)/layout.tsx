@@ -112,7 +112,13 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       }
     });
 
-    return () => subscription.unsubscribe();
+    const handleOpenNotif = () => setShowNotifModal(true);
+    window.addEventListener("openNotifModal", handleOpenNotif);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("openNotifModal", handleOpenNotif);
+    };
   }, []);
 
   const handleSignOut = async () => {
@@ -249,7 +255,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
           onClick={() => setShowNotifModal(false)}
         >
           <div 
-            className="absolute top-16 left-4 md:left-64 w-80 max-w-[calc(100vw-2rem)] bg-white border border-[#e5e7ff] shadow-2xl rounded-2xl p-4 animate-fade-in-up space-y-3 z-[101]"
+            className="absolute top-16 right-4 md:right-auto md:left-64 w-80 max-w-[calc(100vw-2rem)] bg-white border border-[#e5e7ff] shadow-2xl rounded-2xl p-4 animate-fade-in-up space-y-3 z-[101]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
