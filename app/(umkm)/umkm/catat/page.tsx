@@ -146,7 +146,10 @@ export default function CatatPage() {
             <div className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-sm text-center relative overflow-hidden">
               <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl -z-10" />
               
-              <div className="relative w-20 h-20 mx-auto rounded-full bg-gradient-to-tr from-[#001b85]/10 to-sky-500/10 flex items-center justify-center mb-4">
+              <div
+                onClick={startRecordingMock}
+                className="relative w-20 h-20 mx-auto rounded-full bg-gradient-to-tr from-[#001b85]/10 to-sky-500/10 flex items-center justify-center mb-4 cursor-pointer hover:scale-105 active:scale-95 transition-all select-none"
+              >
                 {/* Glowing wave effect */}
                 <div className="absolute inset-0 rounded-full bg-[#001b85]/5 animate-ping opacity-60" />
                 <Mic size={32} className="text-[#001b85]" />
@@ -197,7 +200,10 @@ export default function CatatPage() {
         {/* Recording state */}
         {step === "recording" && (
           <div className="bg-white rounded-2xl p-8 border border-slate-200/60 shadow-sm text-center space-y-6 pt-12">
-            <div className="w-24 h-24 mx-auto rounded-full bg-red-50 border border-red-100 flex items-center justify-center relative">
+            <div
+              onClick={stopRecordingMock}
+              className="w-24 h-24 mx-auto rounded-full bg-red-50 border border-red-100 flex items-center justify-center relative cursor-pointer hover:scale-105 active:scale-95 transition-all"
+            >
               <div className="absolute inset-0 rounded-full bg-red-100 animate-ping opacity-50" />
               <div className="flex items-end gap-1 h-8 justify-center">
                 {[1, 2, 3, 4, 5, 6, 7].map((i) => (
@@ -207,7 +213,7 @@ export default function CatatPage() {
             </div>
             <div>
               <h2 className="font-headline text-lg font-bold text-red-600">Sedang Merekam Suara...</h2>
-              <p className="text-xs text-slate-400 mt-1">Lepaskan tombol untuk langsung memproses</p>
+              <p className="text-xs text-slate-400 mt-1">Klik lingkaran merah di atas atau lepaskan tombol untuk memproses</p>
             </div>
             <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 px-3 py-1 rounded-full text-red-600 font-mono text-xs font-bold">
               <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
@@ -393,7 +399,7 @@ export default function CatatPage() {
 
       {/* Floating Record Mic Button container */}
       {(step === "idle" || step === "recording") && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-40 select-none">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-40 select-none md:hidden">
           {step === "recording" && (
             <p className="text-[10px] text-red-500 font-bold tracking-wide animate-pulse bg-white/90 border border-red-200 px-3 py-1 rounded-full shadow-sm mb-1.5">
               Lepaskan sentuhan untuk memproses
