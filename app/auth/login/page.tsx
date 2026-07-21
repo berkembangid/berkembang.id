@@ -27,14 +27,17 @@ export default function LoginPage() {
       });
 
       if (authError) {
-        let msg = "Terjadi kesalahan saat masuk. Silakan periksa email dan kata sandi Anda.";
-        if (authError.message === "Invalid login credentials") {
-          msg = "Email atau kata sandi salah. Silakan coba lagi.";
-        } else if (authError.message.includes("Email not confirmed")) {
-          msg = "Email belum dikonfirmasi. Silakan periksa kotak masuk email Anda.";
-        } else if (authError.message) {
-          msg = authError.message;
+        let msg = "Email atau kata sandi salah. Silakan periksa kembali atau daftar akun baru.";
+        const rawMsg = authError.message || "";
+        
+        if (rawMsg && rawMsg !== "{}" && rawMsg !== "Invalid login credentials") {
+          if (rawMsg.includes("Email not confirmed")) {
+            msg = "Email belum dikonfirmasi. Silakan periksa kotak masuk email Anda.";
+          } else {
+            msg = rawMsg;
+          }
         }
+        
         setError(msg);
         setLoading(false);
         return;
@@ -43,7 +46,6 @@ export default function LoginPage() {
       if (data?.user) {
         let userRole = data.user.user_metadata?.role || role;
 
-        // Try to fetch profile table role if exists
         try {
           const { data: profile } = await supabase
             .from("profiles")
@@ -68,7 +70,12 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       console.error("Login catch error:", err);
-      const errorMessage = typeof err === "string" ? err : err?.message || "Terjadi kesalahan koneksi ke server.";
+      let errorMessage = "Terjadi kesalahan koneksi saat masuk.";
+      if (typeof err === "string" && err !== "{}") {
+        errorMessage = err;
+      } else if (err?.message && err.message !== "{}") {
+        errorMessage = err.message;
+      }
       setError(errorMessage);
       setLoading(false);
     }

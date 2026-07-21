@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, Mail, AlertCircle, Building2, MapPin, Tag } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, AlertCircle, Building2, MapPin } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
@@ -52,20 +52,24 @@ export default function RegisterUMKMPage() {
       });
 
       if (signUpError) {
-        let msg = "Terjadi kesalahan pendaftaran. Silakan coba lagi.";
-        if (signUpError.message.includes("User already registered")) {
-          msg = "Email sudah terdaftar. Silakan gunakan email lain atau masuk ke akun Anda.";
-        } else if (signUpError.message.includes("Password should be")) {
-          msg = "Kata sandi minimal 8 karakter.";
-        } else if (signUpError.message) {
-          msg = signUpError.message;
+        let msg = "Terjadi kesalahan pendaftaran. Silakan coba lagi dengan email lain.";
+        const rawMsg = signUpError.message || "";
+
+        if (rawMsg && rawMsg !== "{}") {
+          if (rawMsg.includes("User already registered")) {
+            msg = "Email sudah terdaftar. Silakan gunakan email lain atau masuk ke akun Anda.";
+          } else if (rawMsg.includes("Password should be")) {
+            msg = "Kata sandi minimal 8 karakter.";
+          } else {
+            msg = rawMsg;
+          }
         }
+        
         setError(msg);
         setLoading(false);
         return;
       }
 
-      // Try inserting into profiles table if setup, ignore failure if table uninitialized
       if (data?.user) {
         try {
           await supabase.from("profiles").insert({
@@ -84,7 +88,12 @@ export default function RegisterUMKMPage() {
       router.push("/umkm");
     } catch (err: any) {
       console.error("Register catch error:", err);
-      const errorMessage = typeof err === "string" ? err : err?.message || "Terjadi kesalahan pendaftaran.";
+      let errorMessage = "Terjadi kesalahan pendaftaran.";
+      if (typeof err === "string" && err !== "{}") {
+        errorMessage = err;
+      } else if (err?.message && err.message !== "{}") {
+        errorMessage = err.message;
+      }
       setError(errorMessage);
       setLoading(false);
     }
@@ -197,7 +206,7 @@ export default function RegisterUMKMPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-[#600] transition-colors p-1 cursor-pointer"
                   aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
