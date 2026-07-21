@@ -23,14 +23,15 @@ export default function BerandaPage() {
   const [todayTxCount, setTodayTxCount] = useState(0);
   const [weeklyData, setWeeklyData] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
-  const [profilePct, setProfilePct] = useState(40);
+  const [profilePct, setProfilePct] = useState(0);
+  const [readinessScore, setReadinessScore] = useState(0);
   const [profileItems, setProfileItems] = useState([
     { label: "Nama usaha", done: false },
-    { label: "Jenis usaha", done: false },
-    { label: "Lokasi", done: false },
-    { label: "Kontak HP", done: false },
+    { label: "Sektor usaha", done: false },
+    { label: "Kota / Lokasi", done: false },
+    { label: "Alamat kios", done: false },
+    { label: "No. Telepon / WA", done: false },
     { label: "Catatan transaksi", done: false },
-    { label: "5 hari aktif", done: false },
     { label: "NIB terisi", done: false },
   ]);
 
@@ -40,13 +41,27 @@ export default function BerandaPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        const name = user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Pengusaha UMKM";
-        setBusinessName(name);
+        // Fetch database profile for 100% accuracy
+        let dbProfile: any = null;
+        try {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", user.id)
+            .maybeSingle();
+          dbProfile = prof;
+        } catch (e) {
+          console.warn("Profile fetch skipped:", e);
+        }
 
-        const hasName = Boolean(user.user_metadata?.nama_usaha);
-        const hasSektor = Boolean(user.user_metadata?.sektor_usaha);
-        const hasLokasi = Boolean(user.user_metadata?.lokasi);
-        const hasPhone = Boolean(user.user_metadata?.phone);
+        const name = dbProfile?.name || dbProfile?.nama_usaha || user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Pengusaha UMKM";
+        const sektor = dbProfile?.sektor_usaha || user.user_metadata?.sektor_usaha || "";
+        const lokasi = dbProfile?.lokasi || user.user_metadata?.lokasi || "";
+        const alamat = dbProfile?.alamat || user.user_metadata?.alamat || "";
+        const phone = dbProfile?.phone || user.user_metadata?.phone || "";
+        const nib = dbProfile?.nib || user.user_metadata?.nib || "";
+
+        setBusinessName(name);
 
         // Fetch user transactions from Supabase
         const { data: txs } = await supabase
@@ -56,6 +71,7 @@ export default function BerandaPage() {
           .order("created_at", { ascending: false });
 
         const allTxs = txs || [];
+        const count = allTxs.length;
         const todayStr = new Date().toISOString().split("T")[0];
 
         // Today's stats
@@ -65,6 +81,10 @@ export default function BerandaPage() {
         const todayMasuk = todayItems.filter((t: any) => t.type === "masuk").reduce((acc: number, cur: any) => acc + Number(cur.nominal), 0);
         const todayKeluar = todayItems.filter((t: any) => t.type === "keluar").reduce((acc: number, cur: any) => acc + Number(cur.nominal), 0);
         setTodayProfit(todayMasuk - todayKeluar);
+
+        const totalMasuk = allTxs.filter((t: any) => t.type === "masuk").reduce((a: number, c: any) => a + Number(c.nominal), 0);
+        const totalKeluar = allTxs.filter((t: any) => t.type === "keluar").reduce((a: number, c: any) => a + Number(c.nominal), 0);
+        const netProfit = totalMasuk - totalKeluar;
 
         // Weekly profit chart logic
         const dayProfits = [0, 0, 0, 0, 0, 0, 0];
@@ -78,18 +98,32 @@ export default function BerandaPage() {
         });
         setWeeklyData(dayProfits.map(v => Math.max(v, 0)));
 
-        // Profile completion calculation
-        const hasTxs = allTxs.length > 0;
-        const has5Txs = allTxs.length >= 5;
+        // ───────── REAL READINESS SCORE CALCULATION ─────────
+        const konsistensi = Math.min(100, count * 10);
+        let kas = 0;
+        if (totalMasuk > 0) {
+          const marginRatio = netProfit / totalMasuk;
+          kas = Math.min(100, Math.max(20, Math.round(marginRatio * 100)));
+        }
+        const hasBaseProfile = Boolean(name && sektor && lokasi);
+        const legalitas = (hasBaseProfile ? 75 : 40) + (nib ? 25 : 0);
+        let stabilitas = 0;
+        if (count >= 10) stabilitas = 100;
+        else if (count >= 5) stabilitas = 75;
+        else if (count >= 1) stabilitas = 50;
 
+        const calculatedReadiness = Math.round((konsistensi + kas + legalitas + stabilitas) / 4);
+        setReadinessScore(calculatedReadiness);
+
+        // ───────── REAL PROFILE COMPLETION CALCULATION ─────────
         const updatedItems = [
-          { label: "Nama usaha", done: hasName },
-          { label: "Jenis usaha", done: hasSektor },
-          { label: "Lokasi", done: hasLokasi },
-          { label: "Kontak HP", done: hasPhone },
-          { label: "Catatan transaksi", done: hasTxs },
-          { label: "5 hari aktif", done: has5Txs },
-          { label: "NIB terisi", done: false },
+          { label: "Nama usaha", done: Boolean(name && name !== "Pengusaha UMKM") },
+          { label: "Sektor usaha", done: Boolean(sektor) },
+          { label: "Kota / Lokasi", done: Boolean(lokasi) },
+          { label: "Alamat kios", done: Boolean(alamat) },
+          { label: "No. Telepon / WA", done: Boolean(phone) },
+          { label: "Catatan transaksi", done: count > 0 },
+          { label: "NIB terisi", done: Boolean(nib) },
         ];
         setProfileItems(updatedItems);
         const doneCount = updatedItems.filter(i => i.done).length;
@@ -98,11 +132,11 @@ export default function BerandaPage() {
         // Format recent activities from real Supabase data
         if (allTxs.length > 0) {
           const formattedActs = allTxs.slice(0, 4).map((t: any) => ({
-            Icon: t.type === "masuk" ? CheckCircle2 : BarChart2,
-            color: t.type === "masuk" ? "#15803d" : "#1e40af",
-            bg: t.type === "masuk" ? "#dcfce7" : "#dbeafe",
-            title: `${t.type === "masuk" ? "Pemasukan" : "Pengeluaran"}: ${t.item} (Rp${Number(t.nominal).toLocaleString("id-ID")})`,
-            time: t.tanggal || "Terbaru",
+            Icon: t.type === "masuk" ? ArrowUp : FileText,
+            color: t.type === "masuk" ? "#166534" : "#444655",
+            bg: t.type === "masuk" ? "#dcfce7" : "#f1f5f9",
+            title: `${t.type === "masuk" ? "Pemasukan" : "Pengeluaran"}: ${t.item}`,
+            time: t.tanggal || "Baru saja",
           }));
           setRecentActivities(formattedActs);
         } else {
@@ -118,35 +152,37 @@ export default function BerandaPage() {
     loadDashboardData();
   }, []);
 
-  const maxWeekly = Math.max(...weeklyData, 100000);
-  const circumference = 2 * Math.PI * 28;
-  const dashOffset = circumference - (profilePct / 100) * circumference;
-
   const handleCopy = () => {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const circumference = 2 * Math.PI * 28;
+  const dashOffset = circumference - (profilePct / 100) * circumference;
+  const maxWeekly = Math.max(...weeklyData, 1);
+
   return (
     <>
-      {/* Top App Bar - Mobile only */}
-      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-5 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30 shadow-sm">
-        <span className="font-headline text-lg font-extrabold text-[#001b85] tracking-tight">BERKEMBANG.ID</span>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-[#56f9f9]/30 px-2.5 py-1 rounded-full border border-[#006a6a]">
-            <Flame size={14} className="text-[#006a6a]" fill="currentColor" />
-            <span className="text-xs font-bold text-[#006a6a]">5</span>
-          </div>
+      {/* Header - Mobile only */}
+      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-6 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30">
+        <div>
+          <p className="text-[10px] font-bold text-[#444655] uppercase tracking-widest font-mono-label">{timeGreeting()}</p>
+          <p className="font-headline text-base font-bold text-[#001b85] leading-tight truncate max-w-[180px]">{businessName}</p>
+        </div>
+        <div className="flex items-center gap-3">
           <Link href="/umkm/notifikasi">
-            <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-[#ececff] transition-colors relative">
-              <Bell size={20} className="text-[#444655]" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />
+            <button className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-[#e5e7ff] text-[#444655] relative cursor-pointer">
+              <Bell size={16} />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-[#db2777] rounded-full" />
             </button>
           </Link>
+          <div className="w-8 h-8 rounded-full bg-[#001b85] text-white flex items-center justify-center font-bold text-xs shadow-sm">
+            {businessName.charAt(0).toUpperCase()}
+          </div>
         </div>
       </header>
 
-      <main className="px-5 md:px-0 pt-5 pb-4 space-y-6">
+      <main className="px-6 md:px-0 py-5 space-y-6 pb-28 md:pb-8">
         {/* A. Sapaan */}
         <section className="animate-fade-in-up">
           <p className="text-xs font-bold text-[#444655] uppercase tracking-widest font-mono-label">
@@ -174,7 +210,7 @@ export default function BerandaPage() {
                     </div>
                   </div>
                   <Link href="/umkm/riwayat">
-                    <button className="text-sm font-bold text-[#166534] border border-[#166534] px-4 py-2 rounded-full hover:bg-green-100 transition-colors">
+                    <button className="text-sm font-bold text-[#166534] border border-[#166534] px-4 py-2 rounded-full hover:bg-green-100 transition-colors cursor-pointer">
                       Lihat Detail →
                     </button>
                   </Link>
@@ -228,13 +264,13 @@ export default function BerandaPage() {
                   <p className="text-[10px] text-[#444655] mt-1">Terkoneksi Sistem</p>
                 </div>
 
-                <Link href="/umkm/profil" className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-all">
+                <Link href="/umkm/readiness" className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-all">
                   <div className="flex items-center gap-1.5 mb-1">
                     <TrendingUp size={14} className="text-[#166534]" />
                     <p className="text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label">Readiness</p>
                   </div>
                   <div className="flex items-end gap-1">
-                    <span className="text-2xl font-bold text-[#166534]">{profilePct}</span>
+                    <span className="text-2xl font-bold text-[#166534]">{readinessScore}</span>
                     <span className="text-[10px] text-[#166534] mb-0.5">/100</span>
                   </div>
                   <p className="text-[10px] text-[#444655] mt-1">Skor Kesiapan Usaha</p>
@@ -286,7 +322,7 @@ export default function BerandaPage() {
 
                 <div className="flex gap-2 flex-wrap mt-1">
                   {profileItems.map((item) => (
-                    <div key={item.label} title={item.label} className={`w-7 h-7 rounded-full flex items-center justify-center ${item.done ? "bg-green-400" : "bg-white/20"}`}>
+                    <div key={item.label} title={`${item.label}: ${item.done ? "Terisi" : "Belum"}`} className={`w-7 h-7 rounded-full flex items-center justify-center ${item.done ? "bg-green-400" : "bg-white/20"}`}>
                       {item.done ? <CheckCircle2 size={14} className="text-white" fill="white" color="#166534" /> : <Circle size={14} className="text-white/40" />}
                     </div>
                   ))}
@@ -316,10 +352,6 @@ export default function BerandaPage() {
                     {copied ? "Disalin!" : "Salin"}
                   </button>
                 </div>
-                <button className="mt-2 w-full flex items-center justify-center gap-2 bg-green-600 text-white text-sm font-bold py-2.5 rounded-lg hover:bg-green-700 transition-colors cursor-pointer">
-                  <Send size={14} />
-                  Bagikan ke WhatsApp
-                </button>
               </div>
             </section>
 
@@ -331,18 +363,24 @@ export default function BerandaPage() {
                   <span className="text-xs font-bold text-[#001b85]">Lihat Semua →</span>
                 </Link>
               </div>
+
               <div className="space-y-3">
-                {recentActivities.map((act, i) => (
-                  <div key={i} className="flex items-center gap-3 bg-white rounded-xl p-3 shadow-card border border-[#e5e7ff]">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: act.bg }}>
-                      <act.Icon size={18} style={{ color: act.color }} />
+                {recentActivities.map((act, index) => {
+                  const IconComp = act.Icon;
+                  return (
+                    <div key={index} className="bg-white rounded-xl p-3 border border-[#e5e7ff] flex items-center justify-between shadow-card">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: act.bg, color: act.color }}>
+                          <IconComp size={16} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-[#141a34]">{act.title}</p>
+                          <p className="text-[10px] text-[#444655]">{act.time}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-[#141a34] font-medium leading-snug truncate">{act.title}</p>
-                      <p className="text-xs text-[#444655]">{act.time}</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           </div>
