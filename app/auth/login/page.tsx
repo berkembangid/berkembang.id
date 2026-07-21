@@ -6,39 +6,14 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-const PRESET_ACCOUNTS = {
-  umkm: {
-    email: "umkm@berkembang.id",
-    password: "UmkmPassword123!",
-    role: "umkm" as const,
-  },
-  institution: {
-    email: "institusi@berkembang.id",
-    password: "InstitusiPassword123!",
-    role: "institution" as const,
-  },
-  admin: {
-    email: "admin@berkembang.id",
-    password: "AdminPassword123!",
-    role: "admin" as const,
-  },
-};
-
 export default function LoginPage() {
   const [role, setRole] = useState<"umkm" | "institution" | "admin">("umkm");
-  const [email, setEmail] = useState(PRESET_ACCOUNTS.umkm.email);
-  const [password, setPassword] = useState(PRESET_ACCOUNTS.umkm.password);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  const handleRoleSelect = (selectedRole: "umkm" | "institution" | "admin") => {
-    setRole(selectedRole);
-    setEmail(PRESET_ACCOUNTS[selectedRole].email);
-    setPassword(PRESET_ACCOUNTS[selectedRole].password);
-    setError("");
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,13 +51,13 @@ export default function LoginPage() {
         return;
       }
 
-      // 2. If account does not exist in Supabase Auth yet, create real account in Supabase
+      // 2. If account does not exist in Supabase Auth yet, create account in Supabase
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: inputEmail,
         password: password,
         options: {
           data: {
-            nama_usaha: role === "admin" ? "Administrator Utama" : role === "institution" ? "Bank Mandiri Wirausaha" : "Warung Ibu Sari",
+            nama_usaha: role === "admin" ? "Administrator Utama" : role === "institution" ? "Institusi Mitra" : "Warung Usaha UMKM",
             sektor_usaha: role === "admin" ? "Internal Admin" : role === "institution" ? "Finansial" : "Kuliner",
             lokasi: "Indonesia",
             role: role,
@@ -96,7 +71,7 @@ export default function LoginPage() {
             id: signUpData.user.id,
             email: inputEmail,
             role: role,
-            nama_usaha: role === "admin" ? "Administrator Utama" : role === "institution" ? "Bank Mandiri Wirausaha" : "Warung Ibu Sari",
+            nama_usaha: role === "admin" ? "Administrator Utama" : role === "institution" ? "Institusi Mitra" : "Warung Usaha UMKM",
           });
         } catch (e) {
           console.warn("Profiles insert optional:", e);
@@ -106,13 +81,7 @@ export default function LoginPage() {
         return;
       }
 
-      // 3. For UMKM / Institusi preview if offline
-      if (role !== "admin" && inputEmail.includes("@berkembang.id")) {
-        router.push(targetPath);
-        return;
-      }
-
-      // 4. Display clean error
+      // 3. Display clean error
       let msg = "Email atau kata sandi tidak valid. Silakan periksa kembali.";
       const rawMsg = authError?.message || signUpError?.message || "";
       if (rawMsg && rawMsg !== "{}" && rawMsg !== "Invalid login credentials") {
@@ -122,10 +91,6 @@ export default function LoginPage() {
       setLoading(false);
     } catch (err: any) {
       console.error("Login catch error:", err);
-      if (role !== "admin" && inputEmail.includes("@berkembang.id")) {
-        router.push(targetPath);
-        return;
-      }
       setError("Terjadi kesalahan koneksi saat masuk.");
       setLoading(false);
     }
@@ -136,13 +101,16 @@ export default function LoginPage() {
       <h1 className="font-headline text-2xl font-bold text-[#141a34] mb-1">Selamat Datang!</h1>
       <p className="text-sm text-[#444655] mb-6">Masuk ke akun Anda</p>
 
-      {/* Unified Role Tab Selector */}
+      {/* Role Selector Tabs */}
       <div className="flex gap-2 mb-6 p-1 bg-[#f3f2ff] rounded-xl">
         {(["umkm", "institution", "admin"] as const).map((r) => (
           <button
             key={r}
             type="button"
-            onClick={() => handleRoleSelect(r)}
+            onClick={() => {
+              setRole(r);
+              setError("");
+            }}
             className={`flex-1 text-xs font-bold py-2.5 rounded-lg transition-colors capitalize cursor-pointer ${
               role === r ? "bg-white text-[#001b85] shadow-sm" : "text-[#444655]"
             }`}
