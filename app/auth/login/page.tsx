@@ -45,22 +45,25 @@ export default function LoginPage() {
 
       if (data?.user) {
         let userRole = data.user.user_metadata?.role || role;
-        try {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", data.user.id)
-            .maybeSingle();
 
-          if (profile?.role) {
-            userRole = profile.role;
+        if (!data.user.user_metadata?.role) {
+          try {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("role")
+              .eq("id", data.user.id)
+              .maybeSingle();
+
+            if (profile?.role) {
+              userRole = profile.role;
+            }
+          } catch (err) {
+            console.warn("Profiles optional lookup skipped:", err);
           }
-        } catch (err) {
-          console.warn("Profiles optional lookup skipped:", err);
         }
 
         const dest = userRole === "admin" ? "/admin" : userRole === "institution" ? "/institusi" : "/umkm";
-        router.push(dest);
+        window.location.href = dest;
         return;
       }
     } catch (err: any) {

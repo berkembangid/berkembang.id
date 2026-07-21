@@ -3,99 +3,149 @@
 import Link from "next/link";
 import {
   Mic, Sparkles, TrendingUp, Flame, BarChart2, Target, Handshake, WifiOff,
-  ArrowRight, ShieldCheck, CheckCircle2, Star, Play, User, Home, Bell
+  ArrowRight, ShieldCheck, CheckCircle2, Star, Play, User, Home, Bell, Menu, X
 } from "lucide-react";
 import { useState } from "react";
 
 export default function LandingPage() {
   const [activeTab, setActiveTab] = useState<"umkm" | "institusi">("umkm");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-[#bac3ff]/50 selection:text-[#001b85]">
       {/* Navigation Pill */}
-      <nav className="fixed top-4 left-1/2 -translate-x-1/2 w-[92%] max-w-6xl z-50 bg-white/90 backdrop-blur-md border border-slate-200/80 shadow-lg rounded-full px-6 h-16 flex items-center justify-between">
+      <nav className="fixed top-3 sm:top-4 left-1/2 -translate-x-1/2 w-[95%] sm:w-[92%] max-w-6xl z-50 bg-white/95 backdrop-blur-md border border-slate-200/80 shadow-lg rounded-full px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-8 w-auto object-contain" />
+          <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-7 sm:h-8 w-auto object-contain" />
         </div>
 
+        {/* Desktop Menu */}
         <div className="hidden md:flex items-center gap-8">
           <a href="#cara-kerja" className="text-sm text-slate-600 hover:text-[#001b85] font-semibold transition-colors">Cara Kerja</a>
           <a href="#fitur" className="text-sm text-slate-600 hover:text-[#001b85] font-semibold transition-colors">Fitur</a>
           <a href="#institusi" className="text-sm text-slate-600 hover:text-[#001b85] font-semibold transition-colors">Kemitraan</a>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Desktop Auth Buttons */}
+        <div className="hidden md:flex items-center gap-3">
           <Link href="/auth/login">
-            <button className="text-sm font-bold text-[#001b85] hover:text-[#334ed9] px-3 py-2 transition-colors">Masuk</button>
+            <button className="text-sm font-bold text-[#001b85] hover:text-[#334ed9] px-3 py-2 transition-colors cursor-pointer">Masuk</button>
           </Link>
           <Link href="/umkm">
-            <button className="bg-[#001b85] text-white text-sm font-bold px-5 py-2.5 rounded-full hover:bg-[#0e32c2] shadow-sm hover:shadow transition-all">
+            <button className="bg-[#001b85] text-white text-sm font-bold px-5 py-2.5 rounded-full hover:bg-[#0e32c2] shadow-sm hover:shadow transition-all cursor-pointer">
               Mulai Gratis →
             </button>
           </Link>
         </div>
+
+        {/* Mobile Header Controls */}
+        <div className="flex md:hidden items-center gap-1.5">
+          <Link href="/auth/login">
+            <button className="text-xs font-bold text-[#001b85] px-3 py-1.5 rounded-full hover:bg-slate-100 transition-colors">
+              Masuk
+            </button>
+          </Link>
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 text-slate-700 hover:text-[#001b85] focus:outline-none cursor-pointer"
+            aria-label="Toggle Navigation Menu"
+          >
+            {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="relative pt-32 pb-24 overflow-hidden px-6">
-        {/* Background Gradients */}
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-gradient-to-tr from-sky-200/40 to-blue-200/30 rounded-full blur-3xl -z-10" />
-        <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-gradient-to-br from-purple-200/30 to-[#ececff]/40 rounded-full blur-3xl -z-10" />
+      {/* Mobile Drawer Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm md:hidden animate-fade-in"
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          <div
+            className="fixed top-20 left-4 right-4 bg-white rounded-3xl p-6 shadow-2xl border border-slate-200/80 space-y-4 text-center z-50 animate-fade-in-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col gap-3 pb-4 border-b border-slate-100 text-sm font-bold text-slate-700">
+              <a href="#cara-kerja" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-[#001b85] transition-colors">Cara Kerja</a>
+              <a href="#fitur" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-[#001b85] transition-colors">Fitur</a>
+              <a href="#institusi" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-[#001b85] transition-colors">Kemitraan</a>
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              <Link href="/umkm" onClick={() => setIsMobileMenuOpen(false)}>
+                <button className="w-full bg-[#001b85] text-white font-bold py-3 rounded-full text-sm hover:bg-[#0e32c2] shadow-sm">
+                  Mulai Gratis →
+                </button>
+              </Link>
+              <Link href="/auth/login" onClick={() => setIsMobileMenuOpen(false)}>
+                <button className="w-full text-[#001b85] font-bold py-2.5 rounded-full text-sm border border-[#001b85]/30 hover:bg-[#ececff]/50">
+                  Masuk ke Akun
+                </button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
-        <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-12 items-center">
+      {/* Hero Section */}
+      <section className="relative pt-28 sm:pt-36 pb-16 sm:pb-24 overflow-hidden px-4 sm:px-6">
+        {/* Background Gradients */}
+        <div className="absolute top-0 left-1/4 w-[300px] sm:w-[500px] h-[300px] sm:h-[500px] bg-gradient-to-tr from-sky-200/40 to-blue-200/30 rounded-full blur-3xl -z-10" />
+        <div className="absolute top-1/3 right-1/4 w-[250px] sm:w-[400px] h-[250px] sm:h-[400px] bg-gradient-to-br from-purple-200/30 to-[#ececff]/40 rounded-full blur-3xl -z-10" />
+
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           {/* Left Hero Copy */}
-          <div className="lg:col-span-7 space-y-6 text-left animate-fade-in-up">
-            <div className="inline-flex items-center gap-2 bg-[#ececff] text-[#001b85] text-xs font-bold px-4 py-1.5 rounded-full border border-[#bac3ff]/60">
-              <Sparkles size={12} className="animate-pulse" />
-              <span>Platform AI Pendamping UMKM Pertama di Indonesia</span>
+          <div className="lg:col-span-7 space-y-5 sm:space-y-6 text-left animate-fade-in-up">
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-[#ececff] text-[#001b85] text-[11px] sm:text-xs font-bold px-3.5 py-1.5 rounded-full border border-[#bac3ff]/60 max-w-full">
+              <Sparkles size={13} className="animate-pulse shrink-0" />
+              <span className="truncate">Platform AI Pendamping UMKM Pertama di Indonesia</span>
             </div>
             
-            <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl font-extrabold text-[#141a34] leading-tight">
-              Catat Untung Usaha,<br />
+            <h1 className="font-headline text-3xl sm:text-5xl lg:text-6xl font-extrabold text-[#141a34] leading-tight">
+              Catat Untung Usaha,<br className="hidden sm:inline" />{" "}
               <span className="text-gradient-brand">Siap Naik Kelas</span>
             </h1>
 
-            <p className="text-base sm:text-lg text-slate-600 max-w-xl leading-relaxed">
+            <p className="text-sm sm:text-lg text-slate-600 max-w-xl leading-relaxed">
               Catat keuangan semudah bercakap-cakap. Cukup rekam suara transaksi harian Anda, AI kami otomatis memetakan kas, menghitung keuntungan, dan menyusun skor kelayakan pembiayaan Anda.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-2">
               <Link href="/umkm">
-                <button className="bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold px-8 py-4 rounded-full text-base transition-all hover:shadow-lg hover:scale-[1.02] text-center flex items-center justify-center gap-2">
+                <button className="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold px-8 py-3.5 sm:py-4 rounded-full text-sm sm:text-base transition-all hover:shadow-lg hover:scale-[1.02] text-center flex items-center justify-center gap-2 cursor-pointer">
                   <Mic size={18} />
                   Mulai Rekam Suara Free
                 </button>
               </Link>
               <Link href="/institusi">
-                <button className="text-[#001b85] font-bold px-8 py-4 rounded-full text-base border-2 border-[#001b85] hover:bg-[#ececff]/40 transition-colors text-center">
+                <button className="w-full sm:w-auto text-[#001b85] font-bold px-8 py-3.5 sm:py-4 rounded-full text-sm sm:text-base border-2 border-[#001b85] hover:bg-[#ececff]/40 transition-colors text-center cursor-pointer">
                   Portal Institusi
                 </button>
               </Link>
             </div>
 
             {/* Micro stats banner */}
-            <div className="pt-6 border-t border-slate-200/80 grid grid-cols-3 gap-4 max-w-md">
+            <div className="pt-6 border-t border-slate-200/80 grid grid-cols-3 gap-2 sm:gap-4 max-w-md">
               <div>
-                <p className="text-2xl font-black text-[#001b85]">1,200+</p>
-                <p className="text-xs text-slate-500 font-semibold">UMKM Aktif</p>
+                <p className="text-xl sm:text-2xl font-black text-[#001b85]">1,200+</p>
+                <p className="text-[10px] sm:text-xs text-slate-500 font-semibold">UMKM Aktif</p>
               </div>
               <div>
-                <p className="text-2xl font-black text-emerald-600">18+</p>
-                <p className="text-xs text-slate-500 font-semibold">Bank & Fintech</p>
+                <p className="text-xl sm:text-2xl font-black text-emerald-600">18+</p>
+                <p className="text-[10px] sm:text-xs text-slate-500 font-semibold">Bank & Fintech</p>
               </div>
               <div>
-                <p className="text-2xl font-black text-indigo-600">62.4</p>
-                <p className="text-xs text-slate-500 font-semibold">Avg Readiness Score</p>
+                <p className="text-xl sm:text-2xl font-black text-indigo-600">62.4</p>
+                <p className="text-[10px] sm:text-xs text-slate-500 font-semibold">Readiness Score</p>
               </div>
             </div>
           </div>
 
           {/* Right Hero Interactive Mockup */}
-          <div className="lg:col-span-5 relative flex justify-center animate-fade-in-up delay-200">
+          <div className="lg:col-span-5 relative flex justify-center mt-6 lg:mt-0 animate-fade-in-up delay-200">
             {/* Phone shell wrapper */}
-            <div className="relative w-[290px] h-[580px] bg-slate-900 rounded-[40px] p-3 shadow-2xl border-4 border-slate-800 flex flex-col overflow-hidden">
+            <div className="relative w-[280px] sm:w-[290px] h-[520px] sm:h-[580px] bg-slate-900 rounded-[36px] sm:rounded-[40px] p-2.5 sm:p-3 shadow-2xl border-4 border-slate-800 flex flex-col overflow-hidden">
               {/* Screen Content */}
-              <div className="bg-[#fbf8ff] flex-1 rounded-[32px] overflow-hidden flex flex-col relative text-xs">
+              <div className="bg-[#fbf8ff] flex-1 rounded-[28px] sm:rounded-[32px] overflow-hidden flex flex-col relative text-xs">
                 {/* Header Mock */}
                 <div className="px-3 pt-6 pb-2 bg-white border-b border-slate-100 flex items-center justify-between">
                   <span className="font-headline font-bold text-[#001b85] text-[10px]">BERKEMBANG.ID</span>
@@ -210,7 +260,7 @@ export default function LandingPage() {
               </div>
 
               {/* Float Mic Button */}
-              <div className="absolute bottom-11 left-1/2 -translate-x-1/2 w-12 h-12 rounded-full bg-gradient-to-tr from-emerald-600 to-sky-500 flex items-center justify-center shadow-lg border-2 border-white z-40">
+              <div className="absolute bottom-11 left-1/2 -translate-x-1/2 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-emerald-600 to-sky-500 flex items-center justify-center shadow-lg border-2 border-white z-40">
                 <Mic size={18} className="text-white animate-pulse" />
               </div>
             </div>
@@ -221,28 +271,28 @@ export default function LandingPage() {
       </section>
 
       {/* Cara Kerja */}
-      <section id="cara-kerja" className="py-20 bg-slate-100/60 px-6 border-y border-slate-200/50">
+      <section id="cara-kerja" className="py-14 sm:py-20 bg-slate-100/60 px-4 sm:px-6 border-y border-slate-200/50">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-10 sm:mb-16">
             <p className="text-xs font-bold text-[#001b85] uppercase tracking-widest font-mono-label mb-2">Langkah Mudah</p>
-            <h2 className="font-headline text-3xl font-extrabold text-[#141a34]">Bagaimana Berkembang.id Bekerja</h2>
-            <p className="text-sm text-slate-500 mt-2">Pencatatan canggih tanpa perlu memahami pembukuan rumit</p>
+            <h2 className="font-headline text-2xl sm:text-3xl font-extrabold text-[#141a34]">Bagaimana Berkembang.id Bekerja</h2>
+            <p className="text-xs sm:text-sm text-slate-500 mt-2">Pencatatan canggih tanpa perlu memahami pembukuan rumit</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
             {[
               { num: "01", Icon: Mic, title: "Rekam Transaksi", desc: "Cukup tekan tombol mic di dashboard mobile, sebutkan transaksi Anda seperti berbicara biasa.", color: "#16a34a" },
               { num: "02", Icon: Sparkles, title: "AI Ekstraksi Otomatis", desc: "Whisper & GPT memproses ucapan Anda untuk mengenali barang, kuantitas, harga, dan kategori secara tepat.", color: "#001b85" },
               { num: "03", Icon: TrendingUp, title: "Profil Siap Dana", desc: "Data kas Anda diolah menjadi Readiness Score. Ketika score Anda tinggi, bank mitra akan menawarkan pendanaan.", color: "#0d9488" },
             ].map((step, idx) => (
-              <div key={idx} className={`bg-white rounded-2xl p-6 border border-slate-200/50 shadow-sm relative group hover:border-[#bac3ff] hover:shadow transition-all duration-300 animate-fade-in-up ${
+              <div key={idx} className={`bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/50 shadow-sm relative group hover:border-[#bac3ff] hover:shadow transition-all duration-300 animate-fade-in-up ${
                 idx === 0 ? "delay-100" : idx === 1 ? "delay-200" : "delay-300"
               }`}>
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: `${step.color}15` }}>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: `${step.color}15` }}>
                   <step.Icon size={20} style={{ color: step.color }} />
                 </div>
                 <p className="text-[10px] font-mono-label font-bold text-slate-400 mb-1">{step.num}</p>
-                <h3 className="font-headline font-bold text-lg text-[#141a34] mb-2">{step.title}</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
+                <h3 className="font-headline font-bold text-base sm:text-lg text-[#141a34] mb-2">{step.title}</h3>
+                <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">{step.desc}</p>
               </div>
             ))}
           </div>
@@ -250,12 +300,12 @@ export default function LandingPage() {
       </section>
 
       {/* Feature Grid */}
-      <section id="fitur" className="py-20 px-6 max-w-6xl mx-auto">
-        <div className="text-center mb-16">
+      <section id="fitur" className="py-14 sm:py-20 px-4 sm:px-6 max-w-6xl mx-auto">
+        <div className="text-center mb-10 sm:mb-16">
           <p className="text-xs font-bold text-[#001b85] uppercase tracking-widest font-mono-label mb-2">Fitur Unggulan</p>
-          <h2 className="font-headline text-3xl font-extrabold text-[#141a34]">Didesain Khusus Untuk Ekosistem Mikro</h2>
+          <h2 className="font-headline text-2xl sm:text-3xl font-extrabold text-[#141a34]">Didesain Khusus Untuk Ekosistem Mikro</h2>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {[
             { Icon: Mic, color: "#16a34a", bg: "bg-emerald-50", title: "Perekaman Suara Generatif", desc: "Mendukung pengenalan percakapan bahasa Indonesia kasual secara akurat." },
             { Icon: Flame, color: "#ea580c", bg: "bg-orange-50", title: "Konsistensi Gamifikasi", desc: "Jaga kebiasaan mencatat dengan streak harian, badge koleksi, dan reward journey." },
@@ -270,25 +320,25 @@ export default function LandingPage() {
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${f.bg}`}>
                 <f.Icon size={18} style={{ color: f.color }} />
               </div>
-              <h3 className="font-bold text-[#141a34] mb-1">{f.title}</h3>
-              <p className="text-sm text-slate-500 leading-normal">{f.desc}</p>
+              <h3 className="font-bold text-[#141a34] text-sm sm:text-base mb-1">{f.title}</h3>
+              <p className="text-xs sm:text-sm text-slate-500 leading-normal">{f.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* Tabbed Interactive Section for Partners */}
-      <section id="institusi" className="py-20 bg-slate-950 text-white relative px-6">
+      <section id="institusi" className="py-14 sm:py-20 bg-slate-950 text-white relative px-4 sm:px-6">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
+          <div className="text-center mb-8 sm:mb-12">
             <p className="text-teal-400 text-xs font-bold uppercase tracking-widest font-mono-label mb-2">Bagi Lembaga & Mitra</p>
-            <h2 className="font-headline text-3xl font-extrabold">Solusi Penyaluran Pembiayaan Tepat Sasaran</h2>
+            <h2 className="font-headline text-2xl sm:text-3xl font-extrabold">Solusi Penyaluran Pembiayaan Tepat Sasaran</h2>
           </div>
 
-          <div className="flex justify-center gap-4 mb-8">
+          <div className="flex flex-col sm:flex-row justify-center gap-2.5 sm:gap-4 mb-8">
             <button
               onClick={() => setActiveTab("umkm")}
-              className={`px-6 py-2 rounded-full text-xs font-bold border-2 transition-all ${
+              className={`px-5 sm:px-6 py-2.5 sm:py-2 rounded-full text-xs font-bold border-2 transition-all w-full sm:w-auto cursor-pointer ${
                 activeTab === "umkm" ? "bg-white text-slate-900 border-white" : "border-slate-800 text-slate-400 hover:text-white"
               }`}
             >
@@ -296,7 +346,7 @@ export default function LandingPage() {
             </button>
             <button
               onClick={() => setActiveTab("institusi")}
-              className={`px-6 py-2 rounded-full text-xs font-bold border-2 transition-all ${
+              className={`px-5 sm:px-6 py-2.5 sm:py-2 rounded-full text-xs font-bold border-2 transition-all w-full sm:w-auto cursor-pointer ${
                 activeTab === "institusi" ? "bg-white text-slate-900 border-white" : "border-slate-800 text-slate-400 hover:text-white"
               }`}
             >
@@ -305,55 +355,55 @@ export default function LandingPage() {
           </div>
 
           {activeTab === "umkm" ? (
-            <div className="grid md:grid-cols-2 gap-8 items-center bg-slate-900 p-8 rounded-3xl border border-slate-800 animate-fade-in-up">
-              <div className="space-y-4">
-                <h3 className="text-xl font-bold">Pantau Perkembangan Anggota Komunitas Secara Real-Time</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 items-center bg-slate-900 p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-slate-800 animate-fade-in-up">
+              <div className="space-y-3 sm:space-y-4">
+                <h3 className="text-lg sm:text-xl font-bold">Pantau Perkembangan Anggota Komunitas Secara Real-Time</h3>
+                <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
                   Sebagai mitra penggerak atau LSM pendamping, Anda mendapatkan dasbor analitik terpadu untuk melihat kepatuhan pencatatan, skor kesiapan, dan hambatan operasional UMKM dampingan secara anonim namun valid.
                 </p>
                 <ul className="space-y-2 text-xs text-teal-300 font-semibold">
-                  <li className="flex items-center gap-2"><CheckCircle2 size={14} /> Otomasi pengumpulan data NIB</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 size={14} /> Dasbor klasterisasi performa wilayah</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 size={14} /> Notifikasi dini penurunan omset kelompok</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 size={14} className="shrink-0" /> Otomasi pengumpulan data NIB</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 size={14} className="shrink-0" /> Dasbor klasterisasi performa wilayah</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 size={14} className="shrink-0" /> Notifikasi dini penurunan omset kelompok</li>
                 </ul>
               </div>
-              <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800/80 space-y-3">
+              <div className="bg-slate-950 p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-800/80 space-y-3">
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Mitra Komunitas Terdaftar</p>
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center text-xs p-2 bg-slate-900 rounded-lg">
+                  <div className="flex justify-between items-center text-xs p-2.5 bg-slate-900 rounded-lg">
                     <span className="font-bold">SMESCO Indonesia</span>
-                    <span className="text-teal-400">234 UMKM</span>
+                    <span className="text-teal-400 font-semibold">234 UMKM</span>
                   </div>
-                  <div className="flex justify-between items-center text-xs p-2 bg-slate-900 rounded-lg">
+                  <div className="flex justify-between items-center text-xs p-2.5 bg-slate-900 rounded-lg">
                     <span className="font-bold">Komunitas UMKM Jaya</span>
-                    <span className="text-teal-400">87 UMKM</span>
+                    <span className="text-teal-400 font-semibold">87 UMKM</span>
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-8 items-center bg-slate-900 p-8 rounded-3xl border border-slate-800 animate-fade-in-up">
-              <div className="space-y-4">
-                <h3 className="text-xl font-bold">Penilaian Kredit yang Andal & Berbasis Bukti Nyata</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 items-center bg-slate-900 p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-slate-800 animate-fade-in-up">
+              <div className="space-y-3 sm:space-y-4">
+                <h3 className="text-lg sm:text-xl font-bold">Penilaian Kredit yang Andal & Berbasis Bukti Nyata</h3>
+                <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
                   Minimalkan risiko kredit macet (NPL) program KUR Anda. Temukan portofolio UMKM potensial dengan filter Readiness Score, konsistensi pencatatan, dan stabilitas finansial. Ajukan akses berkas (dossier) secara aman.
                 </p>
                 <ul className="space-y-2 text-xs text-teal-300 font-semibold">
-                  <li className="flex items-center gap-2"><CheckCircle2 size={14} /> Integrasi pengurusan NIB legal</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 size={14} /> Filter verifikasi omset riil transaksi</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 size={14} /> Alur persetujuan dossier aman (GDPR)</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 size={14} className="shrink-0" /> Integrasi pengurusan NIB legal</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 size={14} className="shrink-0" /> Filter verifikasi omset riil transaksi</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 size={14} className="shrink-0" /> Alur persetujuan dossier aman (GDPR)</li>
                 </ul>
               </div>
-              <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800/80 space-y-3">
+              <div className="bg-slate-950 p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-800/80 space-y-3">
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Filter Pencarian Institusi</p>
                 <div className="space-y-2 text-xs">
-                  <div className="p-2 bg-slate-900 rounded-lg flex items-center justify-between">
+                  <div className="p-2.5 bg-slate-900 rounded-lg flex items-center justify-between">
                     <span>Sektor: <strong>Kuliner</strong></span>
-                    <span className="text-xs bg-[#001b85] text-white px-2 py-0.5 rounded-full">Sesuai</span>
+                    <span className="text-[10px] sm:text-xs bg-[#001b85] text-white px-2 py-0.5 rounded-full font-bold">Sesuai</span>
                   </div>
-                  <div className="p-2 bg-slate-900 rounded-lg flex items-center justify-between">
+                  <div className="p-2.5 bg-slate-900 rounded-lg flex items-center justify-between">
                     <span>Readiness Score: <strong>&ge; 70</strong></span>
-                    <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full">Lulus</span>
+                    <span className="text-[10px] sm:text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold">Lulus</span>
                   </div>
                 </div>
               </div>
@@ -363,19 +413,19 @@ export default function LandingPage() {
       </section>
 
       {/* Bottom CTA Block */}
-      <section className="py-20 px-6">
-        <div className="max-w-5xl mx-auto rounded-3xl p-10 md:p-14 text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #001b85, #006a6a)" }}>
-          <div className="absolute top-0 right-0 w-80 h-80 bg-teal-500/10 rounded-full blur-3xl -z-10" />
-          <p className="text-teal-300 text-xs font-bold uppercase tracking-widest font-mono-label mb-3">Siap Mengembangkan Usaha?</p>
-          <h2 className="font-headline text-3xl md:text-4xl font-extrabold text-white mb-4">
+      <section className="py-14 sm:py-20 px-4 sm:px-6">
+        <div className="max-w-5xl mx-auto rounded-2xl sm:rounded-3xl p-6 sm:p-10 md:p-14 text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #001b85, #006a6a)" }}>
+          <div className="absolute top-0 right-0 w-60 sm:w-80 h-60 sm:h-80 bg-teal-500/10 rounded-full blur-3xl -z-10" />
+          <p className="text-teal-300 text-xs font-bold uppercase tracking-widest font-mono-label mb-2 sm:mb-3">Siap Mengembangkan Usaha?</p>
+          <h2 className="font-headline text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-3 sm:mb-4">
             Mulai Transformasi Digital Usaha Anda Hari Ini
           </h2>
-          <p className="text-white/70 text-base mb-8 max-w-xl mx-auto">
+          <p className="text-white/80 text-xs sm:text-base mb-6 sm:mb-8 max-w-xl mx-auto leading-relaxed">
             Dapatkan skoring readiness dan bersiaplah menyambut program pendanaan perbankan formal secara transparan.
           </p>
-          <div className="flex justify-center gap-3">
+          <div className="flex justify-center">
             <Link href="/umkm">
-              <button className="bg-white text-[#001b85] font-bold px-8 py-4 rounded-full text-base hover:bg-[#f0f0ff] transition-all">
+              <button className="w-full sm:w-auto bg-white text-[#001b85] font-bold px-8 py-3.5 sm:py-4 rounded-full text-sm sm:text-base hover:bg-[#f0f0ff] transition-all cursor-pointer shadow-md">
                 Coba Sebagai UMKM
               </button>
             </Link>
@@ -384,10 +434,10 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 py-8 px-6 text-center bg-white">
-        <p className="font-headline font-bold text-[#001b85] mb-1">BERKEMBANG.ID</p>
-        <p className="text-xs text-slate-500">Platform Generatif AI Pendamping Journey UMKM Mikro Naik Kelas</p>
-        <p className="text-xs text-slate-400 mt-3">© 2026 Tim P0160 — BERKEMBANG.ID</p>
+      <footer className="border-t border-slate-200 py-6 sm:py-8 px-4 sm:px-6 text-center bg-white">
+        <p className="font-headline font-bold text-[#001b85] mb-1 text-sm sm:text-base">BERKEMBANG.ID</p>
+        <p className="text-[11px] sm:text-xs text-slate-500">Platform Generatif AI Pendamping Journey UMKM Mikro Naik Kelas</p>
+        <p className="text-[10px] sm:text-xs text-slate-400 mt-2 sm:mt-3">© 2026 Tim P0160 — BERKEMBANG.ID</p>
       </footer>
     </div>
   );

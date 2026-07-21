@@ -6,6 +6,31 @@ export async function proxy(request: NextRequest) {
     request,
   });
 
+  const { pathname } = request.nextUrl;
+
+  const isProtectedPath =
+    pathname.startsWith("/umkm") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/institusi");
+
+  const isAuthPath =
+    pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register");
+
+  // Fast-path: Skip Supabase auth check completely for public pages (e.g. landing page '/')
+  if (!isProtectedPath && !isAuthPath) {
+    return response;
+  }
+
+  const allCookies = request.cookies.getAll();
+  const hasAuthCookie = allCookies.some(
+    (c) => c.name.includes("sb-") || c.name.includes("supabase") || c.name.includes("auth-token")
+  );
+
+  // Fast-path: Unauthenticated user on login/register page -> return immediately without external call
+  if (isAuthPath && !hasAuthCookie) {
+    return response;
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
@@ -33,16 +58,6 @@ export async function proxy(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
-
-  const isProtectedPath =
-    pathname.startsWith("/umkm") ||
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/institusi");
-
-  const isAuthPath =
-    pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register");
 
   // 1. Unauthenticated users trying to access protected paths -> Login
   if (!user && isProtectedPath) {
