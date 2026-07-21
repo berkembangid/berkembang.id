@@ -44,6 +44,7 @@ export async function proxy(request: NextRequest) {
   const isAuthPath =
     pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register");
 
+  // 1. Unauthenticated users trying to access protected paths -> Login
   if (!user && isProtectedPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
@@ -51,13 +52,40 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  const userRole = user?.user_metadata?.role || "umkm";
+
+  // 2. Authenticated users trying to access auth pages -> Redirect to their portal
   if (user && isAuthPath) {
-    const userRole = user.user_metadata?.role || "umkm";
     const targetPath =
       userRole === "admin" ? "/admin" : userRole === "institution" ? "/institusi" : "/umkm";
     const url = request.nextUrl.clone();
     url.pathname = targetPath;
     return NextResponse.redirect(url);
+  }
+
+  // 3. Strict Role Access Control: Prevent cross-role access
+  if (user && isProtectedPath) {
+    const isAccessingUmkm = pathname.startsWith("/umkm");
+    const isAccessingAdmin = pathname.startsWith("/admin");
+    const isAccessingInstitusi = pathname.startsWith("/institusi");
+
+    if (userRole === "admin" && !isAccessingAdmin) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin";
+      return NextResponse.redirect(url);
+    }
+
+    if (userRole === "institution" && !isAccessingInstitusi) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/institusi";
+      return NextResponse.redirect(url);
+    }
+
+    if (userRole === "umkm" && !isAccessingUmkm) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/umkm";
+      return NextResponse.redirect(url);
+    }
   }
 
   return response;
