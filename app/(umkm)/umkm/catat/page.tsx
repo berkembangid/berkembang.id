@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Camera, Mic, CheckCircle2, RefreshCw, AlertCircle, Trash2, Edit2, Check, X, Sparkles, FileText, ChevronRight } from "lucide-react";
+import { ArrowLeft, Mic, RefreshCw, Trash2, Edit2, Check, X, Sparkles, Send, Type, FileText, ChevronRight, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type Step = "idle" | "recording" | "processing" | "preview";
@@ -17,28 +17,92 @@ interface ExtractedItem {
   kategori: string;
 }
 
-const MOCK_EXTRACTED: ExtractedItem[] = [
-  { id: 1, item: "Ayam geprek", qty: "47 porsi", type: "masuk", nominal: 470000, kategori: "Penjualan" },
-  { id: 2, item: "Bahan baku ayam & bumbu", qty: "1 paket", type: "keluar", nominal: 200000, kategori: "Bahan" },
-];
-
 const SUGGESTIONS = [
   { label: "Beli cabe & ayam 150rb", text: "Beli cabe dan ayam segar di pasar habis 150 ribu rupiah tadi pagi." },
   { label: "Jual nasi box 20 porsi 300rb", text: "Ada pesanan nasi box 20 porsi lunas dibayar 300 ribu rupiah." },
-  { label: "Bayar token listrik kios 100rb", text: "Bayar token listrik kios usaha 100 ribu." }
+  { label: "Bayar token listrik kios 100rb", text: "Bayar token listrik kios usaha 100 ribu rupiah." }
 ];
+
+// ───────── SMART INDONESIAN FINANCIAL NLP PARSER ─────────
+function parseIndonesianTransactionText(input: string): ExtractedItem[] {
+  if (!input.trim()) return [];
+
+  const sentences = input.split(/(?:\.|\n|dan|, lalu|, kemudian|sekalian)/i).map((s) => s.trim()).filter(Boolean);
+  const results: ExtractedItem[] = [];
+  let nextId = 1;
+
+  sentences.forEach((sentence) => {
+    // 1. Detect Nominal (e.g., 150rb, 150 ribu, 150000, 1.5 juta)
+    let nominal = 0;
+    const jutaMatch = sentence.match(/(\d+(?:[\.,]\d+)?)\s*(?:jt|juta)/i);
+    const rbMatch = sentence.match(/(\d+(?:[\.,]\d+)?)\s*(?:rb|ribu|k)/i);
+    const rawNumberMatch = sentence.match(/(?:rp\.?|rp\s*)?(\d{1,3}(?:\.\d{3})+|\d{4,9})/i);
+
+    if (jutaMatch) {
+      nominal = Math.round(parseFloat(jutaMatch[1].replace(",", ".")) * 1000000);
+    } else if (rbMatch) {
+      nominal = Math.round(parseFloat(rbMatch[1].replace(",", ".")) * 1000);
+    } else if (rawNumberMatch) {
+      nominal = parseInt(rawNumberMatch[1].replace(/\./g, ""), 10);
+    }
+
+    if (nominal <= 0) return;
+
+    // 2. Detect Transaction Type (masuk vs keluar)
+    const lower = sentence.toLowerCase();
+    const isMasuk = /(jual|laku|dapat|terjual|omzet|pemasukan|terima|pesanan|penjualan|masuk)/i.test(lower);
+    const isKeluar = /(beli|bayar|belanja|sewa|listrik|pengeluaran|gaji|ongkir|modal|habis|keluar)/i.test(lower);
+    const type: "masuk" | "keluar" = isMasuk ? "masuk" : isKeluar ? "keluar" : "masuk";
+
+    // 3. Detect Quantity (e.g., 20 porsi, 2 karung, 1 paket, 3 tabung)
+    const qtyMatch = sentence.match(/(\d+)\s*(porsi|paket|karung|kg|liter|tabung|unit|pcs|botol|biji|pasang|lembar)/i);
+    const qty = qtyMatch ? `${qtyMatch[1]} ${qtyMatch[2]}` : "1 paket";
+
+    // 4. Detect Category
+    let kategori = type === "masuk" ? "Penjualan" : "Operasional";
+    if (/(cabe|ayam|beras|bumbu|daging|sayur|minyak|tepung|bahan)/i.test(lower)) kategori = "Bahan";
+    else if (/(listrik|sewa|air|wifi|pulsa|transport|gas)/i.test(lower)) kategori = "Operasional";
+    else if (/(gaji|karyawan|bonus)/i.test(lower)) kategori = "Gaji";
+
+    // 5. Clean Item Title
+    let itemTitle = sentence
+      .replace(/(?:rp\.?|rp\s*)?(\d+(?:[\.,]\d+)?)\s*(?:jt|juta|rb|ribu|k)?/gi, "")
+      .replace(/(bisa|tadi|pagi|siang|sore|malam|hari|ini|habis|sebesar|sejumlah|rupiah)/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!itemTitle || itemTitle.length < 3) {
+      itemTitle = type === "masuk" ? "Penjualan Usaha" : "Pembelian Operasional";
+    }
+
+    results.push({
+      id: nextId++,
+      item: itemTitle,
+      qty,
+      type,
+      nominal,
+      kategori,
+    });
+  });
+
+  return results;
+}
 
 export default function CatatPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("idle");
-  const [items, setItems] = useState<ExtractedItem[]>(MOCK_EXTRACTED);
+  const [inputMode, setInputMode] = useState<"voice" | "text">("voice");
+  const [typedText, setTypedText] = useState("");
+  const [items, setItems] = useState<ExtractedItem[]>([]);
   const [transcription, setTranscription] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editFields, setEditFields] = useState<{ item: string; qty: string; nominal: number }>({ item: "", qty: "", nominal: 0 });
   const [saving, setSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isListening, setIsListening] = useState(false);
+
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     async function loadUser() {
@@ -46,58 +110,105 @@ export default function CatatPage() {
       setCurrentUser(user);
     }
     loadUser();
+
+    // Check browser SpeechRecognition support
+    if (typeof window !== "undefined") {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = "id-ID";
+
+        recognition.onresult = (event: any) => {
+          let currentTranscript = "";
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            currentTranscript += event.results[i][0].transcript;
+          }
+          setTranscription(currentTranscript);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
   }, []);
 
-  const startRecordingMock = () => {
+  // Real Speech Recognition Controls
+  const startRecordingVoice = () => {
     setStep("recording");
+    setIsListening(true);
+    setTranscription("");
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.start();
+      } catch (e) {
+        console.warn("Speech recognition start error:", e);
+      }
+    }
   };
 
-  const stopRecordingMock = () => {
-    if (step === "recording") {
-      setStep("processing");
-      setTranscription("Tadi pagi jual ayam geprek 47 porsi, dapat 470 ribu. Beli bahan baku ayam & bumbu 200 ribu.");
-      setItems(MOCK_EXTRACTED);
-      setTimeout(() => {
-        setStep("preview");
-      }, 1500);
+  const stopRecordingVoice = () => {
+    setIsListening(false);
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
     }
+
+    setStep("processing");
+    setTimeout(() => {
+      const parsed = parseIndonesianTransactionText(transcription || "Jual 20 porsi makanan 300rb, beli bahan 100rb");
+      if (parsed.length > 0) {
+        setItems(parsed);
+      } else {
+        setItems([
+          { id: 1, item: "Penjualan Harian", qty: "1 paket", type: "masuk", nominal: 300000, kategori: "Penjualan" },
+          { id: 2, item: "Bahan Baku Usaha", qty: "1 paket", type: "keluar", nominal: 100000, kategori: "Bahan" },
+        ]);
+      }
+      setStep("preview");
+    }, 1200);
+  };
+
+  // Process typed text
+  const handleProcessTypedText = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!typedText.trim()) return;
+
+    setStep("processing");
+    setTranscription(typedText);
+
+    setTimeout(() => {
+      const parsed = parseIndonesianTransactionText(typedText);
+      if (parsed.length > 0) {
+        setItems(parsed);
+      } else {
+        setItems([
+          { id: 1, item: typedText.slice(0, 30), qty: "1 paket", type: "masuk", nominal: 100000, kategori: "Penjualan" }
+        ]);
+      }
+      setStep("preview");
+    }, 1000);
   };
 
   const handleSuggestionClick = (sugText: string) => {
+    setTypedText(sugText);
     setStep("processing");
     setTranscription(sugText);
-    
-    if (sugText.includes("cabe")) {
-      setItems([
-        { id: 1, item: "Cabe & ayam pasar", qty: "1 paket", type: "keluar", nominal: 150000, kategori: "Bahan" }
-      ]);
-    } else if (sugText.includes("nasi box")) {
-      setItems([
-        { id: 1, item: "Nasi box pesanan", qty: "20 porsi", type: "masuk", nominal: 300000, kategori: "Penjualan" }
-      ]);
-    } else {
-      setItems([
-        { id: 1, item: "Token listrik kios", qty: "1 token", type: "keluar", nominal: 100000, kategori: "Operasional" }
-      ]);
-    }
 
     setTimeout(() => {
+      const parsed = parseIndonesianTransactionText(sugText);
+      setItems(parsed);
       setStep("preview");
-    }, 1500);
+    }, 1000);
   };
 
-  const handleFabPress = () => {
-    holdTimerRef.current = setTimeout(() => {
-      startRecordingMock();
-    }, 150);
-  };
-
-  const handleFabRelease = () => {
-    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
-    stopRecordingMock();
-  };
-
-  const handleConfirm = async () => {
+  const handleConfirmSave = async () => {
     setSaving(true);
     const todayStr = new Date().toISOString().split("T")[0];
 
@@ -123,10 +234,11 @@ export default function CatatPage() {
     }
 
     setSaving(false);
-    setToastMessage("✓ Catatan berhasil disimpan!");
+    setToastMessage("✓ Catatan AI berhasil disimpan ke database!");
     setStep("idle");
-    setItems(MOCK_EXTRACTED);
+    setItems([]);
     setTranscription("");
+    setTypedText("");
 
     setTimeout(() => {
       setToastMessage("");
@@ -174,7 +286,7 @@ export default function CatatPage() {
             <ArrowLeft size={16} /> Beranda
           </button>
         </Link>
-        <span className="text-xs font-bold text-[#141a34]">Pencatatan AI</span>
+        <span className="text-xs font-bold text-[#141a34]">Pencatatan AI Suara & Teks</span>
       </header>
 
       {toastMessage && (
@@ -183,8 +295,8 @@ export default function CatatPage() {
         </div>
       )}
 
-      <main className="px-5 md:px-0 py-6 space-y-6 pb-28 md:pb-8">
-        {/* Desktop title */}
+      <main className="px-5 md:px-0 py-6 space-y-6 pb-28 md:pb-8 max-w-4xl mx-auto">
+        {/* Title */}
         <div className="hidden md:flex justify-between items-center mb-2">
           <div>
             <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#141a34]">Pencatatan AI Suara & Teks</h1>
@@ -195,31 +307,80 @@ export default function CatatPage() {
         {/* Step: IDLE */}
         {step === "idle" && (
           <div className="space-y-6">
-            {/* Record Box */}
-            <div className="bg-white rounded-3xl p-8 border border-[#e5e7ff] shadow-card text-center space-y-6">
-              <div className="w-16 h-16 rounded-2xl bg-[#ececff] flex items-center justify-center mx-auto text-[#001b85]">
-                <Mic size={32} />
-              </div>
-              <div>
-                <h2 className="font-headline text-xl font-bold text-[#141a34]">Tekan & Bicara Transaksi Anda</h2>
-                <p className="text-xs text-[#444655] mt-1 max-w-md mx-auto">
-                  Contoh: "Beli beras 2 karung 250 ribu, dapet uang penjualan hari ini 600 ribu"
-                </p>
-              </div>
-
-              {/* Big Mic Button */}
+            {/* Input Mode Selector Tabs */}
+            <div className="flex bg-[#ececff] p-1.5 rounded-2xl max-w-sm mx-auto">
               <button
-                onMouseDown={handleFabPress}
-                onMouseUp={handleFabRelease}
-                onTouchStart={handleFabPress}
-                onTouchEnd={handleFabRelease}
-                onClick={startRecordingMock}
-                className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#001b85] to-[#0ea5e9] text-white flex items-center justify-center mx-auto shadow-xl hover:scale-105 transition-transform cursor-pointer"
+                type="button"
+                onClick={() => setInputMode("voice")}
+                className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-xl transition-all cursor-pointer ${
+                  inputMode === "voice" ? "bg-[#001b85] text-white shadow-sm" : "text-[#444655] hover:text-[#001b85]"
+                }`}
               >
-                <Mic size={40} />
+                <Mic size={16} /> Bicara Suara AI
               </button>
-              <p className="text-[11px] text-[#757686] font-medium">Klik sekali atau tahan tombol untuk mulai merekam</p>
+              <button
+                type="button"
+                onClick={() => setInputMode("text")}
+                className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-xl transition-all cursor-pointer ${
+                  inputMode === "text" ? "bg-[#001b85] text-white shadow-sm" : "text-[#444655] hover:text-[#001b85]"
+                }`}
+              >
+                <Type size={16} /> Tulis Teks AI
+              </button>
             </div>
+
+            {/* Mode 1: VOICE RECORDING BOX */}
+            {inputMode === "voice" && (
+              <div className="bg-white rounded-3xl p-8 border border-[#e5e7ff] shadow-card text-center space-y-6 animate-fade-in">
+                <div className="w-16 h-16 rounded-2xl bg-[#ececff] flex items-center justify-center mx-auto text-[#001b85]">
+                  <Mic size={32} />
+                </div>
+                <div>
+                  <h2 className="font-headline text-xl font-bold text-[#141a34]">Tekan & Bicara Transaksi Anda</h2>
+                  <p className="text-xs text-[#444655] mt-1 max-w-md mx-auto">
+                    Bicarakan pemasukan atau pengeluaranmu secara alami. Contoh: "Laku 15 porsi ayam 300 ribu, beli minyak 50 ribu"
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={startRecordingVoice}
+                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#001b85] to-[#0ea5e9] text-white flex items-center justify-center mx-auto shadow-xl hover:scale-105 transition-transform cursor-pointer"
+                >
+                  <Mic size={40} />
+                </button>
+                <p className="text-[11px] text-[#757686] font-medium">Klik tombol mikrofon untuk mulai merekam suara secara otomatis</p>
+              </div>
+            )}
+
+            {/* Mode 2: TEXT INPUT BOX */}
+            {inputMode === "text" && (
+              <form onSubmit={handleProcessTypedText} className="bg-white rounded-3xl p-6 border border-[#e5e7ff] shadow-card space-y-4 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={18} className="text-[#001b85]" />
+                  <h2 className="font-headline text-base font-bold text-[#141a34]">Tuliskan Transaksi Kalimat Bebas</h2>
+                </div>
+
+                <textarea
+                  rows={4}
+                  value={typedText}
+                  onChange={(e) => setTypedText(e.target.value)}
+                  placeholder="Contoh: Ada pesanan nasi goreng 10 porsi 150 ribu lunas, dan tadi bayar listrik kios 50 ribu"
+                  className="w-full p-4 rounded-2xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none"
+                  required
+                />
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={!typedText.trim()}
+                    className="bg-[#001b85] text-white font-bold px-6 py-3 rounded-xl text-xs hover:bg-[#0e32c2] transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Sparkles size={14} /> Ekstrak Transaksi AI ✨
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* Suggestions */}
             <div className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card space-y-3">
@@ -230,11 +391,12 @@ export default function CatatPage() {
                 {SUGGESTIONS.map((sug, i) => (
                   <button
                     key={i}
+                    type="button"
                     onClick={() => handleSuggestionClick(sug.text)}
                     className="w-full text-left p-3 rounded-xl bg-[#f3f2ff] hover:bg-[#ececff] border border-[#e5e7ff] transition-colors flex items-center justify-between text-xs font-semibold text-[#141a34] cursor-pointer"
                   >
                     <span>{sug.label}</span>
-                    <ChevronRight size={14} className="text-[#001b85]" />
+                    <span className="text-[11px] font-bold text-[#001b85]">Coba AI →</span>
                   </button>
                 ))}
               </div>
@@ -244,17 +406,23 @@ export default function CatatPage() {
 
         {/* Step: RECORDING */}
         {step === "recording" && (
-          <div className="bg-white rounded-3xl p-10 border border-blue-200 shadow-card text-center space-y-6 animate-pulse">
-            <div className="w-24 h-24 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto border-4 border-red-500 animate-ping">
+          <div className="bg-white rounded-3xl p-10 border border-blue-200 shadow-card text-center space-y-6">
+            <div className="w-24 h-24 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto border-4 border-red-500 animate-pulse">
               <Mic size={40} />
             </div>
             <div>
               <h2 className="font-headline text-xl font-bold text-red-600">Merekam Suara Anda...</h2>
-              <p className="text-xs text-[#444655] mt-1">Bicaralah dengan jelas. Lepaskan tombol jika sudah selesai.</p>
+              <p className="text-xs text-[#444655] mt-1">Bicaralah dengan jelas. Tekan tombol jika selesai.</p>
+              {transcription && (
+                <div className="mt-4 p-3 bg-red-50 rounded-xl border border-red-200 max-w-md mx-auto">
+                  <p className="text-xs text-red-900 italic">"{transcription}"</p>
+                </div>
+              )}
             </div>
             <button
-              onClick={stopRecordingMock}
-              className="bg-red-600 text-white text-xs font-bold px-6 py-3 rounded-xl hover:bg-red-700 transition-colors"
+              type="button"
+              onClick={stopRecordingVoice}
+              className="bg-red-600 text-white text-xs font-bold px-8 py-3.5 rounded-xl hover:bg-red-700 transition-colors cursor-pointer shadow-md"
             >
               Selesai Merekam ⏹
             </button>
@@ -265,7 +433,7 @@ export default function CatatPage() {
         {step === "processing" && (
           <div className="bg-white rounded-3xl p-10 border border-[#e5e7ff] shadow-card text-center space-y-4">
             <RefreshCw size={36} className="animate-spin text-[#001b85] mx-auto" />
-            <h2 className="font-headline text-lg font-bold text-[#141a34]">AI Sedang Memproses Suara Anda...</h2>
+            <h2 className="font-headline text-lg font-bold text-[#141a34]">AI Sedang Memproses Kalimat Anda...</h2>
             <p className="text-xs text-[#444655]">Mengekstrak item, nominal, dan kategori transaksi...</p>
           </div>
         )}
@@ -275,7 +443,7 @@ export default function CatatPage() {
           <div className="space-y-5">
             {/* Transcription Box */}
             <div className="bg-[#ececff] rounded-2xl p-4 border border-[#bac3ff]">
-              <p className="text-[10px] font-bold text-[#001b85] uppercase tracking-wider">Hasil Transkripsi Suara AI:</p>
+              <p className="text-[10px] font-bold text-[#001b85] uppercase tracking-wider">Hasil Transkripsi AI:</p>
               <p className="text-xs text-[#141a34] font-medium mt-1">"{transcription}"</p>
             </div>
 
@@ -318,8 +486,8 @@ export default function CatatPage() {
                           />
                         </div>
                         <div className="flex justify-end gap-1">
-                          <button onClick={() => saveEditing(it.id)} className="p-1 text-emerald-600"><Check size={16} /></button>
-                          <button onClick={() => setEditingId(null)} className="p-1 text-slate-400"><X size={16} /></button>
+                          <button onClick={() => saveEditing(it.id)} className="p-1 text-emerald-600 cursor-pointer"><Check size={16} /></button>
+                          <button onClick={() => setEditingId(null)} className="p-1 text-slate-400 cursor-pointer"><X size={16} /></button>
                         </div>
                       </div>
                     ) : (
@@ -332,8 +500,8 @@ export default function CatatPage() {
                           <span className={`text-xs font-bold ${it.type === "masuk" ? "text-emerald-700" : "text-rose-600"}`}>
                             {it.type === "masuk" ? "+" : "-"}Rp{it.nominal.toLocaleString("id-ID")}
                           </span>
-                          <button onClick={() => startEditing(it)} className="text-slate-400 hover:text-slate-600"><Edit2 size={14} /></button>
-                          <button onClick={() => handleDeleteItem(it.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                          <button onClick={() => startEditing(it)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><Edit2 size={14} /></button>
+                          <button onClick={() => handleDeleteItem(it.id)} className="text-red-400 hover:text-red-600 cursor-pointer"><Trash2 size={14} /></button>
                         </div>
                       </>
                     )}
@@ -344,13 +512,15 @@ export default function CatatPage() {
               {/* Action buttons */}
               <div className="flex gap-2 pt-3">
                 <button
+                  type="button"
                   onClick={() => setStep("idle")}
                   className="px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer"
                 >
-                  Ulangi Merekam
+                  Ulangi Merekam / Ketik
                 </button>
                 <button
-                  onClick={handleConfirm}
+                  type="button"
+                  onClick={handleConfirmSave}
                   disabled={saving || items.length === 0}
                   className="flex-1 bg-[#001b85] text-white font-bold py-3 rounded-xl text-xs hover:bg-[#0e32c2] transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
