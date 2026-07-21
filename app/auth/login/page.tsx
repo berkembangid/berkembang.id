@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, Mail, AlertCircle, Sparkles, ShieldCheck, Building, Store } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const PRESET_ACCOUNTS = {
@@ -25,15 +25,15 @@ const PRESET_ACCOUNTS = {
 };
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<"umkm" | "institution" | "admin">("umkm");
+  const [email, setEmail] = useState(PRESET_ACCOUNTS.umkm.email);
+  const [password, setPassword] = useState(PRESET_ACCOUNTS.umkm.password);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const fillPresetAccount = (selectedRole: "umkm" | "institution" | "admin") => {
+  const handleRoleSelect = (selectedRole: "umkm" | "institution" | "admin") => {
     setRole(selectedRole);
     setEmail(PRESET_ACCOUNTS[selectedRole].email);
     setPassword(PRESET_ACCOUNTS[selectedRole].password);
@@ -106,13 +106,13 @@ export default function LoginPage() {
         return;
       }
 
-      // 3. For UMKM / Institusi preview if offline/unconfirmed
+      // 3. For UMKM / Institusi preview if offline
       if (role !== "admin" && inputEmail.includes("@berkembang.id")) {
         router.push(targetPath);
         return;
       }
 
-      // 4. Display exact error for Admin or failed Auth
+      // 4. Display clean error
       let msg = "Email atau kata sandi tidak valid. Silakan periksa kembali.";
       const rawMsg = authError?.message || signUpError?.message || "";
       if (rawMsg && rawMsg !== "{}" && rawMsg !== "Invalid login credentials") {
@@ -134,70 +134,22 @@ export default function LoginPage() {
   return (
     <>
       <h1 className="font-headline text-2xl font-bold text-[#141a34] mb-1">Selamat Datang!</h1>
-      <p className="text-sm text-[#444655] mb-4">Masuk ke akun Anda</p>
+      <p className="text-sm text-[#444655] mb-6">Masuk ke akun Anda</p>
 
-      {/* Role selector */}
-      <div className="flex gap-2 mb-4 p-1 bg-[#f3f2ff] rounded-xl">
+      {/* Unified Role Tab Selector */}
+      <div className="flex gap-2 mb-6 p-1 bg-[#f3f2ff] rounded-xl">
         {(["umkm", "institution", "admin"] as const).map((r) => (
           <button
             key={r}
             type="button"
-            onClick={() => setRole(r)}
-            className={`flex-1 text-xs font-bold py-2 rounded-lg transition-colors capitalize cursor-pointer ${
+            onClick={() => handleRoleSelect(r)}
+            className={`flex-1 text-xs font-bold py-2.5 rounded-lg transition-colors capitalize cursor-pointer ${
               role === r ? "bg-white text-[#001b85] shadow-sm" : "text-[#444655]"
             }`}
           >
             {r === "umkm" ? "UMKM" : r === "institution" ? "Institusi" : "Admin"}
           </button>
         ))}
-      </div>
-
-      {/* Preset Fill Buttons */}
-      <div className="bg-[#f8fafc] border border-slate-200/80 rounded-xl p-3 mb-5 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-            <Sparkles size={12} className="text-[#001b85]" /> Pilih Kredensial Akun
-          </span>
-          <span className="text-[9px] font-semibold text-[#001b85] bg-[#ececff] px-2 py-0.5 rounded-full">Supabase Auth</span>
-        </div>
-        <div className="grid grid-cols-3 gap-1.5">
-          <button
-            type="button"
-            onClick={() => fillPresetAccount("umkm")}
-            className={`px-2 py-2 rounded-lg border text-[11px] font-bold transition-all text-left flex items-center gap-1.5 cursor-pointer ${
-              role === "umkm" && email === PRESET_ACCOUNTS.umkm.email
-                ? "bg-[#001b85] text-white border-[#001b85] shadow-sm"
-                : "bg-white text-slate-700 border-slate-200 hover:border-[#001b85]"
-            }`}
-          >
-            <Store size={12} />
-            <span className="truncate">UMKM</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => fillPresetAccount("institution")}
-            className={`px-2 py-2 rounded-lg border text-[11px] font-bold transition-all text-left flex items-center gap-1.5 cursor-pointer ${
-              role === "institution" && email === PRESET_ACCOUNTS.institution.email
-                ? "bg-[#001b85] text-white border-[#001b85] shadow-sm"
-                : "bg-white text-slate-700 border-slate-200 hover:border-[#001b85]"
-            }`}
-          >
-            <Building size={12} />
-            <span className="truncate">Institusi</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => fillPresetAccount("admin")}
-            className={`px-2 py-2 rounded-lg border text-[11px] font-bold transition-all text-left flex items-center gap-1.5 cursor-pointer ${
-              role === "admin" && email === PRESET_ACCOUNTS.admin.email
-                ? "bg-[#001b85] text-white border-[#001b85] shadow-sm"
-                : "bg-white text-slate-700 border-slate-200 hover:border-[#001b85]"
-            }`}
-          >
-            <ShieldCheck size={12} />
-            <span className="truncate">Admin (Real)</span>
-          </button>
-        </div>
       </div>
 
       {error && (
