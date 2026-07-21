@@ -13,6 +13,8 @@ export default function ProfilPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewAvatar, setPreviewAvatar] = useState<string | null>(null);
 
   // Form Fields for Business Profile
   const [form, setForm] = useState({
@@ -25,8 +27,6 @@ export default function ProfilPage() {
     nib: "",
     avatarUrl: "",
   });
-
-  const [previewAvatar, setPreviewAvatar] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadUserProfile() {
@@ -78,9 +78,9 @@ export default function ProfilPage() {
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setSelectedFile(file);
       const url = URL.createObjectURL(file);
       setPreviewAvatar(url);
-      setForm((prev) => ({ ...prev, avatarUrl: url }));
     }
   };
 
@@ -97,6 +97,29 @@ export default function ProfilPage() {
         return;
       }
 
+      let finalAvatarUrl = form.avatarUrl;
+
+      // Upload image directly to Supabase Storage 'avatars' bucket if a new file was selected
+      if (selectedFile) {
+        const fileExt = selectedFile.name.split(".").pop();
+        const filePath = `${user.id}/${Date.now()}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(filePath, selectedFile, { upsert: true });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from("avatars")
+            .getPublicUrl(filePath);
+          if (publicUrlData?.publicUrl) {
+            finalAvatarUrl = publicUrlData.publicUrl;
+          }
+        } else {
+          console.warn("Storage upload warning:", uploadError.message);
+        }
+      }
+
       // 1. Update Supabase auth user metadata
       const { error: updateAuthError } = await supabase.auth.updateUser({
         data: {
@@ -106,7 +129,7 @@ export default function ProfilPage() {
           phone: form.phone,
           nib: form.nib,
           alamat: form.alamat,
-          avatar_url: form.avatarUrl,
+          avatar_url: finalAvatarUrl,
         },
       });
 
@@ -125,6 +148,7 @@ export default function ProfilPage() {
           lokasi: form.lokasi,
           phone: form.phone,
           email: form.email,
+          avatar_url: finalAvatarUrl,
           role: "umkm",
           updated_at: new Date().toISOString(),
         });
@@ -133,7 +157,8 @@ export default function ProfilPage() {
         console.warn("Profiles upsert warning:", upsertError.message);
       }
 
-      setMessage({ type: "success", text: "✓ Profil usaha berhasil disimpan!" });
+      setForm((prev) => ({ ...prev, avatarUrl: finalAvatarUrl }));
+      setMessage({ type: "success", text: "✓ Profil & Foto Usaha berhasil disimpan ke Supabase Storage!" });
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
       console.error("Save profile error:", err);
@@ -199,7 +224,7 @@ export default function ProfilPage() {
                   form.namaUsaha ? form.namaUsaha.charAt(0).toUpperCase() : "U"
                 )}
               </div>
-              <label htmlFor="avatar-upload" className="absolute -bottom-2 -right-2 bg-[#001b85] text-white p-2 rounded-xl shadow-lg cursor-pointer hover:bg-[#0e32c2] transition-colors">
+              <label htmlFor="avatar-upload" className="absolute -bottom-2 -right-2 bg-[#001b85] text-white p-2 rounded-xl shadow-lg cursor-pointer hover:bg-[#0e32c2] transition-colors" title="Unggah foto profil ke Storage">
                 <Camera size={14} />
                 <input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
               </label>
@@ -219,7 +244,6 @@ export default function ProfilPage() {
 
           {/* Form Sections Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
             {/* Section 1: Informasi Usaha */}
             <div className="bg-white rounded-2xl p-6 border border-[#e5e7ff] shadow-card space-y-4">
               <h3 className="font-headline text-sm font-bold text-[#141a34] flex items-center gap-2 border-b border-slate-100 pb-3">
@@ -341,7 +365,7 @@ export default function ProfilPage() {
               className="w-full sm:w-auto bg-[#001b85] text-white font-bold px-8 py-3.5 rounded-xl text-sm hover:bg-[#0e32c2] transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
             >
               <Save size={16} />
-              {saving ? "Menyimpan..." : "Simpan Perubahan Profil 🚀"}
+              {saving ? "Menyimpan ke Storage..." : "Simpan Perubahan Profil 🚀"}
             </button>
           </div>
         </form>
