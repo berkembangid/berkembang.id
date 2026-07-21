@@ -11,6 +11,7 @@ const SIDEBAR_TABS = [
   { label: "Pencatatan AI", href: "/umkm/catat", Icon: Mic },
   { label: "Laporan Keuangan", href: "/umkm/laporan", Icon: BarChart3 },
   { label: "Journey Naik Kelas", href: "/umkm/journey", Icon: Target },
+  { label: "Kesiapan Usaha", href: "/umkm/readiness", Icon: Sparkles },
   { label: "Profil Usaha", href: "/umkm/profil", Icon: User },
 ];
 
@@ -20,7 +21,7 @@ const MOBILE_TABS_LEFT = [
 ];
 
 const MOBILE_TABS_RIGHT = [
-  { label: "Journey", href: "/umkm/journey", Icon: Target },
+  { label: "Kesiapan", href: "/umkm/readiness", Icon: Sparkles },
   { label: "Profil", href: "/umkm/profil", Icon: User },
 ];
 
