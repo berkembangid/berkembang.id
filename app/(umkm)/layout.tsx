@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState, useEffect } from "react";
-import { Home, Mic, Target, User, LogOut, Sparkles, Bell, BarChart3 } from "lucide-react";
+import { Home, Mic, Target, User, LogOut, Sparkles, Bell, BarChart3, X, ArrowUpRight, ArrowDownLeft, FileText, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const SIDEBAR_TABS = [
@@ -15,22 +15,20 @@ const SIDEBAR_TABS = [
   { label: "Profil Usaha", href: "/umkm/profil", Icon: User },
 ];
 
-const MOBILE_TABS_LEFT = [
-  { label: "Beranda", href: "/umkm", Icon: Home },
-  { label: "Laporan", href: "/umkm/laporan", Icon: BarChart3 },
-];
-
-const MOBILE_TABS_RIGHT = [
-  { label: "Kesiapan", href: "/umkm/readiness", Icon: Sparkles },
-  { label: "Profil", href: "/umkm/profil", Icon: User },
-];
-
 export default function UMKMLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [fabActive, setFabActive] = useState(false);
   const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([]);
   const rippleIdRef = useRef(0);
+
+  // Notification Modal State
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifLoading, setNotifLoading] = useState(true);
+
+  // Mobile Laporan Branch Submenu State
+  const [showMobileLaporanBranch, setShowMobileLaporanBranch] = useState(false);
 
   // Supabase User State
   const [userBusinessName, setUserBusinessName] = useState("Pengusaha UMKM");
@@ -39,7 +37,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadUser() {
+    async function loadUserAndNotifications() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         let dbProfile: any = null;
@@ -69,9 +67,29 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         } else {
           setUserInitials("UM");
         }
+
+        // Fetch Live Notifications from Supabase Transactions table
+        try {
+          const { data: txs } = await supabase
+            .from("transactions")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(6);
+
+          if (txs && txs.length > 0) {
+            setNotifications(txs);
+          } else {
+            setNotifications([]);
+          }
+        } catch (e) {
+          console.warn("Notification fetch error:", e);
+        } finally {
+          setNotifLoading(false);
+        }
       }
     }
-    loadUser();
+    loadUserAndNotifications();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
@@ -122,6 +140,8 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
     setFabActive(false);
   }
 
+  const isLaporanRouteActive = pathname === "/umkm/laporan" || pathname === "/umkm/riwayat";
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#fbf8ff]">
       
@@ -132,6 +152,17 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
           <Link href="/umkm">
             <img src="/logo/logo berkembang.webp" alt="Berkembang.id" className="h-11 md:h-12 w-auto object-contain hover:opacity-90 transition-opacity" />
           </Link>
+          <button 
+            type="button"
+            onClick={() => setShowNotifModal(true)}
+            className="w-8 h-8 rounded-full bg-slate-50 hover:bg-[#ececff] flex items-center justify-center border border-[#e5e7ff] text-[#444655] relative cursor-pointer transition-colors"
+            title="Notifikasi Transaksi"
+          >
+            <Bell size={15} />
+            {notifications.length > 0 && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-[#db2777] rounded-full" />
+            )}
+          </button>
         </div>
 
         {/* User Profile Info Quick View with Real Avatar */}
@@ -171,7 +202,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
                   </div>
                 </Link>
 
-                {/* Sub-branch for Laporan Keuangan -> Riwayat Transaksi */}
+                {/* Sub-branch for Laporan Keuangan -> Riwayat Transaksi (Only visible when Laporan group is active) */}
                 {isLaporanGroup && isLaporanActive && (
                   <div className="ml-5 pl-3 border-l-2 border-[#c5c5d7]/50 space-y-1 my-1 animate-fade-in">
                     <Link href="/umkm/riwayat">
@@ -211,17 +242,129 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         </div>
       </div>
 
+      {/* NOTIFICATION MODAL POPUP (DESKTOP & MOBILE) */}
+      {showNotifModal && (
+        <div 
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-[100] flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowNotifModal(false)}
+        >
+          <div 
+            className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-5 w-full max-w-md animate-fade-in-up space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#001b85]/10 text-[#001b85] flex items-center justify-center">
+                  <Bell size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[#141a34]">Notifikasi Transaksi Live</h3>
+                  <p className="text-[11px] text-slate-500">Pemberitahuan aktivitas keuangan terbaru</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowNotifModal(false)}
+                className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+              {notifications.length === 0 ? (
+                <div className="py-8 text-center space-y-2">
+                  <CheckCircle2 size={32} className="text-emerald-500 mx-auto" />
+                  <p className="text-xs font-bold text-[#141a34]">Belum Ada Notifikasi Transaksi Baru</p>
+                  <p className="text-[11px] text-slate-400">Catat transaksi pertamamu untuk menerima pemberitahuan live!</p>
+                </div>
+              ) : (
+                notifications.map((n) => (
+                  <div key={n.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                        n.type === "masuk" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"
+                      }`}>
+                        {n.type === "masuk" ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
+                      </div>
+                      <div>
+                        <p className="font-bold text-[#141a34]">
+                          {n.type === "masuk" ? "Pemasukan" : "Pengeluaran"}: Rp{Number(n.nominal).toLocaleString("id-ID")}
+                        </p>
+                        <p className="text-[11px] text-slate-500">{n.item} · {n.kategori || "Umum"}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-medium">{n.tanggal || "Baru saja"}</span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex justify-end">
+              <Link 
+                href="/umkm/riwayat" 
+                onClick={() => setShowNotifModal(false)}
+                className="text-xs font-bold text-[#001b85] hover:underline flex items-center gap-1"
+              >
+                Lihat Selengkapnya di Riwayat →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MOBILE BOTTOM NAVIGATION BAR */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#c5c5d7]/40 px-3 py-2 flex items-center justify-around">
-        {MOBILE_TABS_LEFT.map((tab) => {
-          const isActive = pathname === tab.href;
-          return (
-            <Link key={tab.href} href={tab.href} className="flex-1 flex flex-col items-center justify-center py-1">
-              <tab.Icon size={20} className={isActive ? "text-[#001b85]" : "text-[#757686]"} />
-              <span className={`text-[10px] font-bold mt-1 ${isActive ? "text-[#001b85]" : "text-[#757686]"}`}>{tab.label}</span>
-            </Link>
-          );
-        })}
+        
+        {/* Beranda Tab */}
+        <Link href="/umkm" className="flex-1 flex flex-col items-center justify-center py-1">
+          <Home size={20} className={pathname === "/umkm" ? "text-[#001b85]" : "text-[#757686]"} />
+          <span className={`text-[10px] font-bold mt-1 ${pathname === "/umkm" ? "text-[#001b85]" : "text-[#757686]"}`}>Beranda</span>
+        </Link>
+
+        {/* Laporan & Riwayat Sub-branch Popover Tab on Mobile */}
+        <div className="flex-1 relative flex flex-col items-center justify-center py-1">
+          {/* Branch Sub-menu Popup above Laporan Tab */}
+          {(showMobileLaporanBranch || isLaporanRouteActive) && (
+            <div className="absolute bottom-14 left-1/2 -translate-x-1/2 bg-white border border-[#001b85]/20 shadow-xl rounded-2xl p-2 w-44 space-y-1 animate-fade-in-up z-50">
+              <p className="text-[9px] font-bold text-[#001b85] px-2 py-0.5 uppercase tracking-wider font-mono">Kelompok Laporan</p>
+              <Link 
+                href="/umkm/laporan"
+                onClick={() => setShowMobileLaporanBranch(false)}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold ${
+                  pathname === "/umkm/laporan" ? "bg-[#001b85] text-white font-bold" : "text-[#141a34] hover:bg-slate-100"
+                }`}
+              >
+                <BarChart3 size={14} /> Laporan Utama
+              </Link>
+              <Link 
+                href="/umkm/riwayat"
+                onClick={() => setShowMobileLaporanBranch(false)}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold ${
+                  pathname === "/umkm/riwayat" ? "bg-[#001b85] text-white font-bold" : "text-[#141a34] hover:bg-slate-100"
+                }`}
+              >
+                <FileText size={14} /> Riwayat Transaksi
+              </Link>
+            </div>
+          )}
+
+          <button 
+            type="button"
+            onClick={() => {
+              if (pathname === "/umkm/laporan") {
+                setShowMobileLaporanBranch(!showMobileLaporanBranch);
+              } else {
+                router.push("/umkm/laporan");
+              }
+            }}
+            className="flex flex-col items-center justify-center w-full"
+          >
+            <BarChart3 size={20} className={isLaporanRouteActive ? "text-[#001b85]" : "text-[#757686]"} />
+            <span className={`text-[10px] font-bold mt-1 ${isLaporanRouteActive ? "text-[#001b85]" : "text-[#757686]"}`}>
+              Laporan {isLaporanRouteActive ? "•" : ""}
+            </span>
+          </button>
+        </div>
 
         {/* FAB Pencatatan AI Button */}
         <div className="relative -top-5 flex items-center justify-center">
@@ -238,15 +381,17 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
           </Link>
         </div>
 
-        {MOBILE_TABS_RIGHT.map((tab) => {
-          const isActive = pathname === tab.href;
-          return (
-            <Link key={tab.href} href={tab.href} className="flex-1 flex flex-col items-center justify-center py-1">
-              <tab.Icon size={20} className={isActive ? "text-[#001b85]" : "text-[#757686]"} />
-              <span className={`text-[10px] font-bold mt-1 ${isActive ? "text-[#001b85]" : "text-[#757686]"}`}>{tab.label}</span>
-            </Link>
-          );
-        })}
+        {/* Kesiapan Tab */}
+        <Link href="/umkm/readiness" className="flex-1 flex flex-col items-center justify-center py-1">
+          <Sparkles size={20} className={pathname === "/umkm/readiness" ? "text-[#001b85]" : "text-[#757686]"} />
+          <span className={`text-[10px] font-bold mt-1 ${pathname === "/umkm/readiness" ? "text-[#001b85]" : "text-[#757686]"}`}>Kesiapan</span>
+        </Link>
+
+        {/* Profil Tab */}
+        <Link href="/umkm/profil" className="flex-1 flex flex-col items-center justify-center py-1">
+          <User size={20} className={pathname === "/umkm/profil" ? "text-[#001b85]" : "text-[#757686]"} />
+          <span className={`text-[10px] font-bold mt-1 ${pathname === "/umkm/profil" ? "text-[#001b85]" : "text-[#757686]"}`}>Profil</span>
+        </Link>
       </nav>
     </div>
   );

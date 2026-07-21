@@ -1,76 +1,78 @@
 "use client";
 
 import Link from "next/link";
-
-const NOTIFICATIONS = [
-  {
-    id: 1, icon: "account_balance", color: "#1e40af", bg: "#dbeafe",
-    title: "Match Pembiayaan Baru!",
-    body: "Bank BRI KUR cocok dengan profil Anda. Readiness Score Anda 58 memenuhi syarat minimum 50.",
-    time: "1 jam lalu", unread: true, type: "match",
-  },
-  {
-    id: 2, icon: "notifications_active", color: "#c2410c", bg: "#ffedd5",
-    title: "Jangan Lupa Catat Hari Ini!",
-    body: "Streak 5 hari berturut-turut hampir terputus. Catat sebelum pukul 23:59!",
-    time: "2 jam lalu", unread: true, type: "reminder",
-  },
-  {
-    id: 3, icon: "emoji_events", color: "#854d0e", bg: "#fef3c7",
-    title: "Selamat! Milestone Tercapai 🎉",
-    body: "Anda telah mencatat selama 7 hari berturut-turut. Badge 'Pencatat Rajin' diperoleh!",
-    time: "Kemarin", unread: false, type: "milestone",
-  },
-  {
-    id: 4, icon: "trending_up", color: "#065f46", bg: "#d1fae5",
-    title: "Readiness Score Naik!",
-    body: "Skor Anda naik dari 45 ke 58. Terus konsisten mencatat untuk naik lebih tinggi!",
-    time: "5 hari lalu", unread: false, type: "readiness",
-  },
-];
+import { useState, useEffect } from "react";
+import { ArrowDownLeft, ArrowUpRight, Bell, CheckCircle2, ArrowLeft } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 export default function NotifikasiPage() {
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchLiveNotifs() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: txs } = await supabase
+            .from("transactions")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
+
+          setNotifications(txs || []);
+        }
+      } catch (e) {
+        console.error("Error loading notifications:", e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchLiveNotifs();
+  }, []);
+
   return (
     <>
       <header className="sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-6 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30">
-        <h1 className="font-headline text-lg font-bold text-[#141a34]">Notifikasi</h1>
-        <button className="text-xs text-[#001b85] font-semibold">Tandai Semua Dibaca</button>
+        <Link href="/umkm" className="flex items-center gap-1 text-xs font-bold text-[#001b85]">
+          <ArrowLeft size={16} /> Beranda
+        </Link>
+        <h1 className="font-headline text-base font-bold text-[#141a34]">Notifikasi Transaksi Live</h1>
+        <span />
       </header>
 
-      <main className="px-6 py-4 space-y-3 pb-8">
-        {NOTIFICATIONS.map((n) => (
-          <div
-            key={n.id}
-            className={`flex gap-3 bg-white rounded-xl p-4 shadow-card border transition-colors cursor-pointer ${
-              n.unread ? "border-[#bac3ff] bg-[#f3f2ff]" : "border-[#e5e7ff]"
-            }`}
-          >
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ backgroundColor: n.bg }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ color: n.color, fontVariationSettings: "'FILL' 1", fontSize: 20 }}
-              >
-                {n.icon}
-              </span>
-            </div>
-            <div className="flex-1">
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold text-sm text-[#141a34]">{n.title}</p>
-                {n.unread && <div className="w-2.5 h-2.5 rounded-full bg-[#001b85] flex-shrink-0 mt-1" />}
-              </div>
-              <p className="text-xs text-[#444655] mt-1 leading-relaxed">{n.body}</p>
-              <p className="text-[10px] text-[#757686] mt-1">{n.time}</p>
-              {n.type === "match" && (
-                <button className="mt-2 text-xs bg-[#001b85] text-white px-3 py-1.5 rounded-lg font-bold">
-                  Buka Profil untuk Institusi →
-                </button>
-              )}
-            </div>
+      <main className="px-6 py-4 space-y-3 pb-28 max-w-2xl mx-auto">
+        {loading ? (
+          <p className="text-xs text-slate-500 text-center py-8">Memuat pemberitahuan...</p>
+        ) : notifications.length === 0 ? (
+          <div className="bg-white rounded-2xl p-8 text-center border border-[#e5e7ff] shadow-card space-y-2">
+            <CheckCircle2 size={36} className="text-emerald-500 mx-auto" />
+            <h3 className="font-bold text-sm text-[#141a34]">Belum Ada Notifikasi Transaksi</h3>
+            <p className="text-xs text-slate-500">Mulai catat pemasukan & pengeluaran usahamu untuk melihat riwayat aktivitas live!</p>
           </div>
-        ))}
+        ) : (
+          notifications.map((n) => (
+            <div
+              key={n.id}
+              className="flex items-center justify-between bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  n.type === "masuk" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"
+                }`}>
+                  {n.type === "masuk" ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                </div>
+                <div>
+                  <p className="font-bold text-sm text-[#141a34]">
+                    {n.type === "masuk" ? "Pemasukan Baru" : "Pengeluaran Baru"}: Rp{Number(n.nominal).toLocaleString("id-ID")}
+                  </p>
+                  <p className="text-xs text-slate-500">{n.item} · Kategori {n.kategori || "Umum"}</p>
+                </div>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-400 font-mono">{n.tanggal || "Hari ini"}</span>
+            </div>
+          ))
+        )}
       </main>
     </>
   );
