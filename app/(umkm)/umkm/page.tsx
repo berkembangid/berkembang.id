@@ -25,6 +25,7 @@ export default function BerandaPage() {
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [profilePct, setProfilePct] = useState(0);
   const [readinessScore, setReadinessScore] = useState(0);
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [profileItems, setProfileItems] = useState([
     { label: "Nama usaha", done: false },
     { label: "Sektor usaha", done: false },
@@ -57,8 +58,10 @@ export default function BerandaPage() {
         const lokasi = dbProfile?.lokasi || user.user_metadata?.lokasi || "";
         const phone = dbProfile?.phone || user.user_metadata?.phone || "";
         const nib = dbProfile?.nib || user.user_metadata?.nib || "";
+        const avatar = dbProfile?.avatar_url || user.user_metadata?.avatar_url || null;
 
         setBusinessName(name);
+        setUserAvatarUrl(avatar);
 
         // Fetch user transactions from Supabase
         const { data: txs } = await supabase
@@ -176,9 +179,15 @@ export default function BerandaPage() {
             <Bell size={16} />
             <span className="absolute top-1 right-1 w-2 h-2 bg-[#db2777] rounded-full" />
           </button>
-          <div className="w-8 h-8 rounded-full bg-[#001b85] text-white flex items-center justify-center font-bold text-xs shadow-sm">
-            {businessName.charAt(0).toUpperCase()}
-          </div>
+          <Link href="/umkm/profil">
+            <div className="w-8 h-8 rounded-full bg-[#001b85] text-white flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden border border-[#001b85]/20">
+              {userAvatarUrl ? (
+                <img src={userAvatarUrl} alt={businessName} className="w-full h-full object-cover" />
+              ) : (
+                businessName.charAt(0).toUpperCase()
+              )}
+            </div>
+          </Link>
         </div>
       </header>
 
