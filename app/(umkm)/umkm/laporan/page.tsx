@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar, Tag, Trash2, X, PlusCircle, Sparkles, Receipt, Check } from "lucide-react";
+import { Plus, BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar, Trash2, X, PlusCircle, Sparkles, Receipt, Check } from "lucide-react";
 import DateTimePicker from "@/components/DateTimePicker";
 import { supabase } from "@/lib/supabase";
 
@@ -16,8 +16,28 @@ interface Transaction {
 }
 
 export default function LaporanPage() {
-  const [period, setPeriod] = useState<"hari" | "bulan" | "tahun">("hari");
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const now = new Date();
+  const toYMD = (d: Date) => d.toISOString().split("T")[0];
+  const todayStr = toYMD(now);
+
+  // Default to current month range
+  const firstOfMonth = toYMD(new Date(now.getFullYear(), now.getMonth(), 1));
+  const lastOfMonth = toYMD(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
+  const [preset, setPreset] = useState<"hari" | "minggu" | "bulan" | "semua" | "custom">("bulan");
+  const [startDate, setStartDate] = useState<string>(firstOfMonth);
+  const [endDate, setEndDate] = useState<string>(lastOfMonth);
+
+  // Default mock transactions
+  const DEFAULT_TRANSACTIONS: Transaction[] = [
+    { id: 101, item: "Penjualan Ayam Geprek (47 Porsi)", qty: "47 porsi", type: "masuk", nominal: 705000, kategori: "Penjualan", tanggal: todayStr },
+    { id: 102, item: "Beli Bahan Baku Ayam & Bumbu", qty: "10 kg", type: "keluar", nominal: 320000, kategori: "Bahan", tanggal: todayStr },
+    { id: 103, item: "Penjualan Nasi Goreng Spesial", qty: "25 porsi", type: "masuk", nominal: 375000, kategori: "Penjualan", tanggal: toYMD(new Date(now.setDate(now.getDate() - 1))) },
+    { id: 104, item: "Sewa Tempat Lapak Kios", qty: "1 bulan", type: "keluar", nominal: 250000, kategori: "Sewa", tanggal: toYMD(new Date(now.setDate(now.getDate() - 2))) },
+    { id: 105, item: "Penjualan Es Teh & Minuman", qty: "30 cup", type: "masuk", nominal: 150000, kategori: "Penjualan", tanggal: toYMD(new Date(now.setDate(now.getDate() - 1))) },
+  ];
+
+  const [transactions, setTransactions] = useState<Transaction[]>(DEFAULT_TRANSACTIONS);
   const [showModal, setShowModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -28,9 +48,37 @@ export default function LaporanPage() {
   const [txNominal, setTxNominal] = useState("");
   const [txQty, setTxQty] = useState("");
   const [txKategori, setTxKategori] = useState("Penjualan");
-  const [txTanggal, setTxTanggal] = useState(new Date().toISOString().split("T")[0]);
+  const [txTanggal, setTxTanggal] = useState(todayStr);
 
-  // Check authentication and fetch transactions from Supabase on mount
+  // Preset button click handler
+  const handlePresetClick = (type: "hari" | "minggu" | "bulan" | "semua") => {
+    setPreset(type);
+    const currentDate = new Date();
+
+    if (type === "hari") {
+      const today = toYMD(currentDate);
+      setStartDate(today);
+      setEndDate(today);
+    } else if (type === "minggu") {
+      const day = currentDate.getDay();
+      const diffToMon = currentDate.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(currentDate.getFullYear(), currentDate.getMonth(), diffToMon);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      setStartDate(toYMD(monday));
+      setEndDate(toYMD(sunday));
+    } else if (type === "bulan") {
+      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      setStartDate(toYMD(firstDay));
+      setEndDate(toYMD(lastDay));
+    } else if (type === "semua") {
+      setStartDate("");
+      setEndDate("");
+    }
+  };
+
+  // Fetch transactions from Supabase on mount
   useEffect(() => {
     const fetchUserAndTransactions = async () => {
       try {
@@ -44,7 +92,7 @@ export default function LaporanPage() {
             .eq("user_id", user.id)
             .order("tanggal", { ascending: false });
 
-          if (!error && data) {
+          if (!error && data && data.length > 0) {
             const mapped: Transaction[] = data.map((t: any) => ({
               id: t.id,
               item: t.item,
@@ -52,11 +100,9 @@ export default function LaporanPage() {
               type: t.type,
               nominal: Number(t.nominal),
               kategori: t.kategori,
-              tanggal: t.tanggal
+              tanggal: t.tanggal ? t.tanggal.split("T")[0] : todayStr
             }));
             setTransactions(mapped);
-          } else if (error) {
-            console.error("Gagal memuat data transaksi dari Supabase:", error.message);
           }
         }
       } catch (err) {
@@ -65,7 +111,7 @@ export default function LaporanPage() {
     };
 
     fetchUserAndTransactions();
-  }, []);
+  }, [todayStr]);
 
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +121,6 @@ export default function LaporanPage() {
     const qtyStr = txQty || "1 barang";
 
     if (user) {
-      // Sync to database
       try {
         const { data, error } = await supabase
           .from("transactions")
@@ -113,7 +158,6 @@ export default function LaporanPage() {
         return;
       }
     } else {
-      // Mock fallback
       const newTransaction: Transaction = {
         id: Date.now(),
         item: txName,
@@ -127,17 +171,14 @@ export default function LaporanPage() {
     }
 
     setShowModal(false);
-    
-    // Trigger toast
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
 
-    // Reset fields
     setTxName("");
     setTxNominal("");
     setTxQty("");
     setTxKategori(txType === "masuk" ? "Penjualan" : "Bahan");
-    setTxTanggal(new Date().toISOString().split("T")[0]);
+    setTxTanggal(todayStr);
   };
 
   const handleDeleteTransaction = async (id: number) => {
@@ -159,24 +200,23 @@ export default function LaporanPage() {
         console.error("Error deleting transaction:", err);
       }
     } else {
-      // Mock fallback
       setTransactions(transactions.filter(t => t.id !== id));
     }
   };
 
-  // Filter transactions based on selected period (Assuming current date is 2026-07-21)
+  // Filter transactions based on startDate & endDate
   const filteredTransactions = transactions.filter((t) => {
-    const tDate = new Date(t.tanggal);
-    const currentYear = 2026;
-    const currentMonth = 6; // July is index 6 (0-indexed)
-    
-    if (period === "hari") {
-      return t.tanggal === "2026-07-21";
-    } else if (period === "bulan") {
-      return tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth;
-    } else {
-      return tDate.getFullYear() === currentYear;
+    if (!t.tanggal) return true;
+    const tDateStr = t.tanggal.split("T")[0].split(" ")[0];
+
+    if (startDate && endDate) {
+      return tDateStr >= startDate && tDateStr <= endDate;
+    } else if (startDate) {
+      return tDateStr >= startDate;
+    } else if (endDate) {
+      return tDateStr <= endDate;
     }
+    return true;
   });
 
   // Calculate stats
@@ -216,27 +256,62 @@ export default function LaporanPage() {
         </h1>
         <button
           onClick={() => setShowModal(true)}
-          className="bg-[#001b85] text-white px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-1.5 shadow-sm"
+          className="bg-[#001b85] text-white px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
         >
           <Plus size={14} />
           Catat Manual
         </button>
       </div>
 
-      {/* Period Toggles */}
+      {/* Streamlined Filter Bar */}
       <div className="px-4">
-        <div className="flex bg-[#f3f2ff] p-1 rounded-xl">
-          {(["hari", "bulan", "tahun"] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`flex-1 text-xs font-bold py-2 rounded-lg transition-colors capitalize ${
-                period === p ? "bg-white text-[#001b85] shadow-sm" : "text-[#757686]"
-              }`}
-            >
-              {p === "hari" ? "Hari Ini" : p === "bulan" ? "Bulan Ini" : "Tahun Ini"}
-            </button>
-          ))}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-sm space-y-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Quick Filter Preset Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar">
+              {[
+                { id: "hari", label: "Hari Ini" },
+                { id: "minggu", label: "Minggu Ini" },
+                { id: "bulan", label: "Bulan Ini" },
+                { id: "semua", label: "Semua" },
+              ].map((chip) => (
+                <button
+                  key={chip.id}
+                  onClick={() => handlePresetClick(chip.id as any)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    preset === chip.id
+                      ? "bg-[#001b85] text-white shadow-sm"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom DateTimePicker Range (Dari - Sampai) */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="w-full sm:w-44">
+                <DateTimePicker
+                  value={startDate}
+                  onChange={(val) => {
+                    setStartDate(val.split(" ")[0]);
+                    setPreset("custom");
+                  }}
+                />
+              </div>
+              <span className="text-slate-400 text-xs font-semibold text-center">s/d</span>
+              <div className="w-full sm:w-44">
+                <DateTimePicker
+                  value={endDate}
+                  onChange={(val) => {
+                    setEndDate(val.split(" ")[0]);
+                    setPreset("custom");
+                  }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -300,7 +375,7 @@ export default function LaporanPage() {
                       <span>{cat.name}</span>
                       <span>Rp{cat.total.toLocaleString("id-ID")}</span>
                     </div>
-                    <div className="progress-bar-track h-2 bg-slate-100">
+                    <div className="progress-bar-track h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className="progress-bar-fill h-full bg-gradient-to-r from-emerald-400 to-[#001b85]"
                         style={{ width: `${percent}%` }}
@@ -324,9 +399,9 @@ export default function LaporanPage() {
         {filteredTransactions.length === 0 ? (
           <div className="bg-white border border-slate-200/60 rounded-2xl p-8 text-center space-y-2">
             <Receipt className="mx-auto text-slate-300" size={32} />
-            <h4 className="text-xs font-bold text-slate-700">Belum Ada Transaksi</h4>
+            <h4 className="text-xs font-bold text-slate-700">Tidak Ada Transaksi Ditemukan</h4>
             <p className="text-[10px] text-slate-400 max-w-xs mx-auto leading-relaxed">
-              Tidak ditemukan data transaksi untuk periode ini. Silakan catat manual atau gunakan AI Capture.
+              Tidak ada data transaksi untuk tanggal/periode yang dipilih. Silakan ubah tanggal filter atau tambah pencatatan manual.
             </p>
           </div>
         ) : (
@@ -356,7 +431,7 @@ export default function LaporanPage() {
                   </span>
                   <button
                     onClick={() => handleDeleteTransaction(tx.id)}
-                    className="w-7 h-7 rounded-md hover:bg-red-50 border border-slate-100 hover:border-red-100 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors"
+                    className="w-7 h-7 rounded-md hover:bg-red-50 border border-slate-100 hover:border-red-100 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
                   >
                     <Trash2 size={12} />
                   </button>
@@ -377,7 +452,7 @@ export default function LaporanPage() {
                 <PlusCircle className="text-[#001b85]" size={18} />
                 Catat Transaksi Manual
               </h3>
-              <button onClick={() => setShowModal(false)} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-100 text-slate-400">
+              <button onClick={() => setShowModal(false)} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-100 text-slate-400 cursor-pointer">
                 <X size={18} />
               </button>
             </div>
@@ -394,7 +469,7 @@ export default function LaporanPage() {
                       setTxType("masuk");
                       setTxKategori("Penjualan");
                     }}
-                    className={`flex-1 font-bold py-2.5 rounded-xl border text-xs transition-colors flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 font-bold py-2.5 rounded-xl border text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
                       txType === "masuk"
                         ? "bg-emerald-500 border-emerald-500 text-white shadow-sm shadow-emerald-500/10"
                         : "border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -409,7 +484,7 @@ export default function LaporanPage() {
                       setTxType("keluar");
                       setTxKategori("Bahan");
                     }}
-                    className={`flex-1 font-bold py-2.5 rounded-xl border text-xs transition-colors flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 font-bold py-2.5 rounded-xl border text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
                       txType === "keluar"
                         ? "bg-red-500 border-red-500 text-white shadow-sm shadow-red-500/10"
                         : "border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -467,7 +542,7 @@ export default function LaporanPage() {
                 <select
                   value={txKategori}
                   onChange={(e) => setTxKategori(e.target.value)}
-                  className="w-full text-xs font-semibold px-4 py-3 rounded-xl border border-[#c5c5d7] focus:outline-none focus:border-[#001b85] transition-colors bg-white"
+                  className="w-full text-xs font-semibold px-4 py-3 rounded-xl border border-[#c5c5d7] focus:outline-none focus:border-[#001b85] transition-colors bg-white cursor-pointer"
                 >
                   {txType === "masuk" ? (
                     <>
@@ -497,13 +572,13 @@ export default function LaporanPage() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 border border-slate-200 text-slate-600 font-bold py-3 rounded-xl text-xs hover:bg-slate-50 transition-colors text-center"
+                  className="flex-1 border border-slate-200 text-slate-600 font-bold py-3 rounded-xl text-xs hover:bg-slate-50 transition-colors text-center cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-[#001b85] text-white font-bold py-3 rounded-xl text-xs hover:bg-[#0e32c2] transition-colors text-center shadow-sm"
+                  className="flex-1 bg-[#001b85] text-white font-bold py-3 rounded-xl text-xs hover:bg-[#0e32c2] transition-colors text-center shadow-sm cursor-pointer"
                 >
                   Simpan Transaksi
                 </button>

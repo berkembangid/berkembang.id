@@ -36,7 +36,7 @@ const ACTIVITIES = [
       metode: "Suara (AI Voice)"
     },
     actionText: "Lihat Transaksi",
-    actionLink: "/umkm/riwayat"
+    actionLink: "/umkm/laporan"
   },
   {
     id: "act-2",
@@ -106,7 +106,7 @@ const ACTIVITIES = [
       metode: "Input Manual"
     },
     actionText: "Lihat Transaksi",
-    actionLink: "/umkm/riwayat"
+    actionLink: "/umkm/laporan"
   },
   {
     id: "act-6",

@@ -218,7 +218,7 @@ export default function BerandaPage() {
                       <span className="text-sm text-green-700 font-semibold">{todayTxCount} transaksi hari ini</span>
                     </div>
                   </div>
-                  <Link href="/umkm/riwayat">
+                  <Link href="/umkm/laporan">
                     <button className="text-sm font-bold text-[#166534] border border-[#166534] px-4 py-2 rounded-full hover:bg-green-100 transition-colors cursor-pointer">
                       Lihat Detail →
                     </button>
@@ -250,7 +250,7 @@ export default function BerandaPage() {
             <section className="space-y-2 animate-fade-in-up">
               <h2 className="text-xs font-bold text-[#444655] uppercase tracking-widest font-mono-label px-1">Rangkuman Bisnis Live</h2>
               <div className="grid grid-cols-3 gap-4">
-                <Link href="/umkm/riwayat" className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-all">
+                <Link href="/umkm/laporan" className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-all">
                   <div className="flex items-center gap-1.5 mb-1">
                     <FileText size={14} className="text-[#444655]" />
                     <p className="text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label">Catatan</p>
@@ -368,7 +368,7 @@ export default function BerandaPage() {
             <section className="animate-fade-in-up">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-bold text-[#141a34]">Aktivitas Terbaru</h2>
-                <Link href="/umkm/riwayat">
+                <Link href="/umkm/laporan">
                   <span className="text-xs font-bold text-[#001b85]">Lihat Semua →</span>
                 </Link>
               </div>

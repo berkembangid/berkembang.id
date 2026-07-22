@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {
   Mic, Sparkles, TrendingUp, Flame, BarChart2, Target, Handshake, WifiOff,
-  ArrowRight, ShieldCheck, CheckCircle2, Star, Play, User, Home, Bell, Menu, X
+  ArrowRight, ShieldCheck, CheckCircle2, Star, Play, User, Home, Bell, Menu, X, LogIn
 } from "lucide-react";
 import { useState } from "react";
 
@@ -29,20 +29,20 @@ export default function LandingPage() {
         {/* Desktop Auth Buttons */}
         <div className="hidden md:flex items-center gap-3">
           <Link href="/auth/login">
-            <button className="text-sm font-bold text-[#001b85] hover:text-[#334ed9] px-3 py-2 transition-colors cursor-pointer">Masuk</button>
-          </Link>
-          <Link href="/umkm">
-            <button className="bg-[#001b85] text-white text-sm font-bold px-5 py-2.5 rounded-full hover:bg-[#0e32c2] shadow-sm hover:shadow transition-all cursor-pointer">
-              Mulai Gratis →
+            <button className="group relative inline-flex items-center justify-center gap-2 px-5 py-2 rounded-full text-sm font-bold text-[#001b85] bg-[#ececff]/90 hover:bg-[#001b85] hover:text-white border border-[#bac3ff]/80 hover:border-[#001b85] shadow-sm hover:shadow-md hover:shadow-[#001b85]/20 transition-all duration-300 active:scale-95 cursor-pointer overflow-hidden">
+              <LogIn size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+              <span>Masuk</span>
+              <span className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out pointer-events-none" />
             </button>
           </Link>
         </div>
 
         {/* Mobile Header Controls */}
-        <div className="flex md:hidden items-center gap-1.5">
+        <div className="flex md:hidden items-center gap-2">
           <Link href="/auth/login">
-            <button className="text-xs font-bold text-[#001b85] px-3 py-1.5 rounded-full hover:bg-slate-100 transition-colors">
-              Masuk
+            <button className="inline-flex items-center gap-1.5 text-xs font-bold text-[#001b85] bg-[#ececff]/90 hover:bg-[#001b85] hover:text-white px-3.5 py-1.5 rounded-full border border-[#bac3ff]/80 transition-all duration-200 shadow-sm active:scale-95 cursor-pointer">
+              <LogIn size={13} />
+              <span>Masuk</span>
             </button>
           </Link>
           <button
@@ -71,14 +71,10 @@ export default function LandingPage() {
               <a href="#institusi" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-[#001b85] transition-colors">Kemitraan</a>
             </div>
             <div className="flex flex-col gap-2 pt-1">
-              <Link href="/umkm" onClick={() => setIsMobileMenuOpen(false)}>
-                <button className="w-full bg-[#001b85] text-white font-bold py-3 rounded-full text-sm hover:bg-[#0e32c2] shadow-sm">
-                  Mulai Gratis →
-                </button>
-              </Link>
               <Link href="/auth/login" onClick={() => setIsMobileMenuOpen(false)}>
-                <button className="w-full text-[#001b85] font-bold py-2.5 rounded-full text-sm border border-[#001b85]/30 hover:bg-[#ececff]/50">
-                  Masuk ke Akun
+                <button className="w-full inline-flex items-center justify-center gap-2 text-[#001b85] font-bold py-3 rounded-full text-sm bg-[#ececff]/90 hover:bg-[#001b85] hover:text-white border border-[#bac3ff] shadow-sm transition-all duration-200 cursor-pointer">
+                  <LogIn size={16} />
+                  <span>Masuk ke Akun</span>
                 </button>
               </Link>
             </div>

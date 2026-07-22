@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, AlertCircle, LogIn } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
@@ -148,9 +148,20 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#001b85] text-white font-bold py-3.5 rounded-xl text-sm hover:bg-[#0e32c2] transition-colors mt-2 disabled:bg-[#001b85]/50 flex items-center justify-center cursor-pointer disabled:cursor-not-allowed shadow-sm"
+          className="group relative w-full bg-gradient-to-r from-[#001b85] via-[#0b29a8] to-[#1a38bc] hover:from-[#082088] hover:to-[#2244d8] text-white font-bold py-3.5 rounded-xl text-sm transition-all duration-300 mt-2 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed shadow-md hover:shadow-lg hover:shadow-[#001b85]/30 active:scale-[0.99] overflow-hidden"
         >
-          {loading ? "Memproses..." : "Masuk"}
+          {loading ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span>Memproses...</span>
+            </span>
+          ) : (
+            <>
+              <span>Masuk</span>
+              <LogIn size={18} className="transition-transform duration-300 group-hover:translate-x-1" />
+            </>
+          )}
+          <span className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out pointer-events-none" />
         </button>
       </form>
 

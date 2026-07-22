@@ -24,6 +24,7 @@ const TIME_PRESETS = [
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+const YEARS = Array.from({ length: 31 }, (_, i) => 2015 + i);
 
 export default function DateTimePicker({ value, onChange }: DateTimePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -64,6 +65,21 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Sync state when value prop changes from parent
+  useEffect(() => {
+    if (value) {
+      const parts = value.split(" ");
+      if (parts[0]) {
+        setDateStr(parts[0]);
+        const d = new Date(parts[0]);
+        if (!isNaN(d.getTime())) {
+          setCurrentYear(d.getFullYear());
+          setCurrentMonth(d.getMonth());
+        }
+      }
+    }
+  }, [value]);
 
   const handleSelectDate = (newDateStr: string) => {
     setDateStr(newDateStr);
@@ -170,16 +186,42 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
             className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-5 w-84 animate-fade-in-up"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Calendar Month Header */}
+            {/* Calendar Month & Year Header Dropdowns */}
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-bold text-slate-800 font-headline">
-                {MONTHS[currentMonth]} {currentYear}
-              </h4>
+              <div className="flex items-center gap-1.5">
+                {/* Month Dropdown */}
+                <select
+                  value={currentMonth}
+                  onChange={(e) => setCurrentMonth(Number(e.target.value))}
+                  className="text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border-0 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#001b85] cursor-pointer"
+                >
+                  {MONTHS.map((m, idx) => (
+                    <option key={idx} value={idx}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Year Dropdown */}
+                <select
+                  value={currentYear}
+                  onChange={(e) => setCurrentYear(Number(e.target.value))}
+                  className="text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border-0 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#001b85] cursor-pointer"
+                >
+                  {YEARS.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={navigatePrevMonth}
                   className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors cursor-pointer"
+                  title="Bulan Sebelumnya"
                 >
                   <ChevronLeft size={16} />
                 </button>
@@ -187,6 +229,7 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
                   type="button"
                   onClick={navigateNextMonth}
                   className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors cursor-pointer"
+                  title="Bulan Berikutnya"
                 >
                   <ChevronRight size={16} />
                 </button>

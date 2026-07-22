@@ -146,7 +146,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
     setFabActive(false);
   }
 
-  const isLaporanRouteActive = pathname === "/umkm/laporan" || pathname === "/umkm/riwayat";
+  const isLaporanRouteActive = pathname === "/umkm/laporan";
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#fbf8ff]">
@@ -193,11 +193,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         {/* Navigation Items */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {SIDEBAR_TABS.map((item) => {
-            const isLaporanGroup = item.href === "/umkm/laporan";
-            const isLaporanActive = pathname === "/umkm/laporan" || pathname === "/umkm/riwayat";
-            const isActive = isLaporanGroup
-              ? isLaporanActive
-              : (item.href === "/umkm" ? pathname === "/umkm" : pathname.startsWith(item.href));
+            const isActive = item.href === "/umkm" ? pathname === "/umkm" : pathname.startsWith(item.href);
             
             return (
               <div key={item.href} className="space-y-1">
@@ -207,22 +203,6 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
                     <span>{item.label}</span>
                   </div>
                 </Link>
-
-                {/* Sub-branch for Laporan Keuangan -> Riwayat Transaksi (Only visible when Laporan group is active) */}
-                {isLaporanGroup && isLaporanActive && (
-                  <div className="ml-5 pl-3 border-l-2 border-[#c5c5d7]/50 space-y-1 my-1 animate-fade-in">
-                    <Link href="/umkm/riwayat">
-                      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                        pathname === "/umkm/riwayat"
-                          ? "bg-[#001b85] text-white font-bold shadow-sm"
-                          : "text-[#444655] hover:bg-[#ececff] hover:text-[#001b85]"
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${pathname === "/umkm/riwayat" ? "bg-white" : "bg-[#001b85]"}`} />
-                        <span>Riwayat Transaksi</span>
-                      </div>
-                    </Link>
-                  </div>
-                )}
               </div>
             );
           })}
@@ -308,11 +288,11 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
             <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[11px]">
               <span className="text-slate-400">{notifications.length} item</span>
               <Link 
-                href="/umkm/riwayat" 
+                href="/umkm/laporan" 
                 onClick={() => setShowNotifModal(false)}
                 className="font-bold text-[#001b85] hover:underline"
               >
-                Riwayat Lengkap →
+                Laporan Lengkap →
               </Link>
             </div>
           </div>
@@ -328,57 +308,11 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
           <span className={`text-[10px] font-bold mt-1 ${pathname === "/umkm" ? "text-[#001b85]" : "text-[#757686]"}`}>Beranda</span>
         </Link>
 
-        {/* Laporan & Riwayat Sub-branch Popover Tab on Mobile */}
-        <div className="flex-1 relative flex flex-col items-center justify-center py-1">
-          {/* Backdrop to close sub-menu when clicking outside */}
-          {showMobileLaporanBranch && (
-            <div 
-              className="fixed inset-0 z-40 bg-transparent" 
-              onClick={() => setShowMobileLaporanBranch(false)} 
-            />
-          )}
-
-          {/* Branch Sub-menu Popup above Laporan Tab */}
-          {showMobileLaporanBranch && (
-            <div className="absolute bottom-14 left-1/2 -translate-x-1/2 bg-white border border-[#001b85]/20 shadow-xl rounded-2xl p-2 w-44 space-y-1 animate-fade-in-up z-50">
-              <p className="text-[9px] font-bold text-[#001b85] px-2 py-0.5 uppercase tracking-wider font-mono">Kelompok Laporan</p>
-              <Link 
-                href="/umkm/laporan"
-                onClick={() => setShowMobileLaporanBranch(false)}
-                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold ${
-                  pathname === "/umkm/laporan" ? "bg-[#001b85] text-white font-bold" : "text-[#141a34] hover:bg-slate-100"
-                }`}
-              >
-                <BarChart3 size={14} /> Laporan Utama
-              </Link>
-              <Link 
-                href="/umkm/riwayat"
-                onClick={() => setShowMobileLaporanBranch(false)}
-                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold ${
-                  pathname === "/umkm/riwayat" ? "bg-[#001b85] text-white font-bold" : "text-[#141a34] hover:bg-slate-100"
-                }`}
-              >
-                <FileText size={14} /> Riwayat Transaksi
-              </Link>
-            </div>
-          )}
-
-          <button 
-            type="button"
-            onClick={() => {
-              if (pathname !== "/umkm/laporan" && pathname !== "/umkm/riwayat") {
-                router.push("/umkm/laporan");
-              }
-              setShowMobileLaporanBranch(!showMobileLaporanBranch);
-            }}
-            className="flex flex-col items-center justify-center w-full z-45"
-          >
-            <BarChart3 size={20} className={isLaporanRouteActive ? "text-[#001b85]" : "text-[#757686]"} />
-            <span className={`text-[10px] font-bold mt-1 ${isLaporanRouteActive ? "text-[#001b85]" : "text-[#757686]"}`}>
-              Laporan {isLaporanRouteActive ? "•" : ""}
-            </span>
-          </button>
-        </div>
+        {/* Laporan Tab on Mobile */}
+        <Link href="/umkm/laporan" className="flex-1 flex flex-col items-center justify-center py-1">
+          <BarChart3 size={20} className={pathname.startsWith("/umkm/laporan") ? "text-[#001b85]" : "text-[#757686]"} />
+          <span className={`text-[10px] font-bold mt-1 ${pathname.startsWith("/umkm/laporan") ? "text-[#001b85]" : "text-[#757686]"}`}>Laporan</span>
+        </Link>
 
         {/* FAB Pencatatan AI Button */}
         <div className="relative -top-5 flex items-center justify-center">
