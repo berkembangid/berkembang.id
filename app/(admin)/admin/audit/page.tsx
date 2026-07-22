@@ -13,17 +13,6 @@ interface AuditLog {
   status: string;
 }
 
-const DEFAULT_AUDIT_LOGS: AuditLog[] = [
-  { id: 1, timestamp: "2026-07-21 09:15:32", user: "admin@berkembang.id", action: "UPDATE_RULES_CONFIG", details: "Bobot konsistensi: 30→35, legalitas: 30→25", status: "success" },
-  { id: 2, timestamp: "2026-07-21 08:30:11", user: "institution@bri.co.id", action: "REQUEST_DOSSIER", details: "UMKM ID #1247, program: KUR Mikro", status: "success" },
-  { id: 3, timestamp: "2026-07-20 16:45:00", user: "admin@berkembang.id", action: "OVERRIDE_SCORE", details: "UMKM ID #892, skor: 45→58, alasan: Data diperbarui", status: "success" },
-  { id: 4, timestamp: "2026-07-20 14:22:18", user: "system", action: "RECALCULATE_READINESS", details: "Batch recalculation: 1,247 UMKM diproses", status: "success" },
-  { id: 5, timestamp: "2026-07-20 12:00:00", user: "system", action: "CHECK_STREAK", details: "287 streak diperbarui, 23 peringatan dikirim", status: "success" },
-  { id: 6, timestamp: "2026-07-19 20:30:45", user: "umkm@example.com", action: "CONFIRM_TRANSACTION", details: "Transaksi Rp470.000 dikonfirmasi", status: "success" },
-  { id: 7, timestamp: "2026-07-19 18:05:12", user: "institution@mandiri.co.id", action: "VERIFY_DOSSIER", details: "Dossier UMKM #1102 disetujui", status: "success" },
-  { id: 8, timestamp: "2026-07-18 10:00:00", user: "admin@berkembang.id", action: "CREATE_INSTITUTION", details: "Institusi baru: Bank BNI KUR", status: "success" },
-];
-
 const ACTION_COLORS: Record<string, string> = {
   UPDATE_RULES_CONFIG: "bg-purple-100 text-purple-700 border-purple-200",
   REQUEST_DOSSIER: "bg-blue-100 text-blue-700 border-blue-200",
@@ -37,10 +26,10 @@ const ACTION_COLORS: Record<string, string> = {
 };
 
 export default function AuditPage() {
-  const [logs, setLogs] = useState<AuditLog[]>(DEFAULT_AUDIT_LOGS);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("Semua Action");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchAuditLogsFromSupabase();
@@ -54,7 +43,7 @@ export default function AuditPage() {
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         const mapped: AuditLog[] = data.map((item: any) => ({
           id: item.id,
           timestamp: item.timestamp ? new Date(item.timestamp).toLocaleString("id-ID") : new Date(item.created_at).toLocaleString("id-ID"),
@@ -85,6 +74,7 @@ export default function AuditPage() {
   });
 
   const exportCSV = () => {
+    if (filteredLogs.length === 0) return;
     const headers = ["ID", "Waktu", "User", "Action", "Detail", "Status"];
     const rows = filteredLogs.map((l) => [
       l.id,
@@ -125,7 +115,8 @@ export default function AuditPage() {
           </button>
           <button
             onClick={exportCSV}
-            className="border border-slate-300 text-[#001b85] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#ececff] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+            disabled={filteredLogs.length === 0}
+            className="border border-slate-300 text-[#001b85] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#ececff] transition-colors flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-40"
           >
             <Download size={14} />
             Ekspor CSV
@@ -171,10 +162,16 @@ export default function AuditPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredLogs.length === 0 ? (
+              {loading ? (
                 <tr>
                   <td colSpan={5} className="text-center py-8 text-xs text-slate-400 font-medium">
-                    Tidak ada data log yang sesuai.
+                    Memuat log audit dari Supabase...
+                  </td>
+                </tr>
+              ) : filteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-xs text-slate-400 font-medium">
+                    Belum ada log aktivitas di Supabase.
                   </td>
                 </tr>
               ) : (

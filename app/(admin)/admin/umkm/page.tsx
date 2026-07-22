@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, Check, X, ShieldAlert, AlertCircle } from "lucide-react";
+import { Search, Plus, Check, X, ShieldAlert, AlertCircle, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 interface UMKMProfile {
@@ -15,14 +15,6 @@ interface UMKMProfile {
   status: string;
 }
 
-const DEFAULT_UMKM_DATA: UMKMProfile[] = [
-  { id: "1", name: "Ibu Sari", usaha: "Warung Nasi Goreng Pak Pur", sektor: "Kuliner", lokasi: "Depok", score: 87, konsistensi: 1, status: "active" },
-  { id: "2", name: "Pak Budi", usaha: "Konveksi Budi", sektor: "Fashion", lokasi: "Bandung", score: 79, konsistensi: 14, status: "active" },
-  { id: "3", name: "Bu Ani", usaha: "Dapur Bu Ani", sektor: "Kuliner", lokasi: "Surabaya", score: 71, konsistensi: 10, status: "active" },
-  { id: "4", name: "Pak Joko", usaha: "Pertanian Joko", sektor: "Pertanian", lokasi: "Bogor", score: 58, konsistensi: 5, status: "active" },
-  { id: "5", name: "Bu Wati", usaha: "Kerajinan Wati", sektor: "Kerajinan", lokasi: "Yogyakarta", score: 45, konsistensi: 2, status: "inactive" },
-];
-
 function scoreColor(s: number) {
   if (s < 50) return "text-red-600 bg-red-50 border-red-200";
   if (s < 70) return "text-yellow-600 bg-yellow-50 border-yellow-200";
@@ -31,7 +23,8 @@ function scoreColor(s: number) {
 }
 
 export default function AdminUMKMPage() {
-  const [umkmList, setUmkmList] = useState<UMKMProfile[]>(DEFAULT_UMKM_DATA);
+  const [umkmList, setUmkmList] = useState<UMKMProfile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [editScore, setEditScore] = useState<{ id: string; score: number; oldScore: number } | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
@@ -42,14 +35,15 @@ export default function AdminUMKMPage() {
   const [newName, setNewName] = useState("");
   const [newUsaha, setNewUsaha] = useState("");
   const [newSektor, setNewSektor] = useState("Kuliner");
-  const [newLokasi, setNewLokasi] = useState("Jakarta");
-  const [newScore, setNewScore] = useState("70");
+  const [newLokasi, setNewLokasi] = useState("Depok");
+  const [newScore, setNewScore] = useState("50");
 
   useEffect(() => {
     fetchUMKMFromSupabase();
   }, []);
 
   async function fetchUMKMFromSupabase() {
+    setLoading(true);
     try {
       // Fetch only profiles with role 'umkm' or null role (newly registered)
       const { data, error } = await supabase
@@ -58,7 +52,7 @@ export default function AdminUMKMPage() {
         .or("role.eq.umkm,role.is.null")
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         const now = new Date();
         const mapped: UMKMProfile[] = data.map((p: any, idx: number) => {
           // Calculate account age in days dynamically for consistency
@@ -75,7 +69,7 @@ export default function AdminUMKMPage() {
             name: ownerName,
             usaha: businessName,
             sektor: p.sektor_usaha || "Kuliner",
-            lokasi: p.lokasi || "Indonesia",
+            lokasi: p.lokasi || "Depok",
             score: Number(p.readiness_score) || 50,
             konsistensi: konsistensiVal,
             status: p.status || "active"
@@ -85,6 +79,8 @@ export default function AdminUMKMPage() {
       }
     } catch (err) {
       console.warn("Failed to fetch UMKM profiles from Supabase:", err);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -126,7 +122,7 @@ export default function AdminUMKMPage() {
     if (!newName || !newUsaha) return;
     setSaving(true);
 
-    const scoreNum = Number(newScore) || 70;
+    const scoreNum = Number(newScore) || 50;
 
     try {
       const { data, error } = await supabase
@@ -189,13 +185,22 @@ export default function AdminUMKMPage() {
           <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Manajemen UMKM</h1>
           <p className="text-sm text-slate-500 mt-1">Data lengkap dan override skor kesiapan bagi seluruh ekosistem UMKM</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-[#001b85] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
-        >
-          <Plus size={16} />
-          Tambah UMKM
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchUMKMFromSupabase}
+            className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+            title="Refresh Data"
+          >
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-[#001b85] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+          >
+            <Plus size={16} />
+            Tambah UMKM
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
@@ -227,40 +232,54 @@ export default function AdminUMKMPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((u) => {
-                const sc = scoreColor(u.score);
-                return (
-                  <tr key={u.id} className="border-t border-[#f3f2ff] hover:bg-[#fbf8ff] transition-colors">
-                    <td className="px-4 py-3 font-bold text-[#141a34]">{u.usaha}</td>
-                    <td className="px-4 py-3 text-[#444655] font-medium">{u.name}</td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#ececff] text-[#001b85]">{u.sektor}</span>
-                    </td>
-                    <td className="px-4 py-3 text-[#444655] text-xs">{u.lokasi}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${sc}`}>{u.score}</span>
-                    </td>
-                    <td className="px-4 py-3 text-[#444655]">{u.konsistensi} hari</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                        u.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                      }`}>
-                        {u.status === "active" ? "Aktif" : "Tidak Aktif"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => setEditScore({ id: u.id, score: u.score, oldScore: u.score })}
-                          className="text-[11px] font-bold text-[#001b85] border border-[#bac3ff] px-2.5 py-1 rounded-lg hover:bg-[#ececff] transition-colors cursor-pointer"
-                        >
-                          Edit Score
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-8 text-xs text-slate-400 font-medium">
+                    Memuat data UMKM dari Supabase...
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-8 text-xs text-slate-400 font-medium">
+                    Tidak ada data UMKM ditemukan di Supabase.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((u) => {
+                  const sc = scoreColor(u.score);
+                  return (
+                    <tr key={u.id} className="border-t border-[#f3f2ff] hover:bg-[#fbf8ff] transition-colors">
+                      <td className="px-4 py-3 font-bold text-[#141a34]">{u.usaha}</td>
+                      <td className="px-4 py-3 text-[#444655] font-medium">{u.name}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#ececff] text-[#001b85]">{u.sektor}</span>
+                      </td>
+                      <td className="px-4 py-3 text-[#444655] text-xs">{u.lokasi}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${sc}`}>{u.score}</span>
+                      </td>
+                      <td className="px-4 py-3 text-[#444655]">{u.konsistensi} hari</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                          u.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                        }`}>
+                          {u.status === "active" ? "Aktif" : "Tidak Aktif"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => setEditScore({ id: u.id, score: u.score, oldScore: u.score })}
+                            className="text-[11px] font-bold text-[#001b85] border border-[#bac3ff] px-2.5 py-1 rounded-lg hover:bg-[#ececff] transition-colors cursor-pointer"
+                          >
+                            Edit Score
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Building2, Plus, Edit, Trash2, Shield, ShieldAlert, X } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Shield, ShieldAlert, X, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 interface Institution {
@@ -12,15 +12,9 @@ interface Institution {
   active: boolean;
 }
 
-const DEFAULT_INSTITUTIONS: Institution[] = [
-  { id: 1, name: "Bank BRI KUR", type: "Bank BUMN", programs: 3, active: true },
-  { id: 2, name: "Mandiri Wirausaha", type: "Bank BUMN", programs: 2, active: true },
-  { id: 3, name: "OJK UMKM Program", type: "Pemerintah", programs: 5, active: true },
-  { id: 4, name: "Grab Merchant Loan", type: "Fintech", programs: 1, active: false },
-];
-
 export default function AdminInstitutionsPage() {
-  const [institutions, setInstitutions] = useState<Institution[]>(DEFAULT_INSTITUTIONS);
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingInst, setEditingInst] = useState<Institution | null>(null);
   const [saving, setSaving] = useState(false);
@@ -35,13 +29,14 @@ export default function AdminInstitutionsPage() {
   }, []);
 
   async function fetchInstitutions() {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from("institutions")
         .select("*")
         .order("id", { ascending: true });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         const mapped: Institution[] = data.map((item: any) => ({
           id: item.id,
           name: item.name,
@@ -53,6 +48,8 @@ export default function AdminInstitutionsPage() {
       }
     } catch (err) {
       console.warn("Failed to fetch institutions from Supabase:", err);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -95,7 +92,6 @@ export default function AdminInstitutionsPage() {
 
     try {
       if (editingInst) {
-        // Edit existing
         await supabase
           .from("institutions")
           .update({
@@ -107,8 +103,7 @@ export default function AdminInstitutionsPage() {
 
         setInstitutions(institutions.map(i => i.id === editingInst.id ? { ...i, name: instName, type: instType, programs: progs } : i));
       } else {
-        // Insert new
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from("institutions")
           .insert({
             name: instName,
@@ -163,75 +158,94 @@ export default function AdminInstitutionsPage() {
           <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Manajemen Institusi</h1>
           <p className="text-sm text-slate-500 mt-1">Kelola data bank, fintech, dan lembaga pemerintah penyedia program KUR</p>
         </div>
-        <button
-          onClick={openAddModal}
-          className="bg-[#001b85] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
-        >
-          <Plus size={16} />
-          Tambah Institusi
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchInstitutions}
+            className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+            title="Refresh Data"
+          >
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+          </button>
+          <button
+            onClick={openAddModal}
+            className="bg-[#001b85] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+          >
+            <Plus size={16} />
+            Tambah Institusi
+          </button>
+        </div>
       </div>
 
       {/* Grid List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {institutions.map((inst) => (
-          <div key={inst.id} className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-4">
-            <div className="flex items-start gap-4">
-              {/* Icon */}
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                inst.active ? "bg-[#001b85]/10 text-[#001b85]" : "bg-slate-100 text-slate-400"
-              }`}>
-                <Building2 size={24} />
-              </div>
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-[#141a34] text-base truncate">{inst.name}</h3>
-                  <button
-                    onClick={() => handleToggleActive(inst)}
-                    className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors ${
-                      inst.active ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" : "bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100"
-                    }`}
-                    title="Klik untuk mengubah status aktif"
-                  >
-                    {inst.active ? (
-                      <>
-                        <Shield size={10} /> Aktif
-                      </>
-                    ) : (
-                      <>
-                        <ShieldAlert size={10} /> Nonaktif
-                      </>
-                    )}
-                  </button>
+      {loading ? (
+        <div className="bg-white rounded-2xl p-8 border border-slate-200/60 text-center text-xs text-slate-400 font-medium">
+          Memuat data institusi dari Supabase...
+        </div>
+      ) : institutions.length === 0 ? (
+        <div className="bg-white rounded-2xl p-8 border border-slate-200/60 text-center text-xs text-slate-400 font-medium">
+          Belum ada data institusi di Supabase. Klik "Tambah Institusi" untuk menambahkan.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {institutions.map((inst) => (
+            <div key={inst.id} className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-4">
+              <div className="flex items-start gap-4">
+                {/* Icon */}
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  inst.active ? "bg-[#001b85]/10 text-[#001b85]" : "bg-slate-100 text-slate-400"
+                }`}>
+                  <Building2 size={24} />
                 </div>
-                <div className="flex gap-4 text-xs text-slate-500 mt-2 font-medium">
-                  <span className="bg-slate-100 px-2 py-0.5 rounded">{inst.type}</span>
-                  <span className="text-[#001b85] font-semibold">{inst.programs} program aktif</span>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-[#141a34] text-base truncate">{inst.name}</h3>
+                    <button
+                      onClick={() => handleToggleActive(inst)}
+                      className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors ${
+                        inst.active ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" : "bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100"
+                      }`}
+                      title="Klik untuk mengubah status aktif"
+                    >
+                      {inst.active ? (
+                        <>
+                          <Shield size={10} /> Aktif
+                        </>
+                      ) : (
+                        <>
+                          <ShieldAlert size={10} /> Nonaktif
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex gap-4 text-xs text-slate-500 mt-2 font-medium">
+                    <span className="bg-slate-100 px-2 py-0.5 rounded">{inst.type}</span>
+                    <span className="text-[#001b85] font-semibold">{inst.programs} program aktif</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Action buttons */}
-            <div className="flex gap-2 pt-2 border-t border-slate-100 justify-end">
-              <button
-                onClick={() => openEditModal(inst)}
-                className="text-xs font-bold text-[#001b85] border border-[#bac3ff] px-4 py-2 rounded-xl hover:bg-[#ececff] transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <Edit size={12} />
-                Edit
-              </button>
-              <button
-                onClick={() => handleDelete(inst.id)}
-                className="text-xs font-bold text-red-600 border border-red-200 px-4 py-2 rounded-xl hover:bg-red-50 transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <Trash2 size={12} />
-                Hapus
-              </button>
+              {/* Action buttons */}
+              <div className="flex gap-2 pt-2 border-t border-slate-100 justify-end">
+                <button
+                  onClick={() => openEditModal(inst)}
+                  className="text-xs font-bold text-[#001b85] border border-[#bac3ff] px-4 py-2 rounded-xl hover:bg-[#ececff] transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Edit size={12} />
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDelete(inst.id)}
+                  className="text-xs font-bold text-red-600 border border-red-200 px-4 py-2 rounded-xl hover:bg-red-50 transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 size={12} />
+                  Hapus
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Add / Edit Institution Modal */}
       {showModal && (
