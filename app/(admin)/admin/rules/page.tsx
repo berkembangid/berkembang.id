@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Sliders, Save, History, Check, AlertCircle } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type Weights = {
   konsistensi: number;
@@ -9,16 +11,17 @@ type Weights = {
   stabilitas: number;
 };
 
-const SAMPLE_UMKM = [
+interface RuleVersion {
+  version: string;
+  date: string;
+  user: string;
+  changes: string;
+}
+
+const DEFAULT_SAMPLE_UMKM = [
   { id: "1", name: "Warung Ibu Sari", scores: { konsistensi: 75, kas: 60, legalitas: 20, stabilitas: 65 } },
   { id: "2", name: "Dapur Bu Ani", scores: { konsistensi: 80, kas: 70, legalitas: 50, stabilitas: 55 } },
   { id: "3", name: "Butik Muda", scores: { konsistensi: 40, kas: 80, legalitas: 90, stabilitas: 70 } },
-];
-
-const VERSION_HISTORY = [
-  { version: "v3", date: "2026-06-15 09:00", user: "admin@berkembang.id", changes: "Konsistensi ↑ 30→35, Legalitas ↑ 20→25" },
-  { version: "v2", date: "2026-05-01 14:30", user: "admin@berkembang.id", changes: "Kas ↑ 30→35, Stabilitas ↓ 25→20" },
-  { version: "v1", date: "2026-03-10 10:00", user: "system", changes: "Inisiasi bobot pertama" },
 ];
 
 export default function RulesPage() {
@@ -29,8 +32,88 @@ export default function RulesPage() {
     stabilitas: 5,
   });
   const [thresholds, setThresholds] = useState({ maxDailyExpense: 500000, maxDailyIncome: 2000000 });
-  const [selectedUMKM, setSelectedUMKM] = useState(SAMPLE_UMKM[0]);
+  const [sampleUMKM, setSampleUMKM] = useState(DEFAULT_SAMPLE_UMKM);
+  const [selectedUMKM, setSelectedUMKM] = useState(DEFAULT_SAMPLE_UMKM[0]);
+  const [versionHistory, setVersionHistory] = useState<RuleVersion[]>([
+    { version: "v3", date: "2026-06-15 09:00", user: "admin@berkembang.id", changes: "Konsistensi ↑ 30→35, Legalitas ↑ 20→25" },
+    { version: "v2", date: "2026-05-01 14:30", user: "admin@berkembang.id", changes: "Kas ↑ 30→35, Stabilitas ↓ 25→20" },
+    { version: "v1", date: "2026-03-10 10:00", user: "system", changes: "Inisiasi bobot pertama" },
+  ]);
+
   const [saved, setSaved] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+
+  useEffect(() => {
+    fetchActiveRulesAndHistory();
+    fetchRealSampleUMKM();
+  }, []);
+
+  async function fetchActiveRulesAndHistory() {
+    try {
+      const { data, error } = await supabase
+        .from("rules_config")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const activeRule = data.find((r: any) => r.is_active) || data[0];
+        if (activeRule.weights) {
+          setWeights({
+            konsistensi: Number(activeRule.weights.konsistensi) || 35,
+            kas: Number(activeRule.weights.kas) || 35,
+            legalitas: Number(activeRule.weights.legalitas) || 25,
+            stabilitas: Number(activeRule.weights.stabilitas) || 5,
+          });
+        }
+        if (activeRule.thresholds) {
+          setThresholds({
+            maxDailyExpense: Number(activeRule.thresholds.maxDailyExpense) || 500000,
+            maxDailyIncome: Number(activeRule.thresholds.maxDailyIncome) || 2000000,
+          });
+        }
+
+        // Map history
+        const mappedHistory: RuleVersion[] = data.map((r: any) => ({
+          version: r.version || "v1",
+          date: r.created_at ? new Date(r.created_at).toLocaleString("id-ID") : "Sebelumnya",
+          user: r.created_by || "admin@berkembang.id",
+          changes: `Weights: Konsistensi (${r.weights?.konsistensi}%), Kas (${r.weights?.kas}%), Legalitas (${r.weights?.legalitas}%), Stabilitas (${r.weights?.stabilitas}%)`
+        }));
+        setVersionHistory(mappedHistory);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch rules config from Supabase:", err);
+    }
+  }
+
+  async function fetchRealSampleUMKM() {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .limit(5);
+
+      if (!error && data && data.length > 0) {
+        const mapped = data.map((p: any, idx: number) => {
+          const sc = Number(p.readiness_score) || 65;
+          return {
+            id: p.id || String(idx + 1),
+            name: p.name || p.nama_usaha || `UMKM #${idx + 1}`,
+            scores: {
+              konsistensi: Math.min(sc + 10, 95),
+              kas: Math.max(sc - 5, 20),
+              legalitas: sc > 70 ? 80 : 30,
+              stabilitas: Math.min(sc, 90),
+            }
+          };
+        });
+        setSampleUMKM(mapped);
+        setSelectedUMKM(mapped[0]);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch sample UMKM for preview:", err);
+    }
+  }
 
   const total = Object.values(weights).reduce((s, v) => s + v, 0);
   const isValid = total === 100;
@@ -52,9 +135,50 @@ export default function RulesPage() {
     setSaved(false);
   };
 
-  const handlePublish = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  const handlePublish = async () => {
+    if (!isValid) return;
+    setPublishing(true);
+
+    try {
+      const newVersionName = `v${versionHistory.length + 1}`;
+
+      // Insert new rule config into Supabase
+      const { data, error } = await supabase
+        .from("rules_config")
+        .insert({
+          version: newVersionName,
+          weights,
+          thresholds,
+          is_active: true,
+          created_by: "admin@berkembang.id"
+        })
+        .select()
+        .single();
+
+      if (!error) {
+        // Log into audit logs
+        await supabase.from("audit_logs").insert({
+          user_email: "admin@berkembang.id",
+          action: "UPDATE_RULES_CONFIG",
+          details: `Publish versi ${newVersionName}: Konsistensi (${weights.konsistensi}%), Kas (${weights.kas}%), Legalitas (${weights.legalitas}%), Stabilitas (${weights.stabilitas}%)`,
+          status: "success"
+        });
+
+        const newVersionObj: RuleVersion = {
+          version: newVersionName,
+          date: new Date().toLocaleString("id-ID"),
+          user: "admin@berkembang.id",
+          changes: `Konsistensi: ${weights.konsistensi}%, Kas: ${weights.kas}%, Legalitas: ${weights.legalitas}%, Stabilitas: ${weights.stabilitas}%`
+        };
+        setVersionHistory([newVersionObj, ...versionHistory]);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
+    } catch (err) {
+      console.error("Error publishing rules config:", err);
+    } finally {
+      setPublishing(false);
+    }
   };
 
   return (
@@ -93,7 +217,7 @@ export default function RulesPage() {
                       max={100}
                       value={weights[key]}
                       onChange={(e) => updateWeight(key, Number(e.target.value))}
-                      className="w-full"
+                      className="w-full cursor-pointer"
                       style={{ accentColor: COLORS[key] }}
                     />
                   </div>
@@ -104,7 +228,7 @@ export default function RulesPage() {
 
           {/* Thresholds */}
           <div className="bg-white rounded-2xl border border-[#e5e7ff] shadow-card p-5">
-            <h2 className="font-bold text-[#141a34] mb-3">Threshold</h2>
+            <h2 className="font-bold text-[#141a34] mb-3">Threshold Transaksi</h2>
             <div className="space-y-3">
               <div>
                 <label className="text-xs font-semibold text-[#444655]">Max Pengeluaran Harian (Rp)</label>
@@ -112,7 +236,7 @@ export default function RulesPage() {
                   type="number"
                   value={thresholds.maxDailyExpense}
                   onChange={(e) => setThresholds((t) => ({ ...t, maxDailyExpense: Number(e.target.value) }))}
-                  className="w-full mt-1 px-3 py-2 rounded-lg border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none"
+                  className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs font-semibold focus:border-[#001b85] focus:outline-none"
                 />
               </div>
               <div>
@@ -121,7 +245,7 @@ export default function RulesPage() {
                   type="number"
                   value={thresholds.maxDailyIncome}
                   onChange={(e) => setThresholds((t) => ({ ...t, maxDailyIncome: Number(e.target.value) }))}
-                  className="w-full mt-1 px-3 py-2 rounded-lg border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none"
+                  className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs font-semibold focus:border-[#001b85] focus:outline-none"
                 />
               </div>
             </div>
@@ -131,20 +255,20 @@ export default function RulesPage() {
           <div className="flex gap-3">
             <button
               onClick={handlePublish}
-              disabled={!isValid}
-              className={`flex-1 py-3 rounded-xl font-bold text-sm transition-colors ${
+              disabled={!isValid || publishing}
+              className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all shadow-sm cursor-pointer ${
                 isValid
                   ? "bg-[#001b85] text-white hover:bg-[#0e32c2]"
                   : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >
-              {saved ? "✅ Tersimpan!" : "Publish Perubahan"}
+              {publishing ? "Menyimpan ke Supabase..." : saved ? "✅ Perubahan Berhasil Dipublish!" : "Publish Perubahan Ke Supabase"}
             </button>
             <button
               onClick={() => setWeights({ konsistensi: 35, kas: 35, legalitas: 25, stabilitas: 5 })}
-              className="flex-1 py-3 rounded-xl font-semibold text-sm border border-[#c5c5d7] text-[#444655] hover:bg-[#f3f2ff]"
+              className="flex-1 py-3 rounded-xl font-semibold text-xs border border-[#c5c5d7] text-[#444655] hover:bg-[#f3f2ff] cursor-pointer"
             >
-              Buang Perubahan
+              Reset ke Default
             </button>
           </div>
         </div>
@@ -153,12 +277,12 @@ export default function RulesPage() {
         <div className="space-y-4">
           {/* Preview panel */}
           <div className="bg-white rounded-2xl border border-[#e5e7ff] shadow-card p-5">
-            <h2 className="font-bold text-[#141a34] mb-3">Preview Dampak</h2>
+            <h2 className="font-bold text-[#141a34] mb-3">Preview Dampak pada UMKM</h2>
             <select
-              className="w-full px-3 py-2 rounded-lg border border-[#c5c5d7] text-sm mb-4 focus:border-[#001b85] focus:outline-none"
-              onChange={(e) => setSelectedUMKM(SAMPLE_UMKM.find((u) => u.id === e.target.value)!)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs font-semibold mb-4 focus:border-[#001b85] focus:outline-none bg-white cursor-pointer"
+              onChange={(e) => setSelectedUMKM(sampleUMKM.find((u) => u.id === e.target.value) || sampleUMKM[0])}
             >
-              {SAMPLE_UMKM.map((u) => (
+              {sampleUMKM.map((u) => (
                 <option key={u.id} value={u.id}>{u.name}</option>
               ))}
             </select>
@@ -167,7 +291,7 @@ export default function RulesPage() {
               <div className="text-center p-4 bg-[#f3f2ff] rounded-xl border border-[#e5e7ff]">
                 <p className="text-xs text-[#444655] font-semibold mb-1">Skor Lama</p>
                 <p className="text-3xl font-bold text-[#444655] font-headline">{oldScore}</p>
-                <p className="text-[10px] text-[#757686] mt-1">Bobot sebelumnya</p>
+                <p className="text-[10px] text-[#757686] mt-1">Formula standar</p>
               </div>
               <div className="text-center p-4 rounded-xl border-2 border-[#001b85] bg-[#ececff]">
                 <p className="text-xs text-[#001b85] font-semibold mb-1">Skor Baru</p>
@@ -181,7 +305,7 @@ export default function RulesPage() {
             {/* Score breakdown */}
             <div className="mt-4 space-y-2">
               {(Object.keys(weights) as (keyof Weights)[]).map((key) => {
-                const score = selectedUMKM.scores[key];
+                const score = selectedUMKM.scores[key] || 50;
                 const contribution = Math.round((score * weights[key]) / 100);
                 return (
                   <div key={key} className="flex items-center justify-between text-xs">
@@ -195,15 +319,16 @@ export default function RulesPage() {
 
           {/* Version history */}
           <div className="bg-white rounded-2xl border border-[#e5e7ff] shadow-card p-5">
-            <h2 className="font-bold text-[#141a34] mb-3">Riwayat Versi</h2>
-            <div className="space-y-3">
-              {VERSION_HISTORY.map((v) => (
-                <div key={v.version} className="flex items-start gap-3 p-3 bg-[#f3f2ff] rounded-xl">
-                  <span className="text-xs font-bold bg-[#001b85] text-white px-2 py-0.5 rounded-full mt-0.5">{v.version}</span>
-                  <div>
-                    <p className="text-xs font-semibold text-[#141a34]">{v.changes}</p>
-                    <p className="text-[10px] text-[#444655]">{v.user} · {v.date}</p>
+            <h2 className="font-bold text-[#141a34] mb-3">Riwayat Versi (Supabase)</h2>
+            <div className="space-y-3 max-h-60 overflow-y-auto hide-scrollbar">
+              {versionHistory.map((v, idx) => (
+                <div key={idx} className="p-3 bg-[#fbf8ff] rounded-xl border border-[#e5e7ff] space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-xs text-[#001b85] bg-[#ececff] px-2 py-0.5 rounded-full">{v.version}</span>
+                    <span className="text-[10px] text-slate-400 font-semibold">{v.date}</span>
                   </div>
+                  <p className="text-xs text-slate-700 font-medium leading-snug">{v.changes}</p>
+                  <p className="text-[10px] text-slate-400 font-mono-label">Oleh: {v.user}</p>
                 </div>
               ))}
             </div>

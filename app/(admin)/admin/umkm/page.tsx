@@ -1,15 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Search, Plus, Check, X, ShieldAlert, AlertCircle } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
-import { Search } from "lucide-react";
+interface UMKMProfile {
+  id: string;
+  name: string;
+  usaha: string;
+  sektor: string;
+  lokasi: string;
+  score: number;
+  konsistensi: number;
+  status: string;
+}
 
-const UMKM_DATA = [
-  { id: 1, name: "Ibu Sari", usaha: "Warung Makan", sektor: "Kuliner", lokasi: "Jakarta Selatan", score: 87, konsistensi: 45, status: "active" },
-  { id: 2, name: "Pak Budi", usaha: "Konveksi Budi", sektor: "Fashion", lokasi: "Bandung", score: 79, konsistensi: 38, status: "active" },
-  { id: 3, name: "Bu Ani", usaha: "Dapur Bu Ani", sektor: "Kuliner", lokasi: "Surabaya", score: 71, konsistensi: 41, status: "active" },
-  { id: 4, name: "Pak Joko", usaha: "Pertanian Joko", sektor: "Pertanian", lokasi: "Bogor", score: 58, konsistensi: 25, status: "active" },
-  { id: 5, name: "Bu Wati", usaha: "Kerajinan Wati", sektor: "Kerajinan", lokasi: "Yogyakarta", score: 45, konsistensi: 12, status: "inactive" },
+const DEFAULT_UMKM_DATA: UMKMProfile[] = [
+  { id: "1", name: "Ibu Sari", usaha: "Warung Makan", sektor: "Kuliner", lokasi: "Jakarta Selatan", score: 87, konsistensi: 45, status: "active" },
+  { id: "2", name: "Pak Budi", usaha: "Konveksi Budi", sektor: "Fashion", lokasi: "Bandung", score: 79, konsistensi: 38, status: "active" },
+  { id: "3", name: "Bu Ani", usaha: "Dapur Bu Ani", sektor: "Kuliner", lokasi: "Surabaya", score: 71, konsistensi: 41, status: "active" },
+  { id: "4", name: "Pak Joko", usaha: "Pertanian Joko", sektor: "Pertanian", lokasi: "Bogor", score: 58, konsistensi: 25, status: "active" },
+  { id: "5", name: "Bu Wati", usaha: "Kerajinan Wati", sektor: "Kerajinan", lokasi: "Yogyakarta", score: 45, konsistensi: 12, status: "inactive" },
 ];
 
 function scoreColor(s: number) {
@@ -20,10 +31,136 @@ function scoreColor(s: number) {
 }
 
 export default function AdminUMKMPage() {
+  const [umkmList, setUmkmList] = useState<UMKMProfile[]>(DEFAULT_UMKM_DATA);
   const [search, setSearch] = useState("");
-  const [editScore, setEditScore] = useState<{ id: number; score: number } | null>(null);
+  const [editScore, setEditScore] = useState<{ id: string; score: number; oldScore: number } | null>(null);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const filtered = UMKM_DATA.filter(
+  // Form states for new UMKM
+  const [newName, setNewName] = useState("");
+  const [newUsaha, setNewUsaha] = useState("");
+  const [newSektor, setNewSektor] = useState("Kuliner");
+  const [newLokasi, setNewLokasi] = useState("Jakarta");
+  const [newScore, setNewScore] = useState("70");
+
+  useEffect(() => {
+    fetchUMKMFromSupabase();
+  }, []);
+
+  async function fetchUMKMFromSupabase() {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const mapped: UMKMProfile[] = data.map((p: any, idx: number) => ({
+          id: p.id || String(idx + 1),
+          name: p.name || p.nama_usaha || `UMKM #${idx + 1}`,
+          usaha: p.nama_usaha || "Usaha Mikro",
+          sektor: p.sektor_usaha || "Kuliner",
+          lokasi: p.lokasi || "Indonesia",
+          score: Number(p.readiness_score) || 60,
+          konsistensi: Number(p.konsistensi_days) || 15,
+          status: p.status || "active"
+        }));
+        setUmkmList(mapped);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch UMKM profiles from Supabase:", err);
+    }
+  }
+
+  const handleSaveOverrideScore = async () => {
+    if (!editScore) return;
+    setSaving(true);
+
+    const { id, score, oldScore } = editScore;
+    const reasonText = overrideReason.trim() || "Penyesuaian manual oleh admin";
+
+    try {
+      // 1. Update Supabase profiles table
+      await supabase
+        .from("profiles")
+        .update({ readiness_score: score })
+        .eq("id", id);
+
+      // 2. Insert into Supabase audit_logs table
+      await supabase.from("audit_logs").insert({
+        user_email: "admin@berkembang.id",
+        action: "OVERRIDE_SCORE",
+        details: `UMKM ID #${id}, skor: ${oldScore}->${score}, alasan: ${reasonText}`,
+        status: "success",
+      });
+
+      // Local state update
+      setUmkmList(umkmList.map((u) => (u.id === id ? { ...u, score } : u)));
+    } catch (err) {
+      console.error("Error saving score override:", err);
+    } finally {
+      setSaving(false);
+      setEditScore(null);
+      setOverrideReason("");
+    }
+  };
+
+  const handleAddUMKM = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName || !newUsaha) return;
+    setSaving(true);
+
+    const scoreNum = Number(newScore) || 70;
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .insert({
+          name: newName,
+          nama_usaha: newUsaha,
+          sektor_usaha: newSektor,
+          lokasi: newLokasi,
+          readiness_score: scoreNum,
+          konsistensi_days: 10,
+          role: "umkm",
+          status: "active"
+        })
+        .select()
+        .single();
+
+      const newEntry: UMKMProfile = {
+        id: data?.id || String(Date.now()),
+        name: newName,
+        usaha: newUsaha,
+        sektor: newSektor,
+        lokasi: newLokasi,
+        score: scoreNum,
+        konsistensi: 10,
+        status: "active"
+      };
+
+      // Also log to audit logs
+      await supabase.from("audit_logs").insert({
+        user_email: "admin@berkembang.id",
+        action: "CREATE_UMKM",
+        details: `Pendaftaran UMKM Baru: ${newUsaha} (${newName})`,
+        status: "success",
+      });
+
+      setUmkmList([newEntry, ...umkmList]);
+      setShowAddModal(false);
+      setNewName("");
+      setNewUsaha("");
+    } catch (err) {
+      console.error("Error adding UMKM:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const filtered = umkmList.filter(
     (u) =>
       u.name.toLowerCase().includes(search.toLowerCase()) ||
       u.usaha.toLowerCase().includes(search.toLowerCase()) ||
@@ -37,13 +174,17 @@ export default function AdminUMKMPage() {
           <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Manajemen UMKM</h1>
           <p className="text-sm text-slate-500 mt-1">Data lengkap dan override skor kesiapan bagi seluruh ekosistem UMKM</p>
         </div>
-        <button className="bg-[#001b85] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0e32c2] transition-colors">
-          + Tambah UMKM
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="bg-[#001b85] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+        >
+          <Plus size={16} />
+          Tambah UMKM
         </button>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
-        {/* Search */}
+        {/* Search Bar */}
         <div className="p-4 border-b border-slate-200/60">
           <div className="relative">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -56,84 +197,189 @@ export default function AdminUMKMPage() {
           </div>
         </div>
 
-        <table className="w-full text-sm">
-          <thead className="bg-[#f3f2ff] border-b border-[#e5e7ff]">
-            <tr>
-              <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Nama</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Usaha</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Sektor</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Lokasi</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Score</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Konsistensi</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Status</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((u) => {
-              const sc = scoreColor(u.score);
-              return (
-                <tr key={u.id} className="border-t border-[#f3f2ff] hover:bg-[#fbf8ff] transition-colors">
-                  <td className="px-4 py-3 font-semibold text-[#141a34]">{u.name}</td>
-                  <td className="px-4 py-3 text-[#444655]">{u.usaha}</td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#ececff] text-[#001b85]">{u.sektor}</span>
-                  </td>
-                  <td className="px-4 py-3 text-[#444655] text-xs">{u.lokasi}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${sc}`}>{u.score}</span>
-                  </td>
-                  <td className="px-4 py-3 text-[#444655]">{u.konsistensi} hari</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      u.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                    }`}>
-                      {u.status === "active" ? "Aktif" : "Tidak Aktif"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setEditScore({ id: u.id, score: u.score })}
-                        className="text-[10px] text-[#001b85] border border-[#bac3ff] px-2 py-1 rounded-lg hover:bg-[#ececff]"
-                      >
-                        Edit Score
-                      </button>
-                      <button className="text-[10px] text-[#444655] border border-[#e5e7ff] px-2 py-1 rounded-lg hover:bg-[#f3f2ff]">
-                        Detail
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-[#f3f2ff] border-b border-[#e5e7ff]">
+              <tr>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Nama Owner</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Usaha</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Sektor</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Lokasi</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Score</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Konsistensi</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((u) => {
+                const sc = scoreColor(u.score);
+                return (
+                  <tr key={u.id} className="border-t border-[#f3f2ff] hover:bg-[#fbf8ff] transition-colors">
+                    <td className="px-4 py-3 font-semibold text-[#141a34]">{u.name}</td>
+                    <td className="px-4 py-3 text-[#444655]">{u.usaha}</td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#ececff] text-[#001b85]">{u.sektor}</span>
+                    </td>
+                    <td className="px-4 py-3 text-[#444655] text-xs">{u.lokasi}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${sc}`}>{u.score}</span>
+                    </td>
+                    <td className="px-4 py-3 text-[#444655]">{u.konsistensi} hari</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                        u.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                      }`}>
+                        {u.status === "active" ? "Aktif" : "Tidak Aktif"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => setEditScore({ id: u.id, score: u.score, oldScore: u.score })}
+                          className="text-[11px] font-bold text-[#001b85] border border-[#bac3ff] px-2.5 py-1 rounded-lg hover:bg-[#ececff] transition-colors cursor-pointer"
+                        >
+                          Edit Score
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Edit Score Modal */}
+      {/* Edit Score Override Modal */}
       {editScore && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-fade-in-up">
-            <h3 className="font-bold text-[#141a34] text-base">Override Readiness Score</h3>
-            <p className="text-xs text-[#444655] mt-1 mb-4">Perubahan akan dicatat di audit log dengan alasan.</p>
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-200 animate-fade-in-up">
+            <h3 className="font-bold text-[#141a34] text-base font-headline">Override Readiness Score</h3>
+            <p className="text-xs text-[#444655] mt-1 mb-4">Perubahan akan langsung disimpan ke Supabase dan dicatat di Audit Log.</p>
+            <label className="block text-xs font-bold text-slate-500 mb-1">Skor Kesiapan Baru (0-100)</label>
             <input
               type="number"
               min={0}
               max={100}
               value={editScore.score}
               onChange={(e) => setEditScore({ ...editScore, score: Number(e.target.value) })}
-              className="w-full px-3 py-2 rounded-lg border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none mb-3"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-sm font-bold text-[#001b85] focus:border-[#001b85] focus:outline-none mb-3"
             />
+            <label className="block text-xs font-bold text-slate-500 mb-1">Alasan Override (Wajib)</label>
             <textarea
               rows={2}
-              placeholder="Alasan override (wajib)..."
-              className="w-full px-3 py-2 rounded-lg border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none mb-4 resize-none"
+              value={overrideReason}
+              onChange={(e) => setOverrideReason(e.target.value)}
+              placeholder="Contoh: Hasil verifikasi berkas legalitas NIB fisik lulus."
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none mb-4 resize-none"
             />
             <div className="flex gap-3">
-              <button onClick={() => setEditScore(null)} className="flex-1 py-2.5 rounded-xl border border-[#c5c5d7] text-[#444655] font-semibold text-sm">Batal</button>
-              <button onClick={() => setEditScore(null)} className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-sm hover:bg-[#0e32c2]">Simpan</button>
+              <button
+                onClick={() => setEditScore(null)}
+                className="flex-1 py-2.5 rounded-xl border border-[#c5c5d7] text-[#444655] font-semibold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleSaveOverrideScore}
+                disabled={saving}
+                className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                {saving ? "Menyimpan..." : "Simpan Override"}
+              </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add New UMKM Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200 animate-fade-in-up">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-[#141a34] text-base font-headline">Tambah Data UMKM Baru</h3>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleAddUMKM} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Nama Pemilik / Owner</label>
+                <input
+                  type="text"
+                  required
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Contoh: Pak Haryono"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Nama Usaha</label>
+                <input
+                  type="text"
+                  required
+                  value={newUsaha}
+                  onChange={(e) => setNewUsaha(e.target.value)}
+                  placeholder="Contoh: Kios Keripik Tempe Jaya"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Sektor Usaha</label>
+                  <select
+                    value={newSektor}
+                    onChange={(e) => setNewSektor(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none bg-white"
+                  >
+                    <option value="Kuliner">Kuliner</option>
+                    <option value="Fashion">Fashion</option>
+                    <option value="Pertanian">Pertanian</option>
+                    <option value="Kerajinan">Kerajinan</option>
+                    <option value="Jasa">Jasa & Perdagangan</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Lokasi Kota</label>
+                  <input
+                    type="text"
+                    value={newLokasi}
+                    onChange={(e) => setNewLokasi(e.target.value)}
+                    placeholder="Jakarta"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Skor Kesiapan Awal (0-100)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={newScore}
+                  onChange={(e) => setNewScore(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs font-bold text-[#001b85] focus:border-[#001b85] focus:outline-none"
+                />
+              </div>
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-[#c5c5d7] text-[#444655] font-semibold text-xs hover:bg-slate-50 transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm"
+                >
+                  {saving ? "Menyimpan..." : "Simpan Data UMKM"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
