@@ -45,24 +45,25 @@ export default function AdminUMKMPage() {
   async function fetchUMKMFromSupabase() {
     setLoading(true);
     try {
-      // Fetch profiles table
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (!error && data) {
-        // Filter profiles for UMKM role or profiles that have a business name / role umkm
-        const umkmRows = data.filter((p: any) => p.role === "umkm" || !p.role || p.nama_usaha);
+      if (error) {
+        console.error("Error fetching profiles:", error.message);
+      }
+
+      if (data && data.length > 0) {
+        // Filter profiles that have a nama_usaha OR role 'umkm' OR null role
+        const umkmRows = data.filter((p: any) => p.role === "umkm" || p.nama_usaha || !p.role);
 
         const now = new Date();
         const mapped: UMKMProfile[] = umkmRows.map((p: any, idx: number) => {
-          // Calculate account age in days dynamically for consistency
           const createdDate = p.created_at ? new Date(p.created_at) : now;
           const ageDays = Math.max(1, Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)));
           const konsistensiVal = Number(p.konsistensi_days) > 0 ? Number(p.konsistensi_days) : ageDays;
 
-          // Priority for Business Name
           const businessName = p.nama_usaha || p.name || `Usaha UMKM #${idx + 1}`;
           const ownerName = p.name && p.name !== businessName ? p.name : (p.email ? p.email.split("@")[0] : "Pemilik Usaha");
 
@@ -78,6 +79,8 @@ export default function AdminUMKMPage() {
           };
         });
         setUmkmList(mapped);
+      } else {
+        setUmkmList([]);
       }
     } catch (err) {
       console.warn("Failed to fetch UMKM profiles:", err);
