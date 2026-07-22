@@ -6,8 +6,8 @@ import { supabase } from "@/lib/supabase";
 
 interface UMKMProfile {
   id: string;
-  name: string;
-  usaha: string;
+  name: string;      // Owner name
+  usaha: string;     // Business name (Nama Usaha)
   sektor: string;
   lokasi: string;
   score: number;
@@ -16,11 +16,11 @@ interface UMKMProfile {
 }
 
 const DEFAULT_UMKM_DATA: UMKMProfile[] = [
-  { id: "1", name: "Ibu Sari", usaha: "Warung Makan", sektor: "Kuliner", lokasi: "Jakarta Selatan", score: 87, konsistensi: 45, status: "active" },
-  { id: "2", name: "Pak Budi", usaha: "Konveksi Budi", sektor: "Fashion", lokasi: "Bandung", score: 79, konsistensi: 38, status: "active" },
-  { id: "3", name: "Bu Ani", usaha: "Dapur Bu Ani", sektor: "Kuliner", lokasi: "Surabaya", score: 71, konsistensi: 41, status: "active" },
-  { id: "4", name: "Pak Joko", usaha: "Pertanian Joko", sektor: "Pertanian", lokasi: "Bogor", score: 58, konsistensi: 25, status: "active" },
-  { id: "5", name: "Bu Wati", usaha: "Kerajinan Wati", sektor: "Kerajinan", lokasi: "Yogyakarta", score: 45, konsistensi: 12, status: "inactive" },
+  { id: "1", name: "Ibu Sari", usaha: "Warung Nasi Goreng Pak Pur", sektor: "Kuliner", lokasi: "Depok", score: 87, konsistensi: 1, status: "active" },
+  { id: "2", name: "Pak Budi", usaha: "Konveksi Budi", sektor: "Fashion", lokasi: "Bandung", score: 79, konsistensi: 14, status: "active" },
+  { id: "3", name: "Bu Ani", usaha: "Dapur Bu Ani", sektor: "Kuliner", lokasi: "Surabaya", score: 71, konsistensi: 10, status: "active" },
+  { id: "4", name: "Pak Joko", usaha: "Pertanian Joko", sektor: "Pertanian", lokasi: "Bogor", score: 58, konsistensi: 5, status: "active" },
+  { id: "5", name: "Bu Wati", usaha: "Kerajinan Wati", sektor: "Kerajinan", lokasi: "Yogyakarta", score: 45, konsistensi: 2, status: "inactive" },
 ];
 
 function scoreColor(s: number) {
@@ -51,22 +51,36 @@ export default function AdminUMKMPage() {
 
   async function fetchUMKMFromSupabase() {
     try {
+      // Fetch only profiles with role 'umkm' or null role (newly registered)
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
+        .or("role.eq.umkm,role.is.null")
         .order("created_at", { ascending: false });
 
       if (!error && data && data.length > 0) {
-        const mapped: UMKMProfile[] = data.map((p: any, idx: number) => ({
-          id: p.id || String(idx + 1),
-          name: p.name || p.nama_usaha || `UMKM #${idx + 1}`,
-          usaha: p.nama_usaha || "Usaha Mikro",
-          sektor: p.sektor_usaha || "Kuliner",
-          lokasi: p.lokasi || "Indonesia",
-          score: Number(p.readiness_score) || 60,
-          konsistensi: Number(p.konsistensi_days) || 15,
-          status: p.status || "active"
-        }));
+        const now = new Date();
+        const mapped: UMKMProfile[] = data.map((p: any, idx: number) => {
+          // Calculate account age in days dynamically for consistency
+          const createdDate = p.created_at ? new Date(p.created_at) : now;
+          const ageDays = Math.max(1, Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)));
+          const konsistensiVal = Number(p.konsistensi_days) > 0 ? Number(p.konsistensi_days) : ageDays;
+
+          // Priority for Business Name
+          const businessName = p.nama_usaha || p.name || `Usaha UMKM #${idx + 1}`;
+          const ownerName = p.name && p.name !== businessName ? p.name : (p.email ? p.email.split("@")[0] : "Pemilik Usaha");
+
+          return {
+            id: p.id || String(idx + 1),
+            name: ownerName,
+            usaha: businessName,
+            sektor: p.sektor_usaha || "Kuliner",
+            lokasi: p.lokasi || "Indonesia",
+            score: Number(p.readiness_score) || 50,
+            konsistensi: konsistensiVal,
+            status: p.status || "active"
+          };
+        });
         setUmkmList(mapped);
       }
     } catch (err) {
@@ -123,7 +137,7 @@ export default function AdminUMKMPage() {
           sektor_usaha: newSektor,
           lokasi: newLokasi,
           readiness_score: scoreNum,
-          konsistensi_days: 10,
+          konsistensi_days: 1,
           role: "umkm",
           status: "active"
         })
@@ -137,7 +151,7 @@ export default function AdminUMKMPage() {
         sektor: newSektor,
         lokasi: newLokasi,
         score: scoreNum,
-        konsistensi: 10,
+        konsistensi: 1,
         status: "active"
       };
 
@@ -162,9 +176,10 @@ export default function AdminUMKMPage() {
 
   const filtered = umkmList.filter(
     (u) =>
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
       u.usaha.toLowerCase().includes(search.toLowerCase()) ||
-      u.sektor.toLowerCase().includes(search.toLowerCase())
+      u.name.toLowerCase().includes(search.toLowerCase()) ||
+      u.sektor.toLowerCase().includes(search.toLowerCase()) ||
+      u.lokasi.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -191,7 +206,7 @@ export default function AdminUMKMPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari nama, usaha, atau sektor..."
+              placeholder="Cari nama usaha, pemilik, atau sektor..."
               className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200/80 text-sm focus:border-[#001b85] focus:outline-none"
             />
           </div>
@@ -201,8 +216,8 @@ export default function AdminUMKMPage() {
           <table className="w-full text-sm">
             <thead className="bg-[#f3f2ff] border-b border-[#e5e7ff]">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Nama Owner</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Usaha</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Nama Usaha</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Pemilik (Owner)</th>
                 <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Sektor</th>
                 <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Lokasi</th>
                 <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Score</th>
@@ -216,8 +231,8 @@ export default function AdminUMKMPage() {
                 const sc = scoreColor(u.score);
                 return (
                   <tr key={u.id} className="border-t border-[#f3f2ff] hover:bg-[#fbf8ff] transition-colors">
-                    <td className="px-4 py-3 font-semibold text-[#141a34]">{u.name}</td>
-                    <td className="px-4 py-3 text-[#444655]">{u.usaha}</td>
+                    <td className="px-4 py-3 font-bold text-[#141a34]">{u.usaha}</td>
+                    <td className="px-4 py-3 text-[#444655] font-medium">{u.name}</td>
                     <td className="px-4 py-3">
                       <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#ececff] text-[#001b85]">{u.sektor}</span>
                     </td>
@@ -305,24 +320,24 @@ export default function AdminUMKMPage() {
             </div>
             <form onSubmit={handleAddUMKM} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Nama Pemilik / Owner</label>
-                <input
-                  type="text"
-                  required
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Contoh: Pak Haryono"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
-                />
-              </div>
-              <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1">Nama Usaha</label>
                 <input
                   type="text"
                   required
                   value={newUsaha}
                   onChange={(e) => setNewUsaha(e.target.value)}
-                  placeholder="Contoh: Kios Keripik Tempe Jaya"
+                  placeholder="Contoh: Warung Nasi Goreng Pak Pur"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Nama Pemilik / Owner</label>
+                <input
+                  type="text"
+                  required
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Contoh: Pak Pur"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
                 />
               </div>
@@ -347,7 +362,7 @@ export default function AdminUMKMPage() {
                     type="text"
                     value={newLokasi}
                     onChange={(e) => setNewLokasi(e.target.value)}
-                    placeholder="Jakarta"
+                    placeholder="Depok"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
                   />
                 </div>
