@@ -19,9 +19,8 @@ interface RuleVersion {
 }
 
 const DEFAULT_SAMPLE_UMKM = [
-  { id: "1", name: "Warung Ibu Sari", scores: { konsistensi: 75, kas: 60, legalitas: 20, stabilitas: 65 } },
-  { id: "2", name: "Dapur Bu Ani", scores: { konsistensi: 80, kas: 70, legalitas: 50, stabilitas: 55 } },
-  { id: "3", name: "Butik Muda", scores: { konsistensi: 40, kas: 80, legalitas: 90, stabilitas: 70 } },
+  { id: "1", name: "Warung Nasi Goreng Pak Pur", scores: { konsistensi: 75, kas: 60, legalitas: 20, stabilitas: 65 } },
+  { id: "2", name: "Pixalads", scores: { konsistensi: 80, kas: 70, legalitas: 50, stabilitas: 55 } },
 ];
 
 export default function RulesPage() {
@@ -82,7 +81,7 @@ export default function RulesPage() {
         setVersionHistory(mappedHistory);
       }
     } catch (err) {
-      console.warn("Failed to fetch rules config from Supabase:", err);
+      console.warn("Failed to fetch rules config:", err);
     }
   }
 
@@ -98,7 +97,7 @@ export default function RulesPage() {
           const sc = Number(p.readiness_score) || 65;
           return {
             id: p.id || String(idx + 1),
-            name: p.name || p.nama_usaha || `UMKM #${idx + 1}`,
+            name: p.nama_usaha || p.name || `UMKM #${idx + 1}`,
             scores: {
               konsistensi: Math.min(sc + 10, 95),
               kas: Math.max(sc - 5, 20),
@@ -142,7 +141,7 @@ export default function RulesPage() {
     try {
       const newVersionName = `v${versionHistory.length + 1}`;
 
-      // Insert new rule config into Supabase
+      // Insert new rule config into database
       const { data, error } = await supabase
         .from("rules_config")
         .insert({
@@ -262,7 +261,7 @@ export default function RulesPage() {
                   : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >
-              {publishing ? "Menyimpan ke Supabase..." : saved ? "✅ Perubahan Berhasil Dipublish!" : "Publish Perubahan Ke Supabase"}
+              {publishing ? "Menyimpan Perubahan..." : saved ? "✅ Perubahan Berhasil Dipublish!" : "Publish Perubahan Formula"}
             </button>
             <button
               onClick={() => setWeights({ konsistensi: 35, kas: 35, legalitas: 25, stabilitas: 5 })}
@@ -319,7 +318,7 @@ export default function RulesPage() {
 
           {/* Version history */}
           <div className="bg-white rounded-2xl border border-[#e5e7ff] shadow-card p-5">
-            <h2 className="font-bold text-[#141a34] mb-3">Riwayat Versi (Supabase)</h2>
+            <h2 className="font-bold text-[#141a34] mb-3">Riwayat Versi Aturan</h2>
             <div className="space-y-3 max-h-60 overflow-y-auto hide-scrollbar">
               {versionHistory.map((v, idx) => (
                 <div key={idx} className="p-3 bg-[#fbf8ff] rounded-xl border border-[#e5e7ff] space-y-1">

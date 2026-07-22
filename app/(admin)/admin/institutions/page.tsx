@@ -47,7 +47,7 @@ export default function AdminInstitutionsPage() {
         setInstitutions(mapped);
       }
     } catch (err) {
-      console.warn("Failed to fetch institutions from Supabase:", err);
+      console.warn("Failed to fetch institutions:", err);
     } finally {
       setLoading(false);
     }
@@ -179,11 +179,11 @@ export default function AdminInstitutionsPage() {
       {/* Grid List */}
       {loading ? (
         <div className="bg-white rounded-2xl p-8 border border-slate-200/60 text-center text-xs text-slate-400 font-medium">
-          Memuat data institusi dari Supabase...
+          Memuat data institusi...
         </div>
       ) : institutions.length === 0 ? (
         <div className="bg-white rounded-2xl p-8 border border-slate-200/60 text-center text-xs text-slate-400 font-medium">
-          Belum ada data institusi di Supabase. Klik "Tambah Institusi" untuk menambahkan.
+          Belum ada data institusi terdaftar. Klik "Tambah Institusi" untuk menambahkan.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

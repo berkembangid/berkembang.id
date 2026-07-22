@@ -62,7 +62,7 @@ export default function AdminAnalyticsPage() {
         { label: "Score Kesiapan ≥ 70", value: highScores, color: "#0ea5e9" },
       ];
 
-      // Construct top institutions based strictly on Supabase institutions table
+      // Construct top institutions based strictly on institutions table
       let topInsts: { name: string; requests: number; conversions: number; rate: string }[] = [];
       if (instData && instData.length > 0) {
         topInsts = instData.map((inst: any) => {
@@ -89,7 +89,7 @@ export default function AdminAnalyticsPage() {
         topInstitutions: topInsts
       });
     } catch (err) {
-      console.warn("Failed to fetch live analytics from Supabase:", err);
+      console.warn("Failed to fetch live analytics:", err);
     } finally {
       setLoading(false);
     }
@@ -103,7 +103,7 @@ export default function AdminAnalyticsPage() {
       <div className="flex items-center justify-between mb-2">
         <div>
           <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Analytics Platform</h1>
-          <p className="text-sm text-slate-500 mt-1">Performa platform dan pertumbuhan ekosistem UMKM berdasarkan data Supabase</p>
+          <p className="text-sm text-slate-500 mt-1">Performa platform dan pertumbuhan ekosistem UMKM</p>
         </div>
         <button
           onClick={fetchLiveAnalytics}
@@ -149,7 +149,7 @@ export default function AdminAnalyticsPage() {
 
       {/* Funnel */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200/60 shadow-sm">
-        <h2 className="font-bold text-sm text-[#141a34] mb-4">Konversi Journey UMKM (Real Supabase)</h2>
+        <h2 className="font-bold text-sm text-[#141a34] mb-4">Konversi Journey UMKM</h2>
         <div className="space-y-3">
           {data.funnel.map((f) => {
             const pct = Math.round((f.value / FUNNEL_MAX) * 100);
@@ -192,13 +192,13 @@ export default function AdminAnalyticsPage() {
               {loading ? (
                 <tr>
                   <td colSpan={4} className="text-center py-6 text-xs text-slate-400 font-medium">
-                    Memuat data analitik institusi dari Supabase...
+                    Memuat data analitik institusi...
                   </td>
                 </tr>
               ) : data.topInstitutions.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="text-center py-6 text-xs text-slate-400 font-medium">
-                    Belum ada data institusi di Supabase.
+                    Belum ada data institusi.
                   </td>
                 </tr>
               ) : (

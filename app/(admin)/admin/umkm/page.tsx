@@ -45,16 +45,18 @@ export default function AdminUMKMPage() {
   async function fetchUMKMFromSupabase() {
     setLoading(true);
     try {
-      // Fetch only profiles with role 'umkm' or null role (newly registered)
+      // Fetch profiles table
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
-        .or("role.eq.umkm,role.is.null")
         .order("created_at", { ascending: false });
 
       if (!error && data) {
+        // Filter profiles for UMKM role or profiles that have a business name / role umkm
+        const umkmRows = data.filter((p: any) => p.role === "umkm" || !p.role || p.nama_usaha);
+
         const now = new Date();
-        const mapped: UMKMProfile[] = data.map((p: any, idx: number) => {
+        const mapped: UMKMProfile[] = umkmRows.map((p: any, idx: number) => {
           // Calculate account age in days dynamically for consistency
           const createdDate = p.created_at ? new Date(p.created_at) : now;
           const ageDays = Math.max(1, Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)));
@@ -78,7 +80,7 @@ export default function AdminUMKMPage() {
         setUmkmList(mapped);
       }
     } catch (err) {
-      console.warn("Failed to fetch UMKM profiles from Supabase:", err);
+      console.warn("Failed to fetch UMKM profiles:", err);
     } finally {
       setLoading(false);
     }
@@ -92,13 +94,13 @@ export default function AdminUMKMPage() {
     const reasonText = overrideReason.trim() || "Penyesuaian manual oleh admin";
 
     try {
-      // 1. Update Supabase profiles table
+      // 1. Update profiles table
       await supabase
         .from("profiles")
         .update({ readiness_score: score })
         .eq("id", id);
 
-      // 2. Insert into Supabase audit_logs table
+      // 2. Insert into audit_logs table
       await supabase.from("audit_logs").insert({
         user_email: "admin@berkembang.id",
         action: "OVERRIDE_SCORE",
@@ -235,13 +237,13 @@ export default function AdminUMKMPage() {
               {loading ? (
                 <tr>
                   <td colSpan={8} className="text-center py-8 text-xs text-slate-400 font-medium">
-                    Memuat data UMKM dari Supabase...
+                    Memuat data UMKM...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-8 text-xs text-slate-400 font-medium">
-                    Tidak ada data UMKM ditemukan di Supabase.
+                    Belum ada data UMKM terdaftar.
                   </td>
                 </tr>
               ) : (
@@ -290,7 +292,7 @@ export default function AdminUMKMPage() {
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-200 animate-fade-in-up">
             <h3 className="font-bold text-[#141a34] text-base font-headline">Override Readiness Score</h3>
-            <p className="text-xs text-[#444655] mt-1 mb-4">Perubahan akan langsung disimpan ke Supabase dan dicatat di Audit Log.</p>
+            <p className="text-xs text-[#444655] mt-1 mb-4">Perubahan akan langsung disimpan dan dicatat di Audit Log.</p>
             <label className="block text-xs font-bold text-slate-500 mb-1">Skor Kesiapan Baru (0-100)</label>
             <input
               type="number"

@@ -50,7 +50,7 @@ export default function AdminMitraPage() {
         setMitraList(mapped);
       }
     } catch (err) {
-      console.warn("Failed to fetch mitra from Supabase:", err);
+      console.warn("Failed to fetch mitra:", err);
     } finally {
       setLoading(false);
     }
@@ -166,11 +166,11 @@ export default function AdminMitraPage() {
       {/* Grid List */}
       {loading ? (
         <div className="bg-white rounded-2xl p-8 border border-slate-200/60 text-center text-xs text-slate-400 font-medium">
-          Memuat data mitra dari Supabase...
+          Memuat data mitra...
         </div>
       ) : mitraList.length === 0 ? (
         <div className="bg-white rounded-2xl p-8 border border-slate-200/60 text-center text-xs text-slate-400 font-medium">
-          Belum ada data mitra di Supabase. Klik "Tambah Mitra" untuk menambahkan.
+          Belum ada data mitra terdaftar. Klik "Tambah Mitra" untuk menambahkan.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
