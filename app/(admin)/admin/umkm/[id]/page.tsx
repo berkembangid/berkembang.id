@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Store, Save, ShieldAlert, CheckCircle2, Award, Calendar } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import CitySelect from "@/components/CitySelect";
 
 const UMKM_SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
 
@@ -236,12 +237,10 @@ export default function UMKMDetailPage() {
                 <label className="block text-xs font-bold text-slate-600 mb-1.5">
                   Kota / Lokasi Usaha
                 </label>
-                <input
-                  type="text"
+                <CitySelect
                   value={lokasi}
-                  onChange={(e) => setLokasi(e.target.value)}
-                  placeholder="Depok / Jakarta"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  onChange={(val) => setLokasi(val)}
+                  placeholder="Pilih Kota / Kabupaten..."
                 />
               </div>
 

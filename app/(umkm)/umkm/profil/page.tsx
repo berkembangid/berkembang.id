@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { User, Mail, Building2, MapPin, Tag, Phone, Save, FileText, Camera, Check, AlertCircle, LogOut, ArrowLeft, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import CitySelect from "@/components/CitySelect";
 
 const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
 
@@ -289,17 +290,13 @@ export default function ProfilPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#444655] mb-1.5">Kota / Kabupaten Usaha</label>
-                <div className="relative">
-                  <input
-                    value={form.lokasi}
-                    onChange={(e) => setForm({ ...form, lokasi: e.target.value })}
-                    placeholder="Contoh: Jakarta Selatan"
-                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none"
-                    required
-                  />
-                  <MapPin size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
+                <label className="block text-xs font-bold text-[#444655] mb-1.5">Kota / Kabupaten Usaha *</label>
+                <CitySelect
+                  value={form.lokasi}
+                  onChange={(val) => setForm({ ...form, lokasi: val })}
+                  placeholder="Pilih Kota / Kabupaten Usaha..."
+                  required
+                />
               </div>
 
               <div>

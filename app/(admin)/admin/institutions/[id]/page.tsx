@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Save, Shield, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { Building2, ArrowLeft, Save, ShieldCheck, ShieldAlert, CheckCircle2, Award, Calendar, Mail, User, Shield } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import CitySelect from "@/components/CitySelect";
 
 export default function InstitutionDetailPage() {
   const params = useParams();
@@ -295,12 +296,10 @@ export default function InstitutionDetailPage() {
                     <label className="block text-xs font-bold text-slate-600 mb-1.5">
                       Lokasi / Kota Operasional
                     </label>
-                    <input
-                      type="text"
+                    <CitySelect
                       value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder="Jakarta / Depok / Bandung"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                      onChange={(val) => setLocation(val)}
+                      placeholder="Pilih Kota / Kabupaten Operasional..."
                     />
                   </div>
                 </>

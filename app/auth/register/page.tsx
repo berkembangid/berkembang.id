@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, AlertCircle, Building2, MapPin, Store, Building, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import CitySelect from "@/components/CitySelect";
 
 const UMKM_SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
 const INSTITUSI_TYPES = ["Bank / Koperasi", "Lembaga Pemerintah", "Investor / VC", "NGO / Yayasan", "Universitas", "Lainnya"];
@@ -244,17 +245,14 @@ export default function RegisterPage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#444655] mb-1.5">Kota / Kabupaten</label>
-              <div className="relative">
-                <input
-                  value={umkmForm.lokasi} disabled={loading}
-                  onChange={(e) => setUmkmForm({ ...umkmForm, lokasi: e.target.value })}
-                  placeholder="Contoh: Jakarta Selatan"
-                  className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50"
-                  required
-                />
-                <MapPin size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
+              <label className="block text-xs font-bold text-[#444655] mb-1.5">Kota / Kabupaten Usaha *</label>
+              <CitySelect
+                value={umkmForm.lokasi}
+                disabled={loading}
+                onChange={(val) => setUmkmForm({ ...umkmForm, lokasi: val })}
+                placeholder="Pilih Kota / Kabupaten Usaha..."
+                required
+              />
             </div>
           </>
         )}
@@ -300,17 +298,14 @@ export default function RegisterPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-[#444655] mb-1.5">Kota</label>
-                <div className="relative">
-                  <input
-                    value={institusiForm.kota} disabled={loading}
-                    onChange={(e) => setInstitusiForm({ ...institusiForm, kota: e.target.value })}
-                    placeholder="Jakarta"
-                    className="w-full px-4 py-3 pl-9 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50"
-                    required
-                  />
-                  <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
+                <label className="block text-xs font-bold text-[#444655] mb-1.5">Kota / Kabupaten *</label>
+                <CitySelect
+                  value={institusiForm.kota}
+                  disabled={loading}
+                  onChange={(val) => setInstitusiForm({ ...institusiForm, kota: val })}
+                  placeholder="Pilih Kota..."
+                  required
+                />
               </div>
             </div>
           </>

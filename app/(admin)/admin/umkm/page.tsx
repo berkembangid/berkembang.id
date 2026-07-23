@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { Search, Plus, Check, X, ShieldAlert, AlertCircle, RefreshCw, Store } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/Modal";
+import CitySelect from "@/components/CitySelect";
 
 interface UMKMProfile {
   id: string;
@@ -383,12 +384,10 @@ export default function AdminUMKMPage() {
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-600 mb-1">Lokasi Kota</label>
-              <input
-                type="text"
+              <CitySelect
                 value={newLokasi}
-                onChange={(e) => setNewLokasi(e.target.value)}
-                placeholder="Depok"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                onChange={(val) => setNewLokasi(val)}
+                placeholder="Pilih Kota..."
               />
             </div>
           </div>
