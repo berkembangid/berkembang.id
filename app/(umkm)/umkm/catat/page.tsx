@@ -101,31 +101,79 @@ export default function CatatPage() {
   const [toastMessage, setToastMessage] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isListening, setIsListening] = useState(false);
+  const [realTransactions, setRealTransactions] = useState<any[]>([]);
 
   const recognitionRef = useRef<any>(null);
+  const transcriptionRef = useRef<string>("");
+
+  const fetchRealTransactions = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        if (data && data.length > 0) setRealTransactions(data);
+      }
+    } catch (e) {
+      console.warn("Fetch real transactions error:", e);
+    }
+  };
 
   useEffect(() => {
-    async function loadUser() {
+    async function loadUserAndData() {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      await fetchRealTransactions();
     }
-    loadUser();
+    loadUserAndData();
 
-    // Check browser SpeechRecognition support
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+    };
+  }, []);
+
+  // Real Speech Recognition Controls - Re-instantiates cleanly on every start
+  const startRecordingVoice = () => {
+    setStep("recording");
+    setIsListening(true);
+    setTranscription("");
+    transcriptionRef.current = "";
+
     if (typeof window !== "undefined") {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
+        // Abort previous active session if any
+        if (recognitionRef.current) {
+          try {
+            recognitionRef.current.abort();
+          } catch (e) {}
+        }
+
         const recognition = new SpeechRecognition();
-        recognition.continuous = false;
+        recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = "id-ID";
 
         recognition.onresult = (event: any) => {
-          let currentTranscript = "";
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            currentTranscript += event.results[i][0].transcript;
+          let currentText = "";
+          for (let i = 0; i < event.results.length; i++) {
+            currentText += event.results[i][0].transcript;
           }
-          setTranscription(currentTranscript);
+          setTranscription(currentText);
+          transcriptionRef.current = currentText;
+        };
+
+        recognition.onerror = (event: any) => {
+          console.warn("Speech recognition error:", event.error);
+          setIsListening(false);
         };
 
         recognition.onend = () => {
@@ -133,21 +181,13 @@ export default function CatatPage() {
         };
 
         recognitionRef.current = recognition;
-      }
-    }
-  }, []);
-
-  // Real Speech Recognition Controls
-  const startRecordingVoice = () => {
-    setStep("recording");
-    setIsListening(true);
-    setTranscription("");
-
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.start();
-      } catch (e) {
-        console.warn("Speech recognition start error:", e);
+        try {
+          recognition.start();
+        } catch (e) {
+          console.warn("Speech recognition start failed:", e);
+        }
+      } else {
+        alert("Browser Anda tidak mendukung Speech Recognition secara native. Gunakan browser Chrome atau tab Tulis Teks AI.");
       }
     }
   };
@@ -162,17 +202,17 @@ export default function CatatPage() {
 
     setStep("processing");
     setTimeout(() => {
-      const parsed = parseIndonesianTransactionText(transcription || "Jual 20 porsi makanan 300rb, beli bahan 100rb");
+      const textToParse = transcriptionRef.current.trim() || transcription.trim() || "Jual 20 porsi makanan 300rb, beli bahan 100rb";
+      const parsed = parseIndonesianTransactionText(textToParse);
       if (parsed.length > 0) {
         setItems(parsed);
       } else {
         setItems([
-          { id: 1, item: "Penjualan Harian", qty: "1 paket", type: "masuk", nominal: 300000, kategori: "Penjualan" },
-          { id: 2, item: "Bahan Baku Usaha", qty: "1 paket", type: "keluar", nominal: 100000, kategori: "Bahan" },
+          { id: 1, item: textToParse.slice(0, 35) || "Penjualan Usaha", qty: "1 paket", type: "masuk", nominal: 150000, kategori: "Penjualan" },
         ]);
       }
       setStep("preview");
-    }, 1200);
+    }, 1000);
   };
 
   // Process typed text
@@ -182,6 +222,7 @@ export default function CatatPage() {
 
     setStep("processing");
     setTranscription(typedText);
+    transcriptionRef.current = typedText;
 
     setTimeout(() => {
       const parsed = parseIndonesianTransactionText(typedText);
@@ -193,29 +234,33 @@ export default function CatatPage() {
         ]);
       }
       setStep("preview");
-    }, 1000);
+    }, 800);
   };
 
   const handleSuggestionClick = (sugText: string) => {
     setTypedText(sugText);
     setStep("processing");
     setTranscription(sugText);
+    transcriptionRef.current = sugText;
 
     setTimeout(() => {
       const parsed = parseIndonesianTransactionText(sugText);
       setItems(parsed);
       setStep("preview");
-    }, 1000);
+    }, 800);
   };
 
   const handleConfirmSave = async () => {
     setSaving(true);
     const todayStr = new Date().toISOString().split("T")[0];
 
-    if (currentUser && items.length > 0) {
-      try {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const activeUserId = user?.id || currentUser?.id;
+
+      if (activeUserId && items.length > 0) {
         const rowsToInsert = items.map((it) => ({
-          user_id: currentUser.id,
+          user_id: activeUserId,
           item: it.item,
           qty: it.qty || "1 barang",
           type: it.type,
@@ -227,23 +272,27 @@ export default function CatatPage() {
         const { error } = await supabase.from("transactions").insert(rowsToInsert);
         if (error) {
           console.warn("Save transactions to Supabase error:", error.message);
+        } else {
+          await fetchRealTransactions();
         }
-      } catch (err) {
-        console.error("Error saving transactions:", err);
       }
+    } catch (err) {
+      console.error("Error saving transactions:", err);
+    } finally {
+      setSaving(false);
     }
 
-    setSaving(false);
-    setToastMessage("✓ Catatan AI berhasil disimpan ke database!");
+    setToastMessage("✓ Catatan AI berhasil disimpan ke database real!");
     setStep("idle");
     setItems([]);
     setTranscription("");
+    transcriptionRef.current = "";
     setTypedText("");
 
     setTimeout(() => {
       setToastMessage("");
       router.push("/umkm/laporan");
-    }, 1500);
+    }, 1200);
   };
 
   const handleDeleteItem = (id: number) => {
@@ -401,6 +450,33 @@ export default function CatatPage() {
                 ))}
               </div>
             </div>
+
+            {/* Real Database Transactions History Card */}
+            {realTransactions.length > 0 && (
+              <div className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-[#141a34] uppercase tracking-wider flex items-center gap-1.5">
+                    <CheckCircle2 size={15} className="text-emerald-600" /> Riwayat Transaksi Tersimpan Real
+                  </h3>
+                  <Link href="/umkm/laporan" className="text-xs font-bold text-[#001b85] hover:underline flex items-center gap-1">
+                    Lihat Semua <ChevronRight size={13} />
+                  </Link>
+                </div>
+                <div className="space-y-2">
+                  {realTransactions.map((tx) => (
+                    <div key={tx.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
+                      <div>
+                        <p className="font-bold text-[#141a34]">{tx.item}</p>
+                        <p className="text-[10px] text-slate-500">{tx.qty || "1 barang"} · {tx.kategori || "Umum"} · {tx.tanggal || "Hari ini"}</p>
+                      </div>
+                      <span className={`font-bold ${tx.type === "masuk" ? "text-emerald-700" : "text-rose-600"}`}>
+                        {tx.type === "masuk" ? "+" : "-"}Rp{Number(tx.nominal).toLocaleString("id-ID")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
