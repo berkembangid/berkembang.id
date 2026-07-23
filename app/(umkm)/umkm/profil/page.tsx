@@ -19,6 +19,7 @@ export default function ProfilPage() {
   // Form Fields for Business Profile
   const [form, setForm] = useState({
     email: "",
+    namaPemilik: "",
     namaUsaha: "",
     sektor: "Kuliner",
     lokasi: "",
@@ -45,7 +46,8 @@ export default function ProfilPage() {
             console.warn("Profile table load skipped:", e);
           }
 
-          const nama = dbProfile?.name || dbProfile?.nama_usaha || user.user_metadata?.nama_usaha || "";
+          const namaUsaha = dbProfile?.nama_usaha || user.user_metadata?.nama_usaha || "";
+          const namaPemilik = dbProfile?.nama_pemilik || dbProfile?.name || user.user_metadata?.nama_pemilik || user.user_metadata?.name || "";
           const sektor = dbProfile?.sektor_usaha || user.user_metadata?.sektor_usaha || "Kuliner";
           const lokasi = dbProfile?.lokasi || user.user_metadata?.lokasi || "";
           const phone = dbProfile?.phone || user.user_metadata?.phone || "";
@@ -55,7 +57,8 @@ export default function ProfilPage() {
 
           setForm({
             email: user.email || "",
-            namaUsaha: nama,
+            namaPemilik: namaPemilik,
+            namaUsaha: namaUsaha || dbProfile?.name || "",
             sektor: sektor,
             lokasi: lokasi,
             alamat: alamat,
@@ -123,6 +126,8 @@ export default function ProfilPage() {
       // 1. Update Supabase auth user metadata
       const { error: updateAuthError } = await supabase.auth.updateUser({
         data: {
+          name: form.namaPemilik,
+          nama_pemilik: form.namaPemilik,
           nama_usaha: form.namaUsaha,
           sektor_usaha: form.sektor,
           lokasi: form.lokasi,
@@ -142,7 +147,8 @@ export default function ProfilPage() {
         .from("profiles")
         .upsert({
           id: user.id,
-          name: form.namaUsaha,
+          name: form.namaPemilik || form.namaUsaha,
+          nama_pemilik: form.namaPemilik,
           nama_usaha: form.namaUsaha,
           sektor_usaha: form.sektor,
           lokasi: form.lokasi,
@@ -237,7 +243,7 @@ export default function ProfilPage() {
                   <ShieldCheck size={12} /> Akun Terverifikasi
                 </span>
               </div>
-              <p className="text-xs text-slate-500">{form.email}</p>
+              <p className="text-xs text-slate-500 font-medium">Pemilik: <span className="font-bold text-slate-700">{form.namaPemilik || "Belum Diisi"}</span> · {form.email}</p>
               <p className="text-xs text-[#001b85] font-semibold">{form.sektor} · {form.lokasi || "Lokasi belum diisi"}</p>
             </div>
           </div>
@@ -313,6 +319,21 @@ export default function ProfilPage() {
               <h3 className="font-headline text-sm font-bold text-[#141a34] flex items-center gap-2 border-b border-slate-100 pb-3">
                 <FileText size={16} className="text-[#001b85]" /> Kontak & Legalitas Usaha
               </h3>
+
+              <div>
+                <label className="block text-xs font-bold text-[#444655] mb-1.5">Nama Pemilik Usaha (Owner)</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={form.namaPemilik}
+                    onChange={(e) => setForm({ ...form, namaPemilik: e.target.value })}
+                    placeholder="Contoh: Ibu Sari / Pak Pur"
+                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none font-medium"
+                    required
+                  />
+                  <User size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
 
               <div>
                 <label className="block text-xs font-bold text-[#444655] mb-1.5">Email Terdaftar</label>

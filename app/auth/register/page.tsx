@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, Mail, AlertCircle, Building2, MapPin, Store, Building } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, AlertCircle, Building2, MapPin, Store, Building, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const UMKM_SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
@@ -21,6 +21,7 @@ export default function RegisterPage() {
 
   // UMKM form fields
   const [umkmForm, setUmkmForm] = useState({
+    namaPemilik: "",
     namaUsaha: "",
     sektor: "Kuliner",
     lokasi: "",
@@ -46,8 +47,8 @@ export default function RegisterPage() {
 
   const validateStep1 = () => {
     if (role === "umkm") {
-      if (!umkmForm.namaUsaha.trim() || !umkmForm.lokasi.trim()) {
-        setError("Silakan isi nama usaha dan kota/kabupaten Anda.");
+      if (!umkmForm.namaPemilik.trim() || !umkmForm.namaUsaha.trim() || !umkmForm.lokasi.trim()) {
+        setError("Silakan isi nama pemilik, nama usaha, dan kota/kabupaten Anda.");
         return false;
       }
     } else {
@@ -76,6 +77,7 @@ export default function RegisterPage() {
     try {
       const metadata = role === "umkm"
         ? {
+            nama_pemilik: umkmForm.namaPemilik,
             nama_usaha: umkmForm.namaUsaha,
             sektor_usaha: umkmForm.sektor,
             lokasi: umkmForm.lokasi,
@@ -118,7 +120,8 @@ export default function RegisterPage() {
             id: data.user.id,
             email,
             role: role === "umkm" ? "umkm" : "institution",
-            name: role === "umkm" ? umkmForm.namaUsaha : institusiForm.namaInstitusi,
+            name: role === "umkm" ? umkmForm.namaPemilik : institusiForm.namaInstitusi,
+            nama_pemilik: role === "umkm" ? umkmForm.namaPemilik : null,
             nama_usaha: role === "umkm" ? umkmForm.namaUsaha : null,
             sektor_usaha: role === "umkm" ? umkmForm.sektor : null,
             nama_institusi: role === "institution" ? institusiForm.namaInstitusi : null,
@@ -126,8 +129,17 @@ export default function RegisterPage() {
             nama_contact: role === "institution" ? institusiForm.namaContact : null,
             lokasi: role === "umkm" ? umkmForm.lokasi : institusiForm.kota,
           });
+
+          if (role === "institution") {
+            await supabase.from("institutions").insert({
+              name: institusiForm.namaInstitusi,
+              type: institusiForm.jenisInstitusi || "Bank / Koperasi",
+              programs_count: 1,
+              active: true,
+            });
+          }
         } catch (err) {
-          console.warn("Profiles insert optional:", err);
+          console.warn("Profiles/Institutions insert optional:", err);
         }
       }
 
@@ -189,6 +201,20 @@ export default function RegisterPage() {
         {/* ───────── STEP 1 ───────── */}
         {step === 1 && role === "umkm" && (
           <>
+            <div>
+              <label className="block text-xs font-bold text-[#444655] mb-1.5">Nama Pemilik (Owner)</label>
+              <div className="relative">
+                <input
+                  value={umkmForm.namaPemilik}
+                  disabled={loading}
+                  onChange={(e) => setUmkmForm({ ...umkmForm, namaPemilik: e.target.value })}
+                  placeholder="Contoh: Ibu Sari"
+                  className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none disabled:bg-slate-50"
+                  required
+                />
+                <User size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
             <div>
               <label className="block text-xs font-bold text-[#444655] mb-1.5">Nama Usaha</label>
               <div className="relative">

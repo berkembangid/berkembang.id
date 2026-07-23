@@ -6,13 +6,42 @@ import { useRef, useState, useEffect } from "react";
 import { Home, Mic, Target, User, LogOut, Sparkles, Bell, BarChart3, X, ArrowUpRight, ArrowDownLeft, FileText, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-const SIDEBAR_TABS = [
-  { label: "Beranda", href: "/umkm", Icon: Home },
-  { label: "Pencatatan AI", href: "/umkm/catat", Icon: Mic },
-  { label: "Laporan Keuangan", href: "/umkm/laporan", Icon: BarChart3 },
-  { label: "Journey Naik Kelas", href: "/umkm/journey", Icon: Target },
-  { label: "Kesiapan Usaha", href: "/umkm/readiness", Icon: Sparkles },
-  { label: "Profil Usaha", href: "/umkm/profil", Icon: User },
+interface SidebarGroup {
+  category: string;
+  items: {
+    label: string;
+    href: string;
+    Icon: any;
+  }[];
+}
+
+const SIDEBAR_GROUPS: SidebarGroup[] = [
+  {
+    category: "Utama",
+    items: [
+      { label: "Beranda", href: "/umkm", Icon: Home },
+    ],
+  },
+  {
+    category: "Transaksi & Keuangan",
+    items: [
+      { label: "Pencatatan AI", href: "/umkm/catat", Icon: Mic },
+      { label: "Laporan Keuangan", href: "/umkm/laporan", Icon: BarChart3 },
+    ],
+  },
+  {
+    category: "Pengembangan Usaha",
+    items: [
+      { label: "Journey Naik Kelas", href: "/umkm/journey", Icon: Target },
+      { label: "Kesiapan KUR", href: "/umkm/readiness", Icon: Sparkles },
+    ],
+  },
+  {
+    category: "Profil & Akun",
+    items: [
+      { label: "Profil Usaha", href: "/umkm/profil", Icon: User },
+    ],
+  },
 ];
 
 export default function UMKMLayout({ children }: { children: React.ReactNode }) {
@@ -190,22 +219,28 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
           </div>
         </Link>
 
-        {/* Navigation Items */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {SIDEBAR_TABS.map((item) => {
-            const isActive = item.href === "/umkm" ? pathname === "/umkm" : pathname.startsWith(item.href);
-            
-            return (
-              <div key={item.href} className="space-y-1">
-                <Link href={item.href}>
-                  <div className={`sidebar-nav-item ${isActive ? "active" : ""}`}>
-                    <item.Icon size={18} className={isActive ? "text-[#001b85]" : "text-[#757686]"} />
-                    <span>{item.label}</span>
-                  </div>
-                </Link>
+        {/* Classified Sidebar Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
+          {SIDEBAR_GROUPS.map((group) => (
+            <div key={group.category} className="space-y-1">
+              <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                {group.category}
+              </p>
+              <div className="space-y-0.5 pt-0.5">
+                {group.items.map((item) => {
+                  const isActive = item.href === "/umkm" ? pathname === "/umkm" : pathname.startsWith(item.href);
+                  return (
+                    <Link key={item.href} href={item.href}>
+                      <div className={`sidebar-nav-item ${isActive ? "active" : ""}`}>
+                        <item.Icon size={17} className={isActive ? "text-[#001b85]" : "text-[#757686]"} />
+                        <span>{item.label}</span>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </nav>
 
         {/* Footer Logout */}

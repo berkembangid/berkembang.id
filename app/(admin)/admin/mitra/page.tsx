@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Handshake, Plus, Edit, Users, MapPin, Trash2, X, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import Modal from "@/components/Modal";
 
 interface Mitra {
   id: number;
@@ -204,13 +206,13 @@ export default function AdminMitraPage() {
 
               {/* Action buttons */}
               <div className="flex gap-2 pt-2 border-t border-slate-100 justify-end">
-                <button
-                  onClick={() => openEditModal(m)}
+                <Link
+                  href={`/admin/mitra/${m.id}`}
                   className="text-xs font-bold text-[#001b85] border border-[#bac3ff] px-4 py-2 rounded-xl hover:bg-[#ececff] transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Edit size={12} />
-                  Edit
-                </button>
+                  Detail / Edit
+                </Link>
                 <button
                   onClick={() => handleDelete(m.id)}
                   className="text-xs font-bold text-red-600 border border-red-200 px-4 py-2 rounded-xl hover:bg-red-50 transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -225,85 +227,80 @@ export default function AdminMitraPage() {
       )}
 
       {/* Add / Edit Mitra Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200 animate-fade-in-up">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-[#141a34] text-base font-headline">
-                {editingMitra ? "Edit Data Mitra" : "Tambah Mitra Baru"}
-              </h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleSaveForm} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Nama Organisasi / Komunitas</label>
-                <input
-                  type="text"
-                  required
-                  value={mitraName}
-                  onChange={(e) => setMitraName(e.target.value)}
-                  placeholder="Contoh: SMESCO Indonesia"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Tipe Organisasi</label>
-                  <select
-                    value={mitraType}
-                    onChange={(e) => setMitraType(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none bg-white"
-                  >
-                    <option value="Pemerintah">Pemerintah / BUMD</option>
-                    <option value="LSM">LSM / Komunitas</option>
-                    <option value="NGO">NGO / NPO</option>
-                    <option value="Swasta">Corporate Social (CSR)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Cakupan Wilayah</label>
-                  <input
-                    type="text"
-                    value={mitraCoverage}
-                    onChange={(e) => setMitraCoverage(e.target.value)}
-                    placeholder="Nasional"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Jumlah UMKM Dampingan</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={mitraUmkmCount}
-                  onChange={(e) => setMitraUmkmCount(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
-                />
-              </div>
-
-              <div className="pt-2 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-[#c5c5d7] text-[#444655] font-semibold text-xs hover:bg-slate-50 transition-colors"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm"
-                >
-                  {saving ? "Menyimpan..." : "Simpan Data Mitra"}
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={editingMitra ? "Edit Data Mitra" : "Tambah Mitra Baru"}
+        subtitle="Pendamping dan komunitas penggerak UMKM"
+        icon={<Handshake size={22} />}
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleSaveForm} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Nama Organisasi / Komunitas *</label>
+            <input
+              type="text"
+              required
+              value={mitraName}
+              onChange={(e) => setMitraName(e.target.value)}
+              placeholder="Contoh: SMESCO Indonesia"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+            />
           </div>
-        </div>
-      )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Tipe Organisasi</label>
+              <select
+                value={mitraType}
+                onChange={(e) => setMitraType(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+              >
+                <option value="Pemerintah">Pemerintah / BUMD</option>
+                <option value="LSM">LSM / Komunitas</option>
+                <option value="NGO">NGO / NPO</option>
+                <option value="Swasta">Corporate Social (CSR)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Cakupan Wilayah</label>
+              <input
+                type="text"
+                value={mitraCoverage}
+                onChange={(e) => setMitraCoverage(e.target.value)}
+                placeholder="Nasional"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Jumlah UMKM Dampingan</label>
+            <input
+              type="number"
+              min="0"
+              value={mitraUmkmCount}
+              onChange={(e) => setMitraUmkmCount(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+            />
+          </div>
+
+          <div className="pt-3 flex gap-3">
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
+            >
+              {saving ? "Menyimpan..." : "Simpan Data Mitra"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

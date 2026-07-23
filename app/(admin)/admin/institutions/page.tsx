@@ -1,15 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Building2, Plus, Edit, Trash2, Shield, ShieldAlert, X, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import Modal from "@/components/Modal";
 
 interface Institution {
-  id: number;
+  id: number | string;
   name: string;
   type: string;
   programs: number;
   active: boolean;
+  contact?: string;
 }
 
 export default function AdminInstitutionsPage() {
@@ -31,21 +34,54 @@ export default function AdminInstitutionsPage() {
   async function fetchInstitutions() {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // 1. Fetch master institutions table
+      const { data: instData } = await supabase
         .from("institutions")
         .select("*")
         .order("id", { ascending: true });
 
-      if (!error && data) {
-        const mapped: Institution[] = data.map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          type: item.type,
-          programs: Number(item.programs_count) || 1,
-          active: Boolean(item.active),
-        }));
-        setInstitutions(mapped);
+      // 2. Fetch profiles registered with role = 'institution' or nama_institusi
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("*")
+        .or("role.eq.institution,nama_institusi.not.is.null");
+
+      const list: Institution[] = [];
+      const existingNames = new Set<string>();
+
+      if (instData && instData.length > 0) {
+        instData.forEach((item: any) => {
+          const name = item.name || "Institusi";
+          existingNames.add(name.toLowerCase().trim());
+          list.push({
+            id: item.id,
+            name: name,
+            type: item.type || "Bank / Koperasi",
+            programs: Number(item.programs_count) || 1,
+            active: Boolean(item.active ?? true),
+          });
+        });
       }
+
+      if (profileData && profileData.length > 0) {
+        profileData.forEach((p: any, idx: number) => {
+          const pName = p.nama_institusi || p.name || `Institusi Terdaftar #${idx + 1}`;
+          const normalized = pName.toLowerCase().trim();
+          if (!existingNames.has(normalized)) {
+            existingNames.add(normalized);
+            list.push({
+              id: p.id || `profile-${idx}`,
+              name: pName,
+              type: p.jenis_institusi || "Bank / Koperasi",
+              programs: 1,
+              active: true,
+              contact: p.nama_contact || p.email,
+            });
+          }
+        });
+      }
+
+      setInstitutions(list);
     } catch (err) {
       console.warn("Failed to fetch institutions:", err);
     } finally {
@@ -56,10 +92,12 @@ export default function AdminInstitutionsPage() {
   const handleToggleActive = async (inst: Institution) => {
     const updatedStatus = !inst.active;
     try {
-      await supabase
-        .from("institutions")
-        .update({ active: updatedStatus })
-        .eq("id", inst.id);
+      if (typeof inst.id === "number") {
+        await supabase
+          .from("institutions")
+          .update({ active: updatedStatus })
+          .eq("id", inst.id);
+      }
 
       await supabase.from("audit_logs").insert({
         user_email: "admin@berkembang.id",
@@ -74,9 +112,13 @@ export default function AdminInstitutionsPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number | string) => {
     try {
-      await supabase.from("institutions").delete().eq("id", id);
+      if (typeof id === "number") {
+        await supabase.from("institutions").delete().eq("id", id);
+      } else {
+        await supabase.from("profiles").delete().eq("id", id);
+      }
       setInstitutions(institutions.filter(i => i.id !== id));
     } catch (err) {
       console.error("Error deleting institution:", err);
@@ -92,14 +134,24 @@ export default function AdminInstitutionsPage() {
 
     try {
       if (editingInst) {
-        await supabase
-          .from("institutions")
-          .update({
-            name: instName,
-            type: instType,
-            programs_count: progs
-          })
-          .eq("id", editingInst.id);
+        if (typeof editingInst.id === "number") {
+          await supabase
+            .from("institutions")
+            .update({
+              name: instName,
+              type: instType,
+              programs_count: progs
+            })
+            .eq("id", editingInst.id);
+        } else {
+          await supabase
+            .from("profiles")
+            .update({
+              nama_institusi: instName,
+              jenis_institusi: instType
+            })
+            .eq("id", editingInst.id);
+        }
 
         setInstitutions(institutions.map(i => i.id === editingInst.id ? { ...i, name: instName, type: instType, programs: progs } : i));
       } else {
@@ -218,22 +270,25 @@ export default function AdminInstitutionsPage() {
                       )}
                     </button>
                   </div>
-                  <div className="flex gap-4 text-xs text-slate-500 mt-2 font-medium">
+                  <div className="flex gap-3 text-xs text-slate-500 mt-2 font-medium flex-wrap items-center">
                     <span className="bg-slate-100 px-2 py-0.5 rounded">{inst.type}</span>
                     <span className="text-[#001b85] font-semibold">{inst.programs} program aktif</span>
+                    {inst.contact && (
+                      <span className="text-slate-500 text-[11px] bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Kontak: {inst.contact}</span>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Action buttons */}
               <div className="flex gap-2 pt-2 border-t border-slate-100 justify-end">
-                <button
-                  onClick={() => openEditModal(inst)}
+                <Link
+                  href={`/admin/institutions/${inst.id}`}
                   className="text-xs font-bold text-[#001b85] border border-[#bac3ff] px-4 py-2 rounded-xl hover:bg-[#ececff] transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Edit size={12} />
-                  Edit
-                </button>
+                  Detail / Edit
+                </Link>
                 <button
                   onClick={() => handleDelete(inst.id)}
                   className="text-xs font-bold text-red-600 border border-red-200 px-4 py-2 rounded-xl hover:bg-red-50 transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -247,76 +302,71 @@ export default function AdminInstitutionsPage() {
         </div>
       )}
 
-      {/* Add / Edit Institution Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200 animate-fade-in-up">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-[#141a34] text-base font-headline">
-                {editingInst ? "Edit Data Institusi" : "Tambah Institusi Baru"}
-              </h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleSaveForm} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Nama Institusi / Bank</label>
-                <input
-                  type="text"
-                  required
-                  value={instName}
-                  onChange={(e) => setInstName(e.target.value)}
-                  placeholder="Contoh: Bank BNI KUR"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Jenis Lembaga</label>
-                  <select
-                    value={instType}
-                    onChange={(e) => setInstType(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none bg-white"
-                  >
-                    <option value="Bank BUMN">Bank BUMN</option>
-                    <option value="Bank Swasta">Bank Swasta</option>
-                    <option value="Pemerintah">Pemerintah / BUMD</option>
-                    <option value="Fintech">Fintech / P2P</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Jumlah Program</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={instPrograms}
-                    onChange={(e) => setInstPrograms(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-[#c5c5d7] text-[#444655] font-semibold text-xs hover:bg-slate-50 transition-colors"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm"
-                >
-                  {saving ? "Menyimpan..." : "Simpan Institusi"}
-                </button>
-              </div>
-            </form>
+      {/* Add Institution Modal */}
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={editingInst ? "Edit Data Institusi" : "Tambah Institusi Baru"}
+        subtitle="Kelola bank, fintech, dan penyedia program KUR"
+        icon={<Building2 size={22} />}
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleSaveForm} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Nama Institusi / Bank *</label>
+            <input
+              type="text"
+              required
+              value={instName}
+              onChange={(e) => setInstName(e.target.value)}
+              placeholder="Contoh: Bank BNI KUR"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+            />
           </div>
-        </div>
-      )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Jenis Lembaga</label>
+              <select
+                value={instType}
+                onChange={(e) => setInstType(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+              >
+                <option value="Bank BUMN">Bank BUMN</option>
+                <option value="Bank Swasta">Bank Swasta</option>
+                <option value="Pemerintah">Pemerintah / BUMD</option>
+                <option value="Fintech">Fintech / P2P</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Jumlah Program</label>
+              <input
+                type="number"
+                min="1"
+                value={instPrograms}
+                onChange={(e) => setInstPrograms(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+              />
+            </div>
+          </div>
+
+          <div className="pt-3 flex gap-3">
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
+            >
+              {saving ? "Menyimpan..." : "Simpan Institusi"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Search, Plus, Check, X, ShieldAlert, AlertCircle, RefreshCw } from "lucide-react";
+import { Search, Plus, Check, X, ShieldAlert, AlertCircle, RefreshCw, Store } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import Modal from "@/components/Modal";
 
 interface UMKMProfile {
   id: string;
@@ -273,12 +275,12 @@ export default function AdminUMKMPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1.5">
-                          <button
-                            onClick={() => setEditScore({ id: u.id, score: u.score, oldScore: u.score })}
-                            className="text-[11px] font-bold text-[#001b85] border border-[#bac3ff] px-2.5 py-1 rounded-lg hover:bg-[#ececff] transition-colors cursor-pointer"
+                          <Link
+                            href={`/admin/umkm/${u.id}`}
+                            className="text-[11px] font-bold text-[#001b85] border border-[#bac3ff] px-3 py-1 rounded-lg hover:bg-[#ececff] transition-colors cursor-pointer"
                           >
-                            Edit Score
-                          </button>
+                            Detail / Edit
+                          </Link>
                         </div>
                       </td>
                     </tr>
@@ -333,95 +335,92 @@ export default function AdminUMKMPage() {
       )}
 
       {/* Add New UMKM Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200 animate-fade-in-up">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-[#141a34] text-base font-headline">Tambah Data UMKM Baru</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleAddUMKM} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Nama Usaha</label>
-                <input
-                  type="text"
-                  required
-                  value={newUsaha}
-                  onChange={(e) => setNewUsaha(e.target.value)}
-                  placeholder="Contoh: Warung Nasi Goreng Pak Pur"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Nama Pemilik / Owner</label>
-                <input
-                  type="text"
-                  required
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Contoh: Pak Pur"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Sektor Usaha</label>
-                  <select
-                    value={newSektor}
-                    onChange={(e) => setNewSektor(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none bg-white"
-                  >
-                    <option value="Kuliner">Kuliner</option>
-                    <option value="Fashion">Fashion</option>
-                    <option value="Pertanian">Pertanian</option>
-                    <option value="Kerajinan">Kerajinan</option>
-                    <option value="Jasa">Jasa & Perdagangan</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Lokasi Kota</label>
-                  <input
-                    type="text"
-                    value={newLokasi}
-                    onChange={(e) => setNewLokasi(e.target.value)}
-                    placeholder="Depok"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Skor Kesiapan Awal (0-100)</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={newScore}
-                  onChange={(e) => setNewScore(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs font-bold text-[#001b85] focus:border-[#001b85] focus:outline-none"
-                />
-              </div>
-              <div className="pt-2 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-[#c5c5d7] text-[#444655] font-semibold text-xs hover:bg-slate-50 transition-colors"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm"
-                >
-                  {saving ? "Menyimpan..." : "Simpan Data UMKM"}
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Tambah Data UMKM Baru"
+        subtitle="Registrasikan profil UMKM baru ke sistem"
+        icon={<Store size={22} />}
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleAddUMKM} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Nama Usaha *</label>
+            <input
+              type="text"
+              required
+              value={newUsaha}
+              onChange={(e) => setNewUsaha(e.target.value)}
+              placeholder="Contoh: Warung Nasi Goreng Pak Pur"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+            />
           </div>
-        </div>
-      )}
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Nama Pemilik / Owner *</label>
+            <input
+              type="text"
+              required
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Contoh: Pak Pur"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Sektor Usaha</label>
+              <select
+                value={newSektor}
+                onChange={(e) => setNewSektor(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+              >
+                <option value="Kuliner">Kuliner</option>
+                <option value="Fashion">Fashion</option>
+                <option value="Pertanian">Pertanian</option>
+                <option value="Kerajinan">Kerajinan</option>
+                <option value="Jasa">Jasa & Perdagangan</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Lokasi Kota</label>
+              <input
+                type="text"
+                value={newLokasi}
+                onChange={(e) => setNewLokasi(e.target.value)}
+                placeholder="Depok"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Skor Kesiapan Awal (0-100)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={newScore}
+              onChange={(e) => setNewScore(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-[#001b85] focus:border-[#001b85] focus:outline-none bg-white"
+            />
+          </div>
+          <div className="pt-3 flex gap-3">
+            <button
+              type="button"
+              onClick={() => setShowAddModal(false)}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
+            >
+              {saving ? "Menyimpan..." : "Simpan Data UMKM"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
