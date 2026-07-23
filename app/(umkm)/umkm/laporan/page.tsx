@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar, Trash2, X, PlusCircle, Sparkles, Receipt, Check } from "lucide-react";
+import { Plus, BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar, Trash2, X, PlusCircle, Sparkles, Receipt, Check, Download, FileSpreadsheet, Printer } from "lucide-react";
 import DateTimePicker from "@/components/DateTimePicker";
 import { supabase } from "@/lib/supabase";
 
@@ -244,23 +244,104 @@ export default function LaporanPage() {
     };
   }).sort((a, b) => b.total - a.total);
 
-  const maxCategoryTotal = Math.max(...categorySummary.map(c => c.total), 1);
+  const maxCategoryTotal = Math.max(...categorySummary.map((c) => c.total), 1);
+
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // Export to CSV Function
+  const handleExportCSV = () => {
+    if (filteredTransactions.length === 0) {
+      alert("Tidak ada data transaksi untuk diexport pada periode ini.");
+      return;
+    }
+
+    const headers = ["Tanggal", "Keterangan Item", "Tipe Transaksi", "Nominal (Rp)", "Kategori", "Jumlah (Qty)"];
+    
+    const rows = filteredTransactions.map((t) => [
+      t.tanggal,
+      `"${t.item.replace(/"/g, '""')}"`,
+      t.type === "masuk" ? "Pemasukan" : "Pengeluaran",
+      t.nominal,
+      `"${t.kategori}"`,
+      `"${t.qty}"`
+    ]);
+
+    rows.push([]);
+    rows.push(["TOTAL PEMASUKAN", "", "", totalPemasukan]);
+    rows.push(["TOTAL PENGELUARAN", "", "", totalPengeluaran]);
+    rows.push(["LABA NETT", "", "", netUntung]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement("a");
+    const filename = `Laporan_Keuangan_UMKM_${startDate || "Awal"}_sd_${endDate || "Akhir"}.csv`;
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Export to Print / PDF Function
+  const handlePrintPDF = () => {
+    window.print();
+  };
 
   return (
     <div className="space-y-6 pb-28 animate-fade-in">
       {/* Header banner */}
-      <div className="bg-white border-b border-slate-200/60 p-4 sticky top-0 z-20 flex items-center justify-between">
+      <div className="bg-white border-b border-slate-200/60 p-4 sticky top-0 z-20 flex items-center justify-between flex-wrap gap-2">
         <h1 className="font-headline text-lg font-extrabold text-[#141a34] flex items-center gap-2">
           <BarChart3 className="text-[#001b85]" size={20} />
           Laporan Keuangan
         </h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-[#001b85] text-white px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
-        >
-          <Plus size={14} />
-          Catat Manual
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Export Dropdown Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <Download size={14} />
+              Export Data
+            </button>
+
+            {showExportMenu && (
+              <div className="absolute right-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-1.5 animate-fade-in space-y-1">
+                <button
+                  onClick={() => {
+                    handleExportCSV();
+                    setShowExportMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-xl flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <FileSpreadsheet size={15} className="text-emerald-600" />
+                  <span>Export CSV (Excel)</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handlePrintPDF();
+                    setShowExportMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <Printer size={15} className="text-indigo-600" />
+                  <span>Cetak / Simpan PDF</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-[#001b85] text-white px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+          >
+            <Plus size={14} />
+            Catat Manual
+          </button>
+        </div>
       </div>
 
       {/* Streamlined Filter Bar */}
