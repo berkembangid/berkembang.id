@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar, Trash2, X, PlusCircle, Sparkles, Receipt, Check, Download, FileSpreadsheet, Printer } from "lucide-react";
+import { Plus, BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar, Trash2, X, PlusCircle, Sparkles, Receipt, Check, Download, FileSpreadsheet } from "lucide-react";
 import DateTimePicker from "@/components/DateTimePicker";
 import { supabase } from "@/lib/supabase";
 
@@ -246,8 +246,6 @@ export default function LaporanPage() {
 
   const maxCategoryTotal = Math.max(...categorySummary.map((c) => c.total), 1);
 
-  const [showExportMenu, setShowExportMenu] = useState(false);
-
   // Export to CSV Function
   const handleExportCSV = () => {
     if (filteredTransactions.length === 0) {
@@ -284,11 +282,6 @@ export default function LaporanPage() {
     document.body.removeChild(link);
   };
 
-  // Export to Print / PDF Function
-  const handlePrintPDF = () => {
-    window.print();
-  };
-
   return (
     <div className="space-y-6 pb-28 animate-fade-in">
       {/* Header banner */}
@@ -298,41 +291,15 @@ export default function LaporanPage() {
           Laporan Keuangan
         </h1>
         <div className="flex items-center gap-2">
-          {/* Export Dropdown Menu */}
-          <div className="relative">
-            <button
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
-            >
-              <Download size={14} />
-              Export Data
-            </button>
-
-            {showExportMenu && (
-              <div className="absolute right-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-1.5 animate-fade-in space-y-1">
-                <button
-                  onClick={() => {
-                    handleExportCSV();
-                    setShowExportMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-xl flex items-center gap-2 cursor-pointer transition-colors"
-                >
-                  <FileSpreadsheet size={15} className="text-emerald-600" />
-                  <span>Export CSV (Excel)</span>
-                </button>
-                <button
-                  onClick={() => {
-                    handlePrintPDF();
-                    setShowExportMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl flex items-center gap-2 cursor-pointer transition-colors"
-                >
-                  <Printer size={15} className="text-indigo-600" />
-                  <span>Cetak / Simpan PDF</span>
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Direct 1-Click Export CSV / Excel Button */}
+          <button
+            onClick={handleExportCSV}
+            className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+            title="Unduh Laporan Keuangan ke format Excel (CSV)"
+          >
+            <FileSpreadsheet size={15} className="text-emerald-600" />
+            <span>Export Excel</span>
+          </button>
 
           <button
             onClick={() => setShowModal(true)}
