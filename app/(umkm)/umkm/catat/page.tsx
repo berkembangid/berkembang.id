@@ -450,33 +450,6 @@ export default function CatatPage() {
                 ))}
               </div>
             </div>
-
-            {/* Real Database Transactions History Card */}
-            {realTransactions.length > 0 && (
-              <div className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-[#141a34] uppercase tracking-wider flex items-center gap-1.5">
-                    <CheckCircle2 size={15} className="text-emerald-600" /> Riwayat Transaksi Tersimpan Real
-                  </h3>
-                  <Link href="/umkm/laporan" className="text-xs font-bold text-[#001b85] hover:underline flex items-center gap-1">
-                    Lihat Semua <ChevronRight size={13} />
-                  </Link>
-                </div>
-                <div className="space-y-2">
-                  {realTransactions.map((tx) => (
-                    <div key={tx.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
-                      <div>
-                        <p className="font-bold text-[#141a34]">{tx.item}</p>
-                        <p className="text-[10px] text-slate-500">{tx.qty || "1 barang"} · {tx.kategori || "Umum"} · {tx.tanggal || "Hari ini"}</p>
-                      </div>
-                      <span className={`font-bold ${tx.type === "masuk" ? "text-emerald-700" : "text-rose-600"}`}>
-                        {tx.type === "masuk" ? "+" : "-"}Rp{Number(tx.nominal).toLocaleString("id-ID")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
