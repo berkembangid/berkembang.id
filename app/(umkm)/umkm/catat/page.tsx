@@ -33,14 +33,14 @@ function parseIndonesianTransactionText(input: string): ExtractedItem[] {
 
   sentences.forEach((sentence) => {
     let nominal = 0;
-    const jutaMatch = sentence.match(/(\d+(?:[\.,]\d+)?)\s*(?:jt|juta)/i);
-    const rbMatch = sentence.match(/(\d+(?:[\.,]\d+)?)\s*(?:rb|ribu|k)/i);
+    const rbMatch = sentence.match(/(\d+(?:[\.,]\d+)?)\s*(?:rb|ribu|k)\b/i);
+    const jutaMatch = sentence.match(/(\d+(?:[\.,]\d+)?)\s*(?:jt|juta)\b/i);
     const rawNumberMatch = sentence.match(/(?:rp\.?|rp\s*)?(\d{1,3}(?:\.\d{3})+|\d{4,9})/i);
 
-    if (jutaMatch) {
-      nominal = Math.round(parseFloat(jutaMatch[1].replace(",", ".")) * 1000000);
-    } else if (rbMatch) {
+    if (rbMatch) {
       nominal = Math.round(parseFloat(rbMatch[1].replace(",", ".")) * 1000);
+    } else if (jutaMatch) {
+      nominal = Math.round(parseFloat(jutaMatch[1].replace(",", ".")) * 1000000);
     } else if (rawNumberMatch) {
       nominal = parseInt(rawNumberMatch[1].replace(/\./g, ""), 10);
     }
@@ -48,9 +48,19 @@ function parseIndonesianTransactionText(input: string): ExtractedItem[] {
     if (nominal <= 0) return;
 
     const lower = sentence.toLowerCase();
-    const isMasuk = /(jual|laku|dapat|terjual|omzet|pemasukan|terima|pesanan|penjualan|masuk)/i.test(lower);
+    const isMasuk = /(jual|laku|dapat|terjual|omzet|pemasukan|terima|pesanan|penjualan|masuk|pendapatan|bayaran)/i.test(lower);
     const isKeluar = /(beli|bayar|belanja|sewa|listrik|pengeluaran|gaji|ongkir|modal|habis|keluar)/i.test(lower);
-    const type: "masuk" | "keluar" = isMasuk ? "masuk" : isKeluar ? "keluar" : "masuk";
+
+    let type: "masuk" | "keluar" = "masuk";
+    if (isMasuk && !isKeluar) {
+      type = "masuk";
+    } else if (isKeluar && !isMasuk) {
+      type = "keluar";
+    } else if (isKeluar) {
+      type = "keluar";
+    } else {
+      type = "masuk";
+    }
 
     const qtyMatch = sentence.match(/(\d+)\s*(porsi|paket|karung|kg|liter|tabung|unit|pcs|botol|biji|pasang|lembar)/i);
     const qty = qtyMatch ? `${qtyMatch[1]} ${qtyMatch[2]}` : "1 paket";
@@ -62,12 +72,12 @@ function parseIndonesianTransactionText(input: string): ExtractedItem[] {
 
     let itemTitle = sentence
       .replace(/(?:rp\.?|rp\s*)?(\d+(?:[\.,]\d+)?)\s*(?:jt|juta|rb|ribu|k)?/gi, "")
-      .replace(/(bisa|tadi|pagi|siang|sore|malam|hari|ini|habis|sebesar|sejumlah|rupiah)/gi, "")
+      .replace(/(bisa|tadi|pagi|siang|sore|malam|hari|ini|habis|sebesar|sejumlah|rupiah|pemasukan|pengeluaran)/gi, "")
       .replace(/\s+/g, " ")
       .trim();
 
     if (!itemTitle || itemTitle.length < 3) {
-      itemTitle = type === "masuk" ? "Penjualan Usaha" : "Pembelian Operasional";
+      itemTitle = type === "masuk" ? "Pemasukan Usaha" : "Pengeluaran Operasional";
     }
 
     results.push({

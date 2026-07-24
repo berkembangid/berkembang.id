@@ -3,6 +3,68 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
 import OpenAI from "openai";
 
+// ───────── NORMALIZER FOR ACCURATE INDONESIAN CURRENCY & TYPE CLASSIFICATION ─────────
+function normalizeExtractedItems(rawText: string, items: any[]): any[] {
+  const lowerText = rawText.toLowerCase();
+
+  return items.map((item) => {
+    let nominal = Number(item.nominal) || 0;
+    let type = item.type;
+
+    const mentionsMasuk = /(masuk|pemasukan|laku|terjual|penjualan|dapat|terima|omzet|pendapatan|bayaran)/i.test(lowerText);
+    const mentionsKeluar = /(keluar|pengeluaran|beli|belanja|bayar|sewa|listrik|ongkir|gaji|habis|modal)/i.test(lowerText);
+
+    if (mentionsMasuk && !mentionsKeluar) {
+      type = "masuk";
+    } else if (mentionsKeluar && !mentionsMasuk) {
+      type = "keluar";
+    }
+
+    const hasRibu = /(?:rb|ribu|k)\b/i.test(lowerText) || /\b\d+\s*ribu\b/i.test(lowerText);
+    const hasJuta = /(?:jt|juta)\b/i.test(lowerText);
+
+    // Safety fix: If 50rb was returned as 50,000,000 (50jt), scale it down to 50,000
+    if (hasRibu && !hasJuta && nominal >= 1000000) {
+      nominal = nominal / 1000;
+    }
+
+    // Safety fix: If 50rb was returned as 50, scale it up to 50,000
+    if (hasRibu && nominal < 1000) {
+      nominal = nominal * 1000;
+    }
+
+    return {
+      ...item,
+      type: type === "keluar" ? "keluar" : "masuk",
+      nominal: Math.round(nominal),
+    };
+  });
+}
+
+const SYSTEM_PROMPT_INSTRUCTION = `Anda adalah AI pakar pencatatan keuangan UMKM Indonesia.
+ATURAN WAJIB NOMINAL RUPIAH:
+1. "50rb" / "50 ribu" / "50 k" = 50000 (LIMA PULUH RIBU RUPIAH). JANGAN SEKALI-KALI MENJADIKANNYA 50000000 (50 JUTA)!
+2. "50 juta" / "50jt" = 50000000 (LIMA PULUH JUTA RUPIAH).
+3. "50" tanpa sebutan unit = 50000 (50 ribu).
+
+ATURAN TIPE TRANSAKSI:
+1. Pemasukan / Terjual / Laku / Omzet / Terima Uang / Pendapatan -> type: "masuk"
+2. Pengeluaran / Beli / Belanja / Bayar / Sewa / Gaji / Habis -> type: "keluar"
+
+Format JSON yang wajib dikembalikan:
+{
+  "transcription": "kalimat ucapan lengkap",
+  "items": [
+    {
+      "item": "nama barang / keterangan transaksi",
+      "qty": "jumlah (contoh: 1 paket, 20 porsi)",
+      "type": "masuk" | "keluar",
+      "nominal": angka_integer_murni,
+      "kategori": "Penjualan" | "Bahan" | "Operasional" | "Gaji" | "Lainnya"
+    }
+  ]
+}`;
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
@@ -16,12 +78,11 @@ export async function POST(req: Request) {
     const openaiKey = process.env.OPENAI_API_KEY;
     const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-    // 🏆 PROVIDER 1: GROQ WHISPER (Kecepatan & Akurasi Bahasa Indonesia Tercepat ~0.4 detik)
+    // 🏆 PROVIDER 1: GROQ WHISPER (Ultra-Fast ~0.3 detik)
     if (groqKey) {
       try {
         const groq = new Groq({ apiKey: groqKey });
         
-        // Transcribe audio using Whisper Large v3
         const file = new File([await audioFile.arrayBuffer()], "recording.webm", { type: audioFile.type || "audio/webm" });
         const transcriptionRes = await groq.audio.transcriptions.create({
           file,
@@ -31,42 +92,28 @@ export async function POST(req: Request) {
 
         const rawText = transcriptionRes.text || "";
 
-        // Extract structured JSON with Llama 3.3 70B
         const completion = await groq.chat.completions.create({
           model: "llama-3.3-70b-versatile",
           messages: [
-            {
-              role: "system",
-              content: `Anda adalah AI pakar pencatatan keuangan UMKM Indonesia.
-Tugas Anda: Dari kalimat hasil rekaman suara ucapan pengguna, ekstrak data transaksi ke format JSON persis seperti ini:
-{
-  "transcription": "${rawText.replace(/"/g, '\\"')}",
-  "items": [
-    {
-      "item": "nama barang / transaksi",
-      "qty": "jumlah (contoh: 20 porsi, 1 paket, 10 kg)",
-      "type": "masuk" | "keluar",
-      "nominal": angka_tanpa_titik,
-      "kategori": "Penjualan" | "Bahan" | "Operasional" | "Gaji" | "Lainnya"
-    }
-  ]
-}`
-            },
-            { role: "user", content: rawText }
+            { role: "system", content: SYSTEM_PROMPT_INSTRUCTION },
+            { role: "user", content: `Kalimat suara pengguna: "${rawText}"` }
           ],
           response_format: { type: "json_object" }
         });
 
         const jsonStr = completion.choices[0]?.message?.content;
         if (jsonStr) {
-          return NextResponse.json(JSON.parse(jsonStr));
+          const parsed = JSON.parse(jsonStr);
+          parsed.items = normalizeExtractedItems(rawText, parsed.items || []);
+          parsed.transcription = rawText || parsed.transcription;
+          return NextResponse.json(parsed);
         }
       } catch (groqErr: any) {
         console.warn("Groq Whisper error, falling back:", groqErr.message);
       }
     }
 
-    // 🏆 PROVIDER 2: OPENAI WHISPER-1 + GPT-4o-mini
+    // 🏆 PROVIDER 2: OPENAI WHISPER-1
     if (openaiKey) {
       try {
         const openai = new OpenAI({ apiKey: openaiKey });
@@ -83,37 +130,25 @@ Tugas Anda: Dari kalimat hasil rekaman suara ucapan pengguna, ekstrak data trans
         const gptRes = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [
-            {
-              role: "system",
-              content: `Ekstrak transaksi dari ucapan pengguna ke JSON:
-{
-  "transcription": "${rawText.replace(/"/g, '\\"')}",
-  "items": [
-    {
-      "item": "nama barang",
-      "qty": "1 paket",
-      "type": "masuk" | "keluar",
-      "nominal": 100000,
-      "kategori": "Penjualan" | "Bahan" | "Operasional"
-    }
-  ]
-}`
-            },
-            { role: "user", content: rawText }
+            { role: "system", content: SYSTEM_PROMPT_INSTRUCTION },
+            { role: "user", content: `Kalimat suara pengguna: "${rawText}"` }
           ],
           response_format: { type: "json_object" }
         });
 
         const jsonStr = gptRes.choices[0]?.message?.content;
         if (jsonStr) {
-          return NextResponse.json(JSON.parse(jsonStr));
+          const parsed = JSON.parse(jsonStr);
+          parsed.items = normalizeExtractedItems(rawText, parsed.items || []);
+          parsed.transcription = rawText || parsed.transcription;
+          return NextResponse.json(parsed);
         }
       } catch (oaErr: any) {
         console.warn("OpenAI Whisper error, falling back:", oaErr.message);
       }
     }
 
-    // 🏆 PROVIDER 3: GOOGLE GEMINI 1.5 FLASH (Native Audio Multimodal)
+    // 🏆 PROVIDER 3: GOOGLE GEMINI 1.5 FLASH
     if (geminiKey) {
       try {
         const genAI = new GoogleGenerativeAI(geminiKey);
@@ -123,23 +158,8 @@ Tugas Anda: Dari kalimat hasil rekaman suara ucapan pengguna, ekstrak data trans
         const base64Audio = Buffer.from(arrayBuffer).toString("base64");
         const mimeType = audioFile.type || "audio/webm";
 
-        const prompt = `Anda adalah AI keuangan UMKM Indonesia. Dengarkan audio rekaman suara ucapan ini.
-Transkripsikan ucapan dan ekstrak transaksi ke format JSON saja:
-{
-  "transcription": "kalimat lengkap ucapan",
-  "items": [
-    {
-      "item": "nama barang",
-      "qty": "jumlah",
-      "type": "masuk" atau "keluar",
-      "nominal": angka_tanpa_titik,
-      "kategori": "Penjualan" | "Bahan" | "Operasional" | "Gaji" | "Lainnya"
-    }
-  ]
-}`;
-
         const result = await model.generateContent([
-          prompt,
+          SYSTEM_PROMPT_INSTRUCTION,
           {
             inlineData: {
               data: base64Audio,
@@ -152,7 +172,9 @@ Transkripsikan ucapan dan ekstrak transaksi ke format JSON saja:
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
 
         if (jsonMatch) {
-          return NextResponse.json(JSON.parse(jsonMatch[0]));
+          const parsed = JSON.parse(jsonMatch[0]);
+          parsed.items = normalizeExtractedItems(parsed.transcription || "", parsed.items || []);
+          return NextResponse.json(parsed);
         }
       } catch (geminiError: any) {
         console.warn("Gemini Audio error, using smart fallback:", geminiError.message);
@@ -161,21 +183,14 @@ Transkripsikan ucapan dan ekstrak transaksi ke format JSON saja:
 
     // 🏆 FALLBACK PARSER (Jika API key belum di-set di .env)
     return NextResponse.json({
-      transcription: "Penjualan harian 25 porsi 375 ribu rupiah, dan beli bahan baku 150 ribu.",
+      transcription: "Pemasukan 50 ribu rupiah",
       items: [
         {
-          item: "Penjualan Harian (25 Porsi)",
-          qty: "25 porsi",
-          type: "masuk",
-          nominal: 375000,
-          kategori: "Penjualan",
-        },
-        {
-          item: "Bahan Baku Usaha",
+          item: "Pemasukan Usaha",
           qty: "1 paket",
-          type: "keluar",
-          nominal: 150000,
-          kategori: "Bahan",
+          type: "masuk",
+          nominal: 50000,
+          kategori: "Penjualan",
         },
       ],
     });
