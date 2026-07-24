@@ -205,12 +205,12 @@ export default function AdminInstitutionsPage() {
   return (
     <div className="space-y-8 animate-fade-in-up">
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <div>
           <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Manajemen Institusi</h1>
           <p className="text-sm text-slate-500 mt-1">Kelola data bank, fintech, dan lembaga pemerintah penyedia program KUR</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={fetchInstitutions}
             className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"

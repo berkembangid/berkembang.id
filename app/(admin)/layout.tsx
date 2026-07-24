@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Building2, Handshake, Sliders, BarChart2, History, LogOut, Sparkles, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Users, Building2, Handshake, Sliders, BarChart2, History, LogOut, Sparkles, ShieldCheck, Menu, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 interface NavGroup {
@@ -42,6 +43,7 @@ const NAV_GROUPS: NavGroup[] = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -53,21 +55,57 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   return (
-    <div className="min-h-screen flex bg-[#f5f7fb]">
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#f5f7fb]">
       
+      {/* Mobile Top Navigation Header */}
+      <header className="md:hidden sticky top-0 z-40 bg-[#0a0d24] text-white h-14 px-4 flex items-center justify-between shadow-md border-b border-[#1a1e3f]">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 cursor-pointer"
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+          <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-7 w-auto object-contain brightness-125" />
+        </div>
+        <span className="text-[9px] font-bold text-[#56f9f9] bg-[#56f9f9]/10 px-2.5 py-0.5 rounded-full border border-[#56f9f9]/20 uppercase tracking-widest">
+          Admin Portal
+        </span>
+      </header>
+
+      {/* Mobile Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       {/* Sidebar - Deep brand navy blue */}
-      <aside className="w-64 bg-[#0a0d24] border-r border-[#1a1e3f] flex flex-col fixed h-screen z-30 shadow-xl">
+      <aside className={`fixed top-0 bottom-0 left-0 w-64 bg-[#0a0d24] border-r border-[#1a1e3f] flex flex-col h-screen z-50 shadow-2xl transition-transform duration-300 ease-in-out ${
+        mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+      }`}>
         {/* Brand/Logo Header */}
-        <div className="px-6 py-5 border-b border-[#1a1e3f]">
-          <div className="flex items-center gap-3">
-            <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-8 w-auto object-contain brightness-125" />
-            <span className="text-[9px] font-bold text-[#56f9f9] bg-[#56f9f9]/10 px-2 py-0.5 rounded-full border border-[#56f9f9]/20 uppercase tracking-widest flex-shrink-0">
-              Admin
-            </span>
+        <div className="px-6 py-5 border-b border-[#1a1e3f] flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-8 w-auto object-contain brightness-125" />
+              <span className="text-[9px] font-bold text-[#56f9f9] bg-[#56f9f9]/10 px-2 py-0.5 rounded-full border border-[#56f9f9]/20 uppercase tracking-widest flex-shrink-0">
+                Admin
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1 font-semibold flex items-center gap-1">
+              <Sparkles size={10} className="text-[#56f9f9] animate-pulse" /> Super Admin Control
+            </p>
           </div>
-          <p className="text-[10px] text-slate-400 mt-1 font-semibold flex items-center gap-1">
-            <Sparkles size={10} className="text-[#56f9f9] animate-pulse" /> Super Admin Control
-          </p>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="md:hidden text-slate-400 hover:text-white p-1"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         {/* Admin profile snippet */}
@@ -94,7 +132,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 {group.items.map((item) => {
                   const isActive = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
                   return (
-                    <Link key={item.href} href={item.href}>
+                    <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)}>
                       <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                         isActive
                           ? "bg-gradient-to-r from-[#001b85]/40 to-[#0ea5e9]/10 text-white border-l-4 border-l-[#0ea5e9] shadow-sm"
@@ -125,7 +163,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Main Content Area */}
-      <main className="ml-64 flex-1 min-h-screen p-8 bg-[#f5f7fb]">
+      <main className="md:ml-64 flex-1 min-h-screen p-4 sm:p-6 md:p-8 bg-[#f5f7fb] w-full max-w-full overflow-x-hidden">
         {children}
       </main>
     </div>

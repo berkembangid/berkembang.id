@@ -188,12 +188,12 @@ export default function AdminUMKMPage() {
 
   return (
     <div className="space-y-8 animate-fade-in-up">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <div>
           <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Manajemen UMKM</h1>
           <p className="text-sm text-slate-500 mt-1">Data lengkap dan override skor kesiapan bagi seluruh ekosistem UMKM</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={fetchUMKMFromSupabase}
             className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
