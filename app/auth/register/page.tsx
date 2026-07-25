@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, Mail, AlertCircle, Building2, MapPin, Store, Building, User } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, AlertCircle, Store, Building, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 
@@ -145,10 +145,10 @@ export default function RegisterPage() {
       }
 
       router.push(role === "umkm" ? "/umkm" : "/institusi");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Register catch error:", err);
       let msg = "Terjadi kesalahan pendaftaran.";
-      if (err?.message && err.message !== "{}") msg = err.message;
+      if (err instanceof Error && err.message !== "{}") msg = err.message;
       setError(msg);
       setLoading(false);
     }
@@ -162,26 +162,26 @@ export default function RegisterPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="font-headline text-xl font-bold text-[#141a34]">Daftar Akun</h1>
-          <p className="text-xs text-[#444655] mt-0.5">Langkah {step} dari 2</p>
+          <h1 className="font-headline text-xl font-bold text-[#141a34]">Buat akun Berkembang.id</h1>
+          <p className="text-xs text-[#687086] mt-1">Langkah {step} dari 2 · Isi data yang paling penting dulu</p>
         </div>
         <div className="flex gap-1.5">
           {[1, 2].map((s) => (
-            <div key={s} className={`h-1.5 rounded-full transition-all ${s <= step ? "bg-[#001b85] w-8" : "bg-[#e5e7ff] w-4"}`} />
+            <div key={s} className={`h-1.5 rounded-full transition-all ${s <= step ? "bg-[#02a8d0] w-8" : "bg-[#dfe5eb] w-4"}`} />
           ))}
         </div>
       </div>
 
       {/* Role Tab Selector (Step 1 only) */}
       {step === 1 && (
-        <div className="flex gap-2 mb-5 p-1 bg-[#f3f2ff] rounded-xl">
+        <div className="flex gap-1 mb-6 p-1 bg-[#f5f7fb] border border-[#e7e9ef] rounded-full">
           {(["umkm", "institution"] as const).map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => handleRoleChange(r)}
-              className={`flex-1 text-xs font-bold py-2.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                role === r ? "bg-white text-[#001b85] shadow-sm" : "text-[#444655]"
+              className={`flex-1 text-xs font-bold py-2.5 rounded-full transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                role === r ? "bg-white text-[#001b85] shadow-sm" : "text-[#687086] hover:text-[#141a34]"
               }`}
             >
               {r === "umkm" ? <Store size={13} /> : <Building size={13} />}
@@ -315,7 +315,7 @@ export default function RegisterPage() {
         {step === 2 && (
           <>
             {/* Summary box */}
-            <div className="bg-[#f3f2ff] rounded-xl p-3 text-xs text-[#444655] space-y-0.5 border border-[#e5e7ff]">
+            <div className="bg-[#f2f9fb] rounded-2xl p-4 text-xs text-[#566072] space-y-1 border border-[#d9eef4]">
               <p className="font-bold text-[#141a34] mb-1">Ringkasan {role === "umkm" ? "Usaha" : "Institusi"}:</p>
               {role === "umkm" ? (
                 <>
@@ -381,16 +381,16 @@ export default function RegisterPage() {
           {step === 2 && (
             <button
               type="button" onClick={() => setStep(1)} disabled={loading}
-              className="border border-slate-200 text-slate-600 font-bold px-4 py-3.5 rounded-xl text-sm hover:bg-slate-50 transition-colors cursor-pointer"
+              className="border border-[#d8dce5] text-[#566072] font-bold px-5 py-3.5 rounded-full text-sm hover:bg-[#f5f7fb] transition-colors cursor-pointer"
             >
               ← Kembali
             </button>
           )}
           <button
             type="submit" disabled={loading}
-            className="flex-1 bg-[#001b85] text-white font-bold py-3.5 rounded-xl text-sm hover:bg-[#0e32c2] transition-colors disabled:bg-[#001b85]/50 flex items-center justify-center cursor-pointer disabled:cursor-not-allowed shadow-sm"
+            className="flex-1 bg-[#001b85] text-white font-bold py-3.5 rounded-full text-sm hover:bg-[#08299f] transition-colors disabled:bg-[#001b85]/50 flex items-center justify-center cursor-pointer disabled:cursor-not-allowed shadow-[0_12px_28px_rgba(0,27,133,.16)]"
           >
-            {loading ? "Memproses..." : step === 1 ? "Lanjut →" : `Daftar ${role === "umkm" ? "UMKM" : "Institusi"} 🚀`}
+            {loading ? "Memproses..." : step === 1 ? "Lanjut →" : `Daftar sebagai ${role === "umkm" ? "UMKM" : "Institusi"}`}
           </button>
         </div>
       </form>

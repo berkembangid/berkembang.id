@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, AlertCircle, LogIn } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -13,7 +12,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +64,7 @@ export default function LoginPage() {
         window.location.href = dest;
         return;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Login catch error:", err);
       setError("Terjadi kesalahan koneksi saat masuk.");
       setLoading(false);
@@ -75,11 +73,11 @@ export default function LoginPage() {
 
   return (
     <>
-      <h1 className="font-headline text-2xl font-bold text-[#141a34] mb-1">Selamat Datang!</h1>
-      <p className="text-sm text-[#444655] mb-6">Masuk ke akun Anda</p>
+      <h1 className="font-headline text-2xl font-bold text-[#141a34] mb-2">Masuk ke Berkembang.id</h1>
+      <p className="text-sm leading-6 text-[#687086] mb-7">Lanjutkan pencatatan dan lihat perkembangan usaha Anda.</p>
 
       {/* Role Selector Tabs */}
-      <div className="flex gap-2 mb-6 p-1 bg-[#f3f2ff] rounded-xl">
+      <div className="flex gap-1 mb-7 p-1 bg-[#f5f7fb] border border-[#e7e9ef] rounded-full">
         {(["umkm", "institution", "admin"] as const).map((r) => (
           <button
             key={r}
@@ -88,8 +86,8 @@ export default function LoginPage() {
               setRole(r);
               setError("");
             }}
-            className={`flex-1 text-xs font-bold py-2.5 rounded-lg transition-colors capitalize cursor-pointer ${
-              role === r ? "bg-white text-[#001b85] shadow-sm" : "text-[#444655]"
+            className={`flex-1 text-xs font-bold py-2.5 rounded-full transition-colors capitalize cursor-pointer ${
+              role === r ? "bg-white text-[#001b85] shadow-sm" : "text-[#687086] hover:text-[#141a34]"
             }`}
           >
             {r === "umkm" ? "UMKM" : r === "institution" ? "Institusi" : "Admin"}
@@ -106,15 +104,16 @@ export default function LoginPage() {
 
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
-          <label className="block text-xs font-bold text-[#444655] mb-1.5">Email</label>
+          <label htmlFor="login-email" className="block text-xs font-bold text-[#444655] mb-1.5">Email</label>
           <div className="relative">
             <input
+              id="login-email"
               type="email"
               value={email}
               disabled={loading}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="email@contoh.com"
-              className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none transition-colors disabled:bg-slate-50 disabled:text-slate-400"
+              className="w-full px-4 py-3 pl-10 rounded-2xl border border-[#d8dce5] text-sm transition-colors disabled:bg-slate-50 disabled:text-slate-400"
               required
             />
             <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -122,22 +121,23 @@ export default function LoginPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-[#444655] mb-1.5">Kata Sandi</label>
+          <label htmlFor="login-password" className="block text-xs font-bold text-[#444655] mb-1.5">Kata Sandi</label>
           <div className="relative">
             <input
+              id="login-password"
               type={showPassword ? "text" : "password"}
               value={password}
               disabled={loading}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 pl-10 pr-11 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none transition-colors disabled:bg-slate-50 disabled:text-slate-400"
+              placeholder="Minimal 8 karakter"
+              className="w-full px-4 py-3 pl-10 pr-12 rounded-2xl border border-[#d8dce5] text-sm transition-colors disabled:bg-slate-50 disabled:text-slate-400"
               required
             />
             <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#001b85] transition-colors p-2 cursor-pointer rounded-full"
               aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
             >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -148,7 +148,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="group relative w-full bg-gradient-to-r from-[#001b85] via-[#0b29a8] to-[#1a38bc] hover:from-[#082088] hover:to-[#2244d8] text-white font-bold py-3.5 rounded-xl text-sm transition-all duration-300 mt-2 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed shadow-md hover:shadow-lg hover:shadow-[#001b85]/30 active:scale-[0.99] overflow-hidden"
+          className="group relative w-full bg-[#001b85] hover:bg-[#08299f] text-white font-bold py-3.5 rounded-full text-sm transition-all duration-200 mt-3 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed shadow-[0_12px_28px_rgba(0,27,133,.18)] active:scale-[0.99] overflow-hidden"
         >
           {loading ? (
             <span className="inline-flex items-center gap-2">
@@ -158,10 +158,9 @@ export default function LoginPage() {
           ) : (
             <>
               <span>Masuk</span>
-              <LogIn size={18} className="transition-transform duration-300 group-hover:translate-x-1" />
+              <LogIn size={18} className="text-[#72d9ef] transition-transform duration-300 group-hover:translate-x-1" />
             </>
           )}
-          <span className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out pointer-events-none" />
         </button>
       </form>
 
