@@ -9,13 +9,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "BERKEMBANG.ID — Catat Untungmu, Naik Kelas",
+  title: "BERKEMBANG.ID — Catat Lewat Suara, Tumbuh dengan Data",
   description:
-    "Platform pendamping UMKM berbasis AI. Catat transaksi dengan suara, pantau untung harian, dan siapkan diri untuk naik kelas pembiayaan.",
+    "Platform pendamping UMKM berbasis AI. Catat transaksi dengan suara, pahami kondisi usaha, dan bangun kesiapan untuk tumbuh.",
   manifest: "/manifest.json",
   applicationName: "BERKEMBANG.ID",
   keywords: ["UMKM", "catat keuangan", "naik kelas", "pembiayaan", "AI"],
-  authors: [{ name: "Tim P0160 — BERKEMBANG.ID" }],
+  authors: [{ name: "BERKEMBANG.ID" }],
   icons: {
     icon: "/logo/favicon.png",
     shortcut: "/logo/favicon.png",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "BERKEMBANG.ID",
-    description: "Platform Generatif AI Pendamping Journey UMKM Mikro Naik Kelas",
+    description: "Platform AI pendamping usaha untuk UMKM Indonesia.",
     type: "website",
     locale: "id_ID",
   },
@@ -32,21 +32,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: "#001b85",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="id" className={`${inter.variable} h-full`}>
-      <body className="min-h-full bg-[#fbf8ff] text-[#141a34] antialiased">
-        {children}
-      </body>
+      <body className="min-h-full bg-[#fbf8ff] text-[#141a34] antialiased">{children}</body>
     </html>
   );
 }
