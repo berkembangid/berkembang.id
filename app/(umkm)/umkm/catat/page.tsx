@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Mic, RefreshCw, Trash2, Edit2, Check, X, Sparkles, Send, Type, FileText, ChevronRight, CheckCircle2, Square, Volume2, PenLine, RotateCcw } from "lucide-react";
+import {
+  ArrowLeft, Mic, RefreshCw, Trash2, Edit2, Check, X,
+  Sparkles, Type, Square, Volume2, PenLine, RotateCcw,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
+// ───────── TYPES ─────────
 type Step = "idle" | "recording" | "processing" | "preview";
 
 interface ExtractedItem {
@@ -17,21 +21,29 @@ interface ExtractedItem {
   kategori: string;
 }
 
+// ───────── CONSTANTS ─────────
 const SUGGESTIONS = [
   { label: "Beli cabe & ayam 150rb", text: "Beli cabe dan ayam segar di pasar habis 150 ribu rupiah tadi pagi." },
   { label: "Jual nasi box 20 porsi 300rb", text: "Ada pesanan nasi box 20 porsi lunas dibayar 300 ribu rupiah." },
-  { label: "Bayar token listrik kios 100rb", text: "Bayar token listrik kios usaha 100 ribu rupiah." }
+  { label: "Bayar token listrik kios 100rb", text: "Bayar token listrik kios usaha 100 ribu rupiah." },
 ];
 
-// ───────── SMART INDONESIAN FINANCIAL NLP PARSER ─────────
+const WAVE_BARS = [40, 80, 60, 100, 75, 45, 90, 65, 30];
+const CAPTION_SKELETON = [1, 2, 3, 4, 5];
+
+// ───────── LOCAL NLP PARSER ─────────
 function parseIndonesianTransactionText(input: string): ExtractedItem[] {
   if (!input.trim()) return [];
 
-  const sentences = input.split(/(?:\.|\n|dan|, lalu|, kemudian|sekalian)/i).map((s) => s.trim()).filter(Boolean);
+  const sentences = input
+    .split(/(?:\.|\n|dan|, lalu|, kemudian|sekalian)/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   const results: ExtractedItem[] = [];
   let nextId = 1;
 
-  sentences.forEach((sentence) => {
+  for (const sentence of sentences) {
     let nominal = 0;
     const rbMatch = sentence.match(/(\d+(?:[\.,]\d+)?)\s*(?:rb|ribu|k)\b/i);
     const jutaMatch = sentence.match(/(\d+(?:[\.,]\d+)?)\s*(?:jt|juta)\b/i);
@@ -40,27 +52,17 @@ function parseIndonesianTransactionText(input: string): ExtractedItem[] {
     if (rbMatch) {
       nominal = Math.round(parseFloat(rbMatch[1].replace(",", ".")) * 1000);
     } else if (jutaMatch) {
-      nominal = Math.round(parseFloat(jutaMatch[1].replace(",", ".")) * 1000000);
+      nominal = Math.round(parseFloat(jutaMatch[1].replace(",", ".")) * 1_000_000);
     } else if (rawNumberMatch) {
       nominal = parseInt(rawNumberMatch[1].replace(/\./g, ""), 10);
     }
 
-    if (nominal <= 0) return;
+    if (nominal <= 0) continue;
 
     const lower = sentence.toLowerCase();
     const isMasuk = /(jual|laku|dapat|terjual|omzet|pemasukan|terima|pesanan|penjualan|masuk|pendapatan|bayaran)/i.test(lower);
     const isKeluar = /(beli|bayar|belanja|sewa|listrik|pengeluaran|gaji|ongkir|modal|habis|keluar)/i.test(lower);
-
-    let type: "masuk" | "keluar" = "masuk";
-    if (isMasuk && !isKeluar) {
-      type = "masuk";
-    } else if (isKeluar && !isMasuk) {
-      type = "keluar";
-    } else if (isKeluar) {
-      type = "keluar";
-    } else {
-      type = "masuk";
-    }
+    const type: "masuk" | "keluar" = isKeluar && !isMasuk ? "keluar" : isMasuk ? "masuk" : "masuk";
 
     const qtyMatch = sentence.match(/(\d+)\s*(porsi|paket|karung|kg|liter|tabung|unit|pcs|botol|biji|pasang|lembar)/i);
     const qty = qtyMatch ? `${qtyMatch[1]} ${qtyMatch[2]}` : "1 paket";
@@ -80,19 +82,33 @@ function parseIndonesianTransactionText(input: string): ExtractedItem[] {
       itemTitle = type === "masuk" ? "Pemasukan Usaha" : "Pengeluaran Operasional";
     }
 
-    results.push({
-      id: nextId++,
-      item: itemTitle,
-      qty,
-      type,
-      nominal,
-      kategori,
-    });
-  });
+    results.push({ id: nextId++, item: itemTitle, qty, type, nominal, kategori });
+  }
 
   return results;
 }
 
+// ───────── HELPER: map raw API items to ExtractedItem[] ─────────
+function formatAIItems(rawItems: any[]): ExtractedItem[] {
+  return rawItems.map((it, idx) => ({
+    id: idx + 1,
+    item: it.item || "Penjualan Usaha",
+    qty: it.qty || "1 paket",
+    type: it.type === "keluar" ? "keluar" : "masuk",
+    nominal: Number(it.nominal) || 100_000,
+    kategori: it.kategori || (it.type === "keluar" ? "Bahan" : "Penjualan"),
+  }));
+}
+
+// ───────── HELPER: fallback parse when API returns no items ─────────
+function fallbackParse(text: string): ExtractedItem[] {
+  const parsed = parseIndonesianTransactionText(text);
+  return parsed.length > 0
+    ? parsed
+    : [{ id: 1, item: text.slice(0, 35) || "Penjualan Harian", qty: "1 paket", type: "masuk", nominal: 150_000, kategori: "Penjualan" }];
+}
+
+// ─────────────────────────────────────────────────────────────────
 export default function CatatPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("idle");
@@ -108,150 +124,107 @@ export default function CatatPage() {
   const [saving, setSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isListening, setIsListening] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
-  const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const timerIntervalRef = useRef<any>(null);
-  const transcriptionRef = useRef<string>("");
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // ── Load user once ──────────────────────────────────────────────
   useEffect(() => {
-    async function loadUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUser(user);
-    }
-    loadUser();
-
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        try {
-          mediaRecorderRef.current.stop();
-        } catch (e) {}
+      const mr = mediaRecorderRef.current;
+      if (mr && mr.state !== "inactive") {
+        try { mr.stop(); } catch (_) {}
       }
     };
   }, []);
 
-  // HTML5 MediaRecorder Audio Recording (Cross-browser, 100% Reliable)
-  const startMediaRecording = async () => {
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert("Mikrofon tidak didukung di browser ini. Silakan gunakan tab Tulis Teks AI.");
-        return;
-      }
+  // ── Shared: apply AI/API response to state ──────────────────────
+  const applyCaption = useCallback((text: string) => {
+    setTranscription(text);
+    setEditableCaption(text);
+  }, []);
 
+  // ── Recording ───────────────────────────────────────────────────
+  const startMediaRecording = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      alert("Mikrofon tidak didukung di browser ini. Silakan gunakan tab Tulis Teks AI.");
+      return;
+    }
+    try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
 
-      const options = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? { mimeType: "audio/webm;codecs=opus" }
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/mp4")
-        ? { mimeType: "audio/mp4" }
+        ? "audio/mp4"
         : undefined;
 
-      const mediaRecorder = new MediaRecorder(stream, options);
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+      mediaRecorder.ondataavailable = ({ data }) => {
+        if (data && data.size > 0) audioChunksRef.current.push(data);
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: mediaRecorder.mimeType || "audio/webm",
-        });
-
-        // Stop all mic hardware tracks
-        stream.getTracks().forEach((track) => track.stop());
-
-        // Process audio via AI API Route
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || "audio/webm" });
+        stream.getTracks().forEach((t) => t.stop());
         await processAudioWithAI(audioBlob);
       };
 
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(200);
-
       setStep("recording");
-      setIsListening(true);
       setRecordSeconds(0);
 
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = setInterval(() => {
-        setRecordSeconds((prev) => prev + 1);
-      }, 1000);
+      timerIntervalRef.current = setInterval(() => setRecordSeconds((p) => p + 1), 1000);
     } catch (err: any) {
       console.error("Microphone access error:", err);
       alert("Gagal mengakses mikrofon. Pastikan Anda memberikan izin akses mikrofon di browser.");
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const stopMediaRecording = () => {
-    setIsListening(false);
+  const stopMediaRecording = useCallback(() => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch (e) {}
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") {
+      try { mr.stop(); } catch (_) {}
     }
-  };
+  }, []);
 
-  // Process audio Blob using AI API route
+  // ── Process audio via AI ────────────────────────────────────────
   const processAudioWithAI = async (blob: Blob) => {
     setStep("processing");
-
     try {
       const formData = new FormData();
       formData.append("audio", blob, "recording.webm");
 
-      const res = await fetch("/api/ai/transcribe", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await fetch("/api/ai/transcribe", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("API Route error");
 
-      if (res.ok) {
-        const data = await res.json();
-        const text = data.transcription || "Penjualan harian 25 porsi 375 ribu rupiah, dan beli bahan baku 150 ribu.";
-        setTranscription(text);
-        setEditableCaption(text);
-        transcriptionRef.current = text;
-
-        if (data.items && Array.isArray(data.items) && data.items.length > 0) {
-          const formattedItems: ExtractedItem[] = data.items.map((it: any, idx: number) => ({
-            id: idx + 1,
-            item: it.item || "Penjualan Usaha",
-            qty: it.qty || "1 paket",
-            type: it.type === "keluar" ? "keluar" : "masuk",
-            nominal: Number(it.nominal) || 100000,
-            kategori: it.kategori || (it.type === "keluar" ? "Bahan" : "Penjualan"),
-          }));
-          setItems(formattedItems);
-        } else {
-          const parsed = parseIndonesianTransactionText(text);
-          setItems(parsed.length > 0 ? parsed : [
-            { id: 1, item: text.slice(0, 35) || "Penjualan Harian", qty: "1 paket", type: "masuk", nominal: 150000, kategori: "Penjualan" }
-          ]);
-        }
-      } else {
-        throw new Error("API Route error");
-      }
+      const data = await res.json();
+      const text = data.transcription || "Penjualan harian 25 porsi 375 ribu rupiah, dan beli bahan baku 150 ribu.";
+      applyCaption(text);
+      setItems(data.items?.length > 0 ? formatAIItems(data.items) : fallbackParse(text));
     } catch (e) {
-      console.warn("AI Audio API processing fallback triggered:", e);
+      console.warn("AI Audio API fallback triggered:", e);
       const fallbackText = "Penjualan harian 25 porsi 375 ribu rupiah, dan beli bahan 150 ribu.";
-      setTranscription(fallbackText);
-      setEditableCaption(fallbackText);
-      const parsed = parseIndonesianTransactionText(fallbackText);
-      setItems(parsed);
+      applyCaption(fallbackText);
+      setItems(parseIndonesianTransactionText(fallbackText));
     } finally {
       setStep("preview");
       setIsEditingCaption(false);
     }
   };
 
-  // Re-process items from edited caption text
+  // ── Re-process from edited caption ─────────────────────────────
   const reprocessFromCaption = async () => {
     if (!editableCaption.trim()) return;
     setReprocessing(true);
@@ -259,102 +232,75 @@ export default function CatatPage() {
     setTranscription(editableCaption);
 
     try {
-      // Try sending edited text to AI via a text-based LLM call
       const res = await fetch("/api/ai/transcribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: editableCaption }),
       });
+      if (!res.ok) throw new Error("API error");
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.items && Array.isArray(data.items) && data.items.length > 0) {
-          const formattedItems: ExtractedItem[] = data.items.map((it: any, idx: number) => ({
-            id: idx + 1,
-            item: it.item || "Penjualan Usaha",
-            qty: it.qty || "1 paket",
-            type: it.type === "keluar" ? "keluar" : "masuk",
-            nominal: Number(it.nominal) || 100000,
-            kategori: it.kategori || (it.type === "keluar" ? "Bahan" : "Penjualan"),
-          }));
-          setItems(formattedItems);
-        } else {
-          throw new Error("No items from API");
-        }
+      const data = await res.json();
+      if (data.items?.length > 0) {
+        setItems(formatAIItems(data.items));
       } else {
-        throw new Error("API error");
+        throw new Error("No items from API");
       }
     } catch {
-      // Fallback: use local NLP parser
-      const parsed = parseIndonesianTransactionText(editableCaption);
-      setItems(parsed.length > 0 ? parsed : [
-        { id: 1, item: editableCaption.slice(0, 35) || "Transaksi", qty: "1 paket", type: "masuk", nominal: 100000, kategori: "Penjualan" }
-      ]);
+      setItems(fallbackParse(editableCaption));
     } finally {
       setReprocessing(false);
     }
   };
 
-  // Process typed text
-  const handleProcessTypedText = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!typedText.trim()) return;
-
+  // ── Typed text / suggestion ─────────────────────────────────────
+  const processText = useCallback((text: string) => {
     setStep("processing");
-    setTranscription(typedText);
-    setEditableCaption(typedText);
-
+    applyCaption(text);
     setTimeout(() => {
-      const parsed = parseIndonesianTransactionText(typedText);
-      if (parsed.length > 0) {
-        setItems(parsed);
-      } else {
-        setItems([
-          { id: 1, item: typedText.slice(0, 30), qty: "1 paket", type: "masuk", nominal: 100000, kategori: "Penjualan" }
-        ]);
-      }
+      const parsed = parseIndonesianTransactionText(text);
+      setItems(
+        parsed.length > 0
+          ? parsed
+          : [{ id: 1, item: text.slice(0, 30), qty: "1 paket", type: "masuk", nominal: 100_000, kategori: "Penjualan" }]
+      );
       setStep("preview");
       setIsEditingCaption(false);
     }, 800);
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleSuggestionClick = (sugText: string) => {
-    setTypedText(sugText);
-    setStep("processing");
-    setTranscription(sugText);
-    setEditableCaption(sugText);
+  const handleProcessTypedText = useCallback(
+    (e?: React.FormEvent) => { e?.preventDefault(); if (typedText.trim()) processText(typedText); },
+    [typedText, processText]
+  );
 
-    setTimeout(() => {
-      const parsed = parseIndonesianTransactionText(sugText);
-      setItems(parsed);
-      setStep("preview");
-      setIsEditingCaption(false);
-    }, 800);
-  };
+  const handleSuggestionClick = useCallback(
+    (text: string) => { setTypedText(text); processText(text); },
+    [processText]
+  );
 
+  // ── Save ────────────────────────────────────────────────────────
   const handleConfirmSave = async () => {
     setSaving(true);
     const todayStr = new Date().toISOString().split("T")[0];
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const activeUserId = user?.id || currentUser?.id;
+      const activeUserId = user?.id ?? currentUser?.id;
 
       if (activeUserId && items.length > 0) {
-        const rowsToInsert = items.map((it) => ({
-          user_id: activeUserId,
-          item: it.item,
-          qty: it.qty || "1 barang",
-          type: it.type,
-          nominal: it.nominal,
-          kategori: it.kategori || "Umum",
-          tanggal: todayStr,
-        }));
-
-        const { error } = await supabase.from("transactions").insert(rowsToInsert);
-        if (error) {
-          console.warn("Save transactions to Supabase error:", error.message);
-        }
+        const { error } = await supabase.from("transactions").insert(
+          items.map((it) => ({
+            user_id: activeUserId,
+            item: it.item,
+            qty: it.qty || "1 barang",
+            type: it.type,
+            nominal: it.nominal,
+            kategori: it.kategori || "Umum",
+            tanggal: todayStr,
+          }))
+        );
+        if (error) console.warn("Supabase insert error:", error.message);
       }
     } catch (err) {
       console.error("Error saving transactions:", err);
@@ -366,116 +312,97 @@ export default function CatatPage() {
     setStep("idle");
     setItems([]);
     setTranscription("");
+    setEditableCaption("");
     setTypedText("");
 
-    setTimeout(() => {
-      setToastMessage("");
-      router.push("/umkm/laporan");
-    }, 1200);
+    setTimeout(() => { setToastMessage(""); router.push("/umkm/laporan"); }, 1200);
   };
 
-  const handleDeleteItem = (id: number) => {
-    setItems(items.filter(item => item.id !== id));
-  };
+  // ── Item editing ────────────────────────────────────────────────
+  const handleDeleteItem = useCallback((id: number) => setItems((prev) => prev.filter((i) => i.id !== id)), []);
 
-  const startEditing = (item: ExtractedItem) => {
+  const startEditing = useCallback((item: ExtractedItem) => {
     setEditingId(item.id);
-    setEditFields({
-      item: item.item,
-      qty: item.qty,
-      nominal: item.nominal
-    });
-  };
+    setEditFields({ item: item.item, qty: item.qty, nominal: item.nominal });
+  }, []);
 
-  const saveEditing = (id: number) => {
-    setItems(items.map(item => {
-      if (item.id === id) {
-        return {
-          ...item,
-          item: editFields.item,
-          qty: editFields.qty,
-          nominal: Number(editFields.nominal) || 0
-        };
-      }
-      return item;
-    }));
+  const saveEditing = useCallback((id: number) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, item: editFields.item, qty: editFields.qty, nominal: Number(editFields.nominal) || 0 }
+          : item
+      )
+    );
     setEditingId(null);
-  };
+  }, [editFields]);
 
-  const totalMasuk = items.filter(i => i.type === "masuk").reduce((acc, curr) => acc + curr.nominal, 0);
-  const totalKeluar = items.filter(i => i.type === "keluar").reduce((acc, curr) => acc + curr.nominal, 0);
+  // ── Computed totals (memoized) ──────────────────────────────────
+  const { totalMasuk, totalKeluar } = useMemo(() => ({
+    totalMasuk: items.filter((i) => i.type === "masuk").reduce((s, i) => s + i.nominal, 0),
+    totalKeluar: items.filter((i) => i.type === "keluar").reduce((s, i) => s + i.nominal, 0),
+  }), [items]);
 
-  const formatSeconds = (sec: number) => {
-    const m = Math.floor(sec / 60).toString().padStart(2, "0");
-    const s = (sec % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  };
+  const formatSeconds = (sec: number) =>
+    `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
 
+  // ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Top Header - Mobile only */}
+      {/* Mobile Header */}
       <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-5 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30">
         <Link href="/umkm">
           <button className="flex items-center gap-1.5 text-xs font-bold text-[#001b85]">
             <ArrowLeft size={16} /> Beranda
           </button>
         </Link>
-        <span className="text-xs font-bold text-[#141a34]">Pencatatan AI Suara & Teks</span>
+        <span className="text-xs font-bold text-[#141a34]">Pencatatan AI Suara &amp; Teks</span>
       </header>
 
       {toastMessage && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in">
-          <span>{toastMessage}</span>
+          {toastMessage}
         </div>
       )}
 
       <main className="px-5 md:px-0 py-6 space-y-6 pb-28 md:pb-8 max-w-4xl mx-auto">
-        {/* Title */}
-        <div className="hidden md:flex justify-between items-center mb-2">
-          <div>
-            <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#141a34]">Pencatatan AI Suara & Teks</h1>
-            <p className="text-xs text-[#444655] mt-1">Ucapkan atau ketik transaksi harian Anda, AI akan mengekstrak data keuangan secara otomatis.</p>
-          </div>
+        {/* Desktop Title */}
+        <div className="hidden md:block mb-2">
+          <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#141a34]">Pencatatan AI Suara &amp; Teks</h1>
+          <p className="text-xs text-[#444655] mt-1">Ucapkan atau ketik transaksi harian Anda, AI akan mengekstrak data keuangan secara otomatis.</p>
         </div>
 
-        {/* Step: IDLE */}
+        {/* ── IDLE ───────────────────────────────────────────────── */}
         {step === "idle" && (
           <div className="space-y-6">
-            {/* Input Mode Selector Tabs */}
+            {/* Mode Tabs */}
             <div className="flex bg-[#ececff] p-1.5 rounded-2xl max-w-sm mx-auto">
-              <button
-                type="button"
-                onClick={() => setInputMode("voice")}
-                className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-xl transition-all cursor-pointer ${
-                  inputMode === "voice" ? "bg-[#001b85] text-white shadow-sm" : "text-[#444655] hover:text-[#001b85]"
-                }`}
-              >
-                <Mic size={16} /> Bicara Suara AI
-              </button>
-              <button
-                type="button"
-                onClick={() => setInputMode("text")}
-                className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-xl transition-all cursor-pointer ${
-                  inputMode === "text" ? "bg-[#001b85] text-white shadow-sm" : "text-[#444655] hover:text-[#001b85]"
-                }`}
-              >
-                <Type size={16} /> Tulis Teks AI
-              </button>
+              {(["voice", "text"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setInputMode(mode)}
+                  className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-xl transition-all cursor-pointer ${
+                    inputMode === mode ? "bg-[#001b85] text-white shadow-sm" : "text-[#444655] hover:text-[#001b85]"
+                  }`}
+                >
+                  {mode === "voice" ? <><Mic size={16} /> Bicara Suara AI</> : <><Type size={16} /> Tulis Teks AI</>}
+                </button>
+              ))}
             </div>
 
-            {/* Mode 1: VOICE RECORDING BOX (HTML5 MediaRecorder + AI Transcribe) */}
+            {/* Voice Box */}
             {inputMode === "voice" && (
               <div className="bg-white rounded-3xl p-8 border border-[#e5e7ff] shadow-card text-center space-y-6 animate-fade-in">
                 <div className="w-16 h-16 rounded-2xl bg-[#ececff] flex items-center justify-center mx-auto text-[#001b85]">
                   <Mic size={32} />
                 </div>
                 <div>
-                  <h2 className="font-headline text-xl font-bold text-[#141a34]">Tekan & Bicara Transaksi Anda</h2>
+                  <h2 className="font-headline text-xl font-bold text-[#141a34]">Tekan &amp; Bicara Transaksi Anda</h2>
                   <p className="text-xs text-[#444655] mt-1 max-w-md mx-auto">
-                    Bicarakan pemasukan atau pengeluaranmu secara alami. Contoh: "Laku 15 porsi ayam 300 ribu, beli minyak 50 ribu"
+                    Bicarakan pemasukan atau pengeluaranmu secara alami. Contoh: &quot;Laku 15 porsi ayam 300 ribu, beli minyak 50 ribu&quot;
                   </p>
                 </div>
-
                 <button
                   type="button"
                   onClick={startMediaRecording}
@@ -487,14 +414,13 @@ export default function CatatPage() {
               </div>
             )}
 
-            {/* Mode 2: TEXT INPUT BOX */}
+            {/* Text Box */}
             {inputMode === "text" && (
               <form onSubmit={handleProcessTypedText} className="bg-white rounded-3xl p-6 border border-[#e5e7ff] shadow-card space-y-4 animate-fade-in">
                 <div className="flex items-center gap-2">
                   <Sparkles size={18} className="text-[#001b85]" />
                   <h2 className="font-headline text-base font-bold text-[#141a34]">Tuliskan Transaksi Kalimat Bebas</h2>
                 </div>
-
                 <textarea
                   rows={4}
                   value={typedText}
@@ -503,7 +429,6 @@ export default function CatatPage() {
                   className="w-full p-4 rounded-2xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none"
                   required
                 />
-
                 <div className="flex justify-end">
                   <button
                     type="submit"
@@ -522,9 +447,9 @@ export default function CatatPage() {
                 <Sparkles size={14} className="text-[#001b85]" /> Contoh Kalimat Langsung Coba
               </h3>
               <div className="space-y-2">
-                {SUGGESTIONS.map((sug, i) => (
+                {SUGGESTIONS.map((sug) => (
                   <button
-                    key={i}
+                    key={sug.label}
                     type="button"
                     onClick={() => handleSuggestionClick(sug.text)}
                     className="w-full text-left p-3 rounded-xl bg-[#f3f2ff] hover:bg-[#ececff] border border-[#e5e7ff] transition-colors flex items-center justify-between text-xs font-semibold text-[#141a34] cursor-pointer"
@@ -538,11 +463,11 @@ export default function CatatPage() {
           </div>
         )}
 
-        {/* Step: RECORDING */}
+        {/* ── RECORDING ──────────────────────────────────────────── */}
         {step === "recording" && (
           <div className="bg-white rounded-3xl p-8 border border-red-200 shadow-card text-center space-y-5 animate-fade-in">
             <div className="flex flex-col items-center gap-3">
-              <div className="w-20 h-20 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto border-4 border-red-500 animate-pulse">
+              <div className="w-20 h-20 rounded-full bg-red-100 text-red-600 flex items-center justify-center border-4 border-red-500 animate-pulse">
                 <Mic size={36} />
               </div>
               <div>
@@ -555,27 +480,24 @@ export default function CatatPage() {
               </div>
             </div>
 
-            {/* Audio Live Wave Spectrum Animation */}
+            {/* Wave bars */}
             <div className="flex items-center justify-center gap-1.5 h-10">
-              {[40, 80, 60, 100, 75, 45, 90, 65, 30].map((h, idx) => (
+              {WAVE_BARS.map((h, idx) => (
                 <div
                   key={idx}
                   className="w-1.5 bg-red-500 rounded-full animate-bounce"
-                  style={{
-                    height: `${h}%`,
-                    animationDelay: `${idx * 0.1}s`,
-                  }}
+                  style={{ height: `${h}%`, animationDelay: `${idx * 0.1}s` }}
                 />
               ))}
             </div>
 
-            {/* Live Caption Area (placeholder while recording) */}
+            {/* Caption placeholder */}
             <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-left">
               <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                 <Volume2 size={11} /> Caption Suara (muncul setelah selesai)
               </p>
               <div className="flex items-center gap-2">
-                {[1, 2, 3, 4, 5].map((i) => (
+                {CAPTION_SKELETON.map((i) => (
                   <div
                     key={i}
                     className="h-1.5 rounded-full bg-red-300 animate-pulse"
@@ -591,21 +513,21 @@ export default function CatatPage() {
               onClick={stopMediaRecording}
               className="bg-red-600 text-white text-xs font-bold px-8 py-3.5 rounded-xl hover:bg-red-700 transition-colors cursor-pointer shadow-md flex items-center justify-center gap-2 mx-auto"
             >
-              <Square size={14} className="fill-current" /> Selesai & Ekstrak AI
+              <Square size={14} className="fill-current" /> Selesai &amp; Ekstrak AI
             </button>
           </div>
         )}
 
-        {/* Step: PROCESSING */}
+        {/* ── PROCESSING ─────────────────────────────────────────── */}
         {step === "processing" && (
           <div className="bg-white rounded-3xl p-10 border border-[#e5e7ff] shadow-card text-center space-y-4 animate-fade-in">
             <RefreshCw size={36} className="animate-spin text-[#001b85] mx-auto" />
-            <h2 className="font-headline text-lg font-bold text-[#141a34]">AI Sedang Memproses & Mengonversi Suara Anda...</h2>
+            <h2 className="font-headline text-lg font-bold text-[#141a34]">AI Sedang Memproses &amp; Mengonversi Suara Anda...</h2>
             <p className="text-xs text-[#444655]">Mengekstrak ucapan, nominal, dan kategori transaksi keuangan...</p>
           </div>
         )}
 
-        {/* Step: PREVIEW */}
+        {/* ── PREVIEW ────────────────────────────────────────────── */}
         {step === "preview" && (
           <div className="space-y-5 animate-fade-in">
             {/* Editable Caption Box */}
@@ -617,10 +539,7 @@ export default function CatatPage() {
                 {!isEditingCaption && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsEditingCaption(true);
-                      setTimeout(() => captionTextareaRef.current?.focus(), 50);
-                    }}
+                    onClick={() => { setIsEditingCaption(true); setTimeout(() => captionTextareaRef.current?.focus(), 50); }}
                     className="flex items-center gap-1 text-[10px] font-bold text-[#001b85] bg-white border border-[#bac3ff] px-2 py-1 rounded-lg hover:bg-[#ececff] transition-colors cursor-pointer"
                   >
                     <PenLine size={11} /> Edit Caption
@@ -659,11 +578,11 @@ export default function CatatPage() {
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-[#141a34] font-medium leading-relaxed">"{editableCaption || transcription}"</p>
+                <p className="text-xs text-[#141a34] font-medium leading-relaxed">&quot;{editableCaption || transcription}&quot;</p>
               )}
             </div>
 
-            {/* Extracted items card */}
+            {/* Extracted items */}
             <div className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-sm text-[#141a34]">Item Teridentifikasi ({items.length})</h3>
@@ -677,7 +596,6 @@ export default function CatatPage() {
                 </div>
               </div>
 
-              {/* Items List */}
               <div className="space-y-3">
                 {items.map((it) => (
                   <div key={it.id} className="p-3.5 rounded-xl border border-[#e5e7ff] bg-[#fbf8ff] flex items-center justify-between gap-3">
@@ -685,19 +603,19 @@ export default function CatatPage() {
                       <div className="flex-1 space-y-2">
                         <input
                           value={editFields.item}
-                          onChange={(e) => setEditFields({ ...editFields, item: e.target.value })}
+                          onChange={(e) => setEditFields((p) => ({ ...p, item: e.target.value }))}
                           className="w-full text-xs p-2 rounded border border-[#001b85]"
                         />
                         <div className="flex gap-2">
                           <input
                             value={editFields.qty}
-                            onChange={(e) => setEditFields({ ...editFields, qty: e.target.value })}
+                            onChange={(e) => setEditFields((p) => ({ ...p, qty: e.target.value }))}
                             className="w-1/2 text-xs p-2 rounded border"
                           />
                           <input
                             type="number"
                             value={editFields.nominal}
-                            onChange={(e) => setEditFields({ ...editFields, nominal: Number(e.target.value) })}
+                            onChange={(e) => setEditFields((p) => ({ ...p, nominal: Number(e.target.value) }))}
                             className="w-1/2 text-xs p-2 rounded border"
                           />
                         </div>
@@ -725,11 +643,10 @@ export default function CatatPage() {
                 ))}
               </div>
 
-              {/* Action buttons */}
               <div className="flex gap-2 pt-3">
                 <button
                   type="button"
-                  onClick={() => setStep("idle")}
+                  onClick={() => { setStep("idle"); setEditableCaption(""); }}
                   className="px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer"
                 >
                   Ulangi Merekam / Ketik
