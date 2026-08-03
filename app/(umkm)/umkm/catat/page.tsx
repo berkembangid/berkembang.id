@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Mic, RefreshCw, Trash2, Edit2, Check, X, Sparkles, Send, Type, FileText, ChevronRight, CheckCircle2, Square, Volume2 } from "lucide-react";
+import { ArrowLeft, Mic, RefreshCw, Trash2, Edit2, Check, X, Sparkles, Send, Type, FileText, ChevronRight, CheckCircle2, Square, Volume2, PenLine, RotateCcw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type Step = "idle" | "recording" | "processing" | "preview";
@@ -100,6 +100,9 @@ export default function CatatPage() {
   const [typedText, setTypedText] = useState("");
   const [items, setItems] = useState<ExtractedItem[]>([]);
   const [transcription, setTranscription] = useState("");
+  const [editableCaption, setEditableCaption] = useState("");
+  const [isEditingCaption, setIsEditingCaption] = useState(false);
+  const [reprocessing, setReprocessing] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editFields, setEditFields] = useState<{ item: string; qty: string; nominal: number }>({ item: "", qty: "", nominal: 0 });
   const [saving, setSaving] = useState(false);
@@ -107,6 +110,7 @@ export default function CatatPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isListening, setIsListening] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -212,6 +216,7 @@ export default function CatatPage() {
         const data = await res.json();
         const text = data.transcription || "Penjualan harian 25 porsi 375 ribu rupiah, dan beli bahan baku 150 ribu.";
         setTranscription(text);
+        setEditableCaption(text);
         transcriptionRef.current = text;
 
         if (data.items && Array.isArray(data.items) && data.items.length > 0) {
@@ -237,10 +242,56 @@ export default function CatatPage() {
       console.warn("AI Audio API processing fallback triggered:", e);
       const fallbackText = "Penjualan harian 25 porsi 375 ribu rupiah, dan beli bahan 150 ribu.";
       setTranscription(fallbackText);
+      setEditableCaption(fallbackText);
       const parsed = parseIndonesianTransactionText(fallbackText);
       setItems(parsed);
     } finally {
       setStep("preview");
+      setIsEditingCaption(false);
+    }
+  };
+
+  // Re-process items from edited caption text
+  const reprocessFromCaption = async () => {
+    if (!editableCaption.trim()) return;
+    setReprocessing(true);
+    setIsEditingCaption(false);
+    setTranscription(editableCaption);
+
+    try {
+      // Try sending edited text to AI via a text-based LLM call
+      const res = await fetch("/api/ai/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: editableCaption }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+          const formattedItems: ExtractedItem[] = data.items.map((it: any, idx: number) => ({
+            id: idx + 1,
+            item: it.item || "Penjualan Usaha",
+            qty: it.qty || "1 paket",
+            type: it.type === "keluar" ? "keluar" : "masuk",
+            nominal: Number(it.nominal) || 100000,
+            kategori: it.kategori || (it.type === "keluar" ? "Bahan" : "Penjualan"),
+          }));
+          setItems(formattedItems);
+        } else {
+          throw new Error("No items from API");
+        }
+      } else {
+        throw new Error("API error");
+      }
+    } catch {
+      // Fallback: use local NLP parser
+      const parsed = parseIndonesianTransactionText(editableCaption);
+      setItems(parsed.length > 0 ? parsed : [
+        { id: 1, item: editableCaption.slice(0, 35) || "Transaksi", qty: "1 paket", type: "masuk", nominal: 100000, kategori: "Penjualan" }
+      ]);
+    } finally {
+      setReprocessing(false);
     }
   };
 
@@ -251,6 +302,7 @@ export default function CatatPage() {
 
     setStep("processing");
     setTranscription(typedText);
+    setEditableCaption(typedText);
 
     setTimeout(() => {
       const parsed = parseIndonesianTransactionText(typedText);
@@ -262,6 +314,7 @@ export default function CatatPage() {
         ]);
       }
       setStep("preview");
+      setIsEditingCaption(false);
     }, 800);
   };
 
@@ -269,11 +322,13 @@ export default function CatatPage() {
     setTypedText(sugText);
     setStep("processing");
     setTranscription(sugText);
+    setEditableCaption(sugText);
 
     setTimeout(() => {
       const parsed = parseIndonesianTransactionText(sugText);
       setItems(parsed);
       setStep("preview");
+      setIsEditingCaption(false);
     }, 800);
   };
 
@@ -485,17 +540,19 @@ export default function CatatPage() {
 
         {/* Step: RECORDING */}
         {step === "recording" && (
-          <div className="bg-white rounded-3xl p-10 border border-red-200 shadow-card text-center space-y-6 animate-fade-in">
-            <div className="w-24 h-24 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto border-4 border-red-500 animate-pulse">
-              <Mic size={40} />
-            </div>
-            <div>
-              <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 px-3 py-1 rounded-full mb-2">
-                <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
-                <span className="text-xs font-mono font-bold text-red-600">{formatSeconds(recordSeconds)}</span>
+          <div className="bg-white rounded-3xl p-8 border border-red-200 shadow-card text-center space-y-5 animate-fade-in">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-20 h-20 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto border-4 border-red-500 animate-pulse">
+                <Mic size={36} />
               </div>
-              <h2 className="font-headline text-xl font-bold text-red-600">Merekam Suara Audio AI...</h2>
-              <p className="text-xs text-[#444655] mt-1">Bicaralah dengan jelas. Klik tombol di bawah jika sudah selesai.</p>
+              <div>
+                <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 px-3 py-1 rounded-full mb-2">
+                  <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
+                  <span className="text-xs font-mono font-bold text-red-600">{formatSeconds(recordSeconds)}</span>
+                </div>
+                <h2 className="font-headline text-xl font-bold text-red-600">Merekam Suara Audio AI...</h2>
+                <p className="text-xs text-[#444655] mt-1">Bicaralah dengan jelas. Klik tombol di bawah jika sudah selesai.</p>
+              </div>
             </div>
 
             {/* Audio Live Wave Spectrum Animation */}
@@ -510,6 +567,23 @@ export default function CatatPage() {
                   }}
                 />
               ))}
+            </div>
+
+            {/* Live Caption Area (placeholder while recording) */}
+            <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-left">
+              <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <Volume2 size={11} /> Caption Suara (muncul setelah selesai)
+              </p>
+              <div className="flex items-center gap-2">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div
+                    key={i}
+                    className="h-1.5 rounded-full bg-red-300 animate-pulse"
+                    style={{ width: `${20 + i * 12}%`, animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </div>
+              <p className="text-[11px] text-red-400 mt-2 italic">Transkripsi caption akan tampil setelah rekaman selesai diproses AI...</p>
             </div>
 
             <button
@@ -534,12 +608,59 @@ export default function CatatPage() {
         {/* Step: PREVIEW */}
         {step === "preview" && (
           <div className="space-y-5 animate-fade-in">
-            {/* Transcription Box */}
-            <div className="bg-[#ececff] rounded-2xl p-4 border border-[#bac3ff]">
-              <p className="text-[10px] font-bold text-[#001b85] uppercase tracking-wider flex items-center gap-1.5">
-                <Volume2 size={13} /> Hasil Transkripsi Suara AI:
-              </p>
-              <p className="text-xs text-[#141a34] font-medium mt-1">"{transcription}"</p>
+            {/* Editable Caption Box */}
+            <div className="bg-[#ececff] rounded-2xl p-4 border border-[#bac3ff] space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-[#001b85] uppercase tracking-wider flex items-center gap-1.5">
+                  <Volume2 size={13} /> Caption Hasil Transkripsi AI:
+                </p>
+                {!isEditingCaption && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingCaption(true);
+                      setTimeout(() => captionTextareaRef.current?.focus(), 50);
+                    }}
+                    className="flex items-center gap-1 text-[10px] font-bold text-[#001b85] bg-white border border-[#bac3ff] px-2 py-1 rounded-lg hover:bg-[#ececff] transition-colors cursor-pointer"
+                  >
+                    <PenLine size={11} /> Edit Caption
+                  </button>
+                )}
+              </div>
+
+              {isEditingCaption ? (
+                <div className="space-y-2">
+                  <textarea
+                    ref={captionTextareaRef}
+                    value={editableCaption}
+                    onChange={(e) => setEditableCaption(e.target.value)}
+                    rows={3}
+                    className="w-full text-xs text-[#141a34] font-medium bg-white border border-[#001b85] rounded-xl px-3 py-2.5 focus:outline-none resize-none leading-relaxed"
+                    placeholder="Koreksi caption di sini..."
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={reprocessFromCaption}
+                      disabled={reprocessing || !editableCaption.trim()}
+                      className="flex items-center gap-1.5 bg-[#001b85] text-white text-[10px] font-bold px-3 py-1.5 rounded-lg hover:bg-[#0e32c2] transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {reprocessing ? <RefreshCw size={11} className="animate-spin" /> : <RotateCcw size={11} />}
+                      {reprocessing ? "Memproses..." : "Proses Ulang AI"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setIsEditingCaption(false); setEditableCaption(transcription); }}
+                      className="flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer"
+                    >
+                      <X size={11} /> Batal
+                    </button>
+                    <span className="text-[10px] text-[#757686] ml-auto">Edit caption → proses ulang item AI</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-[#141a34] font-medium leading-relaxed">"{editableCaption || transcription}"</p>
+              )}
             </div>
 
             {/* Extracted items card */}

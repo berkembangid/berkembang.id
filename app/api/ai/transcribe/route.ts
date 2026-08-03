@@ -67,12 +67,100 @@ Format JSON yang wajib dikembalikan:
 
 export async function POST(req: Request) {
   try {
+    const contentType = req.headers.get("content-type") || "";
+
+    // ─── TEXT-ONLY MODE: re-process edited caption without audio ───
+    if (contentType.includes("application/json")) {
+      const body = await req.json();
+      const rawText: string = body.text || "";
+
+      if (!rawText.trim()) {
+        return NextResponse.json({ error: "Teks tidak ditemukan." }, { status: 400 });
+      }
+
+      const groqKey = process.env.GROQ_API_KEY;
+      const openaiKey = process.env.OPENAI_API_KEY;
+      const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
+      if (groqKey) {
+        try {
+          const groq = new Groq({ apiKey: groqKey });
+          const completion = await groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [
+              { role: "system", content: SYSTEM_PROMPT_INSTRUCTION },
+              { role: "user", content: `Kalimat suara pengguna: "${rawText}"` },
+            ],
+            response_format: { type: "json_object" },
+          });
+          const jsonStr = completion.choices[0]?.message?.content;
+          if (jsonStr) {
+            const parsed = JSON.parse(jsonStr);
+            parsed.items = normalizeExtractedItems(rawText, parsed.items || []);
+            parsed.transcription = rawText;
+            return NextResponse.json(parsed);
+          }
+        } catch (e: any) {
+          console.warn("Groq text-only error:", e.message);
+        }
+      }
+
+      if (openaiKey) {
+        try {
+          const openai = new OpenAI({ apiKey: openaiKey });
+          const gptRes = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: SYSTEM_PROMPT_INSTRUCTION },
+              { role: "user", content: `Kalimat suara pengguna: "${rawText}"` },
+            ],
+            response_format: { type: "json_object" },
+          });
+          const jsonStr = gptRes.choices[0]?.message?.content;
+          if (jsonStr) {
+            const parsed = JSON.parse(jsonStr);
+            parsed.items = normalizeExtractedItems(rawText, parsed.items || []);
+            parsed.transcription = rawText;
+            return NextResponse.json(parsed);
+          }
+        } catch (e: any) {
+          console.warn("OpenAI text-only error:", e.message);
+        }
+      }
+
+      if (geminiKey) {
+        try {
+          const genAI = new GoogleGenerativeAI(geminiKey);
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+          const result = await model.generateContent([
+            SYSTEM_PROMPT_INSTRUCTION,
+            `Kalimat suara pengguna: "${rawText}"`,
+          ]);
+          const responseText = result.response.text();
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            parsed.items = normalizeExtractedItems(rawText, parsed.items || []);
+            parsed.transcription = rawText;
+            return NextResponse.json(parsed);
+          }
+        } catch (e: any) {
+          console.warn("Gemini text-only error:", e.message);
+        }
+      }
+
+      // Fallback: return minimal structure so front-end local parser handles it
+      return NextResponse.json({ transcription: rawText, items: [] });
+    }
+
+    // ─── AUDIO MODE: original flow ───
     const formData = await req.formData();
     const audioFile = formData.get("audio") as File | Blob | null;
 
     if (!audioFile) {
       return NextResponse.json({ error: "File audio tidak ditemukan." }, { status: 400 });
     }
+
 
     const groqKey = process.env.GROQ_API_KEY;
     const openaiKey = process.env.OPENAI_API_KEY;
