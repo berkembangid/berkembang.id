@@ -165,7 +165,7 @@ export default function ProfilPage() {
       }
 
       setForm((prev) => ({ ...prev, avatarUrl: finalAvatarUrl }));
-      setMessage({ type: "success", text: "✓ Profil & Foto Usaha berhasil disimpan ke Supabase Storage!" });
+      setMessage({ type: "success", text: "✓ Profil & Foto Usaha berhasil disimpan!" });
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
       console.error("Save profile error:", err);
