@@ -187,19 +187,19 @@ export default function ProfilPage() {
   return (
     <>
       {/* Header - Mobile only */}
-      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-5 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30">
-        <Link href="/umkm">
+      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-4 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30 gap-2">
+        <Link href="/umkm" className="flex-shrink-0">
           <button className="flex items-center gap-1.5 text-xs font-bold text-[#001b85]">
             <ArrowLeft size={16} /> Beranda
           </button>
         </Link>
-        <span className="text-xs font-bold text-[#141a34]">Profil Usaha</span>
-        <button onClick={handleSignOut} className="text-xs text-red-600 font-bold flex items-center gap-1 cursor-pointer">
+        <span className="text-xs font-bold text-[#141a34] truncate">Profil Usaha</span>
+        <button onClick={handleSignOut} className="text-xs text-red-600 font-bold flex items-center gap-1 cursor-pointer flex-shrink-0">
           <LogOut size={14} />
         </button>
       </header>
 
-      <main className="px-5 md:px-0 py-5 space-y-6 pb-28 md:pb-8 max-w-4xl mx-auto">
+      <main className="px-4 md:px-0 py-5 space-y-6 pb-28 md:pb-8 max-w-4xl mx-auto">
         {/* Title Header */}
         <div className="flex justify-between items-center">
           <div>

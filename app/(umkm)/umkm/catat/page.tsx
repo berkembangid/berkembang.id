@@ -163,6 +163,8 @@ export default function CatatPage() {
         ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/mp4")
         ? "audio/mp4"
+        : MediaRecorder.isTypeSupported("audio/ogg")
+        ? "audio/ogg"
         : undefined;
 
       const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
@@ -172,9 +174,10 @@ export default function CatatPage() {
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || "audio/webm" });
+        const actualMime = mediaRecorder.mimeType || mimeType || "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: actualMime });
         stream.getTracks().forEach((t) => t.stop());
-        await processAudioWithAI(audioBlob);
+        await processAudioWithAI(audioBlob, actualMime);
       };
 
       mediaRecorderRef.current = mediaRecorder;
@@ -200,24 +203,25 @@ export default function CatatPage() {
   }, []);
 
   // ── Process audio via AI ────────────────────────────────────────
-  const processAudioWithAI = async (blob: Blob) => {
+  const processAudioWithAI = async (blob: Blob, actualMime?: string) => {
     setStep("processing");
     try {
+      const mime = actualMime || blob.type || "audio/webm";
+      const ext = mime.includes("mp4") ? "mp4" : mime.includes("ogg") ? "ogg" : "webm";
       const formData = new FormData();
-      formData.append("audio", blob, "recording.webm");
+      formData.append("audio", blob, `recording.${ext}`);
 
       const res = await fetch("/api/ai/transcribe", { method: "POST", body: formData });
       if (!res.ok) throw new Error("API Route error");
 
       const data = await res.json();
-      const text = data.transcription || "Penjualan harian 25 porsi 375 ribu rupiah, dan beli bahan baku 150 ribu.";
+      const text = data.transcription || "";
       applyCaption(text);
       setItems(data.items?.length > 0 ? formatAIItems(data.items) : fallbackParse(text));
     } catch (e) {
       console.warn("AI Audio API fallback triggered:", e);
-      const fallbackText = "Penjualan harian 25 porsi 375 ribu rupiah, dan beli bahan 150 ribu.";
-      applyCaption(fallbackText);
-      setItems(parseIndonesianTransactionText(fallbackText));
+      applyCaption("");
+      setItems([]);
     } finally {
       setStep("preview");
       setIsEditingCaption(false);
@@ -350,13 +354,13 @@ export default function CatatPage() {
   return (
     <>
       {/* Mobile Header */}
-      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-5 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30">
-        <Link href="/umkm">
+      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-4 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30 gap-2">
+        <Link href="/umkm" className="flex-shrink-0">
           <button className="flex items-center gap-1.5 text-xs font-bold text-[#001b85]">
             <ArrowLeft size={16} /> Beranda
           </button>
         </Link>
-        <span className="text-xs font-bold text-[#141a34]">Pencatatan AI Suara &amp; Teks</span>
+        <span className="text-xs font-bold text-[#141a34] truncate">Pencatatan AI Suara &amp; Teks</span>
       </header>
 
       {toastMessage && (
@@ -398,9 +402,9 @@ export default function CatatPage() {
                   <Mic size={32} />
                 </div>
                 <div>
-                  <h2 className="font-headline text-xl font-bold text-[#141a34]">Tekan &amp; Bicara Transaksi Anda</h2>
+                  <h2 className="font-headline text-xl font-bold text-[#141a34]">Ceritakan Transaksi Usahamu</h2>
                   <p className="text-xs text-[#444655] mt-1 max-w-md mx-auto">
-                    Bicarakan pemasukan atau pengeluaranmu secara alami. Contoh: &quot;Laku 15 porsi ayam 300 ribu, beli minyak 50 ribu&quot;
+                    Bicaralah seperti bercerita ke teman. Contoh: <span className="font-semibold text-[#001b85]">&quot;Laku 15 porsi ayam 300 ribu, beli minyak 50 ribu&quot;</span>
                   </p>
                 </div>
                 <button
@@ -410,7 +414,7 @@ export default function CatatPage() {
                 >
                   <Mic size={40} className="group-hover:scale-110 transition-transform" />
                 </button>
-                <p className="text-[11px] text-[#757686] font-medium">Klik tombol mikrofon untuk mulai merekam audio suara AI</p>
+                <p className="text-[11px] text-[#757686] font-medium">Tekan tombol mikrofon, bicara, lalu tekan lagi untuk selesai</p>
               </div>
             )}
 
@@ -475,8 +479,8 @@ export default function CatatPage() {
                   <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
                   <span className="text-xs font-mono font-bold text-red-600">{formatSeconds(recordSeconds)}</span>
                 </div>
-                <h2 className="font-headline text-xl font-bold text-red-600">Merekam Suara Audio AI...</h2>
-                <p className="text-xs text-[#444655] mt-1">Bicaralah dengan jelas. Klik tombol di bawah jika sudah selesai.</p>
+                <h2 className="font-headline text-xl font-bold text-red-600">Sedang Mendengarkan...</h2>
+                <p className="text-xs text-[#444655] mt-1">Bicaralah dengan jelas dan natural. Klik tombol di bawah jika sudah selesai.</p>
               </div>
             </div>
 
@@ -494,7 +498,7 @@ export default function CatatPage() {
             {/* Caption placeholder */}
             <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-left">
               <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                <Volume2 size={11} /> Caption Suara (muncul setelah selesai)
+                <Volume2 size={11} /> Transkripsi akan muncul setelah selesai
               </p>
               <div className="flex items-center gap-2">
                 {CAPTION_SKELETON.map((i) => (
@@ -505,7 +509,7 @@ export default function CatatPage() {
                   />
                 ))}
               </div>
-              <p className="text-[11px] text-red-400 mt-2 italic">Transkripsi caption akan tampil setelah rekaman selesai diproses AI...</p>
+              <p className="text-[11px] text-red-400 mt-2 italic">AI akan mengubah suaramu menjadi catatan transaksi otomatis...</p>
             </div>
 
             <button
@@ -534,7 +538,7 @@ export default function CatatPage() {
             <div className="bg-[#ececff] rounded-2xl p-4 border border-[#bac3ff] space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-bold text-[#001b85] uppercase tracking-wider flex items-center gap-1.5">
-                  <Volume2 size={13} /> Caption Hasil Transkripsi AI:
+                  <Volume2 size={13} /> Yang kamu ucapkan:
                 </p>
                 {!isEditingCaption && (
                   <button
@@ -584,14 +588,14 @@ export default function CatatPage() {
 
             {/* Extracted items */}
             <div className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm text-[#141a34]">Item Teridentifikasi ({items.length})</h3>
-                <div className="flex gap-2 text-xs font-bold">
-                  <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                    Masuk: Rp{totalMasuk.toLocaleString("id-ID")}
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <h3 className="font-bold text-sm text-[#141a34] flex-shrink-0">Item Teridentifikasi ({items.length})</h3>
+                <div className="flex flex-wrap gap-1.5 text-xs font-bold">
+                  <span className="text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-200 whitespace-nowrap">
+                    +Rp{totalMasuk.toLocaleString("id-ID")}
                   </span>
-                  <span className="text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200">
-                    Keluar: Rp{totalKeluar.toLocaleString("id-ID")}
+                  <span className="text-rose-700 bg-rose-50 px-2 py-1 rounded-full border border-rose-200 whitespace-nowrap">
+                    -Rp{totalKeluar.toLocaleString("id-ID")}
                   </span>
                 </div>
               </div>

@@ -186,8 +186,10 @@ export async function POST(req: Request) {
     if (keys.groqKey) {
       try {
         const groq = new Groq({ apiKey: keys.groqKey });
-        const file = new File([await audioFile.arrayBuffer()], "recording.webm", {
-          type: audioFile.type || "audio/webm",
+        const actualMime = audioFile.type || "audio/webm";
+        const ext = actualMime.includes("mp4") ? "mp4" : actualMime.includes("ogg") ? "ogg" : "webm";
+        const file = new File([await audioFile.arrayBuffer()], `recording.${ext}`, {
+          type: actualMime,
         });
         const transcriptionRes = await groq.audio.transcriptions.create({
           file,
@@ -206,8 +208,10 @@ export async function POST(req: Request) {
     if (keys.openaiKey) {
       try {
         const openai = new OpenAI({ apiKey: keys.openaiKey });
-        const file = new File([await audioFile.arrayBuffer()], "recording.webm", {
-          type: audioFile.type || "audio/webm",
+        const actualMime2 = audioFile.type || "audio/webm";
+        const ext2 = actualMime2.includes("mp4") ? "mp4" : actualMime2.includes("ogg") ? "ogg" : "webm";
+        const file = new File([await audioFile.arrayBuffer()], `recording.${ext2}`, {
+          type: actualMime2,
         });
         const transcriptRes = await openai.audio.transcriptions.create({
           file,
@@ -230,7 +234,7 @@ export async function POST(req: Request) {
         const arrayBuffer = await audioFile.arrayBuffer();
         const base64Audio = Buffer.from(arrayBuffer).toString("base64");
         const mimeType = audioFile.type || "audio/webm";
-        const normalizedMime = mimeType.includes("mp4") ? "audio/mp4" : "audio/webm";
+        const normalizedMime = mimeType.includes("mp4") ? "audio/mp4" : mimeType.includes("ogg") ? "audio/ogg" : "audio/webm";
 
         const result = await model.generateContent([
           SYSTEM_PROMPT_INSTRUCTION,

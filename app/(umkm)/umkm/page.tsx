@@ -162,14 +162,14 @@ export default function BerandaPage() {
   return (
     <>
       {/* Header - Mobile only */}
-      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/95 backdrop-blur-md px-5 py-3 flex items-center justify-between border-b border-[#c5c5d7]/30">
-        <div className="flex-1 pr-3">
+      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/95 backdrop-blur-md px-4 py-3 flex items-center justify-between border-b border-[#c5c5d7]/30">
+        <div className="flex-1 min-w-0 pr-3">
           <p className="text-[10px] font-bold text-[#444655] uppercase tracking-widest font-mono-label">{timeGreeting()},</p>
-          <h1 className="font-headline text-base font-bold text-[#001b85] leading-tight break-words">
+          <h1 className="font-headline text-base font-bold text-[#001b85] leading-tight truncate">
             Halo, {businessName}! 👋
           </h1>
         </div>
-        <div className="flex items-center gap-2.5 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <button 
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent("openNotifModal"))}
@@ -191,7 +191,7 @@ export default function BerandaPage() {
         </div>
       </header>
 
-      <main className="px-6 md:px-0 py-5 space-y-6 pb-28 md:pb-8">
+      <main className="px-4 md:px-0 py-5 space-y-6 pb-28 md:pb-8">
         {/* A. Sapaan (Desktop only, as mobile header displays the full greeting) */}
         <section className="hidden md:block animate-fade-in-up">
           <p className="text-xs font-bold text-[#444655] uppercase tracking-widest font-mono-label">
@@ -249,40 +249,40 @@ export default function BerandaPage() {
             {/* C. Stat Cards */}
             <section className="space-y-2 animate-fade-in-up">
               <h2 className="text-xs font-bold text-[#444655] uppercase tracking-widest font-mono-label px-1">Rangkuman Bisnis Live</h2>
-              <div className="grid grid-cols-3 gap-4">
-                <Link href="/umkm/laporan" className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-all">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <FileText size={14} className="text-[#444655]" />
-                    <p className="text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label">Catatan</p>
+              <div className="grid grid-cols-3 gap-2 md:gap-4">
+                <Link href="/umkm/laporan" className="bg-white rounded-xl p-3 md:p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-all">
+                  <div className="flex items-center gap-1 mb-1">
+                    <FileText size={13} className="text-[#444655] flex-shrink-0" />
+                    <p className="text-[9px] md:text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label truncate">Catatan</p>
                   </div>
-                  <div className="flex items-end gap-1">
-                    <span className="text-2xl font-bold text-[#001b85]">{todayTxCount}</span>
-                    <span className="text-[10px] text-[#444655] mb-0.5">hari ini</span>
+                  <div className="flex items-end gap-0.5">
+                    <span className="text-xl md:text-2xl font-bold text-[#001b85]">{todayTxCount}</span>
+                    <span className="text-[9px] text-[#444655] mb-0.5">hari ini</span>
                   </div>
-                  <p className="text-[10px] text-[#444655] mt-1">Transaksi tercatat</p>
+                  <p className="text-[9px] md:text-[10px] text-[#444655] mt-1 leading-tight">Transaksi tercatat</p>
                 </Link>
 
-                <div className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff]">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Flame size={14} className="text-[#006a6a]" />
-                    <p className="text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label">Aktif</p>
+                <div className="bg-white rounded-xl p-3 md:p-4 shadow-card border border-[#e5e7ff]">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Flame size={13} className="text-[#006a6a] flex-shrink-0" />
+                    <p className="text-[9px] md:text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label truncate">Aktif</p>
                   </div>
                   <div className="flex items-end gap-1">
-                    <span className="text-2xl font-bold text-[#006a6a]">Live</span>
+                    <span className="text-xl md:text-2xl font-bold text-[#006a6a]">Live</span>
                   </div>
-                  <p className="text-[10px] text-[#444655] mt-1">Terkoneksi Sistem</p>
+                  <p className="text-[9px] md:text-[10px] text-[#444655] mt-1 leading-tight">Terkoneksi Sistem</p>
                 </div>
 
-                <Link href="/umkm/readiness" className="bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-all">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <TrendingUp size={14} className="text-[#166534]" />
-                    <p className="text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label">Readiness</p>
+                <Link href="/umkm/readiness" className="bg-white rounded-xl p-3 md:p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-all">
+                  <div className="flex items-center gap-1 mb-1">
+                    <TrendingUp size={13} className="text-[#166534] flex-shrink-0" />
+                    <p className="text-[9px] md:text-[10px] font-bold text-[#444655] uppercase tracking-tight font-mono-label truncate">Readiness</p>
                   </div>
-                  <div className="flex items-end gap-1">
-                    <span className="text-2xl font-bold text-[#166534]">{readinessScore}</span>
-                    <span className="text-[10px] text-[#166534] mb-0.5">/100</span>
+                  <div className="flex items-end gap-0.5">
+                    <span className="text-xl md:text-2xl font-bold text-[#166534]">{readinessScore}</span>
+                    <span className="text-[9px] text-[#166534] mb-0.5">/100</span>
                   </div>
-                  <p className="text-[10px] text-[#444655] mt-1">Skor Kesiapan Usaha</p>
+                  <p className="text-[9px] md:text-[10px] text-[#444655] mt-1 leading-tight">Skor Kesiapan</p>
                 </Link>
               </div>
             </section>
@@ -355,7 +355,7 @@ export default function BerandaPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <input readOnly value={`https://berkembang.id/daftar?ref=${businessName.toLowerCase().replace(/\s+/g, '_')}`} className="flex-1 text-xs bg-[#f3f2ff] rounded-lg px-3 py-2 text-[#444655] border border-[#e5e7ff] outline-none" />
+                  <input readOnly value={`https://berkembang.id/daftar?ref=${businessName.toLowerCase().replace(/\s+/g, '_')}`} className="flex-1 min-w-0 text-xs bg-[#f3f2ff] rounded-lg px-3 py-2 text-[#444655] border border-[#e5e7ff] outline-none" />
                   <button onClick={handleCopy} className="bg-[#db2777] text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-[#be185d] transition-colors flex-shrink-0 flex items-center gap-1 cursor-pointer">
                     <Copy size={12} />
                     {copied ? "Disalin!" : "Salin"}

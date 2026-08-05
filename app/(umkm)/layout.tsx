@@ -258,7 +258,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
-        <div className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl w-full mx-auto">
+        <div className="flex-1 w-full">
           {children}
         </div>
       </div>

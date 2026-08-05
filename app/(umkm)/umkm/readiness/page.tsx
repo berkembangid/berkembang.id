@@ -81,8 +81,22 @@ export default function ReadinessPage() {
             const marginRatio = netProfit / masuk;
             kas = Math.min(100, Math.max(20, Math.round(marginRatio * 100)));
           }
-          const hasBaseProfile = Boolean(nama && sektor && lokasi);
-          const legalitas = (hasBaseProfile ? 75 : 40) + (dbProfile?.nib ? 25 : 0);
+          // Legalitas: lebih ketat, default name tidak dihitung
+          const isNameCustom = nama && nama !== "Pengusaha UMKM" && nama !== user.email?.split("@")[0];
+          const hasNIB = Boolean(dbProfile?.nib);
+          const hasFullProfile = Boolean(isNameCustom && sektor && lokasi);
+          let legalitas = 0;
+          if (hasNIB && hasFullProfile) legalitas = 100;
+          else if (hasNIB) legalitas = 75;
+          else if (hasFullProfile) legalitas = 50;
+          else if (sektor && lokasi) legalitas = 30;
+          else legalitas = 10;
+
+          let legalitasDesc = "";
+          if (hasNIB && hasFullProfile) legalitasDesc = "NIB & profil usaha lengkap ✓";
+          else if (hasNIB) legalitasDesc = "NIB terisi, lengkapi nama usaha";
+          else if (hasFullProfile) legalitasDesc = "Profil terisi, NIB belum diisi";
+          else legalitasDesc = "Lengkapi profil & daftarkan NIB";
 
           let stabilitas = 0;
           if (count >= 10) stabilitas = 100;
@@ -93,9 +107,9 @@ export default function ReadinessPage() {
 
           setReadinessScore(totalScore);
           setBreakdown([
-            { label: "Konsistensi (25%)", score: konsistensi, desc: `${count} transaksi tercatat`, color: "#15803d" },
+            { label: "Konsistensi (25%)", score: konsistensi, desc: count > 0 ? `${count} transaksi tercatat` : "Belum ada transaksi", color: "#15803d" },
             { label: "Arus Kas (25%)", score: kas, desc: masuk > 0 ? `Omzet Rp${masuk.toLocaleString("id-ID")}` : "Belum ada pemasukan", color: "#1e40af" },
-            { label: "Legalitas & Profil (25%)", score: legalitas, desc: dbProfile?.nib ? "NIB & Profil terverifikasi" : "Profil terisi (NIB opsional)", color: "#dc2626" },
+            { label: "Legalitas & Profil (25%)", score: legalitas, desc: legalitasDesc, color: "#dc2626" },
             { label: "Stabilitas (25%)", score: stabilitas, desc: count >= 5 ? "Riwayat catatan baik" : "Perbanyak riwayat transaksi", color: "#7c3aed" },
           ]);
         }
@@ -125,16 +139,16 @@ export default function ReadinessPage() {
 
   return (
     <>
-      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-5 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30">
-        <Link href="/umkm">
+      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-4 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30 gap-2">
+        <Link href="/umkm" className="flex-shrink-0">
           <button className="flex items-center gap-1.5 text-xs font-bold text-[#001b85]">
             <ArrowLeft size={16} /> Beranda
           </button>
         </Link>
-        <span className="text-xs font-bold text-[#141a34]">Kesiapan Usaha</span>
+        <span className="text-xs font-bold text-[#141a34] truncate">Kesiapan Usaha</span>
       </header>
 
-      <main className="px-5 md:px-0 py-5 space-y-6 pb-28 md:pb-8">
+      <main className="px-4 md:px-0 py-5 space-y-6 pb-28 md:pb-8">
         <div className="hidden md:flex justify-between items-center mb-2">
           <div>
             <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#141a34]">Kesiapan & Readiness Score</h1>

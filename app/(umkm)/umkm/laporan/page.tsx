@@ -28,18 +28,10 @@ export default function LaporanPage() {
   const [startDate, setStartDate] = useState<string>(firstOfMonth);
   const [endDate, setEndDate] = useState<string>(lastOfMonth);
 
-  // Default mock transactions
-  const DEFAULT_TRANSACTIONS: Transaction[] = [
-    { id: 101, item: "Penjualan Ayam Geprek (47 Porsi)", qty: "47 porsi", type: "masuk", nominal: 705000, kategori: "Penjualan", tanggal: todayStr },
-    { id: 102, item: "Beli Bahan Baku Ayam & Bumbu", qty: "10 kg", type: "keluar", nominal: 320000, kategori: "Bahan", tanggal: todayStr },
-    { id: 103, item: "Penjualan Nasi Goreng Spesial", qty: "25 porsi", type: "masuk", nominal: 375000, kategori: "Penjualan", tanggal: toYMD(new Date(now.setDate(now.getDate() - 1))) },
-    { id: 104, item: "Sewa Tempat Lapak Kios", qty: "1 bulan", type: "keluar", nominal: 250000, kategori: "Sewa", tanggal: toYMD(new Date(now.setDate(now.getDate() - 2))) },
-    { id: 105, item: "Penjualan Es Teh & Minuman", qty: "30 cup", type: "masuk", nominal: 150000, kategori: "Penjualan", tanggal: toYMD(new Date(now.setDate(now.getDate() - 1))) },
-  ];
-
-  const [transactions, setTransactions] = useState<Transaction[]>(DEFAULT_TRANSACTIONS);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
   // Form states
@@ -92,7 +84,7 @@ export default function LaporanPage() {
             .eq("user_id", user.id)
             .order("tanggal", { ascending: false });
 
-          if (!error && data && data.length > 0) {
+          if (!error && data) {
             const mapped: Transaction[] = data.map((t: any) => ({
               id: t.id,
               item: t.item,
@@ -107,6 +99,8 @@ export default function LaporanPage() {
         }
       } catch (err) {
         console.error("Error checking auth or fetching data:", err);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -285,28 +279,29 @@ export default function LaporanPage() {
   return (
     <div className="space-y-6 pb-28 animate-fade-in">
       {/* Header banner */}
-      <div className="bg-white border-b border-slate-200/60 p-4 sticky top-0 z-20 flex items-center justify-between flex-wrap gap-2">
-        <h1 className="font-headline text-lg font-extrabold text-[#141a34] flex items-center gap-2">
-          <BarChart3 className="text-[#001b85]" size={20} />
-          Laporan Keuangan
+      <div className="bg-white border-b border-slate-200/60 px-4 py-3 sticky top-0 z-20 flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="font-headline text-base font-extrabold text-[#141a34] flex items-center gap-2 min-w-0">
+          <BarChart3 className="text-[#001b85] flex-shrink-0" size={20} />
+          <span className="truncate">Laporan Keuangan</span>
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {/* Direct 1-Click Export CSV / Excel Button */}
           <button
             onClick={handleExportCSV}
-            className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+            className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-2 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1 shadow-sm cursor-pointer flex-shrink-0"
             title="Unduh Laporan Keuangan ke format Excel (CSV)"
           >
             <FileSpreadsheet size={15} className="text-emerald-600" />
-            <span>Export Excel</span>
+            <span className="hidden sm:inline">Export Excel</span>
           </button>
 
           <button
             onClick={() => setShowModal(true)}
-            className="bg-[#001b85] text-white px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+            className="bg-[#001b85] text-white px-2.5 py-2 rounded-xl text-xs font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-1 shadow-sm cursor-pointer flex-shrink-0"
           >
             <Plus size={14} />
-            Catat Manual
+            <span className="hidden sm:inline">Catat Manual</span>
+            <span className="sm:hidden">Catat</span>
           </button>
         </div>
       </div>
@@ -444,7 +439,22 @@ export default function LaporanPage() {
           <span className="text-[10px] font-semibold text-slate-500">{filteredTransactions.length} Transaksi</span>
         </div>
 
-        {filteredTransactions.length === 0 ? (
+        {loading ? (
+          <div className="grid gap-3">
+            {[1,2,3].map((i) => (
+              <div key={i} className="bg-white rounded-xl p-4 border border-slate-200/60 shadow-sm animate-pulse">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-slate-100 flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 bg-slate-100 rounded w-3/4" />
+                    <div className="h-2 bg-slate-100 rounded w-1/2" />
+                  </div>
+                  <div className="h-4 bg-slate-100 rounded w-20" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredTransactions.length === 0 ? (
           <div className="bg-white border border-slate-200/60 rounded-2xl p-8 text-center space-y-2">
             <Receipt className="mx-auto text-slate-300" size={32} />
             <h4 className="text-xs font-bold text-slate-700">Tidak Ada Transaksi Ditemukan</h4>
