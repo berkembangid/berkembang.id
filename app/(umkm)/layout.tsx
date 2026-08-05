@@ -18,6 +18,7 @@ const NAV_MAIN = [
   { label: "Roadmap", href: "/umkm/roadmap", Icon: Map },
   { label: "AI Copilot", href: "/umkm/ai-copilot", Icon: Bot, badgeAI: true },
   { label: "Laporan", href: "/umkm/laporan", Icon: FileText },
+  { label: "Profil Usaha", href: "/umkm/profil", Icon: User },
 ];
 
 const NAV_OTHER = [
@@ -206,19 +207,24 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
 
         {/* User Profile Footer */}
         <div className="border-t border-slate-100 p-3">
-          <button
-            onClick={handleSignOut}
-            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors group cursor-pointer"
-          >
-            <div className="w-9 h-9 rounded-full bg-[#0f2d6b] text-white flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0">
-              {userAvatarUrl ? <img src={userAvatarUrl} className="w-full h-full object-cover" alt={userName} /> : userInitials}
-            </div>
-            <div className="flex-1 text-left overflow-hidden">
-              <p className="text-xs font-bold text-slate-800 truncate">{userName}</p>
-              <p className="text-[10px] text-slate-500 truncate">{userUsaha || "Kelola akun"}</p>
-            </div>
-            <LogOut size={14} className="text-slate-400 group-hover:text-red-500 flex-shrink-0 transition-colors" />
-          </button>
+          <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 transition-colors">
+            <Link href="/umkm/profil" className="flex items-center gap-3 flex-1 overflow-hidden group cursor-pointer">
+              <div className="w-9 h-9 rounded-full bg-[#0f2d6b] text-white flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0">
+                {userAvatarUrl ? <img src={userAvatarUrl} className="w-full h-full object-cover" alt={userName} /> : userInitials}
+              </div>
+              <div className="flex-1 text-left overflow-hidden">
+                <p className="text-xs font-bold text-slate-800 group-hover:text-[#0f2d6b] transition-colors truncate">{userName}</p>
+                <p className="text-[10px] text-slate-500 truncate">{userUsaha || "Kelola profil"}</p>
+              </div>
+            </Link>
+            <button
+              onClick={handleSignOut}
+              title="Keluar Akun"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer ml-1"
+            >
+              <LogOut size={15} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -308,32 +314,65 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         </div>
       )}
 
-      {/* ── MOBILE BOTTOM NAV ── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/60 px-3 py-2 flex items-center justify-around">
-        <Link href="/umkm" className="flex-1 flex flex-col items-center justify-center py-1">
-          <Home size={20} className={pathname === "/umkm" ? "text-[#0f2d6b]" : "text-slate-400"} />
-          <span className={`text-[10px] font-bold mt-1 ${pathname === "/umkm" ? "text-[#0f2d6b]" : "text-slate-400"}`}>Beranda</span>
-        </Link>
-        <Link href="/umkm/score" className="flex-1 flex flex-col items-center justify-center py-1">
-          <BarChart2 size={20} className={pathname.startsWith("/umkm/score") ? "text-[#0f2d6b]" : "text-slate-400"} />
-          <span className={`text-[10px] font-bold mt-1 ${pathname.startsWith("/umkm/score") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Skor</span>
-        </Link>
-        <div className="relative -top-5 flex items-center justify-center">
-          <Link href="/umkm/catat">
-            <button className={`w-14 h-14 rounded-full bg-gradient-to-tr from-[#0f2d6b] to-[#3b82f6] text-white flex items-center justify-center shadow-lg shadow-[#0f2d6b]/30 transition-transform ${fabActive ? "scale-95" : "hover:scale-105"}`}
-              onMouseDown={() => setFabActive(true)} onMouseUp={() => setFabActive(false)}>
-              <Mic size={24} />
-            </button>
+      {/* ── MOBILE BOTTOM NAV (ESTETIS & SLIDEABLE COMPLETE MENU) ── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
+        <div className="flex items-center overflow-x-auto scrollbar-none px-2 py-1.5 gap-1 justify-between">
+          <Link href="/umkm" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
+            <Home size={18} className={pathname === "/umkm" ? "text-[#0f2d6b]" : "text-slate-400"} />
+            <span className={`text-[9px] font-bold mt-1 ${pathname === "/umkm" ? "text-[#0f2d6b]" : "text-slate-400"}`}>Beranda</span>
+          </Link>
+
+          <Link href="/umkm/upload" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
+            <Upload size={18} className={pathname.startsWith("/umkm/upload") ? "text-[#0f2d6b]" : "text-slate-400"} />
+            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/upload") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Upload</span>
+          </Link>
+
+          <Link href="/umkm/score" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
+            <BarChart2 size={18} className={pathname.startsWith("/umkm/score") ? "text-[#0f2d6b]" : "text-slate-400"} />
+            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/score") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Skor</span>
+          </Link>
+
+          {/* Central AI Mic FAB */}
+          <div className="flex items-center justify-center flex-shrink-0 px-1">
+            <Link href="/umkm/catat">
+              <button
+                className={`w-11 h-11 rounded-full bg-gradient-to-tr from-[#0f2d6b] to-[#3b82f6] text-white flex items-center justify-center shadow-md shadow-[#0f2d6b]/30 transition-transform ${
+                  fabActive ? "scale-95" : "hover:scale-105"
+                }`}
+                onMouseDown={() => setFabActive(true)}
+                onMouseUp={() => setFabActive(false)}
+                title="Pencatatan AI Suara"
+              >
+                <Mic size={20} />
+              </button>
+            </Link>
+          </div>
+
+          <Link href="/umkm/gaps" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
+            <AlertTriangle size={18} className={pathname.startsWith("/umkm/gaps") ? "text-[#0f2d6b]" : "text-slate-400"} />
+            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/gaps") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Gap</span>
+          </Link>
+
+          <Link href="/umkm/roadmap" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
+            <Map size={18} className={pathname.startsWith("/umkm/roadmap") ? "text-[#0f2d6b]" : "text-slate-400"} />
+            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/roadmap") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Roadmap</span>
+          </Link>
+
+          <Link href="/umkm/ai-copilot" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
+            <Bot size={18} className={pathname.startsWith("/umkm/ai-copilot") ? "text-[#0f2d6b]" : "text-slate-400"} />
+            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/ai-copilot") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Copilot</span>
+          </Link>
+
+          <Link href="/umkm/laporan" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
+            <FileText size={18} className={pathname.startsWith("/umkm/laporan") ? "text-[#0f2d6b]" : "text-slate-400"} />
+            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/laporan") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Laporan</span>
+          </Link>
+
+          <Link href="/umkm/profil" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
+            <User size={18} className={pathname === "/umkm/profil" ? "text-[#0f2d6b]" : "text-slate-400"} />
+            <span className={`text-[9px] font-bold mt-1 ${pathname === "/umkm/profil" ? "text-[#0f2d6b]" : "text-slate-400"}`}>Profil</span>
           </Link>
         </div>
-        <Link href="/umkm/gaps" className="flex-1 flex flex-col items-center justify-center py-1">
-          <AlertTriangle size={20} className={pathname.startsWith("/umkm/gaps") ? "text-[#0f2d6b]" : "text-slate-400"} />
-          <span className={`text-[10px] font-bold mt-1 ${pathname.startsWith("/umkm/gaps") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Gap</span>
-        </Link>
-        <Link href="/umkm/profil" className="flex-1 flex flex-col items-center justify-center py-1">
-          <User size={20} className={pathname === "/umkm/profil" ? "text-[#0f2d6b]" : "text-slate-400"} />
-          <span className={`text-[10px] font-bold mt-1 ${pathname === "/umkm/profil" ? "text-[#0f2d6b]" : "text-slate-400"}`}>Profil</span>
-        </Link>
       </nav>
     </div>
   );
