@@ -39,6 +39,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
   const rippleIdRef = useRef(0);
 
   const [showNotifModal, setShowNotifModal] = useState(false);
+  const [showKesiapanSubmenu, setShowKesiapanSubmenu] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const currentUserIdRef = useRef<string | null>(null);
@@ -314,65 +315,82 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         </div>
       )}
 
-      {/* ── MOBILE BOTTOM NAV (ESTETIS & SLIDEABLE COMPLETE MENU) ── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
-        <div className="flex items-center overflow-x-auto scrollbar-none px-2 py-1.5 gap-1 justify-between">
-          <Link href="/umkm" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
-            <Home size={18} className={pathname === "/umkm" ? "text-[#0f2d6b]" : "text-slate-400"} />
-            <span className={`text-[9px] font-bold mt-1 ${pathname === "/umkm" ? "text-[#0f2d6b]" : "text-slate-400"}`}>Beranda</span>
-          </Link>
+      {/* ── MOBILE BOTTOM NAV (5 ICON CLEAN WITH ELEGANT SUBMENU POPOVER) ── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-2 py-1.5 flex items-center justify-around shadow-[0_-4px_25px_rgba(0,0,0,0.08)]">
+        
+        {/* 1. Beranda */}
+        <Link href="/umkm" onClick={() => setShowKesiapanSubmenu(false)} className="flex-1 flex flex-col items-center justify-center py-1">
+          <Home size={20} className={pathname === "/umkm" ? "text-[#0f2d6b]" : "text-slate-400"} />
+          <span className={`text-[9px] font-bold mt-1 ${pathname === "/umkm" ? "text-[#0f2d6b]" : "text-slate-400"}`}>Beranda</span>
+        </Link>
 
-          <Link href="/umkm/upload" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
-            <Upload size={18} className={pathname.startsWith("/umkm/upload") ? "text-[#0f2d6b]" : "text-slate-400"} />
-            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/upload") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Upload</span>
-          </Link>
+        {/* 2. Kesiapan KUR (Submenu Popup for Skor, Upload, Gap, Roadmap) */}
+        <div className="flex-1 relative flex flex-col items-center justify-center">
+          {showKesiapanSubmenu && (
+            <div 
+              className="absolute bottom-14 bg-white border border-slate-200 shadow-2xl rounded-2xl p-2 w-48 space-y-1 animate-fade-in-up z-50 text-left"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-widest text-slate-400 border-b border-slate-100">Analisis Kesiapan</p>
+              <Link href="/umkm/score" onClick={() => setShowKesiapanSubmenu(false)} className="flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-[#0f2d6b]">
+                <BarChart2 size={15} className="text-blue-600" />
+                <span>Skor Kesiapan</span>
+              </Link>
+              <Link href="/umkm/gaps" onClick={() => setShowKesiapanSubmenu(false)} className="flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-[#0f2d6b]">
+                <AlertTriangle size={15} className="text-amber-600" />
+                <span>Gap Analysis</span>
+              </Link>
+              <Link href="/umkm/upload" onClick={() => setShowKesiapanSubmenu(false)} className="flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-[#0f2d6b]">
+                <Upload size={15} className="text-emerald-600" />
+                <span>Upload Dokumen</span>
+              </Link>
+              <Link href="/umkm/roadmap" onClick={() => setShowKesiapanSubmenu(false)} className="flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-[#0f2d6b] hover:bg-blue-50">
+                <Map size={15} className="text-purple-600" />
+                <span>Roadmap</span>
+              </Link>
+            </div>
+          )}
+          <button
+            onClick={() => setShowKesiapanSubmenu(!showKesiapanSubmenu)}
+            className="flex flex-col items-center justify-center py-1 w-full cursor-pointer"
+          >
+            <div className="relative">
+              <Sparkles size={20} className={pathname.startsWith("/umkm/score") || pathname.startsWith("/umkm/gaps") || pathname.startsWith("/umkm/upload") || pathname.startsWith("/umkm/roadmap") ? "text-[#0f2d6b]" : "text-slate-400"} />
+              <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+            </div>
+            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/score") || pathname.startsWith("/umkm/gaps") || pathname.startsWith("/umkm/upload") || pathname.startsWith("/umkm/roadmap") ? "text-[#0f2d6b]" : "text-slate-400"}`}>
+              Kesiapan
+            </span>
+          </button>
+        </div>
 
-          <Link href="/umkm/score" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
-            <BarChart2 size={18} className={pathname.startsWith("/umkm/score") ? "text-[#0f2d6b]" : "text-slate-400"} />
-            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/score") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Skor</span>
-          </Link>
-
-          {/* Central AI Mic FAB */}
-          <div className="flex items-center justify-center flex-shrink-0 px-1">
-            <Link href="/umkm/catat">
-              <button
-                className={`w-11 h-11 rounded-full bg-gradient-to-tr from-[#0f2d6b] to-[#3b82f6] text-white flex items-center justify-center shadow-md shadow-[#0f2d6b]/30 transition-transform ${
-                  fabActive ? "scale-95" : "hover:scale-105"
-                }`}
-                onMouseDown={() => setFabActive(true)}
-                onMouseUp={() => setFabActive(false)}
-                title="Pencatatan AI Suara"
-              >
-                <Mic size={20} />
-              </button>
-            </Link>
-          </div>
-
-          <Link href="/umkm/gaps" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
-            <AlertTriangle size={18} className={pathname.startsWith("/umkm/gaps") ? "text-[#0f2d6b]" : "text-slate-400"} />
-            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/gaps") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Gap</span>
-          </Link>
-
-          <Link href="/umkm/roadmap" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
-            <Map size={18} className={pathname.startsWith("/umkm/roadmap") ? "text-[#0f2d6b]" : "text-slate-400"} />
-            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/roadmap") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Roadmap</span>
-          </Link>
-
-          <Link href="/umkm/ai-copilot" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
-            <Bot size={18} className={pathname.startsWith("/umkm/ai-copilot") ? "text-[#0f2d6b]" : "text-slate-400"} />
-            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/ai-copilot") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Copilot</span>
-          </Link>
-
-          <Link href="/umkm/laporan" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
-            <FileText size={18} className={pathname.startsWith("/umkm/laporan") ? "text-[#0f2d6b]" : "text-slate-400"} />
-            <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/laporan") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Laporan</span>
-          </Link>
-
-          <Link href="/umkm/profil" className="flex flex-col items-center justify-center min-w-[56px] py-1 px-1 flex-shrink-0 transition-colors">
-            <User size={18} className={pathname === "/umkm/profil" ? "text-[#0f2d6b]" : "text-slate-400"} />
-            <span className={`text-[9px] font-bold mt-1 ${pathname === "/umkm/profil" ? "text-[#0f2d6b]" : "text-slate-400"}`}>Profil</span>
+        {/* 3. Central AI Mic FAB */}
+        <div className="relative -top-4 flex items-center justify-center px-1">
+          <Link href="/umkm/catat" onClick={() => setShowKesiapanSubmenu(false)}>
+            <button
+              className={`w-13 h-13 rounded-full bg-gradient-to-tr from-[#0f2d6b] to-[#3b82f6] text-white flex items-center justify-center shadow-lg shadow-[#0f2d6b]/30 transition-transform ${
+                fabActive ? "scale-95" : "hover:scale-105"
+              }`}
+              onMouseDown={() => setFabActive(true)}
+              onMouseUp={() => setFabActive(false)}
+              title="Pencatatan AI Suara"
+            >
+              <Mic size={22} />
+            </button>
           </Link>
         </div>
+
+        {/* 4. AI Copilot / Laporan */}
+        <Link href="/umkm/ai-copilot" onClick={() => setShowKesiapanSubmenu(false)} className="flex-1 flex flex-col items-center justify-center py-1">
+          <Bot size={20} className={pathname.startsWith("/umkm/ai-copilot") || pathname.startsWith("/umkm/laporan") ? "text-[#0f2d6b]" : "text-slate-400"} />
+          <span className={`text-[9px] font-bold mt-1 ${pathname.startsWith("/umkm/ai-copilot") || pathname.startsWith("/umkm/laporan") ? "text-[#0f2d6b]" : "text-slate-400"}`}>Copilot</span>
+        </Link>
+
+        {/* 5. Profil */}
+        <Link href="/umkm/profil" onClick={() => setShowKesiapanSubmenu(false)} className="flex-1 flex flex-col items-center justify-center py-1">
+          <User size={20} className={pathname === "/umkm/profil" ? "text-[#0f2d6b]" : "text-slate-400"} />
+          <span className={`text-[9px] font-bold mt-1 ${pathname === "/umkm/profil" ? "text-[#0f2d6b]" : "text-slate-400"}`}>Profil</span>
+        </Link>
       </nav>
     </div>
   );
