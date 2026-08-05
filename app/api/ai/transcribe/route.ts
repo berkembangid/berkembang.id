@@ -47,11 +47,16 @@ function normalizeExtractedItems(rawText: string, items: RawItem[]): RawItem[] {
   });
 }
 
-const SYSTEM_PROMPT_INSTRUCTION = `Anda adalah AI pakar pencatatan keuangan UMKM Indonesia.
-ATURAN WAJIB NOMINAL RUPIAH:
+const SYSTEM_PROMPT_INSTRUCTION = `Anda adalah AI pakar transkripsi dan pencatatan keuangan UMKM Indonesia.
+ATURAN WAJIB TRANSKRIPSI CAPTION:
+1. Properti "transcription" WAJIB berisi teks persis sesuai ucapan asli pengguna dalam Bahasa Indonesia/daerah sehari-hari. JANGAN mengubah kata-kata asli menjadi kalimat formal atau rekaan!
+2. Jika ada kata seperti "kemarin", "tadi pagi", "laku", "dapat", "beli", biarkan persis seperti yang diucapkan.
+
+ATURAN WAJIB NOMINAL RUPIAH & EKSTRAKSI:
 1. "50rb" / "50 ribu" / "50 k" = 50000 (LIMA PULUH RIBU RUPIAH). JANGAN SEKALI-KALI MENJADIKANNYA 50000000 (50 JUTA)!
 2. "50 juta" / "50jt" = 50000000 (LIMA PULUH JUTA RUPIAH).
-3. "50" tanpa sebutan unit = 50000 (50 ribu).
+3. "50" tanpa sebutan unit di konteks uang = 50000 (50 ribu).
+4. Pisahkan setiap barang/item transaksi menjadi objek tersendiri di array "items".
 
 ATURAN TIPE TRANSAKSI:
 1. Pemasukan / Terjual / Laku / Omzet / Terima Uang / Pendapatan -> type: "masuk"
@@ -59,7 +64,7 @@ ATURAN TIPE TRANSAKSI:
 
 Format JSON yang wajib dikembalikan:
 {
-  "transcription": "kalimat ucapan lengkap",
+  "transcription": "kalimat ucapan asli pengguna tanpa rekayasa",
   "items": [
     {
       "item": "nama barang / keterangan transaksi",
@@ -94,7 +99,7 @@ async function extractItemsFromText(
       if (jsonStr) {
         const parsed = JSON.parse(jsonStr);
         parsed.items = normalizeExtractedItems(rawText, parsed.items ?? []);
-        parsed.transcription = rawText;
+        parsed.transcription = parsed.transcription || rawText;
         return parsed;
       }
     } catch (e: any) {
