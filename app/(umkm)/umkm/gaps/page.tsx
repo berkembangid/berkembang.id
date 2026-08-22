@@ -2,88 +2,55 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { AlertTriangle, TrendingUp, CheckCircle, ArrowRight, ShieldAlert, FileText } from "lucide-react";
+import { AlertTriangle, TrendingUp, CheckCircle, ArrowRight, ShieldAlert, FileText, ChevronRight, Upload, Mic, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { detectUserGaps, GapItem, REQUIRED_DOCS } from "@/lib/score";
 
 export default function GapsPage() {
-  const [analysis, setAnalysis] = useState<any>(null);
+  const [gaps, setGaps] = useState<GapItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-      const { data } = await supabase
-        .from("readiness_analyses")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        const [profRes, txsRes, docsRes, analysisRes] = await Promise.all([
+          supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+          supabase.from("transactions").select("*").eq("user_id", user.id),
+          supabase.from("documents").select("doc_type").eq("user_id", user.id),
+          supabase.from("readiness_analyses").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        ]);
 
-      setAnalysis(data);
-      setLoading(false);
+        const dbProfile = profRes.data;
+        const txs = txsRes.data || [];
+        const docs = docsRes.data || [];
+        const docTypes = new Set(docs.map((d: any) => d.doc_type));
+
+        const detectedGaps = detectUserGaps(dbProfile, txs, docTypes, user.user_metadata, analysisRes.data?.gaps);
+        setGaps(detectedGaps);
+      } catch (err) {
+        console.error("Error loading gaps:", err);
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
 
-  const defaultGaps = [
-    {
-      id: "1",
-      title: "NIB / Izin Usaha Tidak Ditemukan",
-      severity: "kritis",
-      category: "Legalitas",
-      gain: 12,
-      desc: "Surat Izin Usaha Perdagangan atau NIB tidak terdeteksi dalam dokumen yang diupload.",
-      why: "Lembaga keuangan mewajibkan NIB sebagai bukti bahwa usahamu terdaftar secara resmi.",
-      fix: "Daftarkan NIB melalui sistem OSS di oss.go.id — prosesnya gratis dan selesai 1-2 hari kerja.",
-    },
-    {
-      id: "2",
-      title: "Alamat Tidak Konsisten di KTP dan NPWP",
-      severity: "kritis",
-      category: "Konsistensi Data",
-      gain: 8,
-      desc: "Terdapat perbedaan penulisan alamat pada KTP pemilik dan dokumen NPWP.",
-      why: "Bank memverifikasi kecocokan data identitas untuk mencegah kasus manipulasi berkas.",
-      fix: "Perbarui data alamat di akun pajak / KTP agar selaras 100%.",
-    },
-    {
-      id: "3",
-      title: "Rekening Koran Belum Diupload",
-      severity: "penting",
-      category: "Kelengkapan",
-      gain: 10,
-      desc: "Mutasi koran bank 3 bulan terakhir belum diunggah ke portal.",
-      why: "Pihak analis bank mengukur cash flow masuk/keluar dari mutasi asli bank.",
-      fix: "Unduh e-Statement PDF dari mobile banking dan unggah di menu Upload Dokumen.",
-    },
-    {
-      id: "4",
-      title: "Frekuensi Catatan Transaksi Masih Rendah",
-      severity: "minor",
-      category: "Aktivitas Usaha",
-      gain: 5,
-      desc: "Riwayat pencatatan omzet harian masih dibawah 10 transaksi per bulan.",
-      why: "Catatan transaksi yang rutin menunjukkan stabilitas usaha.",
-      fix: "Gunakan fitur Pencatatan AI Suara setiap hari setelah toko tutup.",
-    },
-  ];
+  const criticalCount = gaps.filter((g) => g.severity === "kritis").length;
+  const importantCount = gaps.filter((g) => g.severity === "penting").length;
+  const minorCount = gaps.filter((g) => g.severity === "minor").length;
 
-  const gaps = analysis?.gaps && analysis.gaps.length > 0 ? analysis.gaps : defaultGaps;
-  const criticalCount = gaps.filter((g: any) => g.severity === "kritis").length;
-  const importantCount = gaps.filter((g: any) => g.severity === "penting").length;
-  const minorCount = gaps.filter((g: any) => g.severity === "minor").length;
-
-  const totalGain = gaps.reduce((acc: number, g: any) => acc + (g.gain || g.potential_gain || 0), 0);
+  const totalGain = gaps.reduce((acc: number, g) => acc + (g.gain || g.potential_gain || 0), 0);
 
   return (
     <div className="p-4 md:p-6 pb-28 md:pb-8 space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-xl md:text-2xl font-black text-slate-800">Gap Analysis</h1>
         <p className="text-xs md:text-sm text-slate-500 mt-1">
-          Temuan yang perlu diperbaiki untuk meningkatkan skor kesiapanmu.
+          Temuan prioritas yang perlu diperbaiki untuk mempercepat approval dan meningkatkan skor kesiapan usahamu.
         </p>
       </div>
 
@@ -126,68 +93,85 @@ export default function GapsPage() {
 
       {/* List of Gaps */}
       <div className="space-y-4">
-        {gaps.map((gap: any, i: number) => {
-          const isKritis = gap.severity === "kritis";
-          const isPenting = gap.severity === "penting";
+        {gaps.length === 0 ? (
+          <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center space-y-2 shadow-sm">
+            <CheckCircle size={36} className="mx-auto text-emerald-500" />
+            <h3 className="text-base font-bold text-slate-800">Tidak Ada Gap Ditemukan!</h3>
+            <p className="text-xs text-slate-500">Seluruh dokumen dan riwayat transaksi usahamu sudah dalam kondisi prima untuk pengajuan perbankan.</p>
+          </div>
+        ) : (
+          gaps.map((gap, i) => {
+            const isKritis = gap.severity === "kritis";
+            const isPenting = gap.severity === "penting";
 
-          return (
-            <div
-              key={i}
-              className={`bg-white rounded-2xl p-5 border shadow-sm space-y-3 ${
-                isKritis ? "border-red-200" : isPenting ? "border-amber-200" : "border-slate-200"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                      isKritis ? "bg-red-50 text-red-600" : isPenting ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"
-                    }`}
-                  >
-                    <AlertTriangle size={18} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-800">{gap.title}</h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span
-                        className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                          isKritis
-                            ? "bg-red-100 text-red-700"
-                            : isPenting
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
-                        {gap.severity}
-                      </span>
-                      <span className="text-xs text-slate-400">• {gap.category}</span>
+            return (
+              <div
+                key={gap.id || i}
+                className={`bg-white rounded-2xl p-5 border shadow-sm space-y-3 ${
+                  isKritis ? "border-red-200" : isPenting ? "border-amber-200" : "border-slate-200"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                        isKritis ? "bg-red-50 text-red-600" : isPenting ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"
+                      }`}
+                    >
+                      <AlertTriangle size={18} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-slate-800">{gap.title}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span
+                          className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                            isKritis
+                              ? "bg-red-100 text-red-700"
+                              : isPenting
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {gap.severity}
+                        </span>
+                        <span className="text-xs text-slate-400">• {gap.category}</span>
+                      </div>
                     </div>
                   </div>
+
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex-shrink-0">
+                    +{gap.gain || gap.potential_gain || 0} poin
+                  </span>
                 </div>
 
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex-shrink-0">
-                  +{gap.gain || gap.potential_gain || 0} poin
-                </span>
-              </div>
+                <p className="text-xs text-slate-600 leading-relaxed pl-11">{gap.desc}</p>
 
-              <p className="text-xs text-slate-600 leading-relaxed pl-11">{gap.desc || gap.description}</p>
-
-              {/* Explanations */}
-              <div className="pl-11 space-y-2 pt-1">
-                {gap.why && (
-                  <div className="bg-amber-50/60 border border-amber-200/50 rounded-xl p-3 text-xs text-amber-900 leading-normal">
-                    <span className="font-bold text-amber-950">Kenapa ini penting?</span> {gap.why}
-                  </div>
-                )}
-                {gap.fix && (
-                  <div className="bg-blue-50/60 border border-blue-200/50 rounded-xl p-3 text-xs text-blue-900 leading-normal">
-                    <span className="font-bold text-blue-950">Cara memperbaiki:</span> {gap.fix}
-                  </div>
-                )}
+                {/* Explanations */}
+                <div className="pl-11 space-y-2 pt-1">
+                  {gap.why && (
+                    <div className="bg-amber-50/60 border border-amber-200/50 rounded-xl p-3 text-xs text-amber-900 leading-normal">
+                      <span className="font-bold text-amber-950">Kenapa ini penting?</span> {gap.why}
+                    </div>
+                  )}
+                  {gap.fix && (
+                    <div className="bg-blue-50/60 border border-blue-200/50 rounded-xl p-3 text-xs text-blue-900 leading-normal">
+                      <span className="font-bold text-blue-950">Cara memperbaiki:</span> {gap.fix}
+                    </div>
+                  )}
+                  {gap.linkHref && (
+                    <div className="pt-1">
+                      <Link href={gap.linkHref}>
+                        <button className="text-xs font-bold text-[#0f2d6b] bg-blue-50 hover:bg-blue-100 px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer inline-flex items-center gap-1.5">
+                          Selesaikan Sekarang <ChevronRight size={13} />
+                        </button>
+                      </Link>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
     </div>
   );

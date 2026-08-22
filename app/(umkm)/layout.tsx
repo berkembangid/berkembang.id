@@ -5,25 +5,50 @@ import { usePathname } from "next/navigation";
 import { useRef, useState, useEffect } from "react";
 import {
   LayoutDashboard, Upload, BarChart2, AlertTriangle, Map,
-  Bot, FileText, HelpCircle, Shield, LogOut, Bell, ChevronDown,
-  Mic, Home, Sparkles, User, BarChart3, X, ArrowUpRight, ArrowDownLeft, CheckCircle2
+  Bot, FileText, LogOut, Bell,
+  Mic, Home, Sparkles, User, X, ArrowUpRight, ArrowDownLeft, CheckCircle2
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { calculateReadinessScore, REQUIRED_DOCS } from "@/lib/score";
 
-const NAV_MAIN = [
-  { label: "Beranda", href: "/umkm", Icon: LayoutDashboard },
-  { label: "Upload Dokumen", href: "/umkm/upload", Icon: Upload, badgeKey: "upload" },
-  { label: "Skor Kesiapan", href: "/umkm/score", Icon: BarChart2 },
-  { label: "Gap Analysis", href: "/umkm/gaps", Icon: AlertTriangle, badgeKey: "gaps" },
-  { label: "Roadmap", href: "/umkm/roadmap", Icon: Map },
-  { label: "AI Copilot", href: "/umkm/ai-copilot", Icon: Bot, badgeAI: true },
-  { label: "Laporan", href: "/umkm/laporan", Icon: FileText },
-  { label: "Profil Usaha", href: "/umkm/profil", Icon: User },
-];
+interface NavItem {
+  label: string;
+  href: string;
+  Icon: any;
+  badgeKey?: string;
+  badgeAI?: boolean;
+}
 
-const NAV_OTHER = [
-  { label: "Pusat Bantuan", href: "#", Icon: HelpCircle },
-  { label: "Privasi & Izin", href: "#", Icon: Shield },
+interface NavCategory {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_CATEGORIES: NavCategory[] = [
+  {
+    title: "Aktivitas & Pembukuan",
+    items: [
+      { label: "Beranda", href: "/umkm", Icon: LayoutDashboard },
+      { label: "Catat Transaksi", href: "/umkm/catat", Icon: Mic },
+      { label: "Laporan Keuangan", href: "/umkm/laporan", Icon: FileText },
+    ],
+  },
+  {
+    title: "Kesiapan Pendanaan",
+    items: [
+      { label: "Skor Kesiapan", href: "/umkm/score", Icon: BarChart2 },
+      { label: "Gap Analysis", href: "/umkm/gaps", Icon: AlertTriangle, badgeKey: "gaps" },
+      { label: "Upload Dokumen", href: "/umkm/upload", Icon: Upload, badgeKey: "upload" },
+      { label: "Roadmap Usaha", href: "/umkm/roadmap", Icon: Map },
+    ],
+  },
+  {
+    title: "Asisten & Akun",
+    items: [
+      { label: "AI Copilot", href: "/umkm/ai-copilot", Icon: Bot, badgeAI: true },
+      { label: "Profil Usaha", href: "/umkm/profil", Icon: User },
+    ],
+  },
 ];
 
 function getScoreLabel(score: number) {
@@ -59,10 +84,32 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       currentUserIdRef.current = user.id;
 
       let dbProfile: any = null;
+      let rawTxs: any[] = [];
+      let rawDocs: any[] = [];
+
       try {
-        const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
-        dbProfile = prof;
-      } catch (e) {}
+        const [profRes, txsRes, docsRes, analysisRes] = await Promise.all([
+          supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+          supabase.from("transactions").select("*").eq("user_id", user.id),
+          supabase.from("documents").select("doc_type").eq("user_id", user.id),
+          supabase.from("readiness_analyses").select("total_score, gaps").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+
+        dbProfile = profRes.data;
+        rawTxs = txsRes.data || [];
+        rawDocs = docsRes.data || [];
+        const uploadedTypes = new Set(rawDocs.map((d: any) => d.doc_type));
+
+        const realScore = calculateReadinessScore(dbProfile, rawTxs, uploadedTypes, user.user_metadata);
+        setTotalScore(realScore.totalScore);
+        setDocMissingCount(REQUIRED_DOCS.filter(t => !uploadedTypes.has(t)).length);
+
+        if (analysisRes.data) {
+          setGapCount((analysisRes.data.gaps as any[])?.length ?? 0);
+        }
+      } catch (e) {
+        console.error("Error loading layout data:", e);
+      }
 
       const nama = dbProfile?.name || dbProfile?.nama_usaha || user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Pengguna";
       const usaha = dbProfile?.nama_usaha || user.user_metadata?.nama_usaha || "";
@@ -73,29 +120,6 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       setUserAvatarUrl(avatar);
       const words = nama.trim().split(" ");
       setUserInitials(words.length >= 2 ? (words[0][0] + words[1][0]).toUpperCase() : nama.substring(0, 2).toUpperCase());
-
-      // Fetch latest readiness score
-      try {
-        const { data: analysis } = await supabase
-          .from("readiness_analyses")
-          .select("total_score, gaps")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (analysis) {
-          setTotalScore(analysis.total_score);
-          setGapCount((analysis.gaps as any[])?.length ?? 0);
-        }
-      } catch (e) {}
-
-      // Fetch doc missing count
-      try {
-        const REQUIRED_TYPES = ["ktp", "nib", "npwp", "laporan_keuangan", "rekening_koran", "akta"];
-        const { data: docs } = await supabase.from("documents").select("doc_type").eq("user_id", user.id);
-        const uploadedTypes = new Set((docs || []).map((d: any) => d.doc_type));
-        setDocMissingCount(REQUIRED_TYPES.filter(t => !uploadedTypes.has(t)).length);
-      } catch (e) {}
 
       // Notifications
       try {
@@ -133,12 +157,25 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
     <div className="min-h-screen flex bg-[#f0f2f7]">
 
       {/* ── DESKTOP SIDEBAR ── */}
+      {/* ── DESKTOP SIDEBAR ── */}
       <aside className="hidden md:flex w-60 bg-white border-r border-slate-200 flex-col fixed h-screen z-30 shadow-sm">
-        {/* Logo */}
-        <div className="px-5 h-14 flex items-center border-b border-slate-100">
+        {/* Logo & Notification Header */}
+        <div className="px-4 h-14 flex items-center justify-between border-b border-slate-100">
           <Link href="/umkm">
             <img src="/logo/logo berkembang.webp" alt="Berkembang.id" className="h-8 w-auto object-contain" />
           </Link>
+          <button
+            onClick={() => { setShowNotifModal(!showNotifModal); setUnreadCount(0); }}
+            className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 relative cursor-pointer transition-colors"
+            title="Notifikasi Transaksi"
+          >
+            <Bell size={15} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[9px] font-black flex items-center justify-center">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Score Card */}
@@ -160,50 +197,38 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
-          <div>
-            <p className="px-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">Menu Utama</p>
-            <div className="space-y-0.5">
-              {NAV_MAIN.map((item) => {
-                const isActive = item.href === "/umkm" ? pathname === "/umkm" : pathname.startsWith(item.href);
-                const badge = item.badgeKey === "upload" ? docMissingCount : item.badgeKey === "gaps" ? gapCount : 0;
-                return (
-                  <Link key={item.href} href={item.href}>
-                    <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                      isActive
-                        ? "bg-[#0f2d6b] text-white"
-                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    }`}>
-                      <item.Icon size={17} className="flex-shrink-0" />
-                      <span className="flex-1 truncate">{item.label}</span>
-                      {badge > 0 && (
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ${isActive ? "bg-white/20 text-white" : "bg-red-500 text-white"}`}>
-                          {badge}
-                        </span>
-                      )}
-                      {item.badgeAI && (
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? "bg-cyan-400 text-[#0f2d6b]" : "bg-[#0f2d6b] text-white"}`}>AI</span>
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
+        <nav className="flex-1 px-3 py-3 space-y-4 overflow-y-auto">
+          {NAV_CATEGORIES.map((cat) => (
+            <div key={cat.title}>
+              <p className="px-2.5 text-[9.5px] font-black uppercase tracking-wider text-slate-400 mb-1">{cat.title}</p>
+              <div className="space-y-0.5">
+                {cat.items.map((item) => {
+                  const isActive = item.href === "/umkm" ? pathname === "/umkm" : pathname.startsWith(item.href);
+                  const badge = item.badgeKey === "upload" ? docMissingCount : item.badgeKey === "gaps" ? gapCount : 0;
+                  return (
+                    <Link key={item.href} href={item.href}>
+                      <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                        isActive
+                          ? "bg-[#0f2d6b] text-white shadow-sm"
+                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      }`}>
+                        <item.Icon size={16} className="flex-shrink-0" />
+                        <span className="flex-1 truncate">{item.label}</span>
+                        {badge > 0 && (
+                          <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full min-w-[17px] text-center ${isActive ? "bg-white/20 text-white" : "bg-red-500 text-white"}`}>
+                            {badge}
+                          </span>
+                        )}
+                        {item.badgeAI && (
+                          <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full ${isActive ? "bg-cyan-400 text-[#0f2d6b]" : "bg-[#0f2d6b] text-white"}`}>AI</span>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-
-          <div>
-            <p className="px-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">Lainnya</p>
-            <div className="space-y-0.5">
-              {NAV_OTHER.map((item) => (
-                <Link key={item.label} href={item.href}>
-                  <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all cursor-pointer">
-                    <item.Icon size={17} />
-                    <span>{item.label}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
+          ))}
         </nav>
 
         {/* User Profile Footer */}
@@ -231,41 +256,21 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
 
       {/* ── MAIN CONTENT ── */}
       <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
-        {/* Desktop topbar */}
-        <header className="hidden md:flex h-14 bg-white border-b border-slate-200 items-center justify-between px-6 sticky top-0 z-20">
-          <p className="text-sm text-slate-500 font-medium">Dashboard</p>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => { setShowNotifModal(true); setUnreadCount(0); }}
-              className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 relative cursor-pointer transition-colors"
-            >
-              <Bell size={17} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[9px] font-black flex items-center justify-center animate-bounce">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </button>
-            <Link href="/umkm/profil" className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer">
-              <div className="w-7 h-7 rounded-full bg-[#0f2d6b] text-white flex items-center justify-center font-bold text-xs overflow-hidden">
-                {userAvatarUrl ? <img src={userAvatarUrl} className="w-full h-full object-cover" alt={userName} /> : userInitials}
-              </div>
-              <span className="text-sm font-semibold text-slate-700 max-w-[120px] truncate">{userName}</span>
-              <ChevronDown size={14} className="text-slate-400" />
-            </Link>
-          </div>
-        </header>
-
         <div className="flex-1 w-full">{children}</div>
       </div>
 
-      {/* ── NOTIFICATION MODAL ── */}
+      {/* ── NOTIFICATION MODAL / POPOVER (LIGHTWEIGHT & SNAPPY) ── */}
       {showNotifModal && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-[1px] z-[100]" onClick={() => setShowNotifModal(false)}>
-          <div className="absolute top-14 right-4 md:right-6 w-80 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 space-y-3 z-[101] animate-fade-in-up" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-slate-900/30 z-[100] flex md:block items-start justify-center p-3 md:p-0" onClick={() => setShowNotifModal(false)}>
+          <div
+            className="w-80 max-w-full bg-white border border-slate-200 shadow-xl rounded-2xl p-4 space-y-3 z-[101] md:fixed md:top-3 md:left-64 animate-fade-in"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <Bell size={14} className="text-[#0f2d6b]" />
+                <div className="w-7 h-7 rounded-full bg-blue-50 text-[#0f2d6b] flex items-center justify-center">
+                  <Bell size={14} />
+                </div>
                 <div>
                   <h3 className="font-bold text-xs text-slate-800">Notifikasi Transaksi</h3>
                   <p className="text-[10px] text-slate-400 flex items-center gap-1">
@@ -278,7 +283,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
                 <X size={13} />
               </button>
             </div>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-1.5 max-h-72 overflow-y-auto">
               {notifications.length === 0 ? (
                 <div className="py-6 text-center">
                   <CheckCircle2 size={24} className="text-emerald-500 mx-auto mb-1" />
@@ -287,22 +292,22 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
                 </div>
               ) : (
                 notifications.map((n, idx) => (
-                  <div key={n.id ?? idx} className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${
-                    idx === 0 && unreadCount > 0 ? "bg-blue-50 border-blue-200" : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+                  <div key={n.id ?? idx} className={`p-2 rounded-xl border flex items-center justify-between text-xs transition-colors ${
+                    idx === 0 && unreadCount > 0 ? "bg-blue-50 border-blue-200" : "bg-slate-50 border-slate-200/80 hover:bg-slate-100"
                   }`}>
-                    <div className="flex items-center gap-2.5 overflow-hidden">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${n.type === "masuk" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
-                        {n.type === "masuk" ? <ArrowDownLeft size={13} /> : <ArrowUpRight size={13} />}
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 ${n.type === "masuk" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
+                        {n.type === "masuk" ? <ArrowDownLeft size={12} /> : <ArrowUpRight size={12} />}
                       </div>
                       <div className="overflow-hidden">
                         <div className="flex items-center gap-1.5">
-                          <p className="font-bold text-slate-800 truncate">{n.type === "masuk" ? "+" : "-"}Rp{Number(n.nominal).toLocaleString("id-ID")}</p>
-                          {idx === 0 && unreadCount > 0 && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-red-500 text-white flex-shrink-0">Baru</span>}
+                          <p className="font-bold text-slate-800 truncate text-[11px]">{n.type === "masuk" ? "+" : "-"}Rp{Number(n.nominal).toLocaleString("id-ID")}</p>
+                          {idx === 0 && unreadCount > 0 && <span className="text-[8px] font-black px-1.5 py-0.2 rounded-full bg-red-500 text-white flex-shrink-0">Baru</span>}
                         </div>
-                        <p className="text-[10px] text-slate-500 truncate">{n.item}</p>
+                        <p className="text-[9.5px] text-slate-500 truncate">{n.item}</p>
                       </div>
                     </div>
-                    <span className="text-[9px] text-slate-400 flex-shrink-0 ml-1">{n.tanggal || "Baru saja"}</span>
+                    <span className="text-[8.5px] text-slate-400 flex-shrink-0 ml-1">{n.tanggal || "Baru"}</span>
                   </div>
                 ))
               )}

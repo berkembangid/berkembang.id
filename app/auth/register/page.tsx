@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, Mail, AlertCircle, Store, Building, User } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, AlertCircle, Store, Building, User, ShieldCheck, X, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 
@@ -18,6 +18,8 @@ export default function RegisterPage() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [error, setError] = useState("");
 
   // UMKM form fields
@@ -68,6 +70,11 @@ export default function RegisterPage() {
     if (step < 2) {
       if (!validateStep1()) return;
       setStep(2);
+      return;
+    }
+
+    if (!agreeTerms) {
+      setError("Silakan setujui Syarat & Ketentuan dan Kebijakan Privasi terlebih dahulu.");
       return;
     }
 
@@ -373,6 +380,33 @@ export default function RegisterPage() {
                 </button>
               </div>
             </div>
+
+            {/* Terms and Conditions Checkbox */}
+            <div className="flex items-start gap-2.5 pt-1">
+              <input
+                type="checkbox"
+                id="agreeTerms"
+                checked={agreeTerms}
+                disabled={loading}
+                onChange={(e) => {
+                  setAgreeTerms(e.target.checked);
+                  if (error) setError("");
+                }}
+                className="mt-0.5 h-4 w-4 rounded border-[#c5c5d7] text-[#001b85] focus:ring-[#001b85] cursor-pointer"
+                required
+              />
+              <label htmlFor="agreeTerms" className="text-xs text-[#566072] leading-relaxed cursor-pointer select-none">
+                Saya menyetujui{" "}
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="text-[#001b85] font-bold underline hover:text-[#08299f] cursor-pointer inline focus:outline-none"
+                >
+                  Syarat &amp; Ketentuan
+                </button>{" "}
+                dan Kebijakan Perlindungan Data.
+              </label>
+            </div>
           </>
         )}
 
@@ -387,8 +421,9 @@ export default function RegisterPage() {
             </button>
           )}
           <button
-            type="submit" disabled={loading}
-            className="flex-1 bg-[#001b85] text-white font-bold py-3.5 rounded-full text-sm hover:bg-[#08299f] transition-colors disabled:bg-[#001b85]/50 flex items-center justify-center cursor-pointer disabled:cursor-not-allowed shadow-[0_12px_28px_rgba(0,27,133,.16)]"
+            type="submit"
+            disabled={loading || (step === 2 && !agreeTerms)}
+            className="flex-1 bg-[#001b85] text-white font-bold py-3.5 rounded-full text-sm hover:bg-[#08299f] transition-all disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none flex items-center justify-center cursor-pointer disabled:cursor-not-allowed shadow-[0_12px_28px_rgba(0,27,133,.16)]"
           >
             {loading ? "Memproses..." : step === 1 ? "Lanjut →" : `Daftar sebagai ${role === "umkm" ? "UMKM" : "Institusi"}`}
           </button>
@@ -399,6 +434,99 @@ export default function RegisterPage() {
         Sudah punya akun?{" "}
         <Link href="/auth/login" className="text-[#001b85] font-bold hover:underline">Masuk</Link>
       </p>
+
+      {/* Terms & Conditions Modal */}
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40" onClick={() => setShowTermsModal(false)}>
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] animate-fade-in" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-blue-50 text-[#001b85] flex items-center justify-center">
+                  <ShieldCheck size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[#141a34]">Syarat &amp; Ketentuan Layanan</h3>
+                  <p className="text-[11px] text-[#687086]">Kebijakan Perlindungan Privasi Data</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-200/60 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto space-y-4 text-xs text-slate-600 leading-relaxed">
+              {/* Privacy Highlight Box */}
+              <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-4 text-[#001b85]">
+                <div className="flex items-center gap-1.5 font-bold text-xs mb-1.5 text-[#001b85]">
+                  <Lock size={14} className="shrink-0" />
+                  <span>Komitmen Privasi &amp; Penggunaan Data:</span>
+                </div>
+                <p className="font-medium text-slate-800 text-[12px] leading-relaxed">
+                  “Data yang dikumpulkan akan digunakan semata-mata untuk mendukung operasional, pengembangan, dan peningkatan layanan website. Kami tidak menjual, menyewakan, atau memperdagangkan data pengguna kepada pihak ketiga.”
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                    <CheckCircle2 size={14} className="text-[#001b85]" /> 1. Operasional &amp; Fitur Layanan
+                  </h4>
+                  <p className="pl-5 text-[11px] text-slate-600">
+                    Data transaksi, profil, dan dokumen yang Anda masukkan diolah untuk kalkulasi Skor Kesiapan, Analisis Gap, dan asisten AI Copilot guna mendukung kemajuan usaha Anda.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                    <CheckCircle2 size={14} className="text-[#001b85]" /> 2. Hak &amp; Kendali Penuh
+                  </h4>
+                  <p className="pl-5 text-[11px] text-slate-600">
+                    Anda memiliki kendali penuh untuk memperbarui, mengubah, atau menghapus data dan dokumen usaha Anda kapan saja melalui dashboard profil.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 text-right">
+                <Link
+                  href="/terms"
+                  target="_blank"
+                  className="text-[11px] font-bold text-[#001b85] hover:underline inline-flex items-center gap-1"
+                >
+                  Baca Halaman Syarat &amp; Ketentuan Lengkap ↗
+                </Link>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+              >
+                Tutup
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAgreeTerms(true);
+                  setShowTermsModal(false);
+                  if (error) setError("");
+                }}
+                className="px-4 py-2 text-xs font-bold bg-[#001b85] text-white hover:bg-[#08299f] rounded-xl transition-colors cursor-pointer shadow-sm"
+              >
+                Saya Mengerti &amp; Setujui
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

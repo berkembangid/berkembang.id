@@ -502,8 +502,8 @@ export default function LaporanPage() {
 
       {/* Manual Input Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-md relative shadow-2xl animate-fade-in-up">
+        <div className="fixed inset-0 bg-slate-900/35 z-[60] flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
+          <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-md relative shadow-xl animate-fade-in" onClick={(e) => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-headline font-bold text-base text-[#141a34] flex items-center gap-2">
