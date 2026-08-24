@@ -20,13 +20,10 @@ export default function LaporanPage() {
   const toYMD = (d: Date) => d.toISOString().split("T")[0];
   const todayStr = toYMD(now);
 
-  // Default to current month range
-  const firstOfMonth = toYMD(new Date(now.getFullYear(), now.getMonth(), 1));
-  const lastOfMonth = toYMD(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-
-  const [preset, setPreset] = useState<"hari" | "minggu" | "bulan" | "semua" | "custom">("bulan");
-  const [startDate, setStartDate] = useState<string>(firstOfMonth);
-  const [endDate, setEndDate] = useState<string>(lastOfMonth);
+  // Default to today
+  const [preset, setPreset] = useState<"hari" | "minggu" | "bulan" | "semua" | "custom">("hari");
+  const [startDate, setStartDate] = useState<string>(todayStr);
+  const [endDate, setEndDate] = useState<string>(todayStr);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showModal, setShowModal] = useState(false);

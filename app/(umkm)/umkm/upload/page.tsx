@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Upload, FileText, CheckCircle2, AlertCircle, Trash2, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+import { Upload, FileText, CheckCircle2, AlertCircle, Trash2, ArrowUpRight, Sparkles, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const REQUIRED_DOCS = [
@@ -52,6 +53,47 @@ export default function UploadPage() {
       const { data: publicUrlData } = supabase.storage.from("documents").getPublicUrl(storagePath);
       const fileUrl = publicUrlData?.publicUrl || "";
 
+      let aiNotes = "";
+      let extractedNibNumber: string | null = null;
+
+      // If document is NIB, trigger AI extraction and update user profile
+      if (docType === "nib") {
+        try {
+          const extractFormData = new FormData();
+          extractFormData.append("file", file);
+
+          const res = await fetch("/api/ai/extract-nib", {
+            method: "POST",
+            body: extractFormData,
+          });
+
+          if (res.ok) {
+            const extractData = await res.json();
+            if (extractData?.nib) {
+              extractedNibNumber = extractData.nib;
+              aiNotes = `NIB Terdeteksi: ${extractData.nib}`;
+
+              // 1. Sync to Supabase Auth User Metadata
+              await supabase.auth.updateUser({
+                data: {
+                  nib: extractData.nib,
+                  ...(extractData.nama_usaha ? { nama_usaha_oss: extractData.nama_usaha } : {}),
+                },
+              });
+
+              // 2. Sync to Supabase 'profiles' table
+              await supabase.from("profiles").upsert({
+                id: user.id,
+                nib: extractData.nib,
+                updated_at: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (aiErr) {
+          console.warn("AI NIB extraction warning:", aiErr);
+        }
+      }
+
       // Insert record to DB
       const { error: dbErr } = await supabase.from("documents").insert({
         user_id: user.id,
@@ -61,12 +103,17 @@ export default function UploadPage() {
         file_url: fileUrl,
         file_size: file.size,
         mime_type: file.type,
-        status: "uploaded"
+        status: "uploaded",
+        ai_notes: aiNotes || undefined,
       });
 
       if (dbErr) throw dbErr;
 
-      setMsg(`Dokumen ${file.name} berhasil diupload!`);
+      if (extractedNibNumber) {
+        setMsg(`🎉 Dokumen NIB "${file.name}" berhasil diunggah! Nomor NIB (${extractedNibNumber}) berhasil diekstrak dan otomatis tersimpan di Profil Usaha.`);
+      } else {
+        setMsg(`Dokumen ${file.name} berhasil diupload!`);
+      }
       await fetchDocs();
     } catch (err: any) {
       setMsg(`Gagal upload: ${err.message}`);
@@ -152,36 +199,49 @@ export default function UploadPage() {
               </div>
 
               {/* Upload area or view file */}
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+              <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
                 {isUploaded ? (
-                  <div className="flex items-center justify-between w-full">
-                    <div className="overflow-hidden">
-                      <p className="text-xs font-semibold text-slate-700 truncate max-w-[200px]">{uploadedDoc.name}</p>
-                      <p className="text-[10px] text-slate-400">Status: {uploadedDoc.status}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {uploadedDoc.file_url && (
-                        <a
-                          href={uploadedDoc.file_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-0.5"
+                  <>
+                    <div className="flex items-center justify-between w-full">
+                      <div className="overflow-hidden">
+                        <p className="text-xs font-semibold text-slate-700 truncate max-w-[200px]">{uploadedDoc.name}</p>
+                        <p className="text-[10px] text-slate-400">Status: {uploadedDoc.status}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {uploadedDoc.file_url && (
+                          <a
+                            href={uploadedDoc.file_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-0.5"
+                          >
+                            Lihat <ArrowUpRight size={12} />
+                          </a>
+                        )}
+                        <button
+                          onClick={() => handleDelete(uploadedDoc.id, uploadedDoc.storage_path)}
+                          className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                         >
-                          Lihat <ArrowUpRight size={12} />
-                        </a>
-                      )}
-                      <button
-                        onClick={() => handleDelete(uploadedDoc.id, uploadedDoc.storage_path)}
-                        className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                    {uploadedDoc.ai_notes && (
+                      <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl p-2.5 flex items-center justify-between text-[11px] text-emerald-800">
+                        <span className="flex items-center gap-1.5 font-bold font-mono">
+                          <Sparkles size={13} className="text-emerald-600 flex-shrink-0" />
+                          {uploadedDoc.ai_notes}
+                        </span>
+                        <Link href="/umkm/profil" className="font-bold underline text-emerald-900 hover:text-emerald-700 ml-2 whitespace-nowrap">
+                          Lihat di Profil →
+                        </Link>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <label className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 py-2.5 px-4 rounded-xl text-xs font-bold text-blue-600 cursor-pointer transition-all">
                     <Upload size={14} />
-                    {isUploading ? "Mengunggah..." : "Pilih / Drop Dokumen"}
+                    {isUploading ? (doc.type === "nib" ? "Mengekstrak NIB AI..." : "Mengunggah...") : "Pilih / Drop Dokumen"}
                     <input
                       type="file"
                       className="hidden"

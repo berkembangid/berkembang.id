@@ -366,11 +366,26 @@ export default function ProfilPage() {
                     value={form.nib}
                     onChange={(e) => setForm({ ...form, nib: e.target.value })}
                     placeholder="13 Digit NIB (Opsional, dari OSS.go.id)"
-                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none font-mono"
+                    className={`w-full px-4 py-3 pl-10 pr-4 rounded-xl border text-sm focus:border-[#001b85] focus:outline-none font-mono ${
+                      form.nib ? "border-emerald-300 bg-emerald-50/40" : "border-[#c5c5d7]"
+                    }`}
                   />
-                  <FileText size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <FileText size={17} className={`absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none ${form.nib ? "text-emerald-500" : "text-slate-400"}`} />
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">💡 Pengisian NIB akan menaikkan Readiness Score usaha Anda secara signifikan.</p>
+                {form.nib ? (
+                  <div className="flex items-center justify-between mt-1.5">
+                    <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                      <ShieldCheck size={12} /> NIB terisi — skor kesiapan usaha Anda meningkat signifikan.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    💡 Pengisian NIB akan menaikkan Readiness Score usaha Anda secara signifikan.{" "}
+                    <Link href="/umkm/upload" className="text-[#001b85] underline font-semibold">
+                      Upload dokumen NIB untuk ekstraksi otomatis →
+                    </Link>
+                  </p>
+                )}
               </div>
             </div>
           </div>
