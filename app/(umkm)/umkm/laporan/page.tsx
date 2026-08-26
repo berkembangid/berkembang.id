@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar, Trash2, X, PlusCircle, Sparkles, Receipt, Check, Download, FileSpreadsheet } from "lucide-react";
+import { Plus, BarChart3, TrendingUp, TrendingDown, DollarSign, Trash2, X, PlusCircle, Receipt, Check, FileSpreadsheet } from "lucide-react";
 import DateTimePicker from "@/components/DateTimePicker";
 import { supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 
 interface Transaction {
-  id: number;
+  id: string;
   item: string;
   qty: string;
   type: "masuk" | "keluar";
@@ -16,6 +17,7 @@ interface Transaction {
 }
 
 export default function LaporanPage() {
+  type Preset = "hari" | "minggu" | "bulan" | "semua" | "custom";
   const now = new Date();
   const toYMD = (d: Date) => d.toISOString().split("T")[0];
   const todayStr = toYMD(now);
@@ -24,7 +26,7 @@ export default function LaporanPage() {
   const firstOfMonth = toYMD(new Date(now.getFullYear(), now.getMonth(), 1));
   const lastOfMonth = toYMD(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
-  const [preset, setPreset] = useState<"hari" | "minggu" | "bulan" | "semua" | "custom">("bulan");
+  const [preset, setPreset] = useState<Preset>("bulan");
   const [startDate, setStartDate] = useState<string>(firstOfMonth);
   const [endDate, setEndDate] = useState<string>(lastOfMonth);
 
@@ -32,7 +34,8 @@ export default function LaporanPage() {
   const [showModal, setShowModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [saveError, setSaveError] = useState("");
 
   // Form states
   const [txType, setTxType] = useState<"masuk" | "keluar">("masuk");
@@ -43,7 +46,7 @@ export default function LaporanPage() {
   const [txTanggal, setTxTanggal] = useState(todayStr);
 
   // Preset button click handler
-  const handlePresetClick = (type: "hari" | "minggu" | "bulan" | "semua") => {
+  const handlePresetClick = (type: Exclude<Preset, "custom">) => {
     setPreset(type);
     const currentDate = new Date();
 
@@ -76,26 +79,30 @@ export default function LaporanPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         setUser(user);
+        if (!user) {
+          setSaveError("Sesi berakhir. Silakan masuk kembali.");
+          return;
+        }
         
-        if (user) {
-          const { data, error } = await supabase
-            .from("transactions")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("tanggal", { ascending: false });
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("tanggal", { ascending: false });
 
-          if (!error && data) {
-            const mapped: Transaction[] = data.map((t: any) => ({
-              id: t.id,
-              item: t.item,
-              qty: t.qty || "1 barang",
-              type: t.type,
-              nominal: Number(t.nominal),
-              kategori: t.kategori,
-              tanggal: t.tanggal ? t.tanggal.split("T")[0] : todayStr
-            }));
-            setTransactions(mapped);
-          }
+        if (error) {
+          setSaveError("Laporan belum dapat dimuat. Silakan coba lagi.");
+        } else if (data) {
+          const mapped: Transaction[] = data.map((t: Record<string, unknown>) => ({
+            id: String(t.id),
+            item: String(t.item ?? ""),
+            qty: String(t.qty ?? ""),
+            type: t.type === "keluar" ? "keluar" : "masuk",
+            nominal: Number(t.nominal),
+            kategori: String(t.kategori ?? ""),
+            tanggal: t.tanggal ? String(t.tanggal).split("T")[0] : todayStr
+          }));
+          setTransactions(mapped);
         }
       } catch (err) {
         console.error("Error checking auth or fetching data:", err);
@@ -113,55 +120,51 @@ export default function LaporanPage() {
 
     const nominalNum = Number(txNominal) || 0;
     const qtyStr = txQty || "1 barang";
+    setSaveError("");
 
-    if (user) {
-      try {
-        const { data, error } = await supabase
-          .from("transactions")
-          .insert({
-            user_id: user.id,
-            item: txName,
-            qty: qtyStr,
-            type: txType,
-            nominal: nominalNum,
-            kategori: txKategori,
-            tanggal: txTanggal
-          })
-          .select()
-          .single();
+    if (!user) {
+      setSaveError("Sesi berakhir. Transaksi belum disimpan.");
+      return;
+    }
 
-        if (error) {
-          console.error("Gagal menambahkan transaksi di Supabase:", error.message);
-          return;
-        }
+    if (nominalNum <= 0) {
+      setSaveError("Nominal harus lebih dari nol.");
+      return;
+    }
 
-        if (data) {
-          const newTransaction: Transaction = {
-            id: data.id,
-            item: data.item,
-            qty: data.qty || "1 barang",
-            type: data.type,
-            nominal: Number(data.nominal),
-            kategori: data.kategori,
-            tanggal: data.tanggal
-          };
-          setTransactions([newTransaction, ...transactions]);
-        }
-      } catch (err) {
-        console.error("Error adding transaction:", err);
+    try {
+      const { data, error } = await supabase
+        .from("transactions")
+        .insert({
+          user_id: user.id,
+          item: txName,
+          qty: qtyStr,
+          type: txType,
+          nominal: nominalNum,
+          kategori: txKategori,
+          tanggal: txTanggal
+        })
+        .select()
+        .single();
+
+      if (error || !data) {
+        setSaveError("Transaksi belum tersimpan. Silakan coba lagi.");
         return;
       }
-    } else {
+
       const newTransaction: Transaction = {
-        id: Date.now(),
-        item: txName,
-        qty: qtyStr,
-        type: txType,
-        nominal: nominalNum,
-        kategori: txKategori,
-        tanggal: txTanggal,
+        id: data.id,
+        item: data.item,
+        qty: data.qty || "1 barang",
+        type: data.type === "keluar" ? "keluar" : "masuk",
+        nominal: Number(data.nominal),
+        kategori: data.kategori ?? txKategori,
+        tanggal: data.tanggal ?? txTanggal,
       };
       setTransactions([newTransaction, ...transactions]);
+    } catch {
+      setSaveError("Transaksi belum tersimpan. Periksa koneksi lalu coba lagi.");
+      return;
     }
 
     setShowModal(false);
@@ -175,7 +178,7 @@ export default function LaporanPage() {
     setTxTanggal(todayStr);
   };
 
-  const handleDeleteTransaction = async (id: number) => {
+  const handleDeleteTransaction = async (id: string) => {
     if (user) {
       try {
         const { error } = await supabase
@@ -185,16 +188,17 @@ export default function LaporanPage() {
           .eq("user_id", user.id);
 
         if (error) {
-          console.error("Gagal menghapus transaksi dari Supabase:", error.message);
+          setSaveError("Transaksi belum berhasil dihapus.");
           return;
         }
 
         setTransactions(transactions.filter(t => t.id !== id));
       } catch (err) {
         console.error("Error deleting transaction:", err);
+        setSaveError("Transaksi belum berhasil dihapus.");
       }
     } else {
-      setTransactions(transactions.filter(t => t.id !== id));
+      setSaveError("Sesi berakhir. Transaksi belum dihapus.");
     }
   };
 
@@ -306,21 +310,27 @@ export default function LaporanPage() {
         </div>
       </div>
 
+      {saveError && (
+        <div role="alert" className="mx-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+          {saveError}
+        </div>
+      )}
+
       {/* Streamlined Filter Bar */}
       <div className="px-4">
         <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-sm space-y-3">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             {/* Quick Filter Preset Chips */}
             <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar">
-              {[
+              {([
                 { id: "hari", label: "Hari Ini" },
                 { id: "minggu", label: "Minggu Ini" },
                 { id: "bulan", label: "Bulan Ini" },
                 { id: "semua", label: "Semua" },
-              ].map((chip) => (
+              ] satisfies Array<{ id: Exclude<Preset, "custom">; label: string }>).map((chip) => (
                 <button
                   key={chip.id}
-                  onClick={() => handlePresetClick(chip.id as any)}
+                  onClick={() => handlePresetClick(chip.id)}
                   className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                     preset === chip.id
                       ? "bg-[#001b85] text-white shadow-sm"

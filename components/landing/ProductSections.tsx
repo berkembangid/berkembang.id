@@ -30,8 +30,8 @@ function FeatureBento() {
             <div className="voice-demo">
               <div className="flex items-center justify-between text-[10px] font-semibold text-[#687086]"><span>Rekaman baru</span><span>00:08</span></div>
               <div className="voice-wave my-5" aria-hidden="true">{[14, 28, 46, 31, 58, 38, 52, 24, 43, 18, 32, 12].map((height, index) => <span key={index} style={{ height }} />)}</div>
-              <p className="rounded-xl bg-[#f3f2ff] p-3 text-xs leading-5 text-[#3e4659]">â€œBayar stok sayur seratus delapan puluh ribu.â€</p>
-              <div className="mt-3 flex items-center gap-3 rounded-xl border border-[#dfe3ed] p-3"><span className="inline-flex size-8 items-center justify-center rounded-full bg-[#e6f7ef] text-[#15803d]"><Check size={14} /></span><div><p className="text-[10px] font-bold">Pengeluaran tercatat</p><p className="text-[9px] text-[#7b8294]">Bahan baku Â· Rp180.000</p></div></div>
+              <p className="rounded-xl bg-[#f3f2ff] p-3 text-xs leading-5 text-[#3e4659]">“Bayar stok sayur seratus delapan puluh ribu.”</p>
+              <div className="mt-3 flex items-center gap-3 rounded-xl border border-[#dfe3ed] p-3"><span className="inline-flex size-8 items-center justify-center rounded-full bg-[#e6f7ef] text-[#15803d]"><Check size={14} /></span><div><p className="text-[10px] font-bold">Pengeluaran tercatat</p><p className="text-[9px] text-[#7b8294]">Bahan baku · Rp180.000</p></div></div>
             </div>
           </article>
 

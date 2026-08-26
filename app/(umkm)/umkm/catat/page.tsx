@@ -5,20 +5,41 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Mic, RefreshCw, Trash2, Edit2, Check, X,
-  Sparkles, Type, Square, Volume2, PenLine, RotateCcw,
+  Sparkles, Type, Square, Volume2, PenLine, RotateCcw, AlertCircle,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import {
+  cancelCapture,
+  confirmCapture,
+  createCapture,
+  getCapture,
+  processCapture,
+  CaptureClientError,
+  type CaptureClientView,
+} from "@/modules/ledger/capture-client";
+import {
+  categoryLabels,
+  type TransactionDraftItem,
+} from "@/modules/ledger/capture-schema";
 
 // ───────── TYPES ─────────
 type Step = "idle" | "recording" | "processing" | "preview";
 
 interface ExtractedItem {
   id: number;
+  clientItemId: string;
   item: string;
   qty: string;
   type: "masuk" | "keluar";
   nominal: number;
-  kategori: string;
+  kategori: "Penjualan" | "Bahan" | "Operasional" | "Gaji" | "Lainnya";
+  transactionDate: string;
+  categoryCode: TransactionDraftItem["categoryCode"];
+  quantity: number | null;
+  unit: string | null;
+  unitPriceIdr: number | null;
+  paymentMethod: TransactionDraftItem["paymentMethod"];
+  salesChannel: string | null;
 }
 
 // ───────── CONSTANTS ─────────
@@ -30,82 +51,65 @@ const SUGGESTIONS = [
 
 const WAVE_BARS = [40, 80, 60, 100, 75, 45, 90, 65, 30];
 const CAPTION_SKELETON = [1, 2, 3, 4, 5];
-
-// ───────── LOCAL NLP PARSER ─────────
-function parseIndonesianTransactionText(input: string): ExtractedItem[] {
-  if (!input.trim()) return [];
-
-  const sentences = input
-    .split(/(?:\.|\n|dan|, lalu|, kemudian|sekalian)/i)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const results: ExtractedItem[] = [];
-  let nextId = 1;
-
-  for (const sentence of sentences) {
-    let nominal = 0;
-    const rbMatch = sentence.match(/(\d+(?:[\.,]\d+)?)\s*(?:rb|ribu|k)\b/i);
-    const jutaMatch = sentence.match(/(\d+(?:[\.,]\d+)?)\s*(?:jt|juta)\b/i);
-    const rawNumberMatch = sentence.match(/(?:rp\.?|rp\s*)?(\d{1,3}(?:\.\d{3})+|\d{4,9})/i);
-
-    if (rbMatch) {
-      nominal = Math.round(parseFloat(rbMatch[1].replace(",", ".")) * 1000);
-    } else if (jutaMatch) {
-      nominal = Math.round(parseFloat(jutaMatch[1].replace(",", ".")) * 1_000_000);
-    } else if (rawNumberMatch) {
-      nominal = parseInt(rawNumberMatch[1].replace(/\./g, ""), 10);
-    }
-
-    if (nominal <= 0) continue;
-
-    const lower = sentence.toLowerCase();
-    const isMasuk = /(jual|laku|dapat|terjual|omzet|pemasukan|terima|pesanan|penjualan|masuk|pendapatan|bayaran)/i.test(lower);
-    const isKeluar = /(beli|bayar|belanja|sewa|listrik|pengeluaran|gaji|ongkir|modal|habis|keluar)/i.test(lower);
-    const type: "masuk" | "keluar" = isKeluar && !isMasuk ? "keluar" : isMasuk ? "masuk" : "masuk";
-
-    const qtyMatch = sentence.match(/(\d+)\s*(porsi|paket|karung|kg|liter|tabung|unit|pcs|botol|biji|pasang|lembar)/i);
-    const qty = qtyMatch ? `${qtyMatch[1]} ${qtyMatch[2]}` : "1 paket";
-
-    let kategori = type === "masuk" ? "Penjualan" : "Operasional";
-    if (/(cabe|ayam|beras|bumbu|daging|sayur|minyak|tepung|bahan)/i.test(lower)) kategori = "Bahan";
-    else if (/(listrik|sewa|air|wifi|pulsa|transport|gas)/i.test(lower)) kategori = "Operasional";
-    else if (/(gaji|karyawan|bonus)/i.test(lower)) kategori = "Gaji";
-
-    let itemTitle = sentence
-      .replace(/(?:rp\.?|rp\s*)?(\d+(?:[\.,]\d+)?)\s*(?:jt|juta|rb|ribu|k)?/gi, "")
-      .replace(/(bisa|tadi|pagi|siang|sore|malam|hari|ini|habis|sebesar|sejumlah|rupiah|pemasukan|pengeluaran)/gi, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!itemTitle || itemTitle.length < 3) {
-      itemTitle = type === "masuk" ? "Pemasukan Usaha" : "Pengeluaran Operasional";
-    }
-
-    results.push({ id: nextId++, item: itemTitle, qty, type, nominal, kategori });
-  }
-
-  return results;
-}
+const ACTIVE_CAPTURE_STORAGE_KEY = "berkembang.active-ledger-capture";
 
 // ───────── HELPER: map raw API items to ExtractedItem[] ─────────
-function formatAIItems(rawItems: any[]): ExtractedItem[] {
-  return rawItems.map((it, idx) => ({
+function formatDraftItems(items: TransactionDraftItem[]): ExtractedItem[] {
+  return items.map((it, idx) => ({
     id: idx + 1,
-    item: it.item || "Penjualan Usaha",
-    qty: it.qty || "1 paket",
-    type: it.type === "keluar" ? "keluar" : "masuk",
-    nominal: Number(it.nominal) || 100_000,
-    kategori: it.kategori || (it.type === "keluar" ? "Bahan" : "Penjualan"),
+    clientItemId: it.clientItemId,
+    item: it.description,
+    qty: it.quantity
+      ? `${it.quantity}${it.unit ? ` ${it.unit}` : ""}`
+      : (it.unit ?? ""),
+    type: it.transactionType === "income" ? "masuk" : "keluar",
+    nominal: it.amountIdr,
+    kategori: categoryLabels[it.categoryCode] as ExtractedItem["kategori"],
+    transactionDate: it.transactionDate,
+    categoryCode: it.categoryCode,
+    quantity: it.quantity ?? null,
+    unit: it.unit ?? null,
+    unitPriceIdr: it.unitPriceIdr ?? null,
+    paymentMethod: it.paymentMethod ?? null,
+    salesChannel: it.salesChannel ?? null,
   }));
 }
 
-// ───────── HELPER: fallback parse when API returns no items ─────────
-function fallbackParse(text: string): ExtractedItem[] {
-  const parsed = parseIndonesianTransactionText(text);
-  return parsed.length > 0
-    ? parsed
-    : [{ id: 1, item: text.slice(0, 35) || "Penjualan Harian", qty: "1 paket", type: "masuk", nominal: 150_000, kategori: "Penjualan" }];
+function toDraftItems(items: ExtractedItem[]): TransactionDraftItem[] {
+  return items.map((item) => ({
+    clientItemId: item.clientItemId,
+    transactionType: item.type === "masuk" ? "income" : "expense",
+    amountIdr: item.nominal,
+    transactionDate: item.transactionDate,
+    categoryCode: item.categoryCode,
+    description: item.item,
+    quantity: item.quantity,
+    unit: item.unit,
+    unitPriceIdr: item.unitPriceIdr,
+    paymentMethod: item.paymentMethod,
+    salesChannel: item.salesChannel,
+  }));
+}
+
+function captureErrorMessage(error: unknown, fallback: string) {
+  return error instanceof CaptureClientError ? error.message : fallback;
+}
+
+function normalizedAudioMimeType(value: string) {
+  const mimeType = value.toLowerCase().split(";", 1)[0];
+  return ["audio/webm", "audio/mp4", "audio/ogg", "audio/mpeg"].includes(mimeType)
+    ? (mimeType as "audio/webm" | "audio/mp4" | "audio/ogg" | "audio/mpeg")
+    : "audio/webm";
+}
+
+function parseQuantity(value: string) {
+  const match = value.trim().match(/^(\d+(?:[.,]\d+)?)\s*(.*)$/);
+  if (!match) return { quantity: null, unit: value.trim() || null };
+  const quantity = Number(match[1].replace(",", "."));
+  return {
+    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : null,
+    unit: match[2].trim() || null,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -123,7 +127,8 @@ export default function CatatPage() {
   const [editFields, setEditFields] = useState<{ item: string; qty: string; nominal: number }>({ item: "", qty: "", nominal: 0 });
   const [saving, setSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [captureId, setCaptureId] = useState<string | null>(null);
   const [recordSeconds, setRecordSeconds] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -132,22 +137,144 @@ export default function CatatPage() {
   const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ── Load user once ──────────────────────────────────────────────
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
-    return () => {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-      const mr = mediaRecorderRef.current;
-      if (mr && mr.state !== "inactive") {
-        try { mr.stop(); } catch (_) {}
-      }
-    };
-  }, []);
-
   // ── Shared: apply AI/API response to state ──────────────────────
   const applyCaption = useCallback((text: string) => {
     setTranscription(text);
     setEditableCaption(text);
   }, []);
+
+  const applyCapture = useCallback((capture: CaptureClientView) => {
+    if (capture.transcription) applyCaption(capture.transcription);
+    setItems(formatDraftItems(capture.draft));
+    setIsEditingCaption(false);
+  }, [applyCaption]);
+
+  const pollCapture = useCallback(async (activeCaptureId: string) => {
+    for (let attempt = 0; attempt < 75; attempt += 1) {
+      const capture = await getCapture(activeCaptureId);
+      if (capture.status === "needs_review") {
+        applyCapture(capture);
+        setStep("preview");
+        return;
+      }
+      if (capture.status === "failed") {
+        setItems([]);
+        setStep("preview");
+        setErrorMessage(
+          capture.failure?.message ||
+            "AI belum dapat menyiapkan draft. Gunakan input teks atau coba catatan baru.",
+        );
+        return;
+      }
+      if (capture.status === "cancelled") {
+        localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
+        setCaptureId(null);
+        setStep("idle");
+        return;
+      }
+      if (capture.status === "confirmed") {
+        localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
+        setCaptureId(null);
+        router.push("/umkm/laporan");
+        return;
+      }
+      if ((capture.status === "queued" || capture.status === "processing") && attempt % 10 === 9) {
+        try { await processCapture(activeCaptureId); } catch {}
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 800));
+    }
+    setErrorMessage(
+      "Pemrosesan masih berjalan di latar belakang. Refresh halaman untuk memeriksa statusnya.",
+    );
+  }, [applyCapture, router]);
+
+  useEffect(() => {
+    const persistedCaptureId = localStorage.getItem(ACTIVE_CAPTURE_STORAGE_KEY);
+    if (persistedCaptureId) {
+      setCaptureId(persistedCaptureId);
+      setStep("processing");
+      getCapture(persistedCaptureId)
+        .then(async (capture) => {
+          if (capture.status === "draft") await processCapture(persistedCaptureId);
+          if (capture.status === "needs_review") {
+            applyCapture(capture);
+            setStep("preview");
+            return;
+          }
+          await pollCapture(persistedCaptureId);
+        })
+        .catch((error) => {
+          setStep("preview");
+          setErrorMessage(captureErrorMessage(error, "Status catatan belum dapat dimuat."));
+        });
+    }
+
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      const mr = mediaRecorderRef.current;
+      if (mr && mr.state !== "inactive") {
+        try { mr.stop(); } catch {}
+      }
+    };
+  }, [applyCapture, pollCapture]);
+
+  // ── Process audio via AI ────────────────────────────────────────
+  const processAudioWithAI = useCallback(async (blob: Blob, actualMime?: string) => {
+    setStep("processing");
+    setErrorMessage("");
+    let createdCaptureId: string | null = null;
+    let processingScheduled = false;
+    try {
+      const mimeType = normalizedAudioMimeType(actualMime || blob.type || "audio/webm");
+      const created = await createCapture(
+        { inputMethod: "voice", file: { mimeType, size: blob.size } },
+        `capture:${crypto.randomUUID()}`,
+      );
+      createdCaptureId = created.capture.id;
+      setCaptureId(created.capture.id);
+      localStorage.setItem(ACTIVE_CAPTURE_STORAGE_KEY, created.capture.id);
+
+      if (!created.upload) {
+        throw new CaptureClientError(
+          "UPLOAD_SESSION_UNAVAILABLE",
+          "Sesi upload rekaman tidak tersedia. Silakan coba lagi.",
+          true,
+        );
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from(created.upload.bucket)
+        .uploadToSignedUrl(created.upload.path, created.upload.token, blob, {
+          contentType: mimeType,
+          upsert: false,
+        });
+      if (uploadError) {
+        throw new CaptureClientError(
+          "AUDIO_UPLOAD_FAILED",
+          "Rekaman belum berhasil diunggah. Silakan coba lagi.",
+          true,
+        );
+      }
+
+      await processCapture(created.capture.id);
+      processingScheduled = true;
+      await pollCapture(created.capture.id);
+    } catch (error) {
+      if (createdCaptureId && !processingScheduled) {
+        try { await cancelCapture(createdCaptureId); } catch {}
+        localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
+        setCaptureId(null);
+      }
+      setErrorMessage(
+        captureErrorMessage(
+          error,
+          "Rekaman belum dapat diproses. Silakan coba lagi atau gunakan input manual.",
+        ),
+      );
+      setItems([]);
+      setStep("preview");
+    }
+  }, [pollCapture]);
 
   // ── Recording ───────────────────────────────────────────────────
   const startMediaRecording = useCallback(async () => {
@@ -187,91 +314,58 @@ export default function CatatPage() {
 
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = setInterval(() => setRecordSeconds((p) => p + 1), 1000);
-    } catch (err: any) {
-      console.error("Microphone access error:", err);
+    } catch {
+      console.error("Microphone access error");
       alert("Gagal mengakses mikrofon. Pastikan Anda memberikan izin akses mikrofon di browser.");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [processAudioWithAI]);
 
   const stopMediaRecording = useCallback(() => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     const mr = mediaRecorderRef.current;
     if (mr && mr.state !== "inactive") {
-      try { mr.stop(); } catch (_) {}
+      try { mr.stop(); } catch {}
     }
   }, []);
 
-  // ── Process audio via AI ────────────────────────────────────────
-  const processAudioWithAI = async (blob: Blob, actualMime?: string) => {
-    setStep("processing");
-    try {
-      const mime = actualMime || blob.type || "audio/webm";
-      const ext = mime.includes("mp4") ? "mp4" : mime.includes("ogg") ? "ogg" : "webm";
-      const formData = new FormData();
-      formData.append("audio", blob, `recording.${ext}`);
-
-      const res = await fetch("/api/ai/transcribe", { method: "POST", body: formData });
-      if (!res.ok) throw new Error("API Route error");
-
-      const data = await res.json();
-      const text = data.transcription || "";
-      applyCaption(text);
-      setItems(data.items?.length > 0 ? formatAIItems(data.items) : fallbackParse(text));
-    } catch (e) {
-      console.warn("AI Audio API fallback triggered:", e);
-      applyCaption("");
-      setItems([]);
-    } finally {
-      setStep("preview");
-      setIsEditingCaption(false);
-    }
-  };
-
   // ── Re-process from edited caption ─────────────────────────────
+  // ── Typed text / suggestion ─────────────────────────────────────
+  const processText = useCallback(async (text: string) => {
+    setStep("processing");
+    applyCaption(text);
+    setErrorMessage("");
+
+    try {
+      if (captureId) {
+        try { await cancelCapture(captureId); } catch {}
+        localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
+        setCaptureId(null);
+      }
+      const created = await createCapture(
+        { inputMethod: "manual", sourceText: text },
+        `capture:${crypto.randomUUID()}`,
+      );
+      setCaptureId(created.capture.id);
+      localStorage.setItem(ACTIVE_CAPTURE_STORAGE_KEY, created.capture.id);
+      await processCapture(created.capture.id);
+      await pollCapture(created.capture.id);
+    } catch (error) {
+      setItems([]);
+      setErrorMessage(captureErrorMessage(error, "Teks belum dapat diproses. Silakan coba lagi."));
+      setStep("preview");
+    }
+  }, [applyCaption, captureId, pollCapture]);
+
   const reprocessFromCaption = async () => {
     if (!editableCaption.trim()) return;
     setReprocessing(true);
     setIsEditingCaption(false);
-    setTranscription(editableCaption);
-
     try {
-      const res = await fetch("/api/ai/transcribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: editableCaption }),
-      });
-      if (!res.ok) throw new Error("API error");
-
-      const data = await res.json();
-      if (data.items?.length > 0) {
-        setItems(formatAIItems(data.items));
-      } else {
-        throw new Error("No items from API");
-      }
-    } catch {
-      setItems(fallbackParse(editableCaption));
+      await processText(editableCaption);
     } finally {
       setReprocessing(false);
     }
   };
-
-  // ── Typed text / suggestion ─────────────────────────────────────
-  const processText = useCallback((text: string) => {
-    setStep("processing");
-    applyCaption(text);
-    setTimeout(() => {
-      const parsed = parseIndonesianTransactionText(text);
-      setItems(
-        parsed.length > 0
-          ? parsed
-          : [{ id: 1, item: text.slice(0, 30), qty: "1 paket", type: "masuk", nominal: 100_000, kategori: "Penjualan" }]
-      );
-      setStep("preview");
-      setIsEditingCaption(false);
-    }, 800);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleProcessTypedText = useCallback(
     (e?: React.FormEvent) => { e?.preventDefault(); if (typedText.trim()) processText(typedText); },
@@ -286,40 +380,40 @@ export default function CatatPage() {
   // ── Save ────────────────────────────────────────────────────────
   const handleConfirmSave = async () => {
     setSaving(true);
-    const todayStr = new Date().toISOString().split("T")[0];
-
+    setErrorMessage("");
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const activeUserId = user?.id ?? currentUser?.id;
-
-      if (activeUserId && items.length > 0) {
-        const { error } = await supabase.from("transactions").insert(
-          items.map((it) => ({
-            user_id: activeUserId,
-            item: it.item,
-            qty: it.qty || "1 barang",
-            type: it.type,
-            nominal: it.nominal,
-            kategori: it.kategori || "Umum",
-            tanggal: todayStr,
-          }))
-        );
-        if (error) console.warn("Supabase insert error:", error.message);
+      if (!captureId) {
+        throw new CaptureClientError("CAPTURE_NOT_FOUND", "Draft catatan tidak ditemukan.", false);
       }
-    } catch (err) {
-      console.error("Error saving transactions:", err);
+      await confirmCapture(captureId, toDraftItems(items), `confirm:${captureId}`);
+      localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
+      setCaptureId(null);
+
+    setToastMessage("✓ Catatan berhasil disimpan.");
+      setStep("idle");
+      setItems([]);
+      setTranscription("");
+      setEditableCaption("");
+      setTypedText("");
+      setTimeout(() => { setToastMessage(""); router.push("/umkm/laporan"); }, 1200);
+    } catch (error) {
+      setErrorMessage(captureErrorMessage(error, "Catatan belum tersimpan. Silakan periksa kembali."));
     } finally {
       setSaving(false);
     }
+  };
 
-    setToastMessage("✓ Catatan AI berhasil disimpan ke database real!");
+  const handleStartOver = async () => {
+    if (captureId) {
+      try { await cancelCapture(captureId); } catch {}
+    }
+    localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
+    setCaptureId(null);
     setStep("idle");
     setItems([]);
     setTranscription("");
     setEditableCaption("");
-    setTypedText("");
-
-    setTimeout(() => { setToastMessage(""); router.push("/umkm/laporan"); }, 1200);
+    setErrorMessage("");
   };
 
   // ── Item editing ────────────────────────────────────────────────
@@ -331,10 +425,19 @@ export default function CatatPage() {
   }, []);
 
   const saveEditing = useCallback((id: number) => {
+    const parsedQuantity = parseQuantity(editFields.qty);
     setItems((prev) =>
       prev.map((item) =>
         item.id === id
-          ? { ...item, item: editFields.item, qty: editFields.qty, nominal: Number(editFields.nominal) || 0 }
+          ? {
+              ...item,
+              item: editFields.item,
+              qty: editFields.qty,
+              nominal: Number(editFields.nominal) || 0,
+              quantity: parsedQuantity.quantity,
+              unit: parsedQuantity.unit,
+              unitPriceIdr: null,
+            }
           : item
       )
     );
@@ -366,6 +469,16 @@ export default function CatatPage() {
       {toastMessage && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in">
           {toastMessage}
+        </div>
+      )}
+
+      {errorMessage && (
+        <div
+          role="alert"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex max-w-[calc(100%-2rem)] items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700 shadow-lg"
+        >
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>{errorMessage}</span>
         </div>
       )}
 
@@ -650,7 +763,7 @@ export default function CatatPage() {
               <div className="flex gap-2 pt-3">
                 <button
                   type="button"
-                  onClick={() => { setStep("idle"); setEditableCaption(""); }}
+                  onClick={handleStartOver}
                   className="px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer"
                 >
                   Ulangi Merekam / Ketik

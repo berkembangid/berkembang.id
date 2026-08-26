@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { BarChart3, TrendingUp, Users, Building2, ShieldCheck, ArrowUpRight, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import DemoBanner from "@/components/DemoBanner";
 
 interface AnalyticsData {
   weeklyUMKM: number[];
@@ -65,12 +66,12 @@ export default function AdminAnalyticsPage() {
       // Construct top institutions based strictly on institutions table
       let topInsts: { name: string; requests: number; conversions: number; rate: string }[] = [];
       if (instData && instData.length > 0) {
-        topInsts = instData.map((inst: any) => {
+        topInsts = instData.map((inst: Record<string, unknown>) => {
           const progs = Number(inst.programs_count) || 1;
           const reqs = progs * 10;
           const convs = inst.active ? Math.round(reqs * 0.5) : 0;
           return {
-            name: inst.name,
+            name: String(inst.name ?? "Institusi"),
             requests: reqs,
             conversions: convs,
             rate: reqs > 0 ? `${Math.round((convs / reqs) * 100)}%` : "0%"
@@ -100,6 +101,7 @@ export default function AdminAnalyticsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
+      <DemoBanner>Grafik mingguan, retensi, dan konversi masih mengandung data turunan/simulasi.</DemoBanner>
       <div className="flex items-center justify-between mb-2">
         <div>
           <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Analytics Platform</h1>

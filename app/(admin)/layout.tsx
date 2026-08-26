@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, Building2, Handshake, Sliders, BarChart2, History, LogOut, Sparkles, ShieldCheck, Menu, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 interface NavGroup {
@@ -11,7 +12,7 @@ interface NavGroup {
   items: {
     href: string;
     label: string;
-    Icon: any;
+    Icon: LucideIcon;
   }[];
 }
 
@@ -115,8 +116,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               A
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold text-white truncate">Administrator</p>
-              <p className="text-[10px] text-slate-400 truncate">admin@berkembang.id</p>
+              <p className="text-xs font-bold text-white truncate">Sesi Admin</p>
+              <p className="text-[10px] text-slate-400 truncate">Informasi akun belum dimuat</p>
             </div>
           </div>
         </div>

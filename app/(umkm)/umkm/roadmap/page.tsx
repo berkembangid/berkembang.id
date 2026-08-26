@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Circle, ArrowRight, Award, Sparkles, Trophy, ShieldCheck } from "lucide-react";
+import DemoBanner from "@/components/DemoBanner";
 
 export default function RoadmapPage() {
   const steps = [
@@ -44,6 +45,7 @@ export default function RoadmapPage() {
 
   return (
     <div className="p-4 md:p-6 pb-28 md:pb-8 space-y-6 max-w-5xl mx-auto">
+      <DemoBanner>Progress perjalanan di halaman ini masih berupa contoh dan belum dihitung dari evidence usaha.</DemoBanner>
       <div>
         <h1 className="text-xl md:text-2xl font-black text-slate-800">Roadmap Naik Kelas</h1>
         <p className="text-xs md:text-sm text-slate-500 mt-1">

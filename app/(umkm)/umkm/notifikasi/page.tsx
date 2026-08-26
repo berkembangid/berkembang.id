@@ -2,28 +2,53 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { ArrowDownLeft, ArrowUpRight, Bell, CheckCircle2, ArrowLeft } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, CheckCircle2, ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
+interface TransactionNotification {
+  id: string | number;
+  type: "masuk" | "keluar";
+  nominal: number;
+  item: string;
+  kategori: string;
+  tanggal: string | null;
+}
+
 export default function NotifikasiPage() {
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<TransactionNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     async function fetchLiveNotifs() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: txs } = await supabase
-            .from("transactions")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
-
-          setNotifications(txs || []);
+        if (!user) {
+          setErrorMessage("Sesi berakhir. Silakan masuk kembali.");
+          return;
         }
-      } catch (e) {
-        console.error("Error loading notifications:", e);
+
+        const { data: txs, error } = await supabase
+          .from("transactions")
+          .select("id,type,nominal,item,kategori,tanggal")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          setErrorMessage("Notifikasi belum dapat dimuat. Silakan coba lagi.");
+          return;
+        }
+
+        setNotifications((txs ?? []).map((transaction) => ({
+          id: transaction.id,
+          type: transaction.type === "keluar" ? "keluar" : "masuk",
+          nominal: Number(transaction.nominal),
+          item: String(transaction.item ?? "Transaksi"),
+          kategori: String(transaction.kategori ?? "Umum"),
+          tanggal: transaction.tanggal ? String(transaction.tanggal) : null,
+        })));
+      } catch {
+        setErrorMessage("Notifikasi belum dapat dimuat. Silakan coba lagi.");
       } finally {
         setLoading(false);
       }
@@ -42,7 +67,11 @@ export default function NotifikasiPage() {
       </header>
 
       <main className="px-6 py-4 space-y-3 pb-28 max-w-2xl mx-auto">
-        {loading ? (
+        {errorMessage ? (
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-semibold text-red-700">
+            {errorMessage}
+          </div>
+        ) : loading ? (
           <p className="text-xs text-slate-500 text-center py-8">Memuat pemberitahuan...</p>
         ) : notifications.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center border border-[#e5e7ff] shadow-card space-y-2">
@@ -69,7 +98,7 @@ export default function NotifikasiPage() {
                   <p className="text-xs text-slate-500">{n.item} · Kategori {n.kategori || "Umum"}</p>
                 </div>
               </div>
-              <span className="text-[11px] font-semibold text-slate-400 font-mono">{n.tanggal || "Hari ini"}</span>
+              <span className="text-[11px] font-semibold text-slate-400 font-mono">{n.tanggal || "Waktu tidak tersedia"}</span>
             </div>
           ))
         )}

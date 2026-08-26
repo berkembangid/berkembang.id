@@ -14,10 +14,24 @@ import { calculateReadinessScore, ReadinessScoreResult, REQUIRED_DOCS, detectUse
 const DAYS_ID = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 const MONTHS_ID = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
 
+interface DashboardAnalysis {
+  total_score?: number;
+  ai_summary?: string;
+  gaps?: GapItem[];
+}
+
+interface DashboardTransaction {
+  type?: string | null;
+  nominal?: number | null;
+  tanggal?: string | null;
+  created_at?: string;
+  item?: string | null;
+}
+
 export default function BerandaPage() {
   const [userName, setUserName] = useState("Pengguna");
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [txs, setTxs] = useState<any[]>([]);
+  const [analysis, setAnalysis] = useState<DashboardAnalysis | null>(null);
+  const [txs, setTxs] = useState<DashboardTransaction[]>([]);
   const [uploadedDocTypes, setUploadedDocTypes] = useState<Set<string>>(new Set());
   const [docStats, setDocStats] = useState({ uploaded: 0, missing: 6, total: 6 });
   const [scoreData, setScoreData] = useState<ReadinessScoreResult | null>(null);
@@ -43,13 +57,19 @@ export default function BerandaPage() {
         const prof = profileRes.data;
         const rawTxs = txsRes.data || [];
         const rawDocs = docsRes.data || [];
-        const docTypes = new Set(rawDocs.map((d: any) => d.doc_type));
+        const docTypes = new Set(rawDocs.flatMap((document: { doc_type?: string }) => document.doc_type ? [document.doc_type] : []));
 
         const nama = prof?.name || prof?.nama_usaha || user.user_metadata?.nama_usaha || user.email?.split("@")[0] || "Pengguna";
         setUserName(nama.split(" ")[0]);
 
-        setAnalysis(analysisRes.data);
-        setTxs(rawTxs);
+        setAnalysis(analysisRes.data ? { total_score: analysisRes.data.total_score } : null);
+        setTxs(rawTxs.map((transaction) => ({
+          type: transaction.type,
+          nominal: transaction.nominal,
+          tanggal: transaction.tanggal,
+          created_at: transaction.created_at,
+          item: transaction.item,
+        })));
         setUploadedDocTypes(docTypes);
 
         const uploadedCount = REQUIRED_DOCS.filter(t => docTypes.has(t)).length;
@@ -346,7 +366,7 @@ export default function BerandaPage() {
               </div>
             ) : (
               <div className="space-y-2.5">
-                {gaps.slice(0, 3).map((gap: any, i: number) => (
+                {gaps.slice(0, 3).map((gap, i: number) => (
                   <Link href="/umkm/gaps" key={i} className="block group">
                     <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 group-hover:border-blue-200 group-hover:bg-blue-50/40 transition-all">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-black ${
@@ -356,7 +376,7 @@ export default function BerandaPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-900">{gap.title}</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{gap.desc || gap.description}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{gap.desc}</p>
                       </div>
                       <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex-shrink-0">
                         +{gap.gain || gap.potential_gain || 5} Poin

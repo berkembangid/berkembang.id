@@ -71,6 +71,8 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
     if (value) {
       const parts = value.split(" ");
       if (parts[0]) {
+        // This controlled widget intentionally mirrors an external value reset.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setDateStr(parts[0]);
         const d = new Date(parts[0]);
         if (!isNaN(d.getTime())) {

@@ -44,13 +44,13 @@ export default function AuditPage() {
         .order("created_at", { ascending: false });
 
       if (!error && data) {
-        const mapped: AuditLog[] = data.map((item: any) => ({
-          id: item.id,
-          timestamp: item.timestamp ? new Date(item.timestamp).toLocaleString("id-ID") : new Date(item.created_at).toLocaleString("id-ID"),
-          user: item.user_email || "system",
-          action: item.action || "LOG_EVENT",
-          details: item.details || "-",
-          status: item.status || "success",
+        const mapped: AuditLog[] = data.map((item: Record<string, unknown>) => ({
+          id: Number(item.id),
+          timestamp: item.timestamp ? new Date(String(item.timestamp)).toLocaleString("id-ID") : new Date(String(item.created_at)).toLocaleString("id-ID"),
+          user: String(item.user_email ?? "system"),
+          action: String(item.action ?? "LOG_EVENT"),
+          details: String(item.details ?? "-"),
+          status: String(item.status ?? "success"),
         }));
         setLogs(mapped);
       }

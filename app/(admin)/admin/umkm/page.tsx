@@ -6,6 +6,7 @@ import { Search, Plus, Check, X, ShieldAlert, AlertCircle, RefreshCw, Store } fr
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/Modal";
 import CitySelect from "@/components/CitySelect";
+import { runAdminOperation } from "@/modules/admin/operations";
 
 interface UMKMProfile {
   id: string;
@@ -16,6 +17,20 @@ interface UMKMProfile {
   score: number;
   konsistensi: number;
   status: string;
+}
+
+interface ProfileRow {
+  id?: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  nama_usaha?: string;
+  sektor_usaha?: string;
+  lokasi?: string;
+  readiness_score?: number;
+  konsistensi_days?: number;
+  status?: string;
+  created_at?: string;
 }
 
 function scoreColor(s: number) {
@@ -59,10 +74,10 @@ export default function AdminUMKMPage() {
 
       if (data && data.length > 0) {
         // Filter profiles that have a nama_usaha OR role 'umkm' OR null role
-        const umkmRows = data.filter((p: any) => p.role === "umkm" || p.nama_usaha || !p.role);
+        const umkmRows = (data as ProfileRow[]).filter((p) => p.role === "umkm" || p.nama_usaha || !p.role);
 
         const now = new Date();
-        const mapped: UMKMProfile[] = umkmRows.map((p: any, idx: number) => {
+        const mapped: UMKMProfile[] = umkmRows.map((p, idx: number) => {
           const createdDate = p.created_at ? new Date(p.created_at) : now;
           const ageDays = Math.max(1, Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)));
           const konsistensiVal = Number(p.konsistensi_days) > 0 ? Number(p.konsistensi_days) : ageDays;
@@ -100,18 +115,11 @@ export default function AdminUMKMPage() {
     const reasonText = overrideReason.trim() || "Penyesuaian manual oleh admin";
 
     try {
-      // 1. Update profiles table
-      await supabase
-        .from("profiles")
-        .update({ readiness_score: score })
-        .eq("id", id);
-
-      // 2. Insert into audit_logs table
-      await supabase.from("audit_logs").insert({
-        user_email: "admin@berkembang.id",
-        action: "OVERRIDE_SCORE",
-        details: `UMKM ID #${id}, skor: ${oldScore}->${score}, alasan: ${reasonText}`,
-        status: "success",
+      await runAdminOperation({
+        action: "set_umkm_score",
+        id,
+        score,
+        reason: `Skor ${oldScore} -> ${score}. ${reasonText}`,
       });
 
       // Local state update
@@ -133,23 +141,19 @@ export default function AdminUMKMPage() {
     const scoreNum = Number(newScore) || 50;
 
     try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .insert({
-          name: newName,
-          nama_usaha: newUsaha,
-          sektor_usaha: newSektor,
-          lokasi: newLokasi,
-          readiness_score: scoreNum,
-          konsistensi_days: 1,
-          role: "umkm",
-          status: "active"
-        })
-        .select()
-        .single();
+      const result = await runAdminOperation({
+        action: "save_umkm",
+        ownerName: newName,
+        businessName: newUsaha,
+        sector: newSektor,
+        location: newLokasi,
+        score: scoreNum,
+        consistencyDays: 1,
+        status: "active",
+      });
 
       const newEntry: UMKMProfile = {
-        id: data?.id || String(Date.now()),
+        id: result.id || String(Date.now()),
         name: newName,
         usaha: newUsaha,
         sektor: newSektor,
@@ -158,14 +162,6 @@ export default function AdminUMKMPage() {
         konsistensi: 1,
         status: "active"
       };
-
-      // Also log to audit logs
-      await supabase.from("audit_logs").insert({
-        user_email: "admin@berkembang.id",
-        action: "CREATE_UMKM",
-        details: `Pendaftaran UMKM Baru: ${newUsaha} (${newName})`,
-        status: "success",
-      });
 
       setUmkmList([newEntry, ...umkmList]);
       setShowAddModal(false);

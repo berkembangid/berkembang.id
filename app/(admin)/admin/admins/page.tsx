@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { UserPlus, ShieldCheck, Mail, Lock, User, Trash2, RefreshCw, X, CheckCircle2, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/Modal";
+import { runAdminOperation } from "@/modules/admin/operations";
 
 interface AdminUser {
   id: string;
@@ -38,6 +39,7 @@ export default function AdminUsersPage() {
         .from("profiles")
         .select("*")
         .eq("role", "admin")
+        .eq("status", "active")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -45,27 +47,21 @@ export default function AdminUsersPage() {
       }
 
       if (data && data.length > 0) {
-        const mapped: AdminUser[] = data.map((item: any, idx: number) => ({
-          id: item.id || `admin-${idx}`,
-          name: item.name || item.email?.split("@")[0] || "Administrator",
-          email: item.email || "admin@berkembang.id",
-          role: "Super Admin",
-          created_at: item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID") : "Terdaftar",
-        }));
+        const mapped: AdminUser[] = data.map((item: Record<string, unknown>, idx: number) => {
+          const email = String(item.email ?? "admin@berkembang.id");
+          return {
+            id: String(item.id ?? `admin-${idx}`),
+            name: String(item.name ?? email.split("@")[0] ?? "Administrator"),
+            email,
+            role: "Super Admin",
+            created_at: item.created_at ? new Date(String(item.created_at)).toLocaleDateString("id-ID") : "Terdaftar",
+          };
+        });
         setAdminList(mapped);
       } else {
-        // Fallback default admin if profiles is empty
-        setAdminList([
-          {
-            id: "default-admin-1",
-            name: "Super Administrator",
-            email: "admin@berkembang.id",
-            role: "Super Admin",
-            created_at: "21 Juli 2026",
-          },
-        ]);
+        setAdminList([]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn("Failed to fetch admin users:", err);
     } finally {
       setLoading(false);
@@ -81,47 +77,15 @@ export default function AdminUsersPage() {
     setErrorMsg("");
 
     try {
-      // 1. Sign up user with Supabase auth with metadata role: 'admin'
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const result = await runAdminOperation({
+        action: "create_admin",
         email: adminEmail.trim(),
         password: adminPassword,
-        options: {
-          data: {
-            name: adminName.trim(),
-            role: "admin",
-          },
-        },
-      });
-
-      if (authError) {
-        let msg = authError.message;
-        if (msg.includes("User already registered")) {
-          msg = "Email admin tersebut sudah terdaftar di sistem.";
-        } else if (msg.includes("Password should be")) {
-          msg = "Kata sandi minimal 8 karakter.";
-        }
-        setErrorMsg(msg);
-        setSaving(false);
-        return;
-      }
-
-      const newUserId = authData?.user?.id || `admin-${Date.now()}`;
-
-      // 2. Insert into profiles table with role: 'admin'
-      await supabase.from("profiles").insert({
-        id: newUserId,
-        email: adminEmail.trim(),
         name: adminName.trim(),
-        role: "admin",
       });
 
-      // 3. Log into audit logs
-      await supabase.from("audit_logs").insert({
-        user_email: "admin@berkembang.id",
-        action: "CREATE_ADMIN_ACCOUNT",
-        details: `Pembuatan Akun Admin Baru: ${adminName.trim()} (${adminEmail.trim()})`,
-        status: "success",
-      });
+      const newUserId = result.id;
+      if (!newUserId) throw new Error("ADMIN_CREATE_RESULT_MISSING");
 
       const newAdminObj: AdminUser = {
         id: newUserId,
@@ -138,9 +102,9 @@ export default function AdminUsersPage() {
       setAdminEmail("");
       setAdminPassword("");
       setTimeout(() => setSuccessMsg(""), 4000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error creating admin account:", err);
-      setErrorMsg(err.message || "Gagal membuat akun admin.");
+      setErrorMsg(err instanceof Error ? err.message : "Gagal membuat akun admin.");
     } finally {
       setSaving(false);
     }
@@ -155,19 +119,12 @@ export default function AdminUsersPage() {
     if (!confirm(`Apakah Anda yakin ingin menghapus akun admin (${email})?`)) return;
 
     try {
-      await supabase.from("profiles").delete().eq("id", id);
-      
-      await supabase.from("audit_logs").insert({
-        user_email: "admin@berkembang.id",
-        action: "DELETE_ADMIN_ACCOUNT",
-        details: `Penghapusan Akun Admin ID #${id} (${email})`,
-        status: "success",
-      });
+      await runAdminOperation({ action: "deactivate_admin", profileId: id });
 
       setAdminList(adminList.filter((a) => a.id !== id));
       setSuccessMsg(`Akun Admin (${email}) berhasil dihapus.`);
       setTimeout(() => setSuccessMsg(""), 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error deleting admin:", err);
     }
   };
@@ -219,7 +176,7 @@ export default function AdminUsersPage() {
         </div>
       ) : adminList.length === 0 ? (
         <div className="bg-white rounded-2xl p-8 border border-slate-200/60 text-center text-xs text-slate-400 font-medium">
-          Belum ada akun admin lain terdaftar. Klik "Buat Akun Admin Baru" untuk menambahkan.
+          Belum ada akun admin lain terdaftar. Klik &quot;Buat Akun Admin Baru&quot; untuk menambahkan.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

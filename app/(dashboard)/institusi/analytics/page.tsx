@@ -1,5 +1,7 @@
 "use client";
 
+import DemoBanner from "@/components/DemoBanner";
+
 export default function DashboardAnalyticsPage() {
   const MATCH_DATA = [
     { week: "W1", matches: 12 }, { week: "W2", matches: 18 },
@@ -11,6 +13,7 @@ export default function DashboardAnalyticsPage() {
 
   return (
     <div className="p-8">
+      <DemoBanner>Seluruh metrik analitik di halaman ini adalah data simulasi.</DemoBanner>
       <h1 className="font-headline text-2xl font-bold text-[#141a34] mb-2">Analitik Program</h1>
       <p className="text-sm text-[#444655] mb-6">Performa program pembiayaan Anda</p>
 

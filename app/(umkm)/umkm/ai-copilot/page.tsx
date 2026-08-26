@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Bot, Send, User, Sparkles, AlertCircle } from "lucide-react";
+import { Bot, Send, User, Sparkles } from "lucide-react";
+import DemoBanner from "@/components/DemoBanner";
 
 export default function AICopilotPage() {
   const [messages, setMessages] = useState([
     {
       sender: "ai",
-      text: "Halo! Saya AI Copilot Berkembang.id. Saya sudah menganalisis profil usahamu. Ada yang bisa saya bantu terkait perbaikan dokumen atau strategi pendanaan KUR?",
+      text: "Halo! Ini simulasi AI Copilot. Halaman ini belum menganalisis profil atau data usahamu.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -30,11 +31,11 @@ export default function AICopilotPage() {
     setLoading(true);
 
     setTimeout(() => {
-      let reply = "Terima kasih atas pertanyaannya. Untuk meningkatkan skor kesiapan dan pengajuan KUR, pastikan NIB sudah terdaftar resmi di oss.go.id dan rutin mencatat transaksi harian di menu Catat AI.";
+      let reply = "Ini contoh jawaban antarmuka. Informasi belum dipersonalisasi dari data usahamu dan perlu diverifikasi ke sumber resmi.";
       if (q.toLowerCase().includes("nib")) {
-        reply = "Pembuatan NIB dapat dilakukan secara mandiri dan 100% gratis melalui situs resmi oss.go.id dengan menyiapkan KTP dan email aktif.";
+        reply = "Untuk informasi pembuatan NIB, periksa panduan terbaru pada situs resmi OSS. Simulasi ini belum memverifikasi kondisi atau dokumen usahamu.";
       } else if (q.toLowerCase().includes("kur") || q.toLowerCase().includes("bunga")) {
-        reply = "Bunga KUR Mikro saat ini umumnya berkisar di angka 6% efektif per tahun dengan plafon hingga Rp 100 juta tanpa jaminan tambahan untuk sektor tertentu.";
+        reply = "Ketentuan KUR dapat berubah. Periksa sumber resmi pemerintah atau lembaga penyalur; simulasi ini tidak memberikan keputusan atau janji pembiayaan.";
       }
       setMessages([...newMsgs, { sender: "ai", text: reply }]);
       setLoading(false);
@@ -43,9 +44,10 @@ export default function AICopilotPage() {
 
   return (
     <div className="p-4 md:p-6 pb-28 md:pb-8 max-w-4xl mx-auto flex flex-col h-[calc(100vh-4rem)]">
+      <DemoBanner>Jawaban Copilot di halaman ini belum memakai profil atau data usaha Anda.</DemoBanner>
       <div className="mb-4">
         <h1 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2">
-          AI Copilot Usaha <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">Pro</span>
+          AI Copilot Usaha <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">Demo</span>
         </h1>
         <p className="text-xs md:text-sm text-slate-500 mt-0.5">
           Asisten cerdas untuk konsultasi pendanaan, legalitas KUR, &amp; perbaikan dokumen usaha.

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Users, BarChart2, Handshake, Trophy, Search, X, RefreshCw } from "lucide-react";
+import DemoBanner from "@/components/DemoBanner";
 
 const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi"];
 
@@ -57,6 +58,7 @@ export default function DashboardPage() {
 
   return (
     <div className="p-8">
+      <DemoBanner>Daftar kandidat dan tombol permintaan dossier pada halaman ini masih berupa simulasi.</DemoBanner>
       <div className="mb-8">
         <h1 className="font-headline text-2xl font-bold text-[#141a34]">Portofolio UMKM Terbaik</h1>
         <p className="text-sm text-[#444655] mt-1">

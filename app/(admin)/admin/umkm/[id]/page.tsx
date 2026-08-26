@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Store, Save, ShieldAlert, CheckCircle2, Award, Calendar } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
+import { runAdminOperation } from "@/modules/admin/operations";
 
 const UMKM_SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
 
@@ -36,12 +37,6 @@ export default function UMKMDetailPage() {
   const [status, setStatus] = useState("active");
   const [overrideReason, setOverrideReason] = useState("");
 
-  useEffect(() => {
-    if (idParam) {
-      fetchDetail();
-    }
-  }, [idParam]);
-
   async function fetchDetail() {
     setLoading(true);
     setErrorMsg("");
@@ -69,13 +64,20 @@ export default function UMKMDetailPage() {
         setKonsistensiDays(Number(data.konsistensi_days) || 1);
         setStatus(data.status || "active");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching UMKM detail:", err);
       setErrorMsg("Gagal memuat detail data UMKM.");
     } finally {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (idParam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async remote load
+      void fetchDetail();
+    }
+  }, [idParam]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,46 +88,29 @@ export default function UMKMDetailPage() {
     setErrorMsg("");
 
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          nama_usaha: businessName.trim(),
-          name: ownerName.trim(),
-          sektor_usaha: sektor,
-          lokasi: lokasi.trim(),
-          email: email.trim(),
-          readiness_score: score,
-          konsistensi_days: konsistensiDays,
-          status,
-        })
-        .eq("id", idParam);
-
-      if (error) throw error;
-
-      // Log score override if score was modified
-      if (score !== oldScore) {
-        const reasonText = overrideReason.trim() || "Override skor manual oleh admin";
-        await supabase.from("audit_logs").insert({
-          user_email: "admin@berkembang.id",
-          action: "OVERRIDE_SCORE",
-          details: `UMKM ID #${idParam} (${businessName}): Skor diubah ${oldScore} -> ${score}. Alasan: ${reasonText}`,
-          status: "success",
-        });
-        setOldScore(score);
-      } else {
-        await supabase.from("audit_logs").insert({
-          user_email: "admin@berkembang.id",
-          action: "UPDATE_UMKM_DETAIL",
-          details: `Perubahan data UMKM #${idParam}: ${businessName}`,
-          status: "success",
-        });
-      }
+      const reasonText = score !== oldScore
+        ? overrideReason.trim() || `Override skor ${oldScore} -> ${score}`
+        : "Pembaruan detail UMKM";
+      await runAdminOperation({
+        action: "save_umkm",
+        id: idParam,
+        ownerName: ownerName.trim(),
+        businessName: businessName.trim(),
+        sector: sektor,
+        location: lokasi.trim(),
+        email: email.trim(),
+        score,
+        consistencyDays: konsistensiDays,
+        status,
+        reason: reasonText,
+      });
+      setOldScore(score);
 
       setSuccessMsg("Data UMKM berhasil diperbarui!");
       setTimeout(() => setSuccessMsg(""), 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error saving UMKM:", err);
-      setErrorMsg(err.message || "Terjadi kesalahan saat menyimpan data.");
+      setErrorMsg(err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan data.");
     } finally {
       setSaving(false);
     }

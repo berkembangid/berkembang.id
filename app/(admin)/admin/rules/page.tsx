@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Sliders, Save, History, Check, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import DemoBanner from "@/components/DemoBanner";
+import { runAdminOperation } from "@/modules/admin/operations";
 
 type Weights = {
   konsistensi: number;
@@ -16,6 +18,25 @@ interface RuleVersion {
   date: string;
   user: string;
   changes: string;
+}
+
+interface RuleRecord {
+  is_active?: boolean;
+  weights?: Partial<Weights>;
+  thresholds?: {
+    maxDailyExpense?: number;
+    maxDailyIncome?: number;
+  };
+  version?: string;
+  created_at?: string;
+  created_by?: string;
+}
+
+interface SampleProfile {
+  id?: string;
+  readiness_score?: number;
+  nama_usaha?: string;
+  name?: string;
 }
 
 const DEFAULT_SAMPLE_UMKM = [
@@ -42,11 +63,6 @@ export default function RulesPage() {
   const [saved, setSaved] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
-  useEffect(() => {
-    fetchActiveRulesAndHistory();
-    fetchRealSampleUMKM();
-  }, []);
-
   async function fetchActiveRulesAndHistory() {
     try {
       const { data, error } = await supabase
@@ -55,7 +71,8 @@ export default function RulesPage() {
         .order("created_at", { ascending: false });
 
       if (!error && data && data.length > 0) {
-        const activeRule = data.find((r: any) => r.is_active) || data[0];
+        const ruleRows = data as RuleRecord[];
+        const activeRule = ruleRows.find((rule) => rule.is_active) || ruleRows[0];
         if (activeRule.weights) {
           setWeights({
             konsistensi: Number(activeRule.weights.konsistensi) || 35,
@@ -72,7 +89,7 @@ export default function RulesPage() {
         }
 
         // Map history
-        const mappedHistory: RuleVersion[] = data.map((r: any) => ({
+        const mappedHistory: RuleVersion[] = ruleRows.map((r) => ({
           version: r.version || "v1",
           date: r.created_at ? new Date(r.created_at).toLocaleString("id-ID") : "Sebelumnya",
           user: r.created_by || "admin@berkembang.id",
@@ -93,7 +110,7 @@ export default function RulesPage() {
         .limit(5);
 
       if (!error && data && data.length > 0) {
-        const mapped = data.map((p: any, idx: number) => {
+        const mapped = (data as SampleProfile[]).map((p, idx: number) => {
           const sc = Number(p.readiness_score) || 65;
           return {
             id: p.id || String(idx + 1),
@@ -113,6 +130,12 @@ export default function RulesPage() {
       console.warn("Failed to fetch sample UMKM for preview:", err);
     }
   }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async remote loads
+    void fetchActiveRulesAndHistory();
+    void fetchRealSampleUMKM();
+  }, []);
 
   const total = Object.values(weights).reduce((s, v) => s + v, 0);
   const isValid = total === 100;
@@ -141,38 +164,22 @@ export default function RulesPage() {
     try {
       const newVersionName = `v${versionHistory.length + 1}`;
 
-      // Insert new rule config into database
-      const { data, error } = await supabase
-        .from("rules_config")
-        .insert({
-          version: newVersionName,
-          weights,
-          thresholds,
-          is_active: true,
-          created_by: "admin@berkembang.id"
-        })
-        .select()
-        .single();
+      await runAdminOperation({
+        action: "publish_rules",
+        version: newVersionName,
+        weights,
+        thresholds,
+      });
 
-      if (!error) {
-        // Log into audit logs
-        await supabase.from("audit_logs").insert({
-          user_email: "admin@berkembang.id",
-          action: "UPDATE_RULES_CONFIG",
-          details: `Publish versi ${newVersionName}: Konsistensi (${weights.konsistensi}%), Kas (${weights.kas}%), Legalitas (${weights.legalitas}%), Stabilitas (${weights.stabilitas}%)`,
-          status: "success"
-        });
-
-        const newVersionObj: RuleVersion = {
-          version: newVersionName,
-          date: new Date().toLocaleString("id-ID"),
-          user: "admin@berkembang.id",
-          changes: `Konsistensi: ${weights.konsistensi}%, Kas: ${weights.kas}%, Legalitas: ${weights.legalitas}%, Stabilitas: ${weights.stabilitas}%`
-        };
-        setVersionHistory([newVersionObj, ...versionHistory]);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
-      }
+      const newVersionObj: RuleVersion = {
+        version: newVersionName,
+        date: new Date().toLocaleString("id-ID"),
+        user: "Admin aktif",
+        changes: `Konsistensi: ${weights.konsistensi}%, Kas: ${weights.kas}%, Legalitas: ${weights.legalitas}%, Stabilitas: ${weights.stabilitas}%`
+      };
+      setVersionHistory([newVersionObj, ...versionHistory]);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error("Error publishing rules config:", err);
     } finally {
@@ -182,6 +189,7 @@ export default function RulesPage() {
 
   return (
     <div className="space-y-8 animate-fade-in-up">
+      <DemoBanner>Preview UMKM dan histori awal pada halaman ini dapat memakai data simulasi.</DemoBanner>
       <div>
         <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Rules Engine</h1>
         <p className="text-sm text-slate-500 mt-1">Sesuaikan formula kalkulasi Readiness Score bagi ekosistem UMKM</p>
