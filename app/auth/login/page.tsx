@@ -42,26 +42,15 @@ export default function LoginPage() {
       }
 
       if (data?.user) {
-        let userRole = data.user.user_metadata?.role || role;
-
-        if (!data.user.user_metadata?.role) {
-          try {
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("role")
-              .eq("id", data.user.id)
-              .maybeSingle();
-
-            if (profile?.role) {
-              userRole = profile.role;
-            }
-          } catch (err) {
-            console.warn("Profiles optional lookup skipped:", err);
+        if (data.user.user_metadata?.signup_account_type) {
+          const bootstrapResponse = await fetch("/api/auth/bootstrap", { method: "POST" });
+          if (!bootstrapResponse.ok && bootstrapResponse.status !== 409) {
+            setError("Akun berhasil masuk, tetapi keanggotaan belum dapat disiapkan.");
+            setLoading(false);
+            return;
           }
         }
-
-        const dest = userRole === "admin" ? "/admin" : userRole === "institution" ? "/institusi" : "/umkm";
-        window.location.href = dest;
+        window.location.href = "/auth/continue";
         return;
       }
     } catch (err: unknown) {

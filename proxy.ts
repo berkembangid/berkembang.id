@@ -1,5 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import {
+  portalPathForRole,
+} from "@/modules/auth/role-resolution";
+import { getEffectivePortalRole } from "@/lib/auth/authorization";
+import type { Database } from "@/types/database.generated";
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
@@ -34,11 +39,18 @@ export async function proxy(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
+  if ((!supabaseUrl || !supabaseAnonKey) && isProtectedPath) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/login";
+    url.searchParams.set("error", "auth_unavailable");
+    return NextResponse.redirect(url);
+  }
+
   if (!supabaseUrl || !supabaseAnonKey) {
     return response;
   }
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -71,42 +83,26 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // Determine user role with profile fallback and email fallback
-  let userRole = user.user_metadata?.role;
-
-  if (!userRole && user.email) {
-    if (user.email.startsWith("admin@")) {
-      userRole = "admin";
-    } else if (user.email.startsWith("institusi@")) {
-      userRole = "institution";
-    }
+  let userRole = null;
+  try {
+    userRole = await getEffectivePortalRole(supabase, user.id);
+  } catch {
+    // Fail closed. A temporary authorization lookup failure must never grant a
+    // portal based on client-controlled identity fields.
   }
-
-  if (!userRole) {
-    try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (profile?.role) {
-        userRole = profile.role;
-      }
-    } catch (err) {
-      console.warn("Proxy profile lookup skipped:", err);
-    }
-  }
-
-  // Fallback default
-  userRole = userRole || "umkm";
 
   // 2. Authenticated users trying to access auth pages -> Redirect to their portal
-  if (isAuthPath) {
-    const targetPath =
-      userRole === "admin" ? "/admin" : userRole === "institution" ? "/institusi" : "/umkm";
+  if (isAuthPath && userRole) {
+    const targetPath = portalPathForRole(userRole);
     const url = request.nextUrl.clone();
     url.pathname = targetPath;
+    return NextResponse.redirect(url);
+  }
+
+  if (isProtectedPath && !userRole) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/login";
+    url.searchParams.set("error", "membership_required");
     return NextResponse.redirect(url);
   }
 

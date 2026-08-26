@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DemoBanner from "@/components/DemoBanner";
 
 type DossierStatus = "pending" | "verified" | "declined";
 
@@ -24,6 +25,7 @@ export default function DossiersPage() {
 
   return (
     <div className="p-8">
+      <DemoBanner>Daftar dan status dossier di halaman ini belum berasal dari persetujuan UMKM.</DemoBanner>
       <h1 className="font-headline text-2xl font-bold text-[#141a34] mb-2">Manajemen Dossier</h1>
       <p className="text-sm text-[#444655] mb-6">UMKM yang menyetujui permintaan dossier Anda</p>
 

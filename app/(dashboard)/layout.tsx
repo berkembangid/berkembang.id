@@ -37,8 +37,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Building2 size={18} className="text-white" />
             </div>
             <div>
-              <p className="text-sm font-bold text-[#141a34]">Bank BRI KUR</p>
-              <p className="text-xs text-[#444655]">Kuliner · Jakarta</p>
+              <p className="text-sm font-bold text-[#141a34]">Institusi Demo</p>
+              <p className="text-xs text-amber-700">Mode simulasi</p>
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Handshake, Save, Shield, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { runAdminOperation } from "@/modules/admin/operations";
 
 export default function MitraDetailPage() {
   const params = useParams();
@@ -21,12 +22,6 @@ export default function MitraDetailPage() {
   const [umkmManaged, setUmkmManaged] = useState("50");
   const [active, setActive] = useState(true);
 
-  useEffect(() => {
-    if (idParam) {
-      fetchDetail();
-    }
-  }, [idParam]);
-
   async function fetchDetail() {
     setLoading(true);
     setErrorMsg("");
@@ -34,7 +29,7 @@ export default function MitraDetailPage() {
       const { data, error } = await supabase
         .from("mitra")
         .select("*")
-        .eq("id", Number(idParam))
+        .eq("id", idParam)
         .single();
 
       if (error || !data) {
@@ -46,13 +41,20 @@ export default function MitraDetailPage() {
         setUmkmManaged(String(data.umkm_managed || 0));
         setActive(Boolean(data.active ?? true));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching detail:", err);
       setErrorMsg("Gagal memuat detail data mitra.");
     } finally {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (idParam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async remote load
+      void fetchDetail();
+    }
+  }, [idParam]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,32 +67,21 @@ export default function MitraDetailPage() {
     const managedNum = Number(umkmManaged) || 0;
 
     try {
-      const { error } = await supabase
-        .from("mitra")
-        .update({
-          name: name.trim(),
-          type,
-          coverage: coverage.trim(),
-          umkm_managed: managedNum,
-          active,
-        })
-        .eq("id", Number(idParam));
-
-      if (error) throw error;
-
-      // Log activity
-      await supabase.from("audit_logs").insert({
-        user_email: "admin@berkembang.id",
-        action: "UPDATE_MITRA_DETAIL",
-        details: `Perubahan data mitra #${idParam}: ${name}`,
-        status: "success",
+      await runAdminOperation({
+        action: "save_mitra",
+        id: idParam,
+        name: name.trim(),
+        type,
+        coverage: coverage.trim(),
+        umkmManaged: managedNum,
+        active,
       });
 
       setSuccessMsg("Data mitra berhasil diperbarui!");
       setTimeout(() => setSuccessMsg(""), 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error saving mitra:", err);
-      setErrorMsg(err.message || "Terjadi kesalahan saat menyimpan data.");
+      setErrorMsg(err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan data.");
     } finally {
       setSaving(false);
     }

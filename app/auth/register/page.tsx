@@ -89,14 +89,14 @@ export default function RegisterPage() {
             nama_usaha: umkmForm.namaUsaha,
             sektor_usaha: umkmForm.sektor,
             lokasi: umkmForm.lokasi,
-            role: "umkm",
+            signup_account_type: "umkm",
           }
         : {
             nama_institusi: institusiForm.namaInstitusi,
             jenis_institusi: institusiForm.jenisInstitusi,
             lokasi: institusiForm.kota,
             nama_contact: institusiForm.namaContact,
-            role: "institution",
+            signup_account_type: "institution",
           };
 
       const { data, error: signUpError } = await supabase.auth.signUp({
@@ -123,35 +123,19 @@ export default function RegisterPage() {
       }
 
       if (data?.user) {
-        try {
-          await supabase.from("profiles").insert({
-            id: data.user.id,
-            email,
-            role: role === "umkm" ? "umkm" : "institution",
-            name: role === "umkm" ? umkmForm.namaPemilik : institusiForm.namaInstitusi,
-            nama_pemilik: role === "umkm" ? umkmForm.namaPemilik : null,
-            nama_usaha: role === "umkm" ? umkmForm.namaUsaha : null,
-            sektor_usaha: role === "umkm" ? umkmForm.sektor : null,
-            nama_institusi: role === "institution" ? institusiForm.namaInstitusi : null,
-            jenis_institusi: role === "institution" ? institusiForm.jenisInstitusi : null,
-            nama_contact: role === "institution" ? institusiForm.namaContact : null,
-            lokasi: role === "umkm" ? umkmForm.lokasi : institusiForm.kota,
-          });
-
-          if (role === "institution") {
-            await supabase.from("institutions").insert({
-              name: institusiForm.namaInstitusi,
-              type: institusiForm.jenisInstitusi || "Bank / Koperasi",
-              programs_count: 1,
-              active: true,
-            });
+        if (data.session) {
+          const bootstrapResponse = await fetch("/api/auth/bootstrap", { method: "POST" });
+          if (!bootstrapResponse.ok) {
+            setError("Akun dibuat, tetapi profil keanggotaan belum dapat disiapkan. Silakan masuk kembali.");
+            setLoading(false);
+            return;
           }
-        } catch (err) {
-          console.warn("Profiles/Institutions insert optional:", err);
+          window.location.href = "/auth/continue";
+          return;
         }
       }
 
-      router.push(role === "umkm" ? "/umkm" : "/institusi");
+      router.push("/auth/login?registered=1");
     } catch (err: unknown) {
       console.error("Register catch error:", err);
       let msg = "Terjadi kesalahan pendaftaran.";

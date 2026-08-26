@@ -47,7 +47,7 @@ export function TrustSection() {
             </p>
             <ol className="trust-steps mt-8">
               {[
-                ["01", "Ceritakan", "Penjualan, belanja bahan, atau biaya harianâ€”ucapkan dengan bahasa Anda sendiri."],
+                ["01", "Ceritakan", "Penjualan, belanja bahan, atau biaya harian—ucapkan dengan bahasa Anda sendiri."],
                 ["02", "Pastikan", "Periksa nominal dan kategori tanpa perlu mengetik semuanya dari awal."],
                 ["03", "Pahami", "Setiap catatan membantu membentuk gambaran kas dan kesiapan usaha."],
               ].map(([number, title, copy]) => (

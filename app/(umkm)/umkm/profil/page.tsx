@@ -2,16 +2,25 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { User, Mail, Building2, MapPin, Tag, Phone, Save, FileText, Camera, Check, AlertCircle, LogOut, ArrowLeft, ShieldCheck } from "lucide-react";
+import { User, Mail, Building2, Phone, Save, FileText, Camera, Check, AlertCircle, LogOut, ArrowLeft, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 
 const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
 
+interface ProfileRecord {
+  name?: string | null;
+  nama_pemilik?: string | null;
+  nama_usaha?: string | null;
+  sektor_usaha?: string | null;
+  lokasi?: string | null;
+  phone?: string | null;
+  nib?: string | null;
+  alamat?: string | null;
+  avatar_url?: string | null;
+}
+
 export default function ProfilPage() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -35,7 +44,7 @@ export default function ProfilPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          let dbProfile: any = null;
+          let dbProfile: ProfileRecord | null = null;
           try {
             const { data: prof } = await supabase
               .from("profiles")
@@ -72,8 +81,6 @@ export default function ProfilPage() {
         }
       } catch (err) {
         console.error("Error loading profile:", err);
-      } finally {
-        setLoading(false);
       }
     }
     loadUserProfile();
@@ -112,15 +119,15 @@ export default function ProfilPage() {
           .from("avatars")
           .upload(filePath, selectedFile, { upsert: true });
 
-        if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage
-            .from("avatars")
-            .getPublicUrl(filePath);
-          if (publicUrlData?.publicUrl) {
-            finalAvatarUrl = publicUrlData.publicUrl;
-          }
-        } else {
-          console.warn("Storage upload warning:", uploadError.message);
+        if (uploadError) {
+          throw new Error("Foto belum berhasil diunggah. Silakan coba lagi.");
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("avatars")
+          .getPublicUrl(filePath);
+        if (publicUrlData?.publicUrl) {
+          finalAvatarUrl = publicUrlData.publicUrl;
         }
       }
 
@@ -140,7 +147,7 @@ export default function ProfilPage() {
       });
 
       if (updateAuthError) {
-        console.warn("Auth update warning:", updateAuthError.message);
+        throw new Error("Profil belum berhasil diperbarui. Silakan coba lagi.");
       }
 
       // 2. Upsert profile table row in Supabase
@@ -156,20 +163,22 @@ export default function ProfilPage() {
           phone: form.phone,
           email: form.email,
           avatar_url: finalAvatarUrl,
-          role: "umkm",
           updated_at: new Date().toISOString(),
         });
 
       if (upsertError) {
-        console.warn("Profiles upsert warning:", upsertError.message);
+        throw new Error("Profil belum berhasil disimpan. Silakan coba lagi.");
       }
 
       setForm((prev) => ({ ...prev, avatarUrl: finalAvatarUrl }));
       setMessage({ type: "success", text: "✓ Profil & Foto Usaha berhasil disimpan!" });
       setTimeout(() => setMessage(null), 3000);
-    } catch (err: any) {
-      console.error("Save profile error:", err);
-      setMessage({ type: "error", text: err.message || "Gagal menyimpan profil." });
+    } catch (err: unknown) {
+      console.error("Save profile error");
+      setMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Gagal menyimpan profil.",
+      });
     } finally {
       setSaving(false);
     }

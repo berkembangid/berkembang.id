@@ -36,6 +36,32 @@ export interface GapItem {
 
 export const REQUIRED_DOCS = ["ktp", "nib", "npwp", "laporan_keuangan", "rekening_koran", "akta"];
 
+type ReadinessProfile = {
+  nib?: unknown;
+  name?: unknown;
+  nama_usaha?: unknown;
+  lokasi?: unknown;
+  sektor_usaha?: unknown;
+  phone?: unknown;
+} | null | undefined;
+
+type ReadinessTransaction = {
+  type?: unknown;
+  nominal?: unknown;
+};
+
+type ReadinessMetadata = {
+  nib?: unknown;
+  nama_usaha?: unknown;
+  lokasi?: unknown;
+  sektor_usaha?: unknown;
+  phone?: unknown;
+};
+
+type CustomGap = Partial<GapItem> & {
+  description?: string;
+};
+
 export function getScoreLabel(score: number) {
   if (score >= 80) {
     return {
@@ -66,10 +92,10 @@ export function getScoreLabel(score: number) {
 }
 
 export function calculateReadinessScore(
-  profile: any,
-  txs: any[] = [],
+  profile: ReadinessProfile,
+  txs: ReadinessTransaction[] = [],
   docTypes: Set<string> | string[] = new Set(),
-  userMetadata: any = {}
+  userMetadata: ReadinessMetadata = {}
 ): ReadinessScoreResult {
   const docTypeSet = docTypes instanceof Set ? docTypes : new Set(docTypes);
 
@@ -90,8 +116,8 @@ export function calculateReadinessScore(
   const kelengkapanScore = Math.round((uploadedCount / REQUIRED_DOCS.length) * 100);
 
   // 4. Aktivitas Usaha Score (15%)
-  const masuk = txs.filter((t: any) => t.type === "masuk").reduce((s: number, t: any) => s + Number(t.nominal), 0);
-  const keluar = txs.filter((t: any) => t.type === "keluar").reduce((s: number, t: any) => s + Number(t.nominal), 0);
+  const masuk = txs.filter((t) => t.type === "masuk").reduce((s, t) => s + Number(t.nominal), 0);
+  const keluar = txs.filter((t) => t.type === "keluar").reduce((s, t) => s + Number(t.nominal), 0);
   let aktivitasScore = 0;
   if (masuk > 0) {
     const net = masuk - keluar;
@@ -177,14 +203,16 @@ export function calculateReadinessScore(
 }
 
 export function detectUserGaps(
-  profile: any,
-  txs: any[] = [],
+  profile: ReadinessProfile,
+  txs: ReadinessTransaction[] = [],
   docTypes: Set<string> | string[] = new Set(),
-  userMetadata: any = {},
-  customGaps?: any[]
+  userMetadata: ReadinessMetadata = {},
+  customGaps?: unknown
 ): GapItem[] {
   if (customGaps && Array.isArray(customGaps) && customGaps.length > 0) {
-    return customGaps.map((g, idx) => ({
+    return customGaps.map((value, idx) => {
+      const g: CustomGap = value && typeof value === "object" ? value as CustomGap : {};
+      return ({
       id: g.id || `gap-${idx}`,
       title: g.title || "Temuan Gap Kesiapan",
       severity: g.severity || "penting",
@@ -195,7 +223,8 @@ export function detectUserGaps(
       why: g.why || "Bank memverifikasi kelengkapan berkas untuk validasi kelayakan usaha.",
       fix: g.fix || "Lengkapi data dan dokumen terkait.",
       linkHref: g.linkHref || "/umkm/upload",
-    }));
+      });
+    });
   }
 
   const docTypeSet = docTypes instanceof Set ? docTypes : new Set(docTypes);

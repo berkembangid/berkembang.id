@@ -26,7 +26,7 @@ export default function ScorePage() {
         const dbProfile = profRes.data;
         const txs = txsRes.data || [];
         const docs = docsRes.data || [];
-        const docTypes = new Set(docs.map((d: any) => d.doc_type));
+        const docTypes = new Set(docs.flatMap((document: { doc_type?: string }) => document.doc_type ? [document.doc_type] : []));
 
         const result = calculateReadinessScore(dbProfile, txs, docTypes, user.user_metadata);
         setScoreData(result);

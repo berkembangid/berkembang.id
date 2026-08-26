@@ -16,6 +16,7 @@ import {
   ChevronUp,
   ArrowUpRight
 } from "lucide-react";
+import DemoBanner from "@/components/DemoBanner";
 
 // Premium Activities list with detailed properties for interactive expansion
 const ACTIVITIES = [
@@ -87,7 +88,7 @@ const ACTIVITIES = [
       kategori: "Kolektivitas & Disiplin Pencatatan"
     },
     actionText: "Analisis Skor Kesiapan",
-    actionLink: "/umkm/journey"
+    actionLink: "/umkm/roadmap"
   },
   {
     id: "act-5",
@@ -123,7 +124,7 @@ const ACTIVITIES = [
       bonus: "+15 Kesiapan Pendanaan"
     },
     actionText: "Lihat Pencapaian",
-    actionLink: "/umkm/journey"
+    actionLink: "/umkm/roadmap"
   },
   {
     id: "act-7",
@@ -222,6 +223,10 @@ export default function AktivitasPage() {
         <h1 className="font-headline text-base font-bold text-[#141a34]">Aktivitas & Riwayat</h1>
         <div className="w-10" />
       </header>
+
+      <div className="px-5 pt-4">
+        <DemoBanner>Seluruh aktivitas di halaman ini masih berupa contoh dan bukan audit event akun Anda.</DemoBanner>
+      </div>
 
       {/* Mini Stats Summary */}
       <div className="px-5 pt-4 grid grid-cols-3 gap-3">

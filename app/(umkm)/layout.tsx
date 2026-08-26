@@ -8,15 +8,39 @@ import {
   Bot, FileText, LogOut, Bell,
   Mic, Home, Sparkles, User, X, ArrowUpRight, ArrowDownLeft, CheckCircle2
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { calculateReadinessScore, REQUIRED_DOCS } from "@/lib/score";
 
 interface NavItem {
   label: string;
   href: string;
-  Icon: any;
+  Icon: LucideIcon;
   badgeKey?: string;
   badgeAI?: boolean;
+}
+
+interface LayoutProfile {
+  name?: string | null;
+  nama_usaha?: string | null;
+  avatar_url?: string | null;
+  nib?: string | null;
+  lokasi?: string | null;
+  sektor_usaha?: string | null;
+  phone?: string | null;
+}
+
+interface LayoutTransaction {
+  id?: string | number;
+  user_id?: string | null;
+  type?: string | null;
+  nominal?: number | null;
+  item?: string | null;
+  tanggal?: string | null;
+}
+
+interface LayoutDocument {
+  doc_type?: string;
 }
 
 interface NavCategory {
@@ -65,7 +89,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
 
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showKesiapanSubmenu, setShowKesiapanSubmenu] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<LayoutTransaction[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const currentUserIdRef = useRef<string | null>(null);
 
@@ -83,9 +107,9 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       if (!user) return;
       currentUserIdRef.current = user.id;
 
-      let dbProfile: any = null;
-      let rawTxs: any[] = [];
-      let rawDocs: any[] = [];
+      let dbProfile: LayoutProfile | null = null;
+      let rawTxs: LayoutTransaction[] = [];
+      let rawDocs: LayoutDocument[] = [];
 
       try {
         const [profRes, txsRes, docsRes, analysisRes] = await Promise.all([
@@ -98,14 +122,14 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         dbProfile = profRes.data;
         rawTxs = txsRes.data || [];
         rawDocs = docsRes.data || [];
-        const uploadedTypes = new Set(rawDocs.map((d: any) => d.doc_type));
+        const uploadedTypes = new Set(rawDocs.flatMap((document) => document.doc_type ? [document.doc_type] : []));
 
         const realScore = calculateReadinessScore(dbProfile, rawTxs, uploadedTypes, user.user_metadata);
         setTotalScore(realScore.totalScore);
         setDocMissingCount(REQUIRED_DOCS.filter(t => !uploadedTypes.has(t)).length);
 
         if (analysisRes.data) {
-          setGapCount((analysisRes.data.gaps as any[])?.length ?? 0);
+          setGapCount(Array.isArray(analysisRes.data.gaps) ? analysisRes.data.gaps.length : 0);
         }
       } catch (e) {
         console.error("Error loading layout data:", e);
@@ -125,7 +149,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       try {
         const { data: txs } = await supabase.from("transactions").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(8);
         setNotifications(txs ?? []);
-      } catch (e) {}
+      } catch {}
     }
     load();
 

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Building2, ArrowLeft, Save, ShieldCheck, ShieldAlert, CheckCircle2, Award, Calendar, Mail, User, Shield } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
+import { runAdminOperation } from "@/modules/admin/operations";
 
 export default function InstitutionDetailPage() {
   const params = useParams();
@@ -26,29 +27,24 @@ export default function InstitutionDetailPage() {
 
   const [isFromProfiles, setIsFromProfiles] = useState(false);
 
-  useEffect(() => {
-    if (idParam) {
-      fetchDetail();
-    }
-  }, [idParam]);
-
   async function fetchDetail() {
     setLoading(true);
     setErrorMsg("");
     try {
-      const isNum = !isNaN(Number(idParam)) && !idParam.startsWith("profile-");
+      const isProfileId = idParam.startsWith("profile:");
+      const databaseId = idParam.replace(/^(institution:|profile:)/, "");
 
-      if (isNum) {
+      if (!isProfileId) {
         // Fetch from institutions table
         const { data, error } = await supabase
           .from("institutions")
           .select("*")
-          .eq("id", Number(idParam))
+          .eq("id", databaseId)
           .single();
 
         if (error || !data) {
           // fallback search in profiles
-          await fetchFromProfiles(idParam);
+          await fetchFromProfiles(databaseId);
         } else {
           setName(data.name || "");
           setType(data.type || "Bank BUMN");
@@ -57,9 +53,9 @@ export default function InstitutionDetailPage() {
           setIsFromProfiles(false);
         }
       } else {
-        await fetchFromProfiles(idParam);
+        await fetchFromProfiles(databaseId);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching detail:", err);
       setErrorMsg("Gagal memuat detail data institusi.");
     } finally {
@@ -87,6 +83,13 @@ export default function InstitutionDetailPage() {
     }
   }
 
+  useEffect(() => {
+    if (idParam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async remote load
+      void fetchDetail();
+    }
+  }, [idParam]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -98,49 +101,25 @@ export default function InstitutionDetailPage() {
     const progsNum = Number(programsCount) || 1;
 
     try {
-      if (!isFromProfiles && !isNaN(Number(idParam))) {
-        // Update institutions table
-        const { error } = await supabase
-          .from("institutions")
-          .update({
-            name: name.trim(),
-            type,
-            programs_count: progsNum,
-            active,
-          })
-          .eq("id", Number(idParam));
-
-        if (error) throw error;
-      } else {
-        // Update profiles table
-        const { error } = await supabase
-          .from("profiles")
-          .update({
-            nama_institusi: name.trim(),
-            name: contactName.trim() || name.trim(),
-            jenis_institusi: type,
-            nama_contact: contactName.trim(),
-            email: contactEmail.trim(),
-            lokasi: location.trim(),
-          })
-          .eq("id", idParam);
-
-        if (error) throw error;
-      }
-
-      // Log to audit_logs
-      await supabase.from("audit_logs").insert({
-        user_email: "admin@berkembang.id",
-        action: "UPDATE_INSTITUTION_DETAIL",
-        details: `Perubahan data institusi #${idParam}: ${name}`,
-        status: "success",
+      const databaseId = idParam.replace(/^(institution:|profile:)/, "");
+      await runAdminOperation({
+        action: "save_institution",
+        source: isFromProfiles ? "profiles" : "institutions",
+        id: databaseId,
+        name: name.trim(),
+        type,
+        programsCount: progsNum,
+        active,
+        contactName: contactName.trim(),
+        contactEmail: contactEmail.trim(),
+        location: location.trim(),
       });
 
       setSuccessMsg("Data institusi berhasil diperbarui!");
       setTimeout(() => setSuccessMsg(""), 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error saving institution:", err);
-      setErrorMsg(err.message || "Terjadi kesalahan saat menyimpan data.");
+      setErrorMsg(err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan data.");
     } finally {
       setSaving(false);
     }

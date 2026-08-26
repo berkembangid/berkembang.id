@@ -5,9 +5,10 @@ import { useState, useEffect } from "react";
 import { Handshake, Plus, Edit, Users, MapPin, Trash2, X, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/Modal";
+import { runAdminOperation } from "@/modules/admin/operations";
 
 interface Mitra {
-  id: number;
+  id: string;
   name: string;
   type: string;
   coverage: string;
@@ -41,11 +42,11 @@ export default function AdminMitraPage() {
         .order("id", { ascending: true });
 
       if (!error && data) {
-        const mapped: Mitra[] = data.map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          type: item.type,
-          coverage: item.coverage,
+        const mapped: Mitra[] = data.map((item: Record<string, unknown>) => ({
+          id: String(item.id),
+          name: String(item.name ?? "Mitra"),
+          type: String(item.type ?? "LSM"),
+          coverage: String(item.coverage ?? "Nasional"),
           umkmManaged: Number(item.umkm_managed) || 0,
           active: Boolean(item.active),
         }));
@@ -58,9 +59,9 @@ export default function AdminMitraPage() {
     }
   }
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     try {
-      await supabase.from("mitra").delete().eq("id", id);
+      await runAdminOperation({ action: "delete_mitra", id });
       setMitraList(mitraList.filter(m => m.id !== id));
     } catch (err) {
       console.error("Error deleting mitra:", err);
@@ -76,32 +77,30 @@ export default function AdminMitraPage() {
 
     try {
       if (editingMitra) {
-        await supabase
-          .from("mitra")
-          .update({
-            name: mitraName,
-            type: mitraType,
-            coverage: mitraCoverage,
-            umkm_managed: umkmCountNum
-          })
-          .eq("id", editingMitra.id);
+        await runAdminOperation({
+          action: "save_mitra",
+          id: editingMitra.id,
+          name: mitraName,
+          type: mitraType,
+          coverage: mitraCoverage,
+          umkmManaged: umkmCountNum,
+          active: editingMitra.active,
+        });
 
         setMitraList(mitraList.map(m => m.id === editingMitra.id ? { ...m, name: mitraName, type: mitraType, coverage: mitraCoverage, umkmManaged: umkmCountNum } : m));
       } else {
-        const { data } = await supabase
-          .from("mitra")
-          .insert({
-            name: mitraName,
-            type: mitraType,
-            coverage: mitraCoverage,
-            umkm_managed: umkmCountNum,
-            active: true
-          })
-          .select()
-          .single();
+        const result = await runAdminOperation({
+          action: "save_mitra",
+          name: mitraName,
+          type: mitraType,
+          coverage: mitraCoverage,
+          umkmManaged: umkmCountNum,
+          active: true,
+        });
+        if (!result.id) throw new Error("Mitra belum tersimpan.");
 
         const newObj: Mitra = {
-          id: data?.id || Date.now(),
+          id: result.id,
           name: mitraName,
           type: mitraType,
           coverage: mitraCoverage,
@@ -172,7 +171,7 @@ export default function AdminMitraPage() {
         </div>
       ) : mitraList.length === 0 ? (
         <div className="bg-white rounded-2xl p-8 border border-slate-200/60 text-center text-xs text-slate-400 font-medium">
-          Belum ada data mitra terdaftar. Klik "Tambah Mitra" untuk menambahkan.
+          Belum ada data mitra terdaftar. Klik &quot;Tambah Mitra&quot; untuk menambahkan.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

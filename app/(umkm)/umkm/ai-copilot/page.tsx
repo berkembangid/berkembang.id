@@ -1,143 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Bot, Send, User, Sparkles, ChevronRight } from "lucide-react";
-
-interface QuickQuestion {
-  label: string;
-  question: string;
-  reply: string;
-}
-
-const QUICK_QUESTIONS: QuickQuestion[] = [
-  {
-    label: "Cara buat NIB gratis?",
-    question: "Bagaimana cara membuat NIB secara gratis?",
-    reply: `Pembuatan NIB (Nomor Induk Berusaha) dilakukan 100% gratis melalui OSS (Online Single Submission):
-
-**Langkah-langkahnya:**
-1. Buka situs oss.go.id
-2. Daftar akun menggunakan NIK KTP dan email aktif
-3. Pilih "Perizinan Berusaha" → "Perseorangan" atau "Non-Perseorangan"
-4. Isi data usaha: nama usaha, KBLI (jenis usaha), lokasi
-5. Submit — NIB terbit otomatis dalam hitungan menit
-
-NIB berlaku seumur hidup dan menggantikan izin lama seperti SIUP & TDP. Dengan NIB, skor kesiapan KUR Anda naik signifikan!`,
-  },
-  {
-    label: "Dokumen wajib KUR?",
-    question: "Dokumen apa saja yang wajib untuk KUR?",
-    reply: `Berikut dokumen wajib pengajuan KUR (Kredit Usaha Rakyat):
-
-**Dokumen Identitas:**
-• KTP Pemilik Usaha (wajib)
-• KK (Kartu Keluarga)
-• Surat Nikah (jika sudah menikah)
-
-**Dokumen Legalitas Usaha:**
-• NIB dari OSS.go.id (sangat penting!)
-• NPWP Pribadi/Usaha
-
-**Dokumen Keuangan:**
-• Rekening Koran 3–6 bulan terakhir
-• Laporan keuangan / catatan transaksi usaha
-• Foto usaha dan lokasi
-
-**Tips:** Unggah semua dokumen di menu Upload Dokumen untuk menaikkan skor kesiapan Anda secara otomatis!`,
-  },
-  {
-    label: "Naikkan skor kesiapan?",
-    question: "Bagaimana cara menaikkan skor kesiapan usaha?",
-    reply: `Skor kesiapan usaha Anda dihitung dari 5 komponen utama. Ini cara tercepat menaikkannya:
-
-**🏆 Legalitas (bobot 25%):**
-• Isi NIB di Profil Usaha → naik drastis
-• Lengkapi nama usaha dan sektor
-
-**📋 Kelengkapan Dokumen (bobot 25%):**
-• Upload KTP, NIB, NPWP, Laporan Keuangan
-• Setiap dokumen = poin ekstra
-
-**📊 Konsistensi Transaksi (bobot 20%):**
-• Catat transaksi setiap hari di menu Catat AI
-• Target minimal 10 transaksi untuk poin penuh awal
-
-**💰 Aktivitas Usaha (bobot 15%):**
-• Pastikan omzet masuk lebih besar dari pengeluaran
-• Cashflow positif = skor lebih tinggi
-
-**📍 Data Pendukung (bobot 15%):**
-• Isi lokasi kota, sektor usaha, dan nomor WhatsApp di Profil`,
-  },
-  {
-    label: "Bunga KUR Mikro 2025?",
-    question: "Berapa estimasi bunga KUR mikro saat ini?",
-    reply: `Informasi Bunga KUR Mikro terbaru (2025):
-
-**Suku Bunga:**
-• **6% efektif per tahun** — disubsidi pemerintah
-• Berlaku untuk semua bank penyalur KUR resmi
-
-**Plafon Pinjaman:**
-• KUR Mikro: hingga **Rp 100 juta** (tanpa jaminan untuk debitur tertentu)
-• KUR Kecil: Rp 100 juta – Rp 500 juta
-• KUR TKI: hingga Rp 100 juta
-
-**Bank Penyalur Utama:**
-BRI, BNI, Mandiri, BSI, BPD, bank swasta mitra
-
-**Syarat Utama:**
-Usaha berjalan minimal 6 bulan, memiliki NIB, dan rekam jejak transaksi yang baik.
-
-Semakin tinggi skor kesiapan usaha Anda, semakin besar peluang disetujui!`,
-  },
-  {
-    label: "KUR tanpa jaminan?",
-    question: "Apakah KUR bisa tanpa jaminan?",
-    reply: `Ya! KUR bisa tanpa jaminan tambahan untuk kondisi tertentu:
-
-**KUR Mikro tanpa agunan:**
-• Plafon hingga **Rp 100 juta**
-• Jaminan diganti dengan kelayakan usaha yang terverifikasi
-• Bank melihat histori transaksi dan dokumen legalitas
-
-**Faktor yang menggantikan jaminan:**
-• NIB aktif dari OSS
-• Riwayat transaksi konsisten (minimal 6 bulan)
-• Rekening koran yang sehat
-• NPWP aktif
-
-**Tips penting:**
-Semakin lengkap dokumen Anda di platform ini, semakin kuat "jaminan non-fisik" Anda di mata bank. Fokus naikkan skor kesiapan ke angka ≥ 75 poin!`,
-  },
-  {
-    label: "Cara upload dokumen?",
-    question: "Bagaimana cara upload dokumen di platform ini?",
-    reply: `Berikut cara upload dokumen di Berkembang.id:
-
-**Langkah Upload:**
-1. Pergi ke menu **Upload Dokumen** di navigasi bawah
-2. Pilih jenis dokumen (KTP, NIB, NPWP, dll)
-3. Klik tombol "Pilih / Drop Dokumen"
-4. Pilih file dari HP/komputer Anda (JPG, PNG, atau PDF)
-5. Dokumen terunggah otomatis ke sistem
-
-**Fitur spesial untuk NIB:**
-Saat Anda upload sertifikat NIB, sistem AI kami akan **otomatis membaca nomor NIB** dari dokumen dan menyinkronkannya ke Profil Usaha Anda — tidak perlu input manual!
-
-**Format yang didukung:** JPG, PNG, PDF
-**Ukuran maksimal:** 10MB per file`,
-  },
-];
-
-const DEFAULT_REPLY =
-  "Terima kasih atas pertanyaannya! Untuk hasil terbaik dalam pengajuan KUR, pastikan NIB sudah terdaftar di oss.go.id, lengkapi seluruh dokumen di menu Upload, dan rutin mencatat transaksi harian di menu Catat AI. Semakin tinggi skor kesiapan, semakin besar peluang pengajuan disetujui bank mitra. Ada pertanyaan lain?";
+import { useState } from "react";
+import { Bot, Send, User, Sparkles } from "lucide-react";
+import DemoBanner from "@/components/DemoBanner";
 
 export default function AICopilotPage() {
   const [messages, setMessages] = useState([
     {
       sender: "ai",
-      text: "Halo! Saya AI Copilot Berkembang.id. Saya sudah menganalisis profil usahamu. Ada yang bisa saya bantu terkait perbaikan dokumen atau strategi pendanaan KUR?",
+      text: "Halo! Ini simulasi AI Copilot. Halaman ini belum menganalisis profil atau data usahamu.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -160,30 +31,11 @@ export default function AICopilotPage() {
     setLoading(true);
 
     setTimeout(() => {
-      let reply = DEFAULT_REPLY;
-
-      if (replyOverride) {
-        reply = replyOverride;
-      } else {
-        const lower = q.toLowerCase();
-        const matched = QUICK_QUESTIONS.find((qq) =>
-          qq.question.toLowerCase().split(" ").some((word) => lower.includes(word) && word.length > 3)
-        );
-        if (matched) {
-          reply = matched.reply;
-        } else if (lower.includes("nib") || lower.includes("oss")) {
-          reply = QUICK_QUESTIONS[0].reply;
-        } else if (lower.includes("kur") && (lower.includes("dokumen") || lower.includes("syarat") || lower.includes("berkas"))) {
-          reply = QUICK_QUESTIONS[1].reply;
-        } else if (lower.includes("skor") || lower.includes("score") || lower.includes("kesiapan")) {
-          reply = QUICK_QUESTIONS[2].reply;
-        } else if (lower.includes("bunga") || lower.includes("persen") || lower.includes("mikro")) {
-          reply = QUICK_QUESTIONS[3].reply;
-        } else if (lower.includes("jaminan") || lower.includes("agunan") || lower.includes("kolateral")) {
-          reply = QUICK_QUESTIONS[4].reply;
-        } else if (lower.includes("upload") || lower.includes("unggah") || lower.includes("dokumen")) {
-          reply = QUICK_QUESTIONS[5].reply;
-        }
+      let reply = "Ini contoh jawaban antarmuka. Informasi belum dipersonalisasi dari data usahamu dan perlu diverifikasi ke sumber resmi.";
+      if (q.toLowerCase().includes("nib")) {
+        reply = "Untuk informasi pembuatan NIB, periksa panduan terbaru pada situs resmi OSS. Simulasi ini belum memverifikasi kondisi atau dokumen usahamu.";
+      } else if (q.toLowerCase().includes("kur") || q.toLowerCase().includes("bunga")) {
+        reply = "Ketentuan KUR dapat berubah. Periksa sumber resmi pemerintah atau lembaga penyalur; simulasi ini tidak memberikan keputusan atau janji pembiayaan.";
       }
 
       setMessages([...newMsgs, { sender: "ai", text: reply }]);
@@ -214,12 +66,11 @@ export default function AICopilotPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-4rem)] max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="px-4 pt-4 pb-3 flex-shrink-0">
+    <div className="p-4 md:p-6 pb-28 md:pb-8 max-w-4xl mx-auto flex flex-col h-[calc(100vh-4rem)]">
+      <DemoBanner>Jawaban Copilot di halaman ini belum memakai profil atau data usaha Anda.</DemoBanner>
+      <div className="mb-4">
         <h1 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2">
-          AI Copilot Usaha{" "}
-          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">Pro</span>
+          AI Copilot Usaha <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">Demo</span>
         </h1>
         <p className="text-xs md:text-sm text-slate-500 mt-0.5">
           Asisten cerdas untuk konsultasi pendanaan, legalitas KUR, &amp; perbaikan dokumen usaha.

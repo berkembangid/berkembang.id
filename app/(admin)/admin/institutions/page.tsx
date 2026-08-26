@@ -5,14 +5,21 @@ import { useState, useEffect } from "react";
 import { Building2, Plus, Edit, Trash2, Shield, ShieldAlert, X, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/Modal";
+import { runAdminOperation } from "@/modules/admin/operations";
 
 interface Institution {
-  id: number | string;
+  id: string;
   name: string;
   type: string;
   programs: number;
   active: boolean;
   contact?: string;
+}
+
+function parseInstitutionListId(id: string) {
+  if (id.startsWith("institution:")) return { source: "institutions" as const, id: id.slice(12) };
+  if (id.startsWith("profile:")) return { source: "profiles" as const, id: id.slice(8) };
+  return { source: "institutions" as const, id };
 }
 
 export default function AdminInstitutionsPage() {
@@ -38,25 +45,27 @@ export default function AdminInstitutionsPage() {
       const { data: instData } = await supabase
         .from("institutions")
         .select("*")
+        .neq("status", "archived")
         .order("id", { ascending: true });
 
       // 2. Fetch profiles registered with role = 'institution' or nama_institusi
       const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
+        .neq("status", "inactive")
         .or("role.eq.institution,nama_institusi.not.is.null");
 
       const list: Institution[] = [];
       const existingNames = new Set<string>();
 
       if (instData && instData.length > 0) {
-        instData.forEach((item: any) => {
-          const name = item.name || "Institusi";
+        instData.forEach((item: Record<string, unknown>) => {
+          const name = String(item.name ?? "Institusi");
           existingNames.add(name.toLowerCase().trim());
           list.push({
-            id: item.id,
+            id: `institution:${String(item.id)}`,
             name: name,
-            type: item.type || "Bank / Koperasi",
+            type: String(item.type ?? "Bank / Koperasi"),
             programs: Number(item.programs_count) || 1,
             active: Boolean(item.active ?? true),
           });
@@ -64,18 +73,18 @@ export default function AdminInstitutionsPage() {
       }
 
       if (profileData && profileData.length > 0) {
-        profileData.forEach((p: any, idx: number) => {
-          const pName = p.nama_institusi || p.name || `Institusi Terdaftar #${idx + 1}`;
+        profileData.forEach((p: Record<string, unknown>, idx: number) => {
+          const pName = String(p.nama_institusi ?? p.name ?? `Institusi Terdaftar #${idx + 1}`);
           const normalized = pName.toLowerCase().trim();
           if (!existingNames.has(normalized)) {
             existingNames.add(normalized);
             list.push({
-              id: p.id || `profile-${idx}`,
+              id: `profile:${String(p.id ?? `missing-${idx}`)}`,
               name: pName,
-              type: p.jenis_institusi || "Bank / Koperasi",
+              type: String(p.jenis_institusi ?? "Bank / Koperasi"),
               programs: 1,
               active: true,
-              contact: p.nama_contact || p.email,
+              contact: String(p.nama_contact ?? p.email ?? ""),
             });
           }
         });
@@ -92,18 +101,12 @@ export default function AdminInstitutionsPage() {
   const handleToggleActive = async (inst: Institution) => {
     const updatedStatus = !inst.active;
     try {
-      if (typeof inst.id === "number") {
-        await supabase
-          .from("institutions")
-          .update({ active: updatedStatus })
-          .eq("id", inst.id);
-      }
-
-      await supabase.from("audit_logs").insert({
-        user_email: "admin@berkembang.id",
-        action: "UPDATE_INSTITUTION_STATUS",
-        details: `Status ${inst.name} diubah ke ${updatedStatus ? "Aktif" : "Nonaktif"}`,
-        status: "success",
+      const target = parseInstitutionListId(inst.id);
+      await runAdminOperation({
+        action: "set_institution_active",
+        source: target.source,
+        id: target.id,
+        active: updatedStatus,
       });
 
       setInstitutions(institutions.map(i => i.id === inst.id ? { ...i, active: updatedStatus } : i));
@@ -112,13 +115,10 @@ export default function AdminInstitutionsPage() {
     }
   };
 
-  const handleDelete = async (id: number | string) => {
+  const handleDelete = async (id: string) => {
     try {
-      if (typeof id === "number") {
-        await supabase.from("institutions").delete().eq("id", id);
-      } else {
-        await supabase.from("profiles").delete().eq("id", id);
-      }
+      const target = parseInstitutionListId(id);
+      await runAdminOperation({ action: "deactivate_institution", source: target.source, id: target.id });
       setInstitutions(institutions.filter(i => i.id !== id));
     } catch (err) {
       console.error("Error deleting institution:", err);
@@ -134,40 +134,31 @@ export default function AdminInstitutionsPage() {
 
     try {
       if (editingInst) {
-        if (typeof editingInst.id === "number") {
-          await supabase
-            .from("institutions")
-            .update({
-              name: instName,
-              type: instType,
-              programs_count: progs
-            })
-            .eq("id", editingInst.id);
-        } else {
-          await supabase
-            .from("profiles")
-            .update({
-              nama_institusi: instName,
-              jenis_institusi: instType
-            })
-            .eq("id", editingInst.id);
-        }
+        const target = parseInstitutionListId(editingInst.id);
+        await runAdminOperation({
+          action: "save_institution",
+          source: target.source,
+          id: target.id,
+          name: instName,
+          type: instType,
+          programsCount: progs,
+          active: editingInst.active,
+        });
 
         setInstitutions(institutions.map(i => i.id === editingInst.id ? { ...i, name: instName, type: instType, programs: progs } : i));
       } else {
-        const { data } = await supabase
-          .from("institutions")
-          .insert({
-            name: instName,
-            type: instType,
-            programs_count: progs,
-            active: true
-          })
-          .select()
-          .single();
+        const result = await runAdminOperation({
+          action: "save_institution",
+          source: "institutions",
+          name: instName,
+          type: instType,
+          programsCount: progs,
+          active: true,
+        });
+        if (!result.id) throw new Error("Institusi belum tersimpan.");
 
         const newObj: Institution = {
-          id: data?.id || Date.now(),
+          id: `institution:${result.id}`,
           name: instName,
           type: instType,
           programs: progs,
@@ -235,7 +226,7 @@ export default function AdminInstitutionsPage() {
         </div>
       ) : institutions.length === 0 ? (
         <div className="bg-white rounded-2xl p-8 border border-slate-200/60 text-center text-xs text-slate-400 font-medium">
-          Belum ada data institusi terdaftar. Klik "Tambah Institusi" untuk menambahkan.
+          Belum ada data institusi terdaftar. Klik &quot;Tambah Institusi&quot; untuk menambahkan.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
-import { Upload, FileText, CheckCircle2, AlertCircle, Trash2, ArrowUpRight, Sparkles, ShieldCheck } from "lucide-react";
+import { Upload, FileText, CheckCircle2, Trash2, ArrowUpRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const REQUIRED_DOCS = [
@@ -14,27 +13,57 @@ const REQUIRED_DOCS = [
   { type: "akta", name: "Akta Pendirian / SK", desc: "Dokumen legalitas badan usaha (jika ada)", required: false },
 ];
 
+const ALLOWED_DOCUMENT_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+
+interface DocumentRecord {
+  id: string;
+  name: string;
+  doc_type: string;
+  storage_path: string | null;
+  file_url?: string | null;
+  status: string;
+}
+
 export default function UploadPage() {
-  const [docs, setDocs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [docs, setDocs] = useState<DocumentRecord[]>([]);
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   const fetchDocs = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase.from("documents").select("*").eq("user_id", user.id);
-    setDocs(data || []);
-    setLoading(false);
+    if (!user) {
+      setMsg("Sesi berakhir. Silakan masuk kembali.");
+      return;
+    }
+    const { data, error } = await supabase.from("documents").select("*").eq("user_id", user.id);
+    if (error) {
+      setMsg("Dokumen belum dapat dimuat. Silakan coba lagi.");
+    } else {
+      setDocs(data || []);
+    }
   };
 
   useEffect(() => {
-    fetchDocs();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async remote read
+    void fetchDocs();
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, docType: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!ALLOWED_DOCUMENT_TYPES.has(file.type)) {
+      setMsg("Format dokumen tidak didukung. Gunakan PDF, JPG, atau PNG.");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      setMsg("Ukuran dokumen maksimal 5 MB.");
+      e.target.value = "";
+      return;
+    }
 
     setUploadingType(docType);
     setMsg(null);
@@ -44,14 +73,11 @@ export default function UploadPage() {
       if (!user) throw new Error("Sesi berakhir");
 
       const fileExt = file.name.split(".").pop();
-      const storagePath = `${user.id}/${docType}_${Date.now()}.${fileExt}`;
+      const storagePath = `${user.id}/${docType}_${file.lastModified}_${file.size}.${fileExt}`;
 
       // Upload file to storage
       const { error: uploadErr } = await supabase.storage.from("documents").upload(storagePath, file, { upsert: true });
-      if (uploadErr) console.warn("Storage upload warn:", uploadErr.message);
-
-      const { data: publicUrlData } = supabase.storage.from("documents").getPublicUrl(storagePath);
-      const fileUrl = publicUrlData?.publicUrl || "";
+      if (uploadErr) throw new Error("File belum berhasil diunggah. Silakan coba lagi.");
 
       let aiNotes = "";
       let extractedNibNumber: string | null = null;
@@ -100,14 +126,17 @@ export default function UploadPage() {
         name: file.name,
         doc_type: docType,
         storage_path: storagePath,
-        file_url: fileUrl,
+        file_url: null,
         file_size: file.size,
         mime_type: file.type,
         status: "uploaded",
         ai_notes: aiNotes || undefined,
       });
 
-      if (dbErr) throw dbErr;
+      if (dbErr) {
+        await supabase.storage.from("documents").remove([storagePath]);
+        throw new Error("Data dokumen belum berhasil disimpan. Silakan coba lagi.");
+      }
 
       if (extractedNibNumber) {
         setMsg(`🎉 Dokumen NIB "${file.name}" berhasil diunggah! Nomor NIB (${extractedNibNumber}) berhasil diekstrak dan otomatis tersimpan di Profil Usaha.`);
@@ -115,24 +144,42 @@ export default function UploadPage() {
         setMsg(`Dokumen ${file.name} berhasil diupload!`);
       }
       await fetchDocs();
-    } catch (err: any) {
-      setMsg(`Gagal upload: ${err.message}`);
+    } catch (err: unknown) {
+      setMsg(err instanceof Error ? err.message : "Dokumen belum berhasil diunggah.");
     } finally {
       setUploadingType(null);
     }
   };
 
-  const handleDelete = async (id: string, storagePath: string) => {
+  const handleDelete = async (id: string, storagePath: string | null) => {
     try {
-      await supabase.storage.from("documents").remove([storagePath]);
-      await supabase.from("documents").delete().eq("id", id);
-      fetchDocs();
-    } catch (e) {
-      console.error(e);
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage.from("documents").remove([storagePath]);
+        if (storageError) throw new Error("File belum berhasil dihapus.");
+      }
+      const { error: databaseError } = await supabase.from("documents").delete().eq("id", id);
+      if (databaseError) throw new Error("Data dokumen belum berhasil dihapus.");
+      await fetchDocs();
+    } catch (error: unknown) {
+      setMsg(error instanceof Error ? error.message : "Dokumen belum berhasil dihapus.");
     }
   };
 
-  const uploadedTypes = new Set(docs.map((d) => d.doc_type));
+  const handleView = async (documentId: string) => {
+    setMsg(null);
+    try {
+      const response = await fetch("/api/documents/signed-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId }),
+      });
+      const result = (await response.json().catch(() => null)) as { signedUrl?: string } | null;
+      if (!response.ok || !result?.signedUrl) throw new Error("Tautan dokumen belum dapat dibuat.");
+      window.open(result.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : "Dokumen belum dapat dibuka.");
+    }
+  };
 
   return (
     <div className="p-4 md:p-6 pb-28 md:pb-8 space-y-6 max-w-5xl mx-auto">
@@ -187,7 +234,7 @@ export default function UploadPage() {
                   </div>
                 </div>
 
-                {isUploaded ? (
+                {uploadedDoc ? (
                   <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1 flex-shrink-0">
                     <CheckCircle2 size={13} /> Terupload
                   </span>
@@ -199,32 +246,29 @@ export default function UploadPage() {
               </div>
 
               {/* Upload area or view file */}
-              <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
-                {isUploaded ? (
-                  <>
-                    <div className="flex items-center justify-between w-full">
-                      <div className="overflow-hidden">
-                        <p className="text-xs font-semibold text-slate-700 truncate max-w-[200px]">{uploadedDoc.name}</p>
-                        <p className="text-[10px] text-slate-400">Status: {uploadedDoc.status}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {uploadedDoc.file_url && (
-                          <a
-                            href={uploadedDoc.file_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-0.5"
-                          >
-                            Lihat <ArrowUpRight size={12} />
-                          </a>
-                        )}
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                {uploadedDoc ? (
+                  <div className="flex items-center justify-between w-full">
+                    <div className="overflow-hidden">
+                      <p className="text-xs font-semibold text-slate-700 truncate max-w-[200px]">{uploadedDoc.name}</p>
+                      <p className="text-[10px] text-slate-400">Status: {uploadedDoc.status}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {uploadedDoc.storage_path && (
                         <button
-                          onClick={() => handleDelete(uploadedDoc.id, uploadedDoc.storage_path)}
-                          className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                          type="button"
+                          onClick={() => handleView(uploadedDoc.id)}
+                          className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-0.5"
                         >
-                          <Trash2 size={14} />
+                          Lihat <ArrowUpRight size={12} />
                         </button>
-                      </div>
+                      )}
+                      <button
+                        onClick={() => handleDelete(uploadedDoc.id, uploadedDoc.storage_path)}
+                        className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                     {uploadedDoc.ai_notes && (
                       <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl p-2.5 flex items-center justify-between text-[11px] text-emerald-800">
@@ -244,6 +288,7 @@ export default function UploadPage() {
                     {isUploading ? (doc.type === "nib" ? "Mengekstrak NIB AI..." : "Mengunggah...") : "Pilih / Drop Dokumen"}
                     <input
                       type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                       className="hidden"
                       onChange={(e) => handleFileUpload(e, doc.type)}
                       disabled={isUploading}
