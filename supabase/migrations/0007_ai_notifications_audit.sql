@@ -86,6 +86,7 @@ create table if not exists public.audit_events (
 -- Legacy writable audit surface retained until admin operations become server-only.
 create table if not exists public.audit_logs (
   id uuid primary key default gen_random_uuid(),
+  legacy_numeric_id bigint,
   audit_event_id uuid references public.audit_events(id) on delete set null,
   "timestamp" timestamptz not null default now(),
   "user" text,
@@ -95,6 +96,34 @@ create table if not exists public.audit_logs (
   status text not null default 'success',
   created_at timestamptz not null default now()
 );
+
+alter table public.audit_logs add column if not exists legacy_numeric_id bigint;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'audit_logs'
+      and column_name = 'id'
+      and data_type = 'bigint'
+  ) then
+    update public.audit_logs
+    set legacy_numeric_id = id
+    where legacy_numeric_id is null;
+
+    alter table public.audit_logs alter column id drop identity if exists;
+    alter table public.audit_logs alter column id drop default;
+    alter table public.audit_logs alter column id type uuid using gen_random_uuid();
+    alter table public.audit_logs alter column id set default gen_random_uuid();
+  end if;
+end
+$$;
+
+create unique index if not exists audit_logs_legacy_numeric_id_unique_idx
+  on public.audit_logs(legacy_numeric_id)
+  where legacy_numeric_id is not null;
 
 alter table public.audit_logs add column if not exists audit_event_id uuid;
 alter table public.audit_logs add column if not exists "timestamp" timestamptz default now();
@@ -108,6 +137,7 @@ alter table public.audit_logs add column if not exists created_at timestamptz de
 -- Legacy partner directory; superseded by institutions/programs without dropping data.
 create table if not exists public.mitra (
   id uuid primary key default gen_random_uuid(),
+  legacy_numeric_id bigint,
   institution_id uuid references public.institutions(id) on delete set null,
   name text not null,
   type text not null,
@@ -117,6 +147,34 @@ create table if not exists public.mitra (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.mitra add column if not exists legacy_numeric_id bigint;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'mitra'
+      and column_name = 'id'
+      and data_type = 'bigint'
+  ) then
+    update public.mitra
+    set legacy_numeric_id = id
+    where legacy_numeric_id is null;
+
+    alter table public.mitra alter column id drop identity if exists;
+    alter table public.mitra alter column id drop default;
+    alter table public.mitra alter column id type uuid using gen_random_uuid();
+    alter table public.mitra alter column id set default gen_random_uuid();
+  end if;
+end
+$$;
+
+create unique index if not exists mitra_legacy_numeric_id_unique_idx
+  on public.mitra(legacy_numeric_id)
+  where legacy_numeric_id is not null;
 
 alter table public.mitra add column if not exists institution_id uuid;
 alter table public.mitra add column if not exists name text;

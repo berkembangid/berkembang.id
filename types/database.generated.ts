@@ -300,6 +300,7 @@ export type Database = {
       audit_logs: {
         Row: {
           id: string
+          legacy_numeric_id: number | null
           audit_event_id: string | null
           timestamp: string
           user: string | null
@@ -311,6 +312,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          legacy_numeric_id?: number | null
           audit_event_id?: string | null
           timestamp?: string
           user?: string | null
@@ -322,6 +324,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          legacy_numeric_id?: number | null
           audit_event_id?: string | null
           timestamp?: string
           user?: string | null
@@ -812,6 +815,7 @@ export type Database = {
           mime_type: string | null
           file_size: number | null
           checksum_sha256: string | null
+          ai_notes: string | null
           file_url: string | null
           created_at: string
           updated_at: string
@@ -828,6 +832,7 @@ export type Database = {
           mime_type?: string | null
           file_size?: number | null
           checksum_sha256?: string | null
+          ai_notes?: string | null
           file_url?: string | null
           created_at?: string
           updated_at?: string
@@ -844,6 +849,7 @@ export type Database = {
           mime_type?: string | null
           file_size?: number | null
           checksum_sha256?: string | null
+          ai_notes?: string | null
           file_url?: string | null
           created_at?: string
           updated_at?: string
@@ -1198,6 +1204,7 @@ export type Database = {
       institutions: {
         Row: {
           id: string
+          legacy_numeric_id: number | null
           name: string
           type: string
           programs_count: number
@@ -1212,6 +1219,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          legacy_numeric_id?: number | null
           name: string
           type?: string
           programs_count?: number
@@ -1226,6 +1234,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          legacy_numeric_id?: number | null
           name?: string
           type?: string
           programs_count?: number
@@ -1323,6 +1332,7 @@ export type Database = {
       mitra: {
         Row: {
           id: string
+          legacy_numeric_id: number | null
           institution_id: string | null
           name: string
           type: string
@@ -1334,6 +1344,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          legacy_numeric_id?: number | null
           institution_id?: string | null
           name: string
           type: string
@@ -1345,6 +1356,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          legacy_numeric_id?: number | null
           institution_id?: string | null
           name?: string
           type?: string
@@ -1891,6 +1903,7 @@ export type Database = {
       rules_config: {
         Row: {
           id: string
+          legacy_numeric_id: number | null
           rule_set_id: string | null
           version: string
           weights: Json
@@ -1901,6 +1914,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          legacy_numeric_id?: number | null
           rule_set_id?: string | null
           version: string
           weights?: Json
@@ -1911,6 +1925,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          legacy_numeric_id?: number | null
           rule_set_id?: string | null
           version?: string
           weights?: Json
@@ -2032,6 +2047,7 @@ export type Database = {
       transactions: {
         Row: {
           id: string
+          legacy_numeric_id: number | null
           business_id: string | null
           user_id: string | null
           capture_id: string | null
@@ -2059,6 +2075,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          legacy_numeric_id?: number | null
           business_id?: string | null
           user_id?: string | null
           capture_id?: string | null
@@ -2086,6 +2103,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          legacy_numeric_id?: number | null
           business_id?: string | null
           user_id?: string | null
           capture_id?: string | null

@@ -106,6 +106,7 @@ async function resetManagedTestSchemas() {
       updated_at timestamptz not null default now(),
       unique (bucket_id, name)
     );
+    alter table storage.objects enable row level security;
   `);
 }
 
@@ -811,10 +812,11 @@ async function verifyLegacyBackfill() {
       created_at timestamptz, updated_at timestamptz
     );
     create table public.institutions (
-      id uuid primary key, name text, type text, programs_count integer, active boolean
+      id bigint generated always as identity primary key,
+      name text, type text, programs_count integer, active boolean, created_at timestamptz
     );
     create table public.transactions (
-      id uuid primary key, user_id uuid, item text, qty text, type text,
+      id bigint generated always as identity primary key, user_id uuid, item text, qty text, type text,
       nominal bigint, kategori text, tanggal date, created_at timestamptz
     );
     create table public.documents (
@@ -825,22 +827,27 @@ async function verifyLegacyBackfill() {
       id uuid primary key, user_id uuid, total_score numeric, gaps jsonb, created_at timestamptz
     );
     create table public.rules_config (
-      id uuid primary key, version text, weights jsonb, thresholds jsonb,
+      id bigint generated always as identity primary key, version text, weights jsonb, thresholds jsonb,
       is_active boolean, created_by text, created_at timestamptz
     );
     create table public.audit_logs (
-      id uuid primary key, user_email text, action text, details text, status text, created_at timestamptz
+      id bigint generated always as identity primary key,
+      user_email text, action text, details text, status text, created_at timestamptz
     );
     create table public.mitra (
-      id uuid primary key, name text, type text, coverage text, umkm_managed integer, active boolean
+      id bigint generated always as identity primary key,
+      name text, type text, coverage text, umkm_managed integer, active boolean, created_at timestamptz
     );
     insert into public.profiles values (
       '10000000-0000-4000-8000-000000000001', 'legacy@example.test', 'umkm',
       'Pemilik Legacy', 'Warung Legacy', 'Kuliner', 'Bandung', 72, 'active',
       '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'
     );
-    insert into public.transactions values (
-      '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
+    insert into public.institutions (name, type, programs_count, active, created_at) values (
+      'Institusi Legacy', 'Bank BUMN', 1, true, '2026-01-01T00:00:00Z'
+    );
+    insert into public.transactions (user_id, item, qty, type, nominal, kategori, tanggal, created_at) values (
+      '10000000-0000-4000-8000-000000000001',
       'Nasi goreng', '2 porsi', 'masuk', 150000, 'Penjualan', date '2026-01-02', '2026-01-02T02:00:00Z'
     );
     insert into public.documents values (
@@ -852,12 +859,32 @@ async function verifyLegacyBackfill() {
       '40000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
       72, jsonb_build_array(jsonb_build_object('code', 'nib')), '2026-01-03T00:00:00Z'
     );
-    insert into public.rules_config values (
-      '50000000-0000-4000-8000-000000000001', 'legacy-v1', jsonb_build_object('kas', 25),
+    insert into public.rules_config (version, weights, thresholds, is_active, created_by, created_at) values (
+      'legacy-v1', jsonb_build_object('kas', 25),
       jsonb_build_object('minimum', 70), true, 'admin@berkembang.id', '2026-01-01T00:00:00Z'
+    );
+    insert into public.audit_logs (user_email, action, details, status, created_at) values (
+      'admin@berkembang.id', 'legacy_test', 'legacy audit row', 'success', '2026-01-01T00:00:00Z'
+    );
+    insert into public.mitra (name, type, coverage, umkm_managed, active, created_at) values (
+      'Mitra Legacy', 'Bank', 'Nasional', 1, true, '2026-01-01T00:00:00Z'
     );
   `);
   await applyMigrations("legacy upgrade");
+
+  for (const tableName of ["institutions", "transactions", "rules_config", "audit_logs", "mitra"]) {
+    const idType = await client.query(`select pg_typeof(id)::text as value from public.${tableName} limit 1`);
+    assert.equal(
+      idType.rows[0].value,
+      "uuid",
+      `${tableName}.id should be normalized from bigint to uuid`,
+    );
+    assert.equal(
+      await scalar(`select count(*)::int as value from public.${tableName} where legacy_numeric_id is not null`),
+      1,
+      `${tableName} should preserve its legacy numeric identifier`,
+    );
+  }
 
   assert.equal(await scalar("select count(*)::int as value from public.businesses"), 1);
   assert.equal(await scalar("select count(*)::int as value from public.business_members where role = 'owner' and status = 'active'"), 1);

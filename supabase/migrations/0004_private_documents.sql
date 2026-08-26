@@ -12,6 +12,7 @@ create table if not exists public.documents (
   mime_type text,
   file_size bigint,
   checksum_sha256 text,
+  ai_notes text,
   file_url text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -27,6 +28,7 @@ alter table public.documents add column if not exists storage_path text;
 alter table public.documents add column if not exists mime_type text;
 alter table public.documents add column if not exists file_size bigint;
 alter table public.documents add column if not exists checksum_sha256 text;
+alter table public.documents add column if not exists ai_notes text;
 alter table public.documents add column if not exists file_url text;
 alter table public.documents add column if not exists created_at timestamptz default now();
 alter table public.documents add column if not exists updated_at timestamptz default now();

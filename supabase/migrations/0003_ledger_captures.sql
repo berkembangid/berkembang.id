@@ -23,6 +23,7 @@ create table if not exists public.transaction_captures (
 
 create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),
+  legacy_numeric_id bigint,
   business_id uuid references public.businesses(id) on delete cascade,
   user_id uuid,
   capture_id uuid references public.transaction_captures(id) on delete set null,
@@ -41,6 +42,37 @@ create table if not exists public.transactions (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.transactions add column if not exists legacy_numeric_id bigint;
+
+-- Preserve legacy ledger identifiers while moving the canonical transaction
+-- key from bigint identity to UUID. The legacy schema has no foreign keys to
+-- transactions.id, so the conversion is lossless for relational integrity.
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'transactions'
+      and column_name = 'id'
+      and data_type = 'bigint'
+  ) then
+    update public.transactions
+    set legacy_numeric_id = id
+    where legacy_numeric_id is null;
+
+    alter table public.transactions alter column id drop identity if exists;
+    alter table public.transactions alter column id drop default;
+    alter table public.transactions alter column id type uuid using gen_random_uuid();
+    alter table public.transactions alter column id set default gen_random_uuid();
+  end if;
+end
+$$;
+
+create unique index if not exists transactions_legacy_numeric_id_unique_idx
+  on public.transactions(legacy_numeric_id)
+  where legacy_numeric_id is not null;
 
 alter table public.transactions add column if not exists business_id uuid;
 alter table public.transactions add column if not exists user_id uuid;

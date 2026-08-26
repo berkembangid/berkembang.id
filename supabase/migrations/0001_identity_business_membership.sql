@@ -77,6 +77,7 @@ create table if not exists public.business_members (
 
 create table if not exists public.institutions (
   id uuid primary key default gen_random_uuid(),
+  legacy_numeric_id bigint,
   name text not null,
   type text not null default 'other',
   programs_count integer not null default 0,
@@ -90,6 +91,7 @@ create table if not exists public.institutions (
 );
 
 alter table public.institutions add column if not exists name text;
+alter table public.institutions add column if not exists legacy_numeric_id bigint;
 alter table public.institutions add column if not exists type text default 'other';
 alter table public.institutions add column if not exists programs_count integer default 0;
 alter table public.institutions add column if not exists active boolean default true;
@@ -99,6 +101,35 @@ alter table public.institutions add column if not exists contact_email text;
 alter table public.institutions add column if not exists location text;
 alter table public.institutions add column if not exists created_at timestamptz default now();
 alter table public.institutions add column if not exists updated_at timestamptz default now();
+
+-- The pre-WP schema used a bigint identity for institutions.id. Canonical
+-- membership and consent relations use UUIDs, so preserve the old identifier
+-- for traceability before converting the unreferenced legacy primary key.
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'institutions'
+      and column_name = 'id'
+      and data_type = 'bigint'
+  ) then
+    update public.institutions
+    set legacy_numeric_id = id
+    where legacy_numeric_id is null;
+
+    alter table public.institutions alter column id drop identity if exists;
+    alter table public.institutions alter column id drop default;
+    alter table public.institutions alter column id type uuid using gen_random_uuid();
+    alter table public.institutions alter column id set default gen_random_uuid();
+  end if;
+end
+$$;
+
+create unique index if not exists institutions_legacy_numeric_id_unique_idx
+  on public.institutions(legacy_numeric_id)
+  where legacy_numeric_id is not null;
 
 create table if not exists public.institution_members (
   id uuid primary key default gen_random_uuid(),

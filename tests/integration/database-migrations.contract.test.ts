@@ -72,7 +72,8 @@ describe("WP-04 identity and RLS contract", () => {
     expect(identityRls).toContain("protect_institution_membership_authority");
     expect(identityRls).toContain("private.has_active_consent");
     expect(identityRls).toContain("revoke all on all tables in schema public from anon, authenticated");
-    expect(storageRls).toContain("alter table storage.objects enable row level security");
+    expect(storageRls).not.toContain("alter table storage.objects enable row level security");
+    expect(storageRls).toContain("hosted supabase owns storage.objects");
     expect(storageRls).toContain("documents_owner_select");
     expect(storageRls).toContain("split_part(name, '/', 1) = (select auth.uid())::text");
   });

@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     }
 
     // Quick regex check on filename or text if provided
-    let candidateNib = extractNibWithRegex(fileName + " " + (rawTextInput || ""));
+    const candidateNib = extractNibWithRegex(fileName + " " + (rawTextInput || ""));
 
     // 1. Google Gemini (Supports both Images and PDFs directly!)
     if (keys.geminiKey && base64Data) {
@@ -116,8 +116,8 @@ export async function POST(req: Request) {
             }
           }
         }
-      } catch (geminiErr: any) {
-        console.warn("Gemini NIB extract error:", geminiErr?.message);
+      } catch (geminiErr: unknown) {
+        console.warn("Gemini NIB extract error:", geminiErr instanceof Error ? geminiErr.message : geminiErr);
       }
     }
 
@@ -165,8 +165,8 @@ export async function POST(req: Request) {
             }
           }
         }
-      } catch (groqErr: any) {
-        console.warn("Groq Vision NIB error:", groqErr?.message);
+      } catch (groqErr: unknown) {
+        console.warn("Groq Vision NIB error:", groqErr instanceof Error ? groqErr.message : groqErr);
       }
     }
 
@@ -214,8 +214,8 @@ export async function POST(req: Request) {
             }
           }
         }
-      } catch (openaiErr: any) {
-        console.warn("OpenAI Vision NIB error:", openaiErr?.message);
+      } catch (openaiErr: unknown) {
+        console.warn("OpenAI Vision NIB error:", openaiErr instanceof Error ? openaiErr.message : openaiErr);
       }
     }
 
@@ -241,10 +241,10 @@ export async function POST(req: Request) {
       source: "smart-ocr-fallback",
       note: "Nomor NIB berhasil diekstrak dan disinkronkan ke profil usaha.",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("NIB Extraction Route Error:", err);
     return NextResponse.json(
-      { error: err?.message || "Gagal memproses dokumen NIB." },
+      { error: err instanceof Error ? err.message : "Gagal memproses dokumen NIB." },
       { status: 500 }
     );
   }

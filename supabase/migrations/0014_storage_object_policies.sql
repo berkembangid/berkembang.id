@@ -6,7 +6,9 @@ begin;
 update storage.buckets set public = false where id = 'documents';
 update storage.buckets set public = true where id = 'avatars';
 
-alter table storage.objects enable row level security;
+-- Hosted Supabase owns storage.objects through supabase_storage_admin and
+-- enables RLS on this managed table by default. The migration role may create
+-- policies but must not ALTER the managed relation itself.
 grant usage on schema storage to authenticated;
 grant select, insert, update, delete on storage.objects to authenticated;
 grant usage on schema storage to service_role;

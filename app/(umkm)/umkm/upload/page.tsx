@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Upload, FileText, CheckCircle2, Trash2, ArrowUpRight } from "lucide-react";
+import { Upload, FileText, CheckCircle2, Trash2, ArrowUpRight, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const REQUIRED_DOCS = [
@@ -22,6 +23,7 @@ interface DocumentRecord {
   doc_type: string;
   storage_path: string | null;
   file_url?: string | null;
+  ai_notes?: string | null;
   status: string;
 }
 
@@ -281,7 +283,7 @@ export default function UploadPage() {
                         </Link>
                       </div>
                     )}
-                  </>
+                  </div>
                 ) : (
                   <label className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 py-2.5 px-4 rounded-xl text-xs font-bold text-blue-600 cursor-pointer transition-all">
                     <Upload size={14} />

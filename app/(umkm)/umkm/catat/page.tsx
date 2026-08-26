@@ -190,26 +190,34 @@ export default function CatatPage() {
 
   useEffect(() => {
     const persistedCaptureId = localStorage.getItem(ACTIVE_CAPTURE_STORAGE_KEY);
-    if (persistedCaptureId) {
-      setCaptureId(persistedCaptureId);
-      setStep("processing");
-      getCapture(persistedCaptureId)
-        .then(async (capture) => {
-          if (capture.status === "draft") await processCapture(persistedCaptureId);
-          if (capture.status === "needs_review") {
-            applyCapture(capture);
+    let cancelled = false;
+    const restoreTimerId = persistedCaptureId
+      ? window.setTimeout(() => {
+        if (cancelled) return;
+        setCaptureId(persistedCaptureId);
+        setStep("processing");
+        getCapture(persistedCaptureId)
+          .then(async (capture) => {
+            if (cancelled) return;
+            if (capture.status === "draft") await processCapture(persistedCaptureId);
+            if (capture.status === "needs_review") {
+              applyCapture(capture);
+              setStep("preview");
+              return;
+            }
+            await pollCapture(persistedCaptureId);
+          })
+          .catch((error) => {
+            if (cancelled) return;
             setStep("preview");
-            return;
-          }
-          await pollCapture(persistedCaptureId);
-        })
-        .catch((error) => {
-          setStep("preview");
-          setErrorMessage(captureErrorMessage(error, "Status catatan belum dapat dimuat."));
-        });
-    }
+            setErrorMessage(captureErrorMessage(error, "Status catatan belum dapat dimuat."));
+          });
+        }, 0)
+      : null;
 
     return () => {
+      cancelled = true;
+      if (restoreTimerId !== null) window.clearTimeout(restoreTimerId);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       const mr = mediaRecorderRef.current;
       if (mr && mr.state !== "inactive") {

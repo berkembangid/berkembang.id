@@ -89,6 +89,7 @@ alter table public.readiness_analyses add column if not exists created_at timest
 -- Legacy writable table; WP-12 will move publication authority to readiness_rule_sets.
 create table if not exists public.rules_config (
   id uuid primary key default gen_random_uuid(),
+  legacy_numeric_id bigint,
   rule_set_id uuid references public.readiness_rule_sets(id) on delete set null,
   version text not null,
   weights jsonb not null default '{}'::jsonb,
@@ -97,6 +98,34 @@ create table if not exists public.rules_config (
   created_by text,
   created_at timestamptz not null default now()
 );
+
+alter table public.rules_config add column if not exists legacy_numeric_id bigint;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'rules_config'
+      and column_name = 'id'
+      and data_type = 'bigint'
+  ) then
+    update public.rules_config
+    set legacy_numeric_id = id
+    where legacy_numeric_id is null;
+
+    alter table public.rules_config alter column id drop identity if exists;
+    alter table public.rules_config alter column id drop default;
+    alter table public.rules_config alter column id type uuid using gen_random_uuid();
+    alter table public.rules_config alter column id set default gen_random_uuid();
+  end if;
+end
+$$;
+
+create unique index if not exists rules_config_legacy_numeric_id_unique_idx
+  on public.rules_config(legacy_numeric_id)
+  where legacy_numeric_id is not null;
 
 alter table public.rules_config add column if not exists rule_set_id uuid;
 alter table public.rules_config add column if not exists version text;
