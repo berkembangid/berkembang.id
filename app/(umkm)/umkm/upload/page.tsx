@@ -79,6 +79,47 @@ export default function UploadPage() {
       const { error: uploadErr } = await supabase.storage.from("documents").upload(storagePath, file, { upsert: true });
       if (uploadErr) throw new Error("File belum berhasil diunggah. Silakan coba lagi.");
 
+      let aiNotes = "";
+      let extractedNibNumber: string | null = null;
+
+      // If document is NIB, trigger AI extraction and update user profile
+      if (docType === "nib") {
+        try {
+          const extractFormData = new FormData();
+          extractFormData.append("file", file);
+
+          const res = await fetch("/api/ai/extract-nib", {
+            method: "POST",
+            body: extractFormData,
+          });
+
+          if (res.ok) {
+            const extractData = await res.json();
+            if (extractData?.nib) {
+              extractedNibNumber = extractData.nib;
+              aiNotes = `NIB Terdeteksi: ${extractData.nib}`;
+
+              // 1. Sync to Supabase Auth User Metadata
+              await supabase.auth.updateUser({
+                data: {
+                  nib: extractData.nib,
+                  ...(extractData.nama_usaha ? { nama_usaha_oss: extractData.nama_usaha } : {}),
+                },
+              });
+
+              // 2. Sync to Supabase 'profiles' table
+              await supabase.from("profiles").upsert({
+                id: user.id,
+                nib: extractData.nib,
+                updated_at: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (aiErr) {
+          console.warn("AI NIB extraction warning:", aiErr);
+        }
+      }
+
       // Insert record to DB
       const { error: dbErr } = await supabase.from("documents").insert({
         user_id: user.id,
@@ -88,7 +129,8 @@ export default function UploadPage() {
         file_url: null,
         file_size: file.size,
         mime_type: file.type,
-        status: "uploaded"
+        status: "uploaded",
+        ai_notes: aiNotes || undefined,
       });
 
       if (dbErr) {
@@ -96,7 +138,11 @@ export default function UploadPage() {
         throw new Error("Data dokumen belum berhasil disimpan. Silakan coba lagi.");
       }
 
-      setMsg(`Dokumen ${file.name} berhasil diupload!`);
+      if (extractedNibNumber) {
+        setMsg(`🎉 Dokumen NIB "${file.name}" berhasil diunggah! Nomor NIB (${extractedNibNumber}) berhasil diekstrak dan otomatis tersimpan di Profil Usaha.`);
+      } else {
+        setMsg(`Dokumen ${file.name} berhasil diupload!`);
+      }
       await fetchDocs();
     } catch (err: unknown) {
       setMsg(err instanceof Error ? err.message : "Dokumen belum berhasil diunggah.");
@@ -224,11 +270,22 @@ export default function UploadPage() {
                         <Trash2 size={14} />
                       </button>
                     </div>
-                  </div>
+                    {uploadedDoc.ai_notes && (
+                      <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl p-2.5 flex items-center justify-between text-[11px] text-emerald-800">
+                        <span className="flex items-center gap-1.5 font-bold font-mono">
+                          <Sparkles size={13} className="text-emerald-600 flex-shrink-0" />
+                          {uploadedDoc.ai_notes}
+                        </span>
+                        <Link href="/umkm/profil" className="font-bold underline text-emerald-900 hover:text-emerald-700 ml-2 whitespace-nowrap">
+                          Lihat di Profil →
+                        </Link>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <label className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 py-2.5 px-4 rounded-xl text-xs font-bold text-blue-600 cursor-pointer transition-all">
                     <Upload size={14} />
-                    {isUploading ? "Mengunggah..." : "Pilih / Drop Dokumen"}
+                    {isUploading ? (doc.type === "nib" ? "Mengekstrak NIB AI..." : "Mengunggah...") : "Pilih / Drop Dokumen"}
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"

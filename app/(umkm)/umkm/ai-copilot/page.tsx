@@ -13,15 +13,15 @@ export default function AICopilotPage() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const quickScrollRef = useRef<HTMLDivElement>(null);
 
-  const quickQuestions = [
-    "Bagaimana cara membuat NIB secara gratis?",
-    "Dokumen apa saja yang wajib untuk KUR?",
-    "Bagaimana cara menaikkan skor kesiapan usaha?",
-    "Berapa estimasi bunga KUR mikro saat ini?",
-  ];
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = (textToSend?: string, replyOverride?: string) => {
     const q = textToSend || input;
     if (!q.trim() || loading) return;
 
@@ -37,10 +37,33 @@ export default function AICopilotPage() {
       } else if (q.toLowerCase().includes("kur") || q.toLowerCase().includes("bunga")) {
         reply = "Ketentuan KUR dapat berubah. Periksa sumber resmi pemerintah atau lembaga penyalur; simulasi ini tidak memberikan keputusan atau janji pembiayaan.";
       }
+
       setMessages([...newMsgs, { sender: "ai", text: reply }]);
       setLoading(false);
-    }, 1000);
+    }, 900);
   };
+
+  // Render markdown-style bold with **text**
+  function renderText(text: string) {
+    const lines = text.split("\n");
+    return lines.map((line, i) => {
+      const parts = line.split(/\*\*(.*?)\*\*/g);
+      return (
+        <span key={i}>
+          {parts.map((part, j) =>
+            j % 2 === 1 ? (
+              <strong key={j} className="font-bold">
+                {part}
+              </strong>
+            ) : (
+              <span key={j}>{part}</span>
+            )
+          )}
+          {i < lines.length - 1 && <br />}
+        </span>
+      );
+    });
+  }
 
   return (
     <div className="p-4 md:p-6 pb-28 md:pb-8 max-w-4xl mx-auto flex flex-col h-[calc(100vh-4rem)]">
@@ -54,72 +77,96 @@ export default function AICopilotPage() {
         </p>
       </div>
 
-      {/* Quick suggestions */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-3 scrollbar-none">
-        {quickQuestions.map((q, idx) => (
-          <button
-            key={idx}
-            onClick={() => handleSend(q)}
-            className="text-xs font-semibold text-slate-600 bg-white border border-slate-200 hover:border-blue-300 hover:bg-blue-50 px-3 py-1.5 rounded-full flex-shrink-0 transition-all cursor-pointer"
-          >
-            {q}
-          </button>
-        ))}
+      {/* Quick Questions — scrollable */}
+      <div className="flex-shrink-0 px-4 pb-2">
+        <div
+          ref={quickScrollRef}
+          className="flex items-center gap-2 overflow-x-auto pb-1"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          {QUICK_QUESTIONS.map((qq, idx) => (
+            <button
+              key={idx}
+              onClick={() => handleSend(qq.question, qq.reply)}
+              disabled={loading}
+              className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 px-3 py-2 rounded-full transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap shadow-sm"
+            >
+              <Sparkles size={11} className="text-blue-400 flex-shrink-0" />
+              {qq.label}
+            </button>
+          ))}
+          <div className="flex-shrink-0 w-2" />
+        </div>
       </div>
 
       {/* Chat Messages Container */}
-      <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-4 overflow-y-auto space-y-4 shadow-sm">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-4 space-y-4 pb-3"
+      >
         {messages.map((m, i) => (
           <div key={i} className={`flex items-start gap-3 ${m.sender === "user" ? "flex-row-reverse" : ""}`}>
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+              className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs mt-0.5 ${
                 m.sender === "user" ? "bg-slate-800 text-white" : "bg-[#0f2d6b] text-cyan-300"
               }`}
             >
-              {m.sender === "user" ? <User size={16} /> : <Bot size={16} />}
+              {m.sender === "user" ? <User size={15} /> : <Bot size={15} />}
             </div>
             <div
-              className={`p-3.5 rounded-2xl text-xs max-w-[80%] leading-relaxed ${
+              className={`p-3.5 rounded-2xl text-xs max-w-[82%] leading-relaxed ${
                 m.sender === "user"
                   ? "bg-[#0f2d6b] text-white rounded-tr-none"
-                  : "bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200/60"
+                  : "bg-white border border-slate-200 text-slate-800 rounded-tl-none shadow-sm"
               }`}
             >
-              {m.text}
+              {renderText(m.text)}
             </div>
           </div>
         ))}
         {loading && (
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium italic">
-            <Sparkles size={14} className="animate-spin text-blue-500" />
-            AI Copilot sedang berpikir...
+          <div className="flex items-center gap-2.5 text-xs text-slate-400 font-medium">
+            <div className="w-8 h-8 rounded-full bg-[#0f2d6b] flex items-center justify-center flex-shrink-0">
+              <Bot size={15} className="text-cyan-300" />
+            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm flex items-center gap-2">
+              <span className="inline-flex gap-1">
+                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              </span>
+              <span className="italic">AI sedang berpikir...</span>
+            </div>
           </div>
         )}
+        <div ref={chatEndRef} />
       </div>
 
       {/* Input Form */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSend();
-        }}
-        className="mt-3 flex gap-2"
-      >
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Tanyakan sesuatu tentang KUR atau perbaikan skor usahamu..."
-          className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-blue-500 shadow-sm"
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="bg-[#0f2d6b] hover:bg-blue-900 disabled:opacity-50 text-white font-bold px-5 py-3 rounded-xl transition-all flex items-center gap-2 cursor-pointer text-xs shadow-sm"
+      <div className="flex-shrink-0 px-4 pt-2 pb-28 md:pb-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSend();
+          }}
+          className="flex gap-2"
         >
-          Kirim <Send size={14} />
-        </button>
-      </form>
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Tanyakan sesuatu tentang KUR atau perbaikan skor usahamu..."
+            className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-blue-500 shadow-sm"
+          />
+          <button
+            type="submit"
+            disabled={loading || !input.trim()}
+            className="bg-[#0f2d6b] hover:bg-blue-900 disabled:opacity-50 text-white font-bold px-5 py-3 rounded-xl transition-all flex items-center gap-2 cursor-pointer text-xs shadow-sm flex-shrink-0"
+          >
+            Kirim <Send size={14} />
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
