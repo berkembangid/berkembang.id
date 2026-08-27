@@ -279,10 +279,10 @@ export default function AdminUsersPage() {
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
-                placeholder="Minimal 6 karakter"
+                placeholder="Minimal 8 karakter"
                 className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
               />
             </div>

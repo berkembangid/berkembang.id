@@ -92,7 +92,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div>
             <div className="flex items-center gap-2">
               <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-8 w-auto object-contain brightness-125" />
-            </div>  
+              <span className="text-[9px] font-bold text-[#56f9f9] bg-[#56f9f9]/10 px-2 py-0.5 rounded-full border border-[#56f9f9]/20 uppercase tracking-widest flex-shrink-0">
+                Admin
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1 font-semibold flex items-center gap-1">
+              <Sparkles size={10} className="text-[#56f9f9] animate-pulse" /> Super Admin Control
+            </p>
           </div>
           <button
             type="button"
