@@ -80,7 +80,7 @@ describe("WP-05 capture endpoint contract", () => {
     const processResponse = await handleProcess(captureId, {
       authenticate,
       schedule: vi.fn(),
-      scheduleBackground: vi.fn(),
+      process: vi.fn(),
     });
     const confirmResponse = await handleConfirm(
       new Request(`http://localhost/api/v1/captures/${captureId}/confirm`, { method: "POST" }),
@@ -150,7 +150,7 @@ describe("WP-05 capture endpoint contract", () => {
     const forbidden = await handleProcess(captureId, {
       authenticate: async () => user,
       schedule: async () => { throw new CaptureOperationError("BUSINESS_ACCESS_DENIED"); },
-      scheduleBackground: vi.fn(),
+      process: vi.fn(),
     });
     const notFound = await handleGet(captureId, {
       authenticate: async () => user,
@@ -165,17 +165,17 @@ describe("WP-05 capture endpoint contract", () => {
     expect((await json(notFound)).error).toMatchObject({ code: "CAPTURE_NOT_FOUND" });
   });
 
-  it("enqueues processing and schedules background work without awaiting the provider", async () => {
-    const scheduleBackground = vi.fn();
+  it("enqueues processing and runs the worker before returning", async () => {
+    const process = vi.fn().mockResolvedValue(undefined);
     const response = await handleProcess(captureId, {
       authenticate: async () => user,
       schedule: async () => ({ captureId, jobId, status: "queued", idempotent: false }),
-      scheduleBackground,
+      process,
     });
 
     expect(response.status).toBe(202);
     expect(await json(response)).toMatchObject({ data: { captureId, jobId, status: "queued" } });
-    expect(scheduleBackground).toHaveBeenCalledWith(jobId);
+    expect(process).toHaveBeenCalledWith(jobId);
   });
 
   it("returns persisted draft status for refresh recovery", async () => {

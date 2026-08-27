@@ -251,7 +251,7 @@ export default function CatatPage() {
 
       const { error: uploadError } = await supabase.storage
         .from(created.upload.bucket)
-        .uploadToSignedUrl(created.upload.path, created.upload.token, blob, {
+        .uploadToSignedUrl(created.upload.path, created.upload.token, new Blob([blob], { type: mimeType }), {
           contentType: mimeType,
           upsert: false,
         });

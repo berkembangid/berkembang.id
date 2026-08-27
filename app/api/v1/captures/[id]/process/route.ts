@@ -1,4 +1,3 @@
-import { after } from "next/server";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { processQueuedCaptureJob } from "@/modules/ledger/capture-worker";
 import {
@@ -17,24 +16,13 @@ export const maxDuration = 60;
 export type ProcessCaptureRouteDependencies = {
   authenticate: () => Promise<{ id: string } | null>;
   schedule: (captureId: string) => Promise<ScheduledCapture>;
-  scheduleBackground: (jobId: string) => void;
+  process: (jobId: string) => Promise<void>;
 };
 
 const defaultDependencies: ProcessCaptureRouteDependencies = {
   authenticate: getAuthenticatedUser,
   schedule: scheduleCaptureProcessing,
-  scheduleBackground(jobId) {
-    after(async () => {
-      try {
-        await processQueuedCaptureJob(jobId);
-      } catch {
-        console.error("Capture worker invocation failed", {
-          jobId,
-          code: "CAPTURE_WORKER_INVOCATION_FAILED",
-        });
-      }
-    });
-  },
+  process: processQueuedCaptureJob,
 };
 
 export async function handleProcessCaptureRequest(
@@ -49,7 +37,9 @@ export async function handleProcessCaptureRequest(
     if (!parsedId.success) return captureValidationErrorResponse(parsedId.error);
 
     const scheduled = await dependencies.schedule(parsedId.data);
-    dependencies.scheduleBackground(scheduled.jobId);
+    // Run the MVP worker before returning. A serverless `after()` callback is
+    // not a durable queue and was leaving remote jobs permanently queued.
+    await dependencies.process(scheduled.jobId);
     return Response.json({ data: scheduled }, { status: 202 });
   } catch (error) {
     return captureErrorResponse(error);
