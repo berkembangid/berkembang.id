@@ -15,11 +15,15 @@ export async function POST() {
   }
 
   try {
-    const role = await bootstrapAccountFromSignupMetadata(supabase, user);
+    const role = await bootstrapAccountFromSignupMetadata(user);
     return NextResponse.json({ role, destination: portalPathForRole(role) });
   } catch (bootstrapError) {
     const code = bootstrapError instanceof Error ? bootstrapError.message : "ONBOARDING_FAILED";
     const status = code === "ONBOARDING_METADATA_MISSING" ? 409 : 500;
+    console.error("Account membership bootstrap failed", {
+      userId: user.id,
+      code,
+    });
     return NextResponse.json({ error: code }, { status });
   }
 }

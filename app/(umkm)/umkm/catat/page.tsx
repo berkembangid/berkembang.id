@@ -23,7 +23,7 @@ import {
 } from "@/modules/ledger/capture-schema";
 
 // ───────── TYPES ─────────
-type Step = "idle" | "recording" | "processing" | "preview";
+type Step = "ready" | "recording" | "uploading" | "processing" | "needs_review" | "saving" | "success" | "failed";
 
 interface ExtractedItem {
   id: number;
@@ -115,7 +115,7 @@ function parseQuantity(value: string) {
 // ─────────────────────────────────────────────────────────────────
 export default function CatatPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("idle");
+  const [step, setStep] = useState<Step>("ready");
   const [inputMode, setInputMode] = useState<"voice" | "text">("voice");
   const [typedText, setTypedText] = useState("");
   const [items, setItems] = useState<ExtractedItem[]>([]);
@@ -154,12 +154,11 @@ export default function CatatPage() {
       const capture = await getCapture(activeCaptureId);
       if (capture.status === "needs_review") {
         applyCapture(capture);
-        setStep("preview");
+        setStep("needs_review");
         return;
       }
       if (capture.status === "failed") {
-        setItems([]);
-        setStep("preview");
+        setStep("failed");
         setErrorMessage(
           capture.failure?.message ||
             "AI belum dapat menyiapkan draft. Gunakan input teks atau coba catatan baru.",
@@ -169,7 +168,7 @@ export default function CatatPage() {
       if (capture.status === "cancelled") {
         localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
         setCaptureId(null);
-        setStep("idle");
+        setStep("ready");
         return;
       }
       if (capture.status === "confirmed") {
@@ -202,14 +201,14 @@ export default function CatatPage() {
             if (capture.status === "draft") await processCapture(persistedCaptureId);
             if (capture.status === "needs_review") {
               applyCapture(capture);
-              setStep("preview");
+              setStep("needs_review");
               return;
             }
             await pollCapture(persistedCaptureId);
           })
           .catch((error) => {
             if (cancelled) return;
-            setStep("preview");
+            setStep("failed");
             setErrorMessage(captureErrorMessage(error, "Status catatan belum dapat dimuat."));
           });
         }, 0)
@@ -228,7 +227,7 @@ export default function CatatPage() {
 
   // ── Process audio via AI ────────────────────────────────────────
   const processAudioWithAI = useCallback(async (blob: Blob, actualMime?: string) => {
-    setStep("processing");
+    setStep("uploading");
     setErrorMessage("");
     let createdCaptureId: string | null = null;
     let processingScheduled = false;
@@ -264,6 +263,7 @@ export default function CatatPage() {
         );
       }
 
+      setStep("processing");
       await processCapture(created.capture.id);
       processingScheduled = true;
       await pollCapture(created.capture.id);
@@ -279,15 +279,15 @@ export default function CatatPage() {
           "Rekaman belum dapat diproses. Silakan coba lagi atau gunakan input manual.",
         ),
       );
-      setItems([]);
-      setStep("preview");
+      setStep("failed");
     }
   }, [pollCapture]);
 
   // ── Recording ───────────────────────────────────────────────────
   const startMediaRecording = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
-      alert("Mikrofon tidak didukung di browser ini. Silakan gunakan tab Tulis Teks AI.");
+      setInputMode("text");
+      setErrorMessage("Mikrofon tidak tersedia di browser ini. Gunakan pilihan Tulis transaksi.");
       return;
     }
     try {
@@ -323,8 +323,7 @@ export default function CatatPage() {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = setInterval(() => setRecordSeconds((p) => p + 1), 1000);
     } catch {
-      console.error("Microphone access error");
-      alert("Gagal mengakses mikrofon. Pastikan Anda memberikan izin akses mikrofon di browser.");
+      setErrorMessage("Mikrofon belum dapat digunakan. Izinkan akses mikrofon, atau gunakan pilihan Tulis transaksi.");
     }
   }, [processAudioWithAI]);
 
@@ -358,9 +357,8 @@ export default function CatatPage() {
       await processCapture(created.capture.id);
       await pollCapture(created.capture.id);
     } catch (error) {
-      setItems([]);
       setErrorMessage(captureErrorMessage(error, "Teks belum dapat diproses. Silakan coba lagi."));
-      setStep("preview");
+      setStep("failed");
     }
   }, [applyCaption, captureId, pollCapture]);
 
@@ -388,6 +386,7 @@ export default function CatatPage() {
   // ── Save ────────────────────────────────────────────────────────
   const handleConfirmSave = async () => {
     setSaving(true);
+    setStep("saving");
     setErrorMessage("");
     try {
       if (!captureId) {
@@ -398,7 +397,7 @@ export default function CatatPage() {
       setCaptureId(null);
 
     setToastMessage("✓ Catatan berhasil disimpan.");
-      setStep("idle");
+      setStep("success");
       setItems([]);
       setTranscription("");
       setEditableCaption("");
@@ -406,6 +405,7 @@ export default function CatatPage() {
       setTimeout(() => { setToastMessage(""); router.push("/umkm/laporan"); }, 1200);
     } catch (error) {
       setErrorMessage(captureErrorMessage(error, "Catatan belum tersimpan. Silakan periksa kembali."));
+      setStep("needs_review");
     } finally {
       setSaving(false);
     }
@@ -417,7 +417,7 @@ export default function CatatPage() {
     }
     localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
     setCaptureId(null);
-    setStep("idle");
+    setStep("ready");
     setItems([]);
     setTranscription("");
     setEditableCaption("");
@@ -471,7 +471,7 @@ export default function CatatPage() {
             <ArrowLeft size={16} /> Beranda
           </button>
         </Link>
-        <span className="text-xs font-bold text-[#141a34] truncate">Pencatatan AI Suara &amp; Teks</span>
+        <span className="text-xs font-bold text-[#141a34] truncate">Catat transaksi</span>
       </header>
 
       {toastMessage && (
@@ -480,7 +480,7 @@ export default function CatatPage() {
         </div>
       )}
 
-      {errorMessage && (
+      {errorMessage && step !== "failed" && (
         <div
           role="alert"
           className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex max-w-[calc(100%-2rem)] items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700 shadow-lg"
@@ -493,12 +493,12 @@ export default function CatatPage() {
       <main className="px-5 md:px-0 py-6 space-y-6 pb-28 md:pb-8 max-w-4xl mx-auto">
         {/* Desktop Title */}
         <div className="hidden md:block mb-2">
-          <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#141a34]">Pencatatan AI Suara &amp; Teks</h1>
-          <p className="text-xs text-[#444655] mt-1">Ucapkan atau ketik transaksi harian Anda, AI akan mengekstrak data keuangan secara otomatis.</p>
+          <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#141a34]">Catat transaksi</h1>
+          <p className="text-xs text-[#444655] mt-1">Ceritakan atau tulis pemasukan dan pengeluaran, lalu periksa hasilnya sebelum disimpan.</p>
         </div>
 
         {/* ── IDLE ───────────────────────────────────────────────── */}
-        {step === "idle" && (
+        {step === "ready" && (
           <div className="space-y-6">
             {/* Mode Tabs */}
             <div className="flex bg-[#ececff] p-1.5 rounded-2xl max-w-sm mx-auto">
@@ -511,7 +511,7 @@ export default function CatatPage() {
                     inputMode === mode ? "bg-[#001b85] text-white shadow-sm" : "text-[#444655] hover:text-[#001b85]"
                   }`}
                 >
-                  {mode === "voice" ? <><Mic size={16} /> Bicara Suara AI</> : <><Type size={16} /> Tulis Teks AI</>}
+                  {mode === "voice" ? <><Mic size={16} /> Gunakan suara</> : <><Type size={16} /> Tulis transaksi</>}
                 </button>
               ))}
             </div>
@@ -638,22 +638,31 @@ export default function CatatPage() {
               onClick={stopMediaRecording}
               className="bg-red-600 text-white text-xs font-bold px-8 py-3.5 rounded-xl hover:bg-red-700 transition-colors cursor-pointer shadow-md flex items-center justify-center gap-2 mx-auto"
             >
-              <Square size={14} className="fill-current" /> Selesai &amp; Ekstrak AI
+              <Square size={14} className="fill-current" /> Selesai berbicara
             </button>
           </div>
         )}
 
         {/* ── PROCESSING ─────────────────────────────────────────── */}
-        {step === "processing" && (
-          <div className="bg-white rounded-3xl p-10 border border-[#e5e7ff] shadow-card text-center space-y-4 animate-fade-in">
+        {(["uploading", "processing", "saving", "success"] as Step[]).includes(step) && (
+          <div role="status" aria-live="polite" className="bg-white rounded-3xl p-10 border border-[#e5e7ff] shadow-card text-center space-y-4 animate-fade-in">
             <RefreshCw size={36} className="animate-spin text-[#001b85] mx-auto" />
-            <h2 className="font-headline text-lg font-bold text-[#141a34]">AI Sedang Memproses &amp; Mengonversi Suara Anda...</h2>
-            <p className="text-xs text-[#444655]">Mengekstrak ucapan, nominal, dan kategori transaksi keuangan...</p>
+            <h2 className="font-headline text-lg font-bold text-[#141a34]">{step === "uploading" ? "Mengirim rekaman dengan aman..." : step === "processing" ? "Membaca isi catatan..." : step === "saving" ? "Menyimpan catatan..." : "Catatan berhasil disimpan"}</h2>
+            <p className="text-xs text-[#444655]">{step === "uploading" ? "Jangan tutup halaman sampai rekaman selesai dikirim." : step === "processing" ? "Nominal dan jenis transaksi sedang disiapkan untuk Anda periksa." : step === "saving" ? "Data yang sudah Anda periksa sedang dimasukkan ke buku kas." : "Anda akan diarahkan ke laporan."}</p>
+          </div>
+        )}
+
+        {step === "failed" && (
+          <div role="alert" className="rounded-3xl border border-red-200 bg-white p-8 text-center shadow-card">
+            <AlertCircle size={36} className="mx-auto text-red-500" />
+            <h2 className="mt-3 text-lg font-bold text-slate-800">Catatan belum berhasil dibaca</h2>
+            <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-500">{errorMessage || "Rekaman atau tulisan tetap tersimpan. Anda dapat mencoba lagi tanpa kehilangan isi yang sudah dibuat."}</p>
+            <button type="button" onClick={() => { setTypedText(editableCaption || transcription || typedText); setInputMode("text"); setErrorMessage(""); setStep("ready"); }} className="mt-5 min-h-11 rounded-xl bg-[#001b85] px-5 text-xs font-bold text-white">Periksa sebagai tulisan</button>
           </div>
         )}
 
         {/* ── PREVIEW ────────────────────────────────────────────── */}
-        {step === "preview" && (
+        {step === "needs_review" && (
           <div className="space-y-5 animate-fade-in">
             {/* Editable Caption Box */}
             <div className="bg-[#ececff] rounded-2xl p-4 border border-[#bac3ff] space-y-2">

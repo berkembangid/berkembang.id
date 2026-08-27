@@ -75,8 +75,9 @@ async function extractTransactionsFromText(
   if (keys.groq) {
     try {
       const groq = new Groq({ apiKey: keys.groq });
+      const model = process.env.CAPTURE_GROQ_EXTRACTION_MODEL?.trim() || "openai/gpt-oss-20b";
       const completion = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
+        model,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userMessage },
@@ -214,4 +215,3 @@ export async function processAudioWithAi(
 
   return null;
 }
-

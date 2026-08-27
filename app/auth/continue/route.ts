@@ -16,6 +16,12 @@ export async function GET(request: Request) {
   try {
     const role = await getEffectivePortalRole(supabase, user.id);
     if (role) {
+      if (role === "umkm") {
+        const transaction = await supabase.from("transactions").select("id").eq("user_id", user.id).limit(1).maybeSingle();
+        if (!transaction.error && !transaction.data) {
+          return NextResponse.redirect(new URL("/umkm/catat?onboarding=1", request.url));
+        }
+      }
       return NextResponse.redirect(new URL(portalPathForRole(role), request.url));
     }
   } catch {

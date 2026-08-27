@@ -20,12 +20,21 @@ const expectedMigrations = [
   "0013_identity_membership_rls.sql",
   "0014_storage_object_policies.sql",
   "0015_voice_capture_lifecycle.sql",
+  "0016_private_document_lifecycle.sql",
+  "0017_document_extraction_completion.sql",
+  "0018_document_ocr_owner_confirmation.sql",
+  "0019_document_reading_consent_policy.sql",
+  "0020_document_extraction_retry.sql",
+  "0021_ledger_report_daily_closing.sql",
+  "0022_readiness_mission_engine.sql",
+  "0023_consent_verified_business_profile.sql",
 ];
 
 const coreTables = [
   "profiles", "businesses", "business_members", "institutions", "institution_members",
-  "programs", "program_enrollments", "transaction_captures", "transactions", "daily_closings",
+  "programs", "program_enrollments", "transaction_captures", "transactions", "daily_closings", "transaction_changes",
   "documents", "document_versions", "document_extractions", "document_verifications",
+  "document_upload_sessions",
   "readiness_rule_sets", "readiness_score_snapshots", "readiness_score_components", "missions",
   "business_missions", "ai_jobs", "ai_runs", "ai_feedback", "dossier_requests", "consent_grants",
   "dossiers", "dossier_items", "dossier_access_events", "notifications", "audit_events",
@@ -67,11 +76,15 @@ async function resetManagedTestSchemas() {
       end if;
     end;
     $$;
+    drop extension if exists pgcrypto cascade;
     drop schema if exists public cascade;
     drop schema if exists auth cascade;
     drop schema if exists storage cascade;
     drop schema if exists private cascade;
+    drop schema if exists extensions cascade;
     create schema public;
+    create schema extensions;
+    create extension pgcrypto with schema extensions;
     create schema auth;
     create table auth.users (
       id uuid primary key,
@@ -648,7 +661,7 @@ async function verifyRlsIsolation() {
     userA,
     `insert into storage.objects (bucket_id, name, owner_id) values ('avatars', '${userA}/avatar.webp', '${userA}')`,
   );
-  await asAuthenticated(
+  await expectAuthenticatedRejected(
     userA,
     `insert into storage.objects (bucket_id, name, owner_id) values ('documents', '${userA}/nib.pdf', '${userA}')`,
   );
@@ -667,6 +680,394 @@ async function verifyRlsIsolation() {
   await expectAuthenticatedRejected(
     userA,
     `insert into storage.objects (bucket_id, name, owner_id) values ('captures', '${userB}/forged.webm', '${userA}')`,
+  );
+
+  await expectAuthenticatedRejected(
+    userA,
+    `insert into public.documents (business_id, user_id, name, doc_type) values ('${businessA}', '${userA}', 'forged.pdf', 'nib')`,
+  );
+  await assert.rejects(
+    () => asAuthenticated(
+      staffA,
+      "select public.create_document_upload_session($1, 'nib', 'nib.pdf', 'application/pdf', 8, $2, $3) as value",
+      ["document-staff-denied", "a".repeat(64), businessA],
+    ),
+    (error) => error.code === "P0001" && error.message.includes("BUSINESS_ACCESS_DENIED"),
+  );
+
+  const firstSessionResult = await asAuthenticatedCommitted(
+    userA,
+    "select public.create_document_upload_session($1, 'nib', 'nib.pdf', 'application/pdf', 8, $2, $3) as value",
+    ["document-owner-v1", "a".repeat(64), businessA],
+  );
+  const firstSession = firstSessionResult.rows[0].value;
+  assert.equal(firstSession.version, 1);
+  assert.match(firstSession.storagePath, new RegExp(`^${userA}/${businessA}/${firstSession.documentId}/`));
+
+  const firstReplay = await asAuthenticatedCommitted(
+    userA,
+    "select public.create_document_upload_session($1, 'nib', 'nib.pdf', 'application/pdf', 8, $2, $3) as value",
+    ["document-owner-v1", "a".repeat(64), businessA],
+  );
+  assert.equal(firstReplay.rows[0].value.sessionId, firstSession.sessionId);
+  assert.equal(firstReplay.rows[0].value.idempotent, true);
+
+  const recordedOcrConsent = await asAuthenticatedCommitted(
+    userA,
+    "select public.record_document_ocr_consent($1) as value",
+    [firstSession.sessionId],
+  );
+  assert.equal(recordedOcrConsent.rows[0].value.consentRecorded, true);
+  assert.equal(recordedOcrConsent.rows[0].value.policyVersion, "document-reading-v1");
+  const recordedConsentRow = await asServiceRoleCommitted(
+    "select ocr_consent_at, ocr_consent_policy_version from public.document_upload_sessions where id = $1",
+    [firstSession.sessionId],
+  );
+  assert.ok(recordedConsentRow.rows[0].ocr_consent_at);
+  assert.equal(recordedConsentRow.rows[0].ocr_consent_policy_version, "document-reading-v1");
+  await assert.rejects(
+    () => asAuthenticatedCommitted(
+      userB,
+      "select public.record_document_ocr_consent($1)",
+      [firstSession.sessionId],
+    ),
+    (error) => error.code === "42501" && error.message.includes("DOCUMENT_ACCESS_DENIED"),
+  );
+
+  await asServiceRoleCommitted(
+    "insert into storage.objects (bucket_id, name, owner_id) values ('documents', $1, $2)",
+    [firstSession.storagePath, userA],
+  );
+  const firstVersion = await asAuthenticatedCommitted(
+    userA,
+    "select public.complete_document_upload_session($1, $2) as value",
+    [firstSession.documentId, firstSession.sessionId],
+  );
+  assert.equal(firstVersion.rows[0].value.version, 1);
+  assert.equal(firstVersion.rows[0].value.status, "processing");
+  assert.equal(
+    (await asAuthenticated(userA, "select id from public.documents where id = $1", [firstSession.documentId])).rowCount,
+    1,
+  );
+  assert.equal(
+    (await asAuthenticated(staffA, "select id from public.documents where id = $1", [firstSession.documentId])).rowCount,
+    0,
+    "staff must not read owner legal documents",
+  );
+  assert.equal(
+    (await asAuthenticated(userB, "select id from public.documents where id = $1", [firstSession.documentId])).rowCount,
+    0,
+    "another business must not read private documents",
+  );
+
+  const firstJobId = firstVersion.rows[0].value.jobId;
+  const claimedExtraction = await asServiceRoleCommitted(
+    "select public.claim_document_extraction_job($1, 'wp06-test-worker', 'test-provider', 'test-model') as value",
+    [firstJobId],
+  );
+  assert.equal(claimedExtraction.rows[0].value.attemptNumber, 1);
+  const completedExtraction = await asServiceRoleCommitted(
+    `select public.complete_document_extraction_job(
+      $1, 1, 'test-provider',
+      jsonb_build_object(
+        'documentType', 'nib', 'nib', '1234567890123',
+        'businessName', 'Warung Aman', 'ownerName', null,
+        'businessAddress', null, 'confidence', 0.95
+      ), 5
+    ) as value`,
+    [firstJobId],
+  );
+  assert.equal(completedExtraction.rows[0].value.status, "uploaded");
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.document_extractions where document_version_id = '${firstVersion.rows[0].value.versionId}' and status = 'succeeded'`),
+    1,
+    "document extraction completion must use the constraint-compatible succeeded status",
+  );
+  const confirmedExtraction = await asAuthenticatedCommitted(
+    userA,
+    `select public.confirm_document_extraction(
+      $1, $2,
+      jsonb_build_object(
+        'documentType', 'nib', 'nib', '1234567890123',
+        'businessName', 'Warung Aman', 'ownerName', null,
+        'businessAddress', null, 'confidence', 0.95
+      )
+    ) as value`,
+    [firstSession.documentId, firstVersion.rows[0].value.versionId],
+  );
+  assert.equal(confirmedExtraction.rows[0].value.reviewStatus, "owner_confirmed");
+  const correctedExtraction = await asAuthenticatedCommitted(
+    userA,
+    `select public.confirm_document_extraction(
+      $1, $2,
+      jsonb_build_object(
+        'documentType', 'nib', 'nib', '1234567890123',
+        'businessName', 'Warung Aman Depok', 'ownerName', null,
+        'businessAddress', null, 'confidence', 0.95
+      )
+    ) as value`,
+    [firstSession.documentId, firstVersion.rows[0].value.versionId],
+  );
+  assert.equal(correctedExtraction.rows[0].value.reviewStatus, "owner_corrected");
+  await assert.rejects(
+    () => asAuthenticatedCommitted(
+      userB,
+      "select public.confirm_document_extraction($1, $2, '{}'::jsonb)",
+      [firstSession.documentId, firstVersion.rows[0].value.versionId],
+    ),
+    (error) => error.code === "42501" && error.message.includes("DOCUMENT_ACCESS_DENIED"),
+  );
+
+  const secondSessionResult = await asAuthenticatedCommitted(
+    userA,
+    "select public.create_document_upload_session($1, 'nib', 'nib-baru.pdf', 'application/pdf', 9, $2, $3, $4) as value",
+    ["document-owner-v2", "b".repeat(64), businessA, firstSession.documentId],
+  );
+  const secondSession = secondSessionResult.rows[0].value;
+  assert.equal(secondSession.version, 2);
+  await asServiceRoleCommitted(
+    "insert into storage.objects (bucket_id, name, owner_id) values ('documents', $1, $2)",
+    [secondSession.storagePath, userA],
+  );
+  await asAuthenticatedCommitted(
+    userA,
+    "select public.complete_document_upload_session($1, $2)",
+    [secondSession.documentId, secondSession.sessionId],
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.document_versions where document_id = '${firstSession.documentId}'`),
+    2,
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.document_versions where document_id = '${firstSession.documentId}' and status = 'superseded'`),
+    1,
+  );
+
+  await asAuthenticatedCommitted(
+    userA,
+    "select public.archive_document($1)",
+    [firstSession.documentId],
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.documents where id = '${firstSession.documentId}' and status = 'superseded'`),
+    1,
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from storage.objects where bucket_id = 'documents' and name in ('${firstSession.storagePath}', '${secondSession.storagePath}')`),
+    2,
+    "archiving must preserve private source objects and version history",
+  );
+
+  const ledgerDate = "2026-08-26";
+  const createdIncome = await asAuthenticatedCommitted(
+    userA,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => $1, p_transaction_type => 'income', p_amount_idr => 125000,
+      p_transaction_date => $2, p_category_group => 'sales', p_category_code => 'sales_direct',
+      p_description => 'Penjualan uji laporan', p_payment_method => 'cash'
+    ) as value`,
+    ["wp07-income-owner-a", ledgerDate],
+  );
+  const incomeId = createdIncome.rows[0].value.transactionId;
+  const repeatedIncome = await asAuthenticatedCommitted(
+    userA,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => $1, p_transaction_type => 'income', p_amount_idr => 125000,
+      p_transaction_date => $2, p_category_group => 'sales', p_category_code => 'sales_direct',
+      p_description => 'Penjualan uji laporan', p_payment_method => 'cash'
+    ) as value`,
+    ["wp07-income-owner-a", ledgerDate],
+  );
+  assert.equal(repeatedIncome.rows[0].value.idempotent, true, "manual transaction creation must be idempotent");
+
+  const createdExpense = await asAuthenticatedCommitted(
+    userA,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => $1, p_transaction_type => 'expense', p_amount_idr => 20000,
+      p_transaction_date => $2, p_category_group => 'cost_of_goods', p_category_code => 'raw_material',
+      p_description => 'Belanja bahan uji', p_payment_method => 'cash'
+    ) as value`,
+    ["wp07-expense-owner-a", ledgerDate],
+  );
+  const expenseId = createdExpense.rows[0].value.transactionId;
+
+  await asAuthenticatedCommitted(
+    userA,
+    `select public.update_ledger_transaction(
+      p_transaction_id => $1, p_transaction_type => 'income', p_amount_idr => 130000,
+      p_transaction_date => $2, p_category_group => 'sales', p_category_code => 'sales_direct',
+      p_description => 'Penjualan uji laporan diperbaiki', p_reason => 'Nominal diperbaiki',
+      p_payment_method => 'cash'
+    )`,
+    [incomeId, ledgerDate],
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.transaction_changes where transaction_id = '${incomeId}' and action = 'updated' and reason = 'Nominal diperbaiki'`),
+    1,
+    "pre-closing edits must preserve their reason",
+  );
+
+  const closing = await asAuthenticatedCommitted(
+    userA,
+    "select public.close_ledger_day($1, 50000, 160000, 'Tutup buku uji') as value",
+    [ledgerDate],
+  );
+  assert.equal(closing.rows[0].value.status, "closed");
+  await assert.rejects(
+    () => asAuthenticatedCommitted(
+      userA,
+      `select public.update_ledger_transaction(
+        p_transaction_id => $1, p_transaction_type => 'income', p_amount_idr => 140000,
+        p_transaction_date => $2, p_category_group => 'sales', p_category_code => 'sales_direct',
+        p_description => 'Perubahan terlambat', p_reason => 'Uji tanggal ditutup'
+      )`,
+      [incomeId, ledgerDate],
+    ),
+    (error) => error.code === "P0001" && error.message === "TRANSACTION_DATE_CLOSED",
+  );
+
+  await asAuthenticatedCommitted(
+    userA,
+    "select public.cancel_ledger_transaction($1, 'Belanja dibatalkan pemasok')",
+    [expenseId],
+  );
+  assert.equal(
+    await scalar(`select coalesce(sum(amount_idr), 0)::bigint as value from public.transactions where business_id = '${businessA}' and transaction_date = date '${ledgerDate}' and ledger_status = 'confirmed'`),
+    130000,
+    "cancelled transactions must not contribute to confirmed report totals",
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.transaction_changes where transaction_id = '${expenseId}' and action = 'cancelled' and reason = 'Belanja dibatalkan pemasok'`),
+    1,
+    "post-closing cancellation must keep its audit reason",
+  );
+  await expectAuthenticatedRejected(
+    userA,
+    `delete from public.transactions where id = '${incomeId}'`,
+    "42501",
+  );
+
+  const readiness = await asAuthenticatedCommitted(
+    userA,
+    "select public.recalculate_my_readiness() as value",
+  );
+  const repeatedReadiness = await asAuthenticatedCommitted(
+    userA,
+    "select public.recalculate_my_readiness() as value",
+  );
+  assert.equal(repeatedReadiness.rows[0].value.snapshotId, readiness.rows[0].value.snapshotId, "unchanged evidence must reuse the immutable snapshot");
+  assert.equal(repeatedReadiness.rows[0].value.idempotent, true);
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.readiness_score_components where snapshot_id = '${readiness.rows[0].value.snapshotId}'`),
+    7,
+    "a readiness snapshot must explain every configured component",
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.readiness_score_components where snapshot_id = '${readiness.rows[0].value.snapshotId}' and component_key = 'basic_legality' and component_status = 'data_insufficient' and weighted_score is null`),
+    1,
+    "missing NIB evidence must stay unknown instead of becoming a zero",
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.business_missions assignment join public.missions mission on mission.id = assignment.mission_id where assignment.business_id = '${businessA}' and mission.code = 'record_transactions' and assignment.status = 'completed'`),
+    1,
+    "transaction mission completion must be evidence-driven",
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.business_missions assignment join public.missions mission on mission.id = assignment.mission_id where assignment.business_id = '${businessA}' and mission.code = 'upload_nib' and assignment.status = 'available'`),
+    1,
+    "an archived NIB must not complete the NIB mission",
+  );
+  await expectAuthenticatedRejected(
+    userA,
+    `update public.business_missions set status = 'completed' where business_id = '${businessA}'`,
+    "42501",
+  );
+}
+
+async function verifyConsentVerifiedProfileLifecycle() {
+  const owner = "b0000000-0000-4000-8000-000000000001";
+  const institutionUser = "c0000000-0000-4000-8000-000000000001";
+  const business = "b1000000-0000-4000-8000-000000000001";
+  const rejectedRequest = "d2000000-0000-4000-8000-000000000001";
+
+  const candidatesResult = await asAuthenticated(
+    institutionUser,
+    "select public.list_anonymous_business_candidates(null) as value",
+  );
+  const candidates = candidatesResult.rows[0].value;
+  const candidate = candidates.find((item) => item.businessId === business);
+  assert(candidate, "active institution must see anonymous candidate");
+  assert.equal(candidate.candidateCode.startsWith("UMKM-"), true);
+  assert.equal(JSON.stringify(candidate).includes("Business B"), false, "candidate response must not expose a business name");
+
+  const rejection = await asAuthenticatedCommitted(
+    owner,
+    "select public.respond_to_dossier_request($1, 'reject', '{}'::text[], false) as value",
+    [rejectedRequest],
+  );
+  assert.equal(rejection.rows[0].value.status, "rejected");
+  assert.equal(await scalar(`select count(*)::int as value from public.consent_grants where request_id = '${rejectedRequest}'`), 0);
+
+  const requestResult = await asAuthenticatedCommitted(
+    institutionUser,
+    `select public.create_dossier_request(
+      $1, null, 'program_review', 'Menilai kecocokan untuk program pendampingan',
+      array['business_identity','financial_summary'], array['financial_summary'], 14, true, 'wp10-request-1'
+    ) as value`,
+    [business],
+  );
+  const requestId = requestResult.rows[0].value.requestId;
+  const replayResult = await asAuthenticatedCommitted(
+    institutionUser,
+    `select public.create_dossier_request(
+      $1, null, 'program_review', 'Menilai kecocokan untuk program pendampingan',
+      array['business_identity','financial_summary'], array['financial_summary'], 14, true, 'wp10-request-1'
+    ) as value`,
+    [business],
+  );
+  assert.equal(replayResult.rows[0].value.requestId, requestId);
+  assert.equal(replayResult.rows[0].value.idempotent, true);
+
+  const approval = await asAuthenticatedCommitted(
+    owner,
+    "select public.respond_to_dossier_request($1, 'approve', array['business_identity','financial_summary'], true) as value",
+    [requestId],
+  );
+  const { dossierId, grantId } = approval.rows[0].value;
+  assert(dossierId && grantId, "approval must atomically create an access grant and frozen profile");
+
+  const allowed = await asAuthenticatedCommitted(
+    institutionUser,
+    "select public.access_verified_business_profile($1, 'financial_summary', 'view') as value",
+    [dossierId],
+  );
+  assert.equal(allowed.rows[0].value.allowed, true);
+  assert.equal(allowed.rows[0].value.data.transactionCount, 1);
+
+  const deniedScope = await asAuthenticatedCommitted(
+    institutionUser,
+    "select public.access_verified_business_profile($1, 'owner_identity', 'view') as value",
+    [dossierId],
+  );
+  assert.equal(deniedScope.rows[0].value.allowed, false);
+  assert.equal(deniedScope.rows[0].value.code, "DATA_NOT_APPROVED");
+
+  const revoked = await asAuthenticatedCommitted(
+    owner,
+    "select public.revoke_consent_grant($1, 'Tidak lagi diperlukan') as value",
+    [grantId],
+  );
+  assert.equal(revoked.rows[0].value.status, "revoked");
+  const deniedRevoked = await asAuthenticatedCommitted(
+    institutionUser,
+    "select public.access_verified_business_profile($1, 'financial_summary', 'view') as value",
+    [dossierId],
+  );
+  assert.equal(deniedRevoked.rows[0].value.allowed, false);
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.dossier_access_events where dossier_id = '${dossierId}'`),
+    3,
+    "allowed and denied access attempts must all be recorded",
   );
 }
 
@@ -799,6 +1200,7 @@ async function verifyFreshDatabase() {
   `, "P0001");
 
   await verifyRlsIsolation();
+  await verifyConsentVerifiedProfileLifecycle();
 }
 
 async function verifyLegacyBackfill() {
@@ -926,7 +1328,7 @@ try {
   await verifyLegacyBackfill();
   await resetManagedTestSchemas();
   await applyMigrations("final reproducible schema");
-  console.log("Database migrations passed: fresh apply/replay, constraints, cross-account RLS, private storage, concurrent capture confirmation, failure/cancellation lifecycle, legacy backfill, and verification queries.");
+  console.log("Database migrations passed: fresh apply/replay, constraints, cross-account RLS, private document versioning, private storage, capture lifecycle, ledger history, evidence-based readiness missions, consent-scoped verified profiles, legacy backfill, and verification queries.");
 } finally {
   await client.end();
 }

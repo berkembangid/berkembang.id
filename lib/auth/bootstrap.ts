@@ -1,10 +1,9 @@
 import "server-only";
 
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 import { getEffectivePortalRole } from "@/lib/auth/authorization";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import type { AppRole } from "@/modules/auth/role-resolution";
-import type { Database } from "@/types/database.generated";
 
 function textValue(value: unknown, fallback = "", maxLength = 200) {
   if (typeof value !== "string") return fallback;
@@ -17,10 +16,13 @@ function requireNoError(error: { message: string } | null, code: string) {
 }
 
 export async function bootstrapAccountFromSignupMetadata(
-  sessionClient: SupabaseClient<Database>,
   user: User,
 ): Promise<AppRole> {
-  const existingRole = await getEffectivePortalRole(sessionClient, user.id);
+  // The session has already been verified by auth.getUser() in the route.
+  // Use the server-only client for this recovery lookup so a half-created
+  // legacy profile is not blocked by membership RLS before it can be repaired.
+  const admin = createServiceRoleClient();
+  const existingRole = await getEffectivePortalRole(admin, user.id);
   if (existingRole) return existingRole;
 
   const accountType = user.user_metadata?.signup_account_type;
@@ -30,8 +32,6 @@ export async function bootstrapAccountFromSignupMetadata(
 
   const metadata = user.user_metadata ?? {};
   const email = textValue(user.email, "", 320) || null;
-  const admin = createServiceRoleClient();
-
   const ownerName = textValue(metadata.nama_pemilik ?? metadata.name, "Pemilik Usaha");
   const businessName = textValue(metadata.nama_usaha, ownerName || "Usaha Baru");
   const institutionName = textValue(metadata.nama_institusi ?? metadata.name, "Institusi Baru");

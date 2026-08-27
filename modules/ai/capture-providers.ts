@@ -192,6 +192,7 @@ function createGroqProviders(apiKey: string): {
   extraction: ExtractionProvider;
 } {
   const client = new Groq({ apiKey });
+  const extractionModel = process.env.CAPTURE_GROQ_EXTRACTION_MODEL?.trim() || "openai/gpt-oss-20b";
   return {
     transcription: {
       provider: "groq",
@@ -213,11 +214,11 @@ function createGroqProviders(apiKey: string): {
     },
     extraction: {
       provider: "groq",
-      model: "llama-3.3-70b-versatile",
+      model: extractionModel,
       async extractTransactions(input) {
         try {
           const response = await client.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: extractionModel,
             messages: [
               { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
               { role: "user", content: extractionUserPrompt(input) },

@@ -1,307 +1,556 @@
 "use client";
 
-import Link from "next/link";
-import { useState, useEffect } from "react";
-import { Upload, FileText, CheckCircle2, Trash2, ArrowUpRight, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Archive,
+  CheckCircle2,
+  Clock3,
+  Eye,
+  FileText,
+  LoaderCircle,
+  RefreshCcw,
+  ShieldCheck,
+  Upload,
+} from "lucide-react";
+import { DocumentOcrReviewDialog } from "@/components/documents/DocumentOcrReviewDialog";
+import { DocumentUploadConsentDialog } from "@/components/documents/DocumentUploadConsentDialog";
 import { supabase } from "@/lib/supabase";
+import {
+  archiveDocument,
+  completeDocumentVersion,
+  confirmDocumentExtraction,
+  createDocumentSignedUrl,
+  createDocumentUploadSession,
+  DocumentClientError,
+  getDocument,
+  listDocuments,
+  retryDocumentExtraction,
+  sha256Hex,
+} from "@/modules/documents/document-client";
+import {
+  createDocumentUploadSessionSchema,
+  documentTypeLabels,
+  maxDocumentBytes,
+  parseDocumentOcrResult,
+  supportsDocumentOcr,
+  type DocumentOcrResult,
+  type DocumentType,
+  type OcrDocumentType,
+} from "@/modules/documents/document-schema";
+import type { DocumentView } from "@/modules/documents/document-repository";
 
-const REQUIRED_DOCS = [
-  { type: "ktp", name: "KTP Pemilik Usaha", desc: "Wajib untuk verifikasi identitas pemilik", required: true },
-  { type: "nib", name: "NIB (Nomor Induk Berusaha)", desc: "Bukti legalitas formal usaha dari OSS", required: true },
-  { type: "npwp", name: "NPWP Usaha / Perorangan", desc: "Dokumen pendaftaran perpajakan", required: true },
-  { type: "laporan_keuangan", name: "Laporan Keuangan / Arus Kas", desc: "Catatan transaksi 3-6 bulan terakhir", required: true },
-  { type: "rekening_koran", name: "Rekening Koran Bank", desc: "Bukti mutasi transaksi usaha", required: false },
-  { type: "akta", name: "Akta Pendirian / SK", desc: "Dokumen legalitas badan usaha (jika ada)", required: false },
+type DocumentCategory = "identity" | "product" | "finance" | "supporting";
+
+const DOCUMENT_CATEGORIES: Array<{
+  id: DocumentCategory;
+  title: string;
+  description: string;
+}> = [
+  { id: "identity", title: "Identitas & Legalitas", description: "Dokumen utama pemilik dan badan usaha" },
+  { id: "product", title: "Izin & Sertifikasi Produk", description: "Perizinan yang berkaitan dengan produk usaha" },
+  { id: "finance", title: "Keuangan & Transaksi", description: "Catatan yang menunjukkan aktivitas keuangan usaha" },
+  { id: "supporting", title: "Bukti Pendukung Usaha", description: "Dokumen tambahan untuk memperkuat profil usaha" },
 ];
 
-const ALLOWED_DOCUMENT_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
-const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+const DOCUMENT_REQUIREMENTS: Array<{
+  type: DocumentType;
+  description: string;
+  required: boolean;
+  category: DocumentCategory;
+}> = [
+  { type: "ktp", description: "Identitas pemilik usaha", required: true, category: "identity" },
+  { type: "nib", description: "Legalitas usaha dari OSS", required: true, category: "identity" },
+  { type: "npwp", description: "Dokumen perpajakan usaha atau pemilik", required: true, category: "identity" },
+  { type: "akta_pendirian", description: "Akta atau SK untuk badan usaha", required: false, category: "identity" },
+  { type: "pirt", description: "Izin produksi pangan rumah tangga jika relevan", required: false, category: "product" },
+  { type: "halal", description: "Sertifikat halal jika sudah dimiliki", required: false, category: "product" },
+  { type: "izin_edar", description: "Izin edar produk jika diwajibkan", required: false, category: "product" },
+  { type: "rekening_koran", description: "Mutasi rekening usaha", required: false, category: "finance" },
+  { type: "qris", description: "Riwayat transaksi QRIS", required: false, category: "finance" },
+  { type: "laporan_keuangan", description: "Laporan atau arus kas usaha", required: false, category: "finance" },
+  { type: "foto_tempat_usaha", description: "Foto tempat atau aktivitas usaha", required: false, category: "supporting" },
+  { type: "utilitas", description: "Tagihan listrik, air, atau internet tempat usaha", required: false, category: "supporting" },
+];
 
-interface DocumentRecord {
-  id: string;
-  name: string;
-  doc_type: string;
-  storage_path: string | null;
-  file_url?: string | null;
-  ai_notes?: string | null;
-  status: string;
+function inspectImageQuality(file: File) {
+  if (!file.type.startsWith("image/")) return Promise.resolve<string | null>(null);
+  return new Promise<string | null>((resolve) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      if (image.width < 1200 || image.height < 700) {
+        resolve(`Ukuran gambar ${image.width} × ${image.height} piksel. Agar data lebih mudah dibaca, gunakan foto minimal 1200 piksel dan pastikan dokumen memenuhi gambar.`);
+        return;
+      }
+      resolve(null);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve("Gambar tidak dapat diperiksa. Pastikan file dapat dibuka dan tidak rusak.");
+    };
+    image.src = url;
+  });
+}
+
+const statusPresentation: Record<
+  DocumentView["status"],
+  { label: string; className: string }
+> = {
+  uploaded: { label: "Menunggu verifikasi", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  processing: { label: "Sedang diproses", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  verified: { label: "Terverifikasi", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  rejected: { label: "Perlu diperbaiki", className: "bg-red-50 text-red-700 border-red-200" },
+  superseded: { label: "Diarsipkan", className: "bg-slate-100 text-slate-600 border-slate-200" },
+};
+
+function documentStatusPresentation(document: DocumentView) {
+  if (!supportsDocumentOcr(document.docType)) return statusPresentation[document.status];
+  if (["verified", "rejected", "superseded"].includes(document.status)) {
+    return statusPresentation[document.status];
+  }
+  if (document.status === "processing" || ["queued", "processing"].includes(document.currentExtraction?.status ?? "")) {
+    return { label: "Sedang membaca data", className: "bg-blue-50 text-blue-700 border-blue-200" };
+  }
+  if (document.currentExtraction?.status === "failed") {
+    return { label: "Data belum terbaca", className: "bg-red-50 text-red-700 border-red-200" };
+  }
+  if (document.currentExtraction?.status === "succeeded" && document.currentExtraction.extractor === "metadata") {
+    return { label: "Perlu diunggah ulang", className: "bg-slate-100 text-slate-600 border-slate-200" };
+  }
+  if (["owner_confirmed", "owner_corrected"].includes(document.currentExtraction?.ownerReviewStatus ?? "")) {
+    return { label: "Dikonfirmasi pemilik", className: "bg-indigo-50 text-indigo-700 border-indigo-200" };
+  }
+  if (document.currentExtraction?.status === "succeeded") {
+    return { label: "Data siap dikonfirmasi", className: "bg-amber-50 text-amber-700 border-amber-200" };
+  }
+  return statusPresentation.uploaded;
+}
+
+function fileSizeLabel(bytes: number | null) {
+  if (!bytes) return "-";
+  return bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    : `${Math.ceil(bytes / 1024)} KB`;
 }
 
 export default function UploadPage() {
-  const [docs, setDocs] = useState<DocumentRecord[]>([]);
-  const [uploadingType, setUploadingType] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<DocumentView[]>([]);
+  const [busyType, setBusyType] = useState<DocumentType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pendingUpload, setPendingUpload] = useState<{
+    file: File;
+    docType: OcrDocumentType;
+    existingDocument?: DocumentView;
+    qualityWarning: string | null;
+  } | null>(null);
+  const [confirmingOcr, setConfirmingOcr] = useState(false);
+  const [ocrReview, setOcrReview] = useState<{
+    documentId: string;
+    documentVersionId: string;
+    docType: OcrDocumentType;
+    data: DocumentOcrResult;
+  } | null>(null);
+  const [message, setMessage] = useState<{ tone: "info" | "error" | "success"; text: string } | null>(null);
 
-  const fetchDocs = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setMsg("Sesi berakhir. Silakan masuk kembali.");
-      return;
-    }
-    const { data, error } = await supabase.from("documents").select("*").eq("user_id", user.id);
-    if (error) {
-      setMsg("Dokumen belum dapat dimuat. Silakan coba lagi.");
-    } else {
-      setDocs(data || []);
-    }
-  };
+  const documentsByType = useMemo(
+    () => new Map(documents.map((document) => [document.docType, document])),
+    [documents],
+  );
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- async remote read
-    void fetchDocs();
+  const loadDocuments = useCallback(async () => {
+    try {
+      setDocuments(await listDocuments());
+      setMessage((current) => current?.tone === "error" ? null : current);
+    } catch (error) {
+      setMessage({
+        tone: "error",
+        text: error instanceof Error ? error.message : "Dokumen belum dapat dimuat.",
+      });
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, docType: string) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadDocuments(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadDocuments]);
 
-    if (!ALLOWED_DOCUMENT_TYPES.has(file.type)) {
-      setMsg("Format dokumen tidak didukung. Gunakan PDF, JPG, atau PNG.");
-      e.target.value = "";
-      return;
-    }
+  useEffect(() => {
+    if (!documents.some((document) => document.status === "processing")) return;
+    const interval = window.setInterval(() => void loadDocuments(), 3_000);
+    return () => window.clearInterval(interval);
+  }, [documents, loadDocuments]);
 
-    if (file.size > MAX_DOCUMENT_BYTES) {
-      setMsg("Ukuran dokumen maksimal 5 MB.");
-      e.target.value = "";
-      return;
-    }
-
-    setUploadingType(docType);
-    setMsg(null);
-
+  const uploadFile = async (
+    file: File,
+    docType: DocumentType,
+    existingDocument?: DocumentView,
+    ocrConsent = false,
+  ) => {
+    setBusyType(docType);
+    setMessage({ tone: "info", text: "Memeriksa file sebelum disimpan..." });
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Sesi berakhir");
-
-      const fileExt = file.name.split(".").pop();
-      const storagePath = `${user.id}/${docType}_${file.lastModified}_${file.size}.${fileExt}`;
-
-      // Upload file to storage
-      const { error: uploadErr } = await supabase.storage.from("documents").upload(storagePath, file, { upsert: true });
-      if (uploadErr) throw new Error("File belum berhasil diunggah. Silakan coba lagi.");
-
-      let aiNotes = "";
-      let extractedNibNumber: string | null = null;
-
-      // If document is NIB, trigger AI extraction and update user profile
-      if (docType === "nib") {
-        try {
-          const extractFormData = new FormData();
-          extractFormData.append("file", file);
-
-          const res = await fetch("/api/ai/extract-nib", {
-            method: "POST",
-            body: extractFormData,
-          });
-
-          if (res.ok) {
-            const extractData = await res.json();
-            if (extractData?.nib) {
-              extractedNibNumber = extractData.nib;
-              aiNotes = `NIB Terdeteksi: ${extractData.nib}`;
-
-              // 1. Sync to Supabase Auth User Metadata
-              await supabase.auth.updateUser({
-                data: {
-                  nib: extractData.nib,
-                  ...(extractData.nama_usaha ? { nama_usaha_oss: extractData.nama_usaha } : {}),
-                },
-              });
-
-              // 2. Sync to Supabase 'profiles' table
-              await supabase.from("profiles").upsert({
-                id: user.id,
-                nib: extractData.nib,
-                updated_at: new Date().toISOString(),
-              });
-            }
-          }
-        } catch (aiErr) {
-          console.warn("AI NIB extraction warning:", aiErr);
-        }
-      }
-
-      // Insert record to DB
-      const { error: dbErr } = await supabase.from("documents").insert({
-        user_id: user.id,
-        name: file.name,
-        doc_type: docType,
-        storage_path: storagePath,
-        file_url: null,
-        file_size: file.size,
-        mime_type: file.type,
-        status: "uploaded",
-        ai_notes: aiNotes || undefined,
+      const checksumSha256 = await sha256Hex(file);
+      const parsed = createDocumentUploadSessionSchema.safeParse({
+        ...(existingDocument ? { documentId: existingDocument.id } : {}),
+        docType,
+        ocrConsent: supportsDocumentOcr(docType) ? ocrConsent : false,
+        file: {
+          name: file.name,
+          mimeType: file.type,
+          size: file.size,
+          checksumSha256,
+        },
       });
-
-      if (dbErr) {
-        await supabase.storage.from("documents").remove([storagePath]);
-        throw new Error("Data dokumen belum berhasil disimpan. Silakan coba lagi.");
+      if (!parsed.success) {
+        throw new DocumentClientError(
+          "VALIDATION_FAILED",
+          parsed.error.issues[0]?.message ?? "File belum valid.",
+          false,
+        );
       }
 
-      if (extractedNibNumber) {
-        setMsg(`🎉 Dokumen NIB "${file.name}" berhasil diunggah! Nomor NIB (${extractedNibNumber}) berhasil diekstrak dan otomatis tersimpan di Profil Usaha.`);
-      } else {
-        setMsg(`Dokumen ${file.name} berhasil diupload!`);
+      setMessage({ tone: "info", text: "Menyiapkan penyimpanan aman..." });
+      const session = await createDocumentUploadSession(
+        parsed.data,
+        `document:${crypto.randomUUID()}`,
+      );
+      const { error: uploadError } = await supabase.storage
+        .from(session.upload.bucket)
+        .uploadToSignedUrl(session.upload.path, session.upload.token, file, {
+          contentType: parsed.data.file.mimeType,
+          upsert: false,
+        });
+      if (uploadError) {
+        throw new DocumentClientError(
+          "UPLOAD_FAILED",
+          "File belum berhasil dikirim ke penyimpanan privat. Silakan unggah kembali.",
+          true,
+        );
       }
-      await fetchDocs();
-    } catch (err: unknown) {
-      setMsg(err instanceof Error ? err.message : "Dokumen belum berhasil diunggah.");
+
+      setMessage({ tone: "info", text: "Memastikan file tersimpan dengan lengkap..." });
+      await completeDocumentVersion(session.documentId, session.sessionId);
+      setMessage({
+        tone: "success",
+        text: supportsDocumentOcr(docType)
+          ? `${documentTypeLabels[docType]} berhasil disimpan dan sedang dibaca. Biasanya selesai kurang dari satu menit.`
+          : `${documentTypeLabels[docType]} berhasil disimpan dengan aman.`,
+      });
+      await loadDocuments();
+    } catch (error) {
+      setMessage({
+        tone: "error",
+        text: error instanceof Error ? error.message : "Dokumen belum berhasil diunggah.",
+      });
     } finally {
-      setUploadingType(null);
+      setBusyType(null);
     }
   };
 
-  const handleDelete = async (id: string, storagePath: string | null) => {
+  const handleFileSelection = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    docType: DocumentType,
+    existingDocument?: DocumentView,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (supportsDocumentOcr(docType)) {
+      const qualityWarning = await inspectImageQuality(file);
+      setPendingUpload({ file, docType, existingDocument, qualityWarning });
+      return;
+    }
+    void uploadFile(file, docType, existingDocument, false);
+  };
+
+  const handleReviewOcr = async (document: DocumentView) => {
+    if (!supportsDocumentOcr(document.docType)) return;
+    setBusyType(document.docType);
+    setMessage({ tone: "info", text: "Memuat data yang berhasil dibaca..." });
     try {
-      if (storagePath) {
-        const { error: storageError } = await supabase.storage.from("documents").remove([storagePath]);
-        if (storageError) throw new Error("File belum berhasil dihapus.");
+      const detail = await getDocument(document.id);
+      const currentVersion = detail.versions.find((version) => version.version === detail.currentVersion);
+      const extraction = currentVersion?.extraction;
+      if (!currentVersion || extraction?.status !== "succeeded") {
+        throw new DocumentClientError("DOCUMENT_EXTRACTION_NOT_READY", "Data dokumen belum siap diperiksa.", true);
       }
-      const { error: databaseError } = await supabase.from("documents").delete().eq("id", id);
-      if (databaseError) throw new Error("Data dokumen belum berhasil dihapus.");
-      await fetchDocs();
-    } catch (error: unknown) {
-      setMsg(error instanceof Error ? error.message : "Dokumen belum berhasil dihapus.");
+      const data = parseDocumentOcrResult(
+        document.docType,
+        extraction.confirmedData ?? extraction.structuredData,
+      );
+      setOcrReview({
+        documentId: document.id,
+        documentVersionId: currentVersion.id,
+        docType: document.docType,
+        data,
+      });
+      setMessage(null);
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Data dokumen belum dapat dimuat." });
+    } finally {
+      setBusyType(null);
+    }
+  };
+
+  const handleRetryReading = async (document: DocumentView) => {
+    setBusyType(document.docType);
+    setMessage({ tone: "info", text: "Mencoba membaca kembali dokumen..." });
+    try {
+      await retryDocumentExtraction(document.id);
+      setMessage({ tone: "success", text: "Dokumen sedang dibaca kembali. Anda tidak perlu mengunggah file yang sama." });
+      await loadDocuments();
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Dokumen belum dapat dibaca kembali." });
+    } finally {
+      setBusyType(null);
+    }
+  };
+
+  const handleConfirmOcr = async (data: DocumentOcrResult) => {
+    if (!ocrReview) return;
+    setConfirmingOcr(true);
+    try {
+      const result = await confirmDocumentExtraction(
+        ocrReview.documentId,
+        ocrReview.documentVersionId,
+        data,
+      );
+      setOcrReview(null);
+      setMessage({
+        tone: "success",
+        text: result.reviewStatus === "owner_corrected"
+          ? "Perbaikan data telah disimpan. Dokumen masih menunggu pemeriksaan keaslian."
+          : "Data telah Anda konfirmasi. Dokumen masih menunggu pemeriksaan keaslian.",
+      });
+      await loadDocuments();
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Konfirmasi data belum berhasil." });
+      throw error;
+    } finally {
+      setConfirmingOcr(false);
     }
   };
 
   const handleView = async (documentId: string) => {
-    setMsg(null);
+    setMessage(null);
     try {
-      const response = await fetch("/api/documents/signed-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentId }),
-      });
-      const result = (await response.json().catch(() => null)) as { signedUrl?: string } | null;
-      if (!response.ok || !result?.signedUrl) throw new Error("Tautan dokumen belum dapat dibuat.");
+      const result = await createDocumentSignedUrl(documentId);
       window.open(result.signedUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : "Dokumen belum dapat dibuka.");
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Dokumen belum dapat dibuka." });
+    }
+  };
+
+  const handleArchive = async (document: DocumentView) => {
+    if (!window.confirm(`Arsipkan ${documentTypeLabels[document.docType]}? File tidak dihapus dan riwayat versi tetap disimpan.`)) return;
+    setBusyType(document.docType);
+    try {
+      await archiveDocument(document.id);
+      setMessage({ tone: "success", text: "Dokumen diarsipkan. Riwayat dan audit tetap tersimpan." });
+      await loadDocuments();
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Dokumen belum dapat diarsipkan." });
+    } finally {
+      setBusyType(null);
     }
   };
 
   return (
-    <div className="p-4 md:p-6 pb-28 md:pb-8 space-y-6 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-xl md:text-2xl font-black text-slate-800">Upload Dokumen Usaha</h1>
-        <p className="text-xs md:text-sm text-slate-500 mt-1">
-          Unggah dokumen legalitas & keuangan untuk meningkatkan skor kesiapan pengajuan KUR / pendanaan.
-        </p>
+    <div className="mx-auto max-w-6xl space-y-6 p-4 pb-28 md:p-6 md:pb-8">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-xl font-black text-slate-800 md:text-2xl">Dokumen Usaha</h1>
+          <p className="mt-1 max-w-3xl text-xs text-slate-500 md:text-sm">
+            Lengkapi dokumen usaha Anda. Dokumen disimpan secara privat dan tidak menjamin penerimaan pembiayaan.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void loadDocuments()}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+        >
+          <RefreshCcw size={14} /> Muat ulang
+        </button>
       </div>
 
-      {msg && (
-        <div className="p-3.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-          {msg}
+      <div className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-800">
+        <ShieldCheck className="mt-0.5 shrink-0" size={18} />
+        <div>
+          <p className="font-bold">Dokumen Anda disimpan dengan aman</p>
+          <p className="mt-1 leading-relaxed text-blue-700">
+            Format dan ukuran file diperiksa. Tautan untuk melihat dokumen hanya berlaku sebentar dan setiap akses dicatat.
+          </p>
+        </div>
+      </div>
+
+      {message && (
+        <div className={`rounded-xl border p-3.5 text-xs font-semibold ${
+          message.tone === "error"
+            ? "border-red-200 bg-red-50 text-red-700"
+            : message.tone === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-blue-200 bg-blue-50 text-blue-700"
+        }`}>
+          {message.text}
         </div>
       )}
 
-      {/* Grid of Documents */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {REQUIRED_DOCS.map((doc) => {
-          const uploadedDoc = docs.find((d) => d.doc_type === doc.type);
-          const isUploaded = Boolean(uploadedDoc);
-          const isUploading = uploadingType === doc.type;
-
-          return (
-            <div
-              key={doc.type}
-              className={`p-5 rounded-2xl border transition-all ${
-                isUploaded
-                  ? "bg-white border-emerald-200 shadow-sm"
-                  : "bg-white border-slate-200 hover:border-blue-300 shadow-sm"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      isUploaded ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"
-                    }`}
-                  >
-                    <FileText size={20} />
-                  </div>
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-10 text-sm font-semibold text-slate-500">
+          <LoaderCircle className="animate-spin" size={18} /> Memuat dokumen...
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {DOCUMENT_CATEGORIES.map((category) => {
+            const requirements = DOCUMENT_REQUIREMENTS.filter((item) => item.category === category.id);
+            const completed = requirements.filter((item) => documentsByType.has(item.type)).length;
+            return (
+              <section key={category.id} aria-labelledby={`category-${category.id}`}>
+                <div className="mb-3 flex items-end justify-between gap-4">
                   <div>
-                    <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
-                      {doc.name}
-                      {doc.required && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">
-                          Wajib
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">{doc.desc}</p>
+                    <h2 id={`category-${category.id}`} className="text-base font-black text-slate-800">{category.title}</h2>
+                    <p className="mt-0.5 text-xs text-slate-500">{category.description}</p>
                   </div>
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
+                    {completed} dari {requirements.length} tersedia
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {requirements.map((requirement) => {
+            const document = documentsByType.get(requirement.type);
+            const isBusy = busyType === requirement.type;
+            const presentation = document ? documentStatusPresentation(document) : null;
+            const limit = maxDocumentBytes(requirement.type) / 1024 / 1024;
+            return (
+              <article key={requirement.type} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${document ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"}`}>
+                      {document?.status === "verified" ? <CheckCircle2 size={20} /> : <FileText size={20} />}
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-bold text-slate-800">
+                        {documentTypeLabels[requirement.type]}
+                        {requirement.required && <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-600">Inti</span>}
+                      </h2>
+                      <p className="mt-0.5 text-xs text-slate-400">{requirement.description}</p>
+                    </div>
+                  </div>
+                  {presentation && (
+                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold ${presentation.className}`}>
+                      {presentation.label}
+                    </span>
+                  )}
                 </div>
 
-                {uploadedDoc ? (
-                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1 flex-shrink-0">
-                    <CheckCircle2 size={13} /> Terupload
-                  </span>
-                ) : (
-                  <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full flex-shrink-0">
-                    Belum ada
-                  </span>
-                )}
-              </div>
-
-              {/* Upload area or view file */}
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                {uploadedDoc ? (
-                  <div className="flex items-center justify-between w-full">
-                    <div className="overflow-hidden">
-                      <p className="text-xs font-semibold text-slate-700 truncate max-w-[200px]">{uploadedDoc.name}</p>
-                      <p className="text-[10px] text-slate-400">Status: {uploadedDoc.status}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {uploadedDoc.storage_path && (
-                        <button
-                          type="button"
-                          onClick={() => handleView(uploadedDoc.id)}
-                          className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-0.5"
-                        >
-                          Lihat <ArrowUpRight size={12} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDelete(uploadedDoc.id, uploadedDoc.storage_path)}
-                        className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                    {uploadedDoc.ai_notes && (
-                      <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl p-2.5 flex items-center justify-between text-[11px] text-emerald-800">
-                        <span className="flex items-center gap-1.5 font-bold font-mono">
-                          <Sparkles size={13} className="text-emerald-600 flex-shrink-0" />
-                          {uploadedDoc.ai_notes}
-                        </span>
-                        <Link href="/umkm/profil" className="font-bold underline text-emerald-900 hover:text-emerald-700 ml-2 whitespace-nowrap">
-                          Lihat di Profil →
-                        </Link>
+                {document ? (
+                  <div className="mt-4 space-y-3 border-t border-slate-100 pt-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-slate-700">{document.name}</p>
+                        <p className="mt-0.5 text-[10px] text-slate-400">Versi {document.currentVersion} · {fileSizeLabel(document.fileSize)}</p>
                       </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button type="button" onClick={() => void handleView(document.id)} className="rounded-lg p-2 text-blue-600 hover:bg-blue-50" aria-label="Lihat dokumen">
+                          <Eye size={15} />
+                        </button>
+                        <button type="button" onClick={() => void handleArchive(document)} disabled={isBusy} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50" aria-label="Arsipkan dokumen">
+                          <Archive size={15} />
+                        </button>
+                      </div>
+                    </div>
+                    {(document.rejectionReason || document.notes || document.currentExtraction?.status === "failed") && (
+                      <p className={`rounded-lg p-2.5 text-[11px] leading-relaxed ${document.rejectionReason ? "bg-red-50 text-red-700" : "bg-slate-50 text-slate-600"}`}>
+                        {document.rejectionReason ?? (document.currentExtraction?.status === "failed"
+                          ? "Data belum berhasil dibaca. Foto dokumen dari dekat, pastikan seluruh sisi terlihat, tulisan tidak buram, dan hindari tangkapan layar yang menyisakan area kosong."
+                          : document.notes)}
+                      </p>
                     )}
+                    {supportsDocumentOcr(document.docType) && document.currentExtraction?.status === "succeeded" && document.currentExtraction.extractor !== "metadata" && (
+                      <button
+                        type="button"
+                        onClick={() => void handleReviewOcr(document)}
+                        disabled={isBusy}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-700 hover:border-amber-400 disabled:opacity-50"
+                      >
+                        <CheckCircle2 size={14} />
+                        {["owner_confirmed", "owner_corrected"].includes(document.currentExtraction.ownerReviewStatus)
+                          ? "Periksa kembali data"
+                          : "Periksa dan konfirmasi data"}
+                      </button>
+                    )}
+                    {supportsDocumentOcr(document.docType) && document.currentExtraction?.status === "failed" && (
+                      <button
+                        type="button"
+                        onClick={() => void handleRetryReading(document)}
+                        disabled={isBusy}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {isBusy ? <LoaderCircle className="animate-spin" size={14} /> : <RefreshCcw size={14} />}
+                        {isBusy ? "Sedang mencoba..." : "Coba baca lagi"}
+                      </button>
+                    )}
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-blue-200 bg-blue-50/50 px-4 py-2.5 text-xs font-bold text-blue-600 hover:border-blue-400">
+                      {isBusy ? <LoaderCircle className="animate-spin" size={14} /> : <Clock3 size={14} />}
+                      {isBusy ? "Memproses..." : "Unggah versi pengganti"}
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                        className="hidden"
+                        disabled={isBusy}
+                        onChange={(event) => void handleFileSelection(event, requirement.type, document)}
+                      />
+                    </label>
                   </div>
                 ) : (
-                  <label className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 py-2.5 px-4 rounded-xl text-xs font-bold text-blue-600 cursor-pointer transition-all">
-                    <Upload size={14} />
-                    {isUploading ? (doc.type === "nib" ? "Mengekstrak NIB AI..." : "Mengunggah...") : "Pilih / Drop Dokumen"}
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                      className="hidden"
-                      onChange={(e) => handleFileUpload(e, doc.type)}
-                      disabled={isUploading}
-                    />
-                  </label>
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 px-4 py-3 text-xs font-bold text-blue-600 hover:border-blue-400 hover:bg-blue-50/50">
+                      {isBusy ? <LoaderCircle className="animate-spin" size={14} /> : <Upload size={14} />}
+                      {isBusy ? "Memproses..." : `Pilih file (maks. ${limit} MB)`}
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                        className="hidden"
+                        disabled={isBusy}
+                        onChange={(event) => void handleFileSelection(event, requirement.type)}
+                      />
+                    </label>
+                  </div>
                 )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              </article>
+            );
+          })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+      {ocrReview && (
+        <DocumentOcrReviewDialog
+          docType={ocrReview.docType}
+          initialData={ocrReview.data}
+          busy={confirmingOcr}
+          onClose={() => setOcrReview(null)}
+          onConfirm={handleConfirmOcr}
+        />
+      )}
+      {pendingUpload && (
+        <DocumentUploadConsentDialog
+          docType={pendingUpload.docType}
+          fileName={pendingUpload.file.name}
+          qualityWarning={pendingUpload.qualityWarning}
+          onCancel={() => setPendingUpload(null)}
+          onAgree={() => {
+            const upload = pendingUpload;
+            setPendingUpload(null);
+            void uploadFile(upload.file, upload.docType, upload.existingDocument, true);
+          }}
+        />
+      )}
     </div>
   );
 }

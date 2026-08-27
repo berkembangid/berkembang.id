@@ -19,6 +19,14 @@ const expectedMigrations = [
   "0013_identity_membership_rls.sql",
   "0014_storage_object_policies.sql",
   "0015_voice_capture_lifecycle.sql",
+  "0016_private_document_lifecycle.sql",
+  "0017_document_extraction_completion.sql",
+  "0018_document_ocr_owner_confirmation.sql",
+  "0019_document_reading_consent_policy.sql",
+  "0020_document_extraction_retry.sql",
+  "0021_ledger_report_daily_closing.sql",
+  "0022_readiness_mission_engine.sql",
+  "0023_consent_verified_business_profile.sql",
 ];
 
 describe("WP-03 migration contract", () => {
@@ -34,8 +42,9 @@ describe("WP-03 migration contract", () => {
       .toLowerCase();
     const coreTables = [
       "profiles", "businesses", "business_members", "institutions", "institution_members",
-      "programs", "program_enrollments", "transaction_captures", "transactions", "daily_closings",
+      "programs", "program_enrollments", "transaction_captures", "transactions", "daily_closings", "transaction_changes",
       "documents", "document_versions", "document_extractions", "document_verifications",
+      "document_upload_sessions",
       "readiness_rule_sets", "readiness_score_snapshots", "readiness_score_components", "missions",
       "business_missions", "ai_jobs", "ai_runs", "ai_feedback", "dossier_requests", "consent_grants",
       "dossiers", "dossier_items", "dossier_access_events", "notifications", "audit_events",
@@ -118,8 +127,8 @@ describe("WP-04 identity and RLS contract", () => {
     expect(adminRoute).toContain('!== "admin"');
     expect(adminRoute).toContain("createServiceRoleClient");
     expect(adminRoute).toContain("operationSchema.safeParse");
-    expect(signedUrlRoute).toContain('.createSignedUrl(document.data.storage_path, 60)');
-    expect(signedUrlRoute).toContain('.from("audit_events").insert');
+    expect(signedUrlRoute).toContain("createDocumentDownloadUrl");
+    expect(signedUrlRoute).toContain('Deprecation: "true"');
     expect(adminPages).not.toMatch(/\.insert\(|\.update\(|\.delete\(|signUp\(/);
   });
 
@@ -198,5 +207,150 @@ describe("WP-05 voice-to-ledger contract", () => {
     expect(page).toContain("confirmCapture");
     expect(page).not.toContain('/api/ai/transcribe');
     expect(page).not.toContain("saveConfirmedTransactions");
+  });
+});
+
+describe("WP-06 private-document contract", () => {
+  it("reserves server-selected paths, versions atomically, and retires permanent URLs", () => {
+    const lifecycle = readFileSync(
+      join(migrationDirectory, "0016_private_document_lifecycle.sql"),
+      "utf8",
+    ).toLowerCase();
+    const completionFix = readFileSync(
+      join(migrationDirectory, "0017_document_extraction_completion.sql"),
+      "utf8",
+    ).toLowerCase();
+    const ocrConfirmation = readFileSync(
+      join(migrationDirectory, "0018_document_ocr_owner_confirmation.sql"),
+      "utf8",
+    ).toLowerCase();
+    const consentPolicy = readFileSync(
+      join(migrationDirectory, "0019_document_reading_consent_policy.sql"),
+      "utf8",
+    ).toLowerCase();
+    const extractionRetry = readFileSync(
+      join(migrationDirectory, "0020_document_extraction_retry.sql"),
+      "utf8",
+    ).toLowerCase();
+
+    expect(lifecycle).toContain("create table if not exists public.document_upload_sessions");
+    expect(lifecycle).toContain("create_document_upload_session");
+    expect(lifecycle).toContain("complete_document_upload_session");
+    expect(lifecycle).toContain("archive_document");
+    expect(lifecycle).toContain("legacy_public_url_sha256");
+    expect(lifecycle).toContain("extensions.digest");
+    expect(lifecycle).toContain("file_url = null");
+    expect(lifecycle).toContain("drop policy if exists documents_owner_insert");
+    expect(lifecycle).toContain("revoke insert, update, delete on public.documents from authenticated");
+    expect(lifecycle).toContain("document_version_uploaded");
+    expect(completionFix).toContain("set status = 'succeeded'");
+    expect(completionFix).toContain("document_record.doc_type <> 'nib'");
+    expect(ocrConfirmation).toContain("record_document_ocr_consent");
+    expect(ocrConfirmation).toContain("confirm_document_extraction");
+    expect(ocrConfirmation).toContain("owner_corrected");
+    expect(consentPolicy).toContain("ocr_consent_policy_version");
+    expect(consentPolicy).toContain("document-reading-v1");
+    expect(extractionRetry).toContain("retry_document_extraction");
+    expect(extractionRetry).toContain("document_extraction_retried");
+  });
+
+  it("ships the authenticated document API and keeps sensitive writes behind it", () => {
+    const routeFiles = [
+      join(process.cwd(), "app", "api", "v1", "documents", "upload-session", "route.ts"),
+      join(process.cwd(), "app", "api", "v1", "documents", "route.ts"),
+      join(process.cwd(), "app", "api", "v1", "documents", "[id]", "route.ts"),
+      join(process.cwd(), "app", "api", "v1", "documents", "[id]", "versions", "route.ts"),
+      join(process.cwd(), "app", "api", "v1", "documents", "[id]", "signed-url", "route.ts"),
+      join(process.cwd(), "app", "api", "v1", "documents", "[id]", "archive", "route.ts"),
+      join(process.cwd(), "app", "api", "v1", "documents", "[id]", "extraction-confirmation", "route.ts"),
+      join(process.cwd(), "app", "api", "v1", "documents", "[id]", "retry-extraction", "route.ts"),
+    ];
+    const routes = routeFiles.map((file) => readFileSync(file, "utf8")).join("\n");
+    const page = readFileSync(
+      join(process.cwd(), "app", "(umkm)", "umkm", "upload", "page.tsx"),
+      "utf8",
+    );
+    const consentDialog = readFileSync(
+      join(process.cwd(), "components", "documents", "DocumentUploadConsentDialog.tsx"),
+      "utf8",
+    );
+    const oldExtractor = readFileSync(
+      join(process.cwd(), "app", "api", "ai", "extract-nib", "route.ts"),
+      "utf8",
+    );
+
+    expect(routes.match(/getAuthenticatedUser/g)?.length).toBeGreaterThanOrEqual(7);
+    expect(routes).toContain("documentErrorResponse");
+    expect(routes).toContain("processDocumentExtractionJob");
+    expect(page).toContain("uploadToSignedUrl");
+    expect(page).toContain("completeDocumentVersion");
+    expect(page).toContain("confirmDocumentExtraction");
+    expect(page).toContain("retryDocumentExtraction");
+    expect(page).toContain("Identitas & Legalitas");
+    expect(page).toContain("DocumentUploadConsentDialog");
+    expect(consentDialog).toContain("Persetujuan ini hanya berlaku untuk file");
+    expect(consentDialog).toContain("Saya sudah membaca dan menyetujui");
+    expect(page).toContain("sha256Hex");
+    expect(page).not.toMatch(/\.from\(["']documents["']\)\.(insert|update|delete)/);
+    expect(oldExtractor).toContain("ENDPOINT_RETIRED");
+    expect(oldExtractor).not.toContain("Math.random");
+    expect(oldExtractor).not.toContain("smart-ocr-fallback");
+  });
+
+  it("keeps OCR outputs reviewable and never promotes unverified identity data", () => {
+    const worker = readFileSync(
+      join(process.cwd(), "modules", "documents", "document-worker.ts"),
+      "utf8",
+    );
+    const extractors = readFileSync(
+      join(process.cwd(), "modules", "documents", "document-extractors.ts"),
+      "utf8",
+    );
+    const schema = readFileSync(
+      join(process.cwd(), "modules", "documents", "document-schema.ts"),
+      "utf8",
+    );
+    const lifecycle = readFileSync(
+      join(migrationDirectory, "0016_private_document_lifecycle.sql"),
+      "utf8",
+    ).toLowerCase();
+
+    expect(extractors).toContain("Jangan menebak");
+    expect(schema).toContain("normalizedDigits([13])");
+    expect(schema).toContain("normalizedDigits([16])");
+    expect(worker).toContain("manual-review");
+    expect(lifecycle).toContain("menunggu verifikasi");
+    expect(lifecycle).not.toContain("update public.profiles");
+  });
+
+  it("ships the authenticated ledger, report, export, and daily-closing lifecycle", () => {
+    const migration = readFileSync(
+      join(migrationDirectory, "0021_ledger_report_daily_closing.sql"),
+      "utf8",
+    ).toLowerCase();
+    const routeFiles = [
+      join(process.cwd(), "app", "api", "v1", "ledger", "route.ts"),
+      join(process.cwd(), "app", "api", "v1", "ledger", "transactions", "[id]", "route.ts"),
+      join(process.cwd(), "app", "api", "v1", "ledger", "daily-closing", "route.ts"),
+      join(process.cwd(), "app", "api", "v1", "ledger", "export", "route.ts"),
+    ];
+    const routes = routeFiles.map((file) => readFileSync(file, "utf8")).join("\n");
+    const page = readFileSync(
+      join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "page.tsx"),
+      "utf8",
+    );
+
+    expect(migration).toContain("create table if not exists public.transaction_changes");
+    expect(migration).toContain("create_ledger_transaction");
+    expect(migration).toContain("update_ledger_transaction");
+    expect(migration).toContain("cancel_ledger_transaction");
+    expect(migration).toContain("close_ledger_day");
+    expect(migration).toContain("revoke insert,update,delete on public.transactions from authenticated");
+    expect(routes.match(/getAuthenticatedUser/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(routes).toContain("ledgerErrorResponse");
+    expect(routes).toContain("ledgerReportCsv");
+    expect(page).toContain("Tutup kas hari ini");
+    expect(page).toContain("Transaksi dibatalkan");
+    expect(page).not.toMatch(/\.from\(["']transactions["']\)\.(insert|update|delete)/);
   });
 });

@@ -6,8 +6,8 @@ import { BarChart2, FolderOpen, TrendingUp, LogOut, Building2 } from "lucide-rea
 import { supabase } from "@/lib/supabase";
 
 const NAV_ITEMS = [
-  { href: "/institusi", label: "Portofolio UMKM", Icon: TrendingUp },
-  { href: "/institusi/dossiers", label: "Dossier", Icon: FolderOpen },
+  { href: "/institusi", label: "Cari Usaha", Icon: TrendingUp },
+  { href: "/institusi/dossiers", label: "Profil Berizin", Icon: FolderOpen },
   { href: "/institusi/analytics", label: "Analitik", Icon: BarChart2 },
 ];
 
@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="w-64 bg-white border-r border-[#e5e7ff] flex flex-col fixed h-screen z-30">
         <div className="px-6 py-5 border-b border-[#e5e7ff]">
           <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-8 w-auto object-contain" />
-          <p className="text-xs text-[#444655] mt-2 font-semibold">Institution Portal</p>
+          <p className="text-xs text-[#444655] mt-2 font-semibold">Ruang kerja institusi</p>
         </div>
 
         <div className="px-4 py-4 border-b border-[#e5e7ff]">
@@ -37,8 +37,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Building2 size={18} className="text-white" />
             </div>
             <div>
-              <p className="text-sm font-bold text-[#141a34]">Institusi Demo</p>
-              <p className="text-xs text-amber-700">Mode simulasi</p>
+              <p className="text-sm font-bold text-[#141a34]">Akun Institusi</p>
+              <p className="text-xs text-emerald-700">Akses sesuai izin</p>
             </div>
           </div>
         </div>

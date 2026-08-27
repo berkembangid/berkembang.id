@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { User, Mail, Building2, Phone, Save, FileText, Camera, Check, AlertCircle, LogOut, ArrowLeft, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
+import OwnerConsentPanel from "@/modules/consent/owner-consent-panel";
 
 const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
 
@@ -209,6 +210,7 @@ export default function ProfilPage() {
       </header>
 
       <main className="px-4 md:px-0 py-5 space-y-6 pb-28 md:pb-8 max-w-4xl mx-auto">
+        <OwnerConsentPanel />
         {/* Title Header */}
         <div className="flex justify-between items-center">
           <div>

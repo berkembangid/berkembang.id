@@ -221,12 +221,12 @@ ${renderFields(view, "Row")}
         Relationships: ${renderRelationships(view)}
       }`;
   const renderRoutine = (routine) => `      ${routine.function_name}: {
-        Args: {${routine.arguments.length === 0 ? "" : `\n${routine.arguments
+        Args: ${routine.arguments.length === 0 ? "Record<string, never>" : `{\n${routine.arguments
           .map(
             (argument) =>
               `          ${argument.name}${argument.optional ? "?" : ""}: ${renderPostgresType(argument.type)}`,
           )
-          .join("\n")}\n        `}}
+          .join("\n")}\n        }`}
         Returns: ${renderPostgresType(routine.return_type)}${routine.returns_set ? "[]" : ""}
       }`;
 

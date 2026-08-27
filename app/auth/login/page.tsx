@@ -45,7 +45,7 @@ export default function LoginPage() {
         if (data.user.user_metadata?.signup_account_type) {
           const bootstrapResponse = await fetch("/api/auth/bootstrap", { method: "POST" });
           if (!bootstrapResponse.ok && bootstrapResponse.status !== 409) {
-            setError("Akun berhasil masuk, tetapi keanggotaan belum dapat disiapkan.");
+            setError("Data usaha belum berhasil disiapkan. Silakan tekan Masuk sekali lagi. Jika masih gagal, hubungi pengelola.");
             setLoading(false);
             return;
           }

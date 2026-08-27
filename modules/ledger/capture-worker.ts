@@ -255,7 +255,7 @@ export async function processQueuedCaptureJob(
         jobId,
         attemptNumber: claim.attemptNumber,
         code: failure.code,
-        message: "Provider belum dapat memproses catatan.",
+        message: "Catatan belum berhasil dipahami. Coba rekam ulang atau gunakan Tulis Teks.",
         retryable,
         latencyMs: Date.now() - startedAt,
         retryReason: retryable ? (hasDifferentProvider ? "provider_fallback" : "transient_error") : null,
