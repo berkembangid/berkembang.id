@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { ReadinessOperationError } from "@/modules/readiness/readiness-errors";
+import { ReadinessOperationError, readinessOperationError } from "@/modules/readiness/readiness-errors";
 import { missionLinks, readinessLabels, type ReadinessComponentView, type ReadinessMissionView, type ReadinessView } from "@/modules/readiness/readiness-schema";
 
 type RecalculationResult = { snapshotId?: string };
@@ -23,7 +23,7 @@ export async function getMyReadiness(): Promise<ReadinessView> {
   const client = await createServerSupabaseClient();
   const rpc = client.rpc as unknown as (name: string) => Promise<{ data: unknown; error: { message: string } | null }>;
   const recalculation = await rpc("recalculate_my_readiness");
-  if (recalculation.error) throw new ReadinessOperationError("SERVICE_UNAVAILABLE", new Error(recalculation.error.message));
+  if (recalculation.error) throw readinessOperationError(new Error(recalculation.error.message));
   const snapshotId = (recalculation.data as RecalculationResult | null)?.snapshotId;
   if (!snapshotId) throw new ReadinessOperationError("SERVICE_UNAVAILABLE");
 

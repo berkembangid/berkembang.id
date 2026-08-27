@@ -33,9 +33,9 @@ export async function getEffectivePortalRole(
       .limit(1)
       .maybeSingle(),
     client
-      .from("business_members")
+      .from("businesses")
       .select("id")
-      .eq("user_id", userId)
+      .eq("legacy_profile_id", userId)
       .eq("status", "active")
       .limit(1)
       .maybeSingle(),

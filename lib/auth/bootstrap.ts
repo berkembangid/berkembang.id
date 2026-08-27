@@ -87,24 +87,8 @@ export async function bootstrapAccountFromSignupMetadata(
     }
 
     if (!businessId) throw new Error("BUSINESS_BOOTSTRAP_FAILED");
-    const membership = await admin
-      .from("business_members")
-      .select("id")
-      .eq("business_id", businessId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-    requireNoError(membership.error, "BUSINESS_MEMBERSHIP_LOOKUP_FAILED");
-    if (!membership.data) {
-      const { error } = await admin.from("business_members").insert({
-        business_id: businessId,
-        profile_id: user.id,
-        user_id: user.id,
-        role: "owner",
-        status: "active",
-        joined_at: new Date().toISOString(),
-      });
-      requireNoError(error, "BUSINESS_MEMBERSHIP_BOOTSTRAP_FAILED");
-    }
+    // Kepemilikan usaha cukup lewat businesses.legacy_profile_id; baris
+    // keanggotaan 'owner' disinkronkan otomatis oleh trigger database.
     return "umkm";
   }
 

@@ -27,6 +27,9 @@ const expectedMigrations = [
   "0021_ledger_report_daily_closing.sql",
   "0022_readiness_mission_engine.sql",
   "0023_consent_verified_business_profile.sql",
+  "0024_umkm_owner_without_membership.sql",
+  "0025_umkm_roleless_internal_plumbing.sql",
+  "0026_auto_provision_umkm_business.sql",
 ];
 
 describe("WP-03 migration contract", () => {
@@ -103,7 +106,9 @@ describe("WP-04 identity and RLS contract", () => {
     expect(login).not.toContain('.from("profiles")');
     expect(authorization).toContain('.from("platform_admins")');
     expect(authorization).toContain('.from("institution_members")');
-    expect(authorization).toContain('.from("business_members")');
+    // UMKM tanpa role: kepemilikan usaha ditentukan dari profil, bukan keanggotaan.
+    expect(authorization).toContain('.from("businesses")');
+    expect(authorization).not.toContain('.from("business_members")');
   });
 
   it("keeps privileged writes behind authenticated server routes", () => {

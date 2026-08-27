@@ -6,7 +6,12 @@ import { AlertCircle, ArrowRight, CheckCircle2, Circle, RefreshCw, ShieldCheck }
 import type { ReadinessComponentView, ReadinessView } from "@/modules/readiness/readiness-schema";
 
 type PageMode = "score" | "gaps" | "roadmap";
-type ApiResult = { data?: ReadinessView; error?: { message?: string } };
+type ApiErrorCode = "UNAUTHENTICATED" | "BUSINESS_ACCESS_DENIED" | "READINESS_RULE_UNAVAILABLE" | "SERVICE_UNAVAILABLE";
+type ApiResult = { data?: ReadinessView; error?: { code?: string; message?: string } };
+
+class ResponseError extends Error {
+  constructor(readonly code: ApiErrorCode, message: string) { super(message); this.name = "ResponseError"; }
+}
 
 function statusLabel(component: ReadinessComponentView) {
   if (component.status !== "scored") return "Data belum cukup";
@@ -18,12 +23,16 @@ function statusLabel(component: ReadinessComponentView) {
 export default function ReadinessPage({ mode }: { mode: PageMode }) {
   const [data, setData] = useState<ReadinessView | null>(null);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState<ApiErrorCode | null>(null);
   const [loading, setLoading] = useState(true);
   async function load() {
     try {
       const response = await fetch("/api/v1/readiness", { cache: "no-store" });
       const payload = await response.json() as ApiResult;
-      if (!response.ok || !payload.data) throw new Error(payload.error?.message ?? "Ringkasan belum dapat dimuat.");
+      if (!response.ok || !payload.data) {
+        setErrorCode((payload.error?.code ?? null) as ApiErrorCode | null);
+        throw new Error(payload.error?.message ?? "Ringkasan belum dapat dimuat.");
+      }
       setData(payload.data);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Ringkasan belum dapat dimuat."); }
     finally { setLoading(false); }
@@ -33,15 +42,19 @@ export default function ReadinessPage({ mode }: { mode: PageMode }) {
     fetch("/api/v1/readiness", { cache: "no-store" })
       .then(async (response) => ({ response, payload: await response.json() as ApiResult }))
       .then(({ response, payload }) => {
-        if (!response.ok || !payload.data) throw new Error(payload.error?.message ?? "Ringkasan belum dapat dimuat.");
+        if (!response.ok || !payload.data) throw new ResponseError(payload.error?.code as ApiErrorCode | undefined ?? "SERVICE_UNAVAILABLE", payload.error?.message ?? "Ringkasan belum dapat dimuat.");
         if (active) setData(payload.data);
       })
-      .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : "Ringkasan belum dapat dimuat."); })
+      .catch((cause: unknown) => { if (!active) return; if (cause instanceof ResponseError) setErrorCode(cause.code); setError(cause instanceof Error ? cause.message : "Ringkasan belum dapat dimuat."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
   if (loading) return <main className="mx-auto max-w-5xl p-4 md:p-6"><div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Menyiapkan ringkasan usaha...</div></main>;
-  if (error || !data) return <main className="mx-auto max-w-5xl p-4 md:p-6"><div className="rounded-2xl border border-red-200 bg-white p-8 text-center"><AlertCircle className="mx-auto text-red-500" /><p className="mt-3 text-sm text-slate-700">{error}</p><button onClick={() => { setLoading(true); setError(""); void load(); }} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#0f2d6b] px-4 py-2 text-xs font-bold text-white"><RefreshCw size={14} /> Coba lagi</button></div></main>;
+  if (error && (errorCode === "BUSINESS_ACCESS_DENIED" || errorCode === "UNAUTHENTICATED")) {
+    const isNoBusiness = errorCode === "BUSINESS_ACCESS_DENIED";
+    return <main className="mx-auto max-w-5xl p-4 md:p-6"><div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-8 text-center"><ShieldCheck className="mx-auto text-blue-700" /><h2 className="mt-3 font-bold text-slate-900">{isNoBusiness ? "Hubungkan akun Anda dengan usaha" : "Sesi Anda telah berakhir"}</h2><p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-slate-600">{isNoBusiness ? "Perjalanan dan Kesiapan Data Usaha membutuhkan usaha yang aktif terhubung ke akun ini. Lengkapi profil usaha, atau masuk kembali menggunakan akun pemilik usaha." : "Masuk kembali untuk melihat perjalanan usaha Anda."}</p><div className="mt-4 flex items-center justify-center gap-3">{isNoBusiness ? (<><Link href="/umkm/profil" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#0f2d6b] px-4 py-2 text-xs font-bold text-white">Lengkapi profil usaha</Link><Link href="/auth/login" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-bold text-[#0f2d6b] ring-1 ring-slate-200">Ganti akun</Link></>) : <Link href="/auth/login" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#0f2d6b] px-4 py-2 text-xs font-bold text-white">Masuk kembali</Link>}</div></div></main>;
+  }
+  if (error || !data) return <main className="mx-auto max-w-5xl p-4 md:p-6"><div className="rounded-2xl border border-red-200 bg-white p-8 text-center"><AlertCircle className="mx-auto text-red-500" /><p className="mt-3 text-sm text-slate-700">{error}</p><button onClick={() => { setLoading(true); setError(""); setErrorCode(null); void load(); }} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#0f2d6b] px-4 py-2 text-xs font-bold text-white"><RefreshCw size={14} /> Coba lagi</button></div></main>;
   if (mode === "gaps") return <GapsView data={data} />;
   if (mode === "roadmap") return <RoadmapView data={data} />;
   return <ScoreView data={data} />;

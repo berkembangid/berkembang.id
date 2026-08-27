@@ -434,7 +434,7 @@ export default function UploadPage() {
                     <div className="min-w-0">
                       <h2 className="text-sm font-bold text-slate-800">
                         {documentTypeLabels[requirement.type]}
-                        {requirement.required && <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-600">Inti</span>}
+                        {requirement.required && <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-600">Wajib</span>}
                       </h2>
                       <p className="mt-0.5 text-xs text-slate-400">{requirement.description}</p>
                     </div>

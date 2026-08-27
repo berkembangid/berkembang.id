@@ -14,16 +14,14 @@ function rpcError(error: { message: string } | null) {
 
 async function activeBusinessId(userId: string) {
   const client = await createServerSupabaseClient();
-  const { data, error } = await client.from("business_members").select("business_id,role,created_at")
-    .eq("user_id", userId).eq("status", "active").in("role", ["owner", "manager", "staff"])
-    .order("created_at", { ascending: true }).limit(10);
+  // UMKM gratis satu pemilik: usaha aktif ditentukan dari kepemilikan profil,
+  // tanpa konsep role ataupun keanggotaan.
+  const { data, error } = await client.from("businesses").select("id")
+    .eq("legacy_profile_id", userId).eq("status", "active")
+    .order("created_at", { ascending: true }).limit(1);
   if (error) throw new LedgerOperationError("SERVICE_UNAVAILABLE", error);
-  const ordered = [...(data ?? [])].sort((a, b) => {
-    const rank = { owner: 1, manager: 2, staff: 3 } as Record<string, number>;
-    return (rank[a.role] ?? 9) - (rank[b.role] ?? 9);
-  });
-  if (!ordered[0]?.business_id) throw new LedgerOperationError("BUSINESS_ACCESS_DENIED");
-  return ordered[0].business_id;
+  if (!data?.[0]?.id) throw new LedgerOperationError("BUSINESS_ACCESS_DENIED");
+  return data[0].id;
 }
 
 export type LedgerTransactionView = {
