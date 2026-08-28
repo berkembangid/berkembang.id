@@ -18,7 +18,7 @@ function dateRange(preset: Exclude<Preset, "custom">) {
 function emptyForm(type: "income" | "expense" = "income"): FormState { return { transactionType: type, amount: "", date: jakartaDate(), categoryCode: type === "income" ? "sales_direct" : "raw_material", description: "", paymentMethod: "cash", counterparty: "", reason: "" }; }
 
 export default function LaporanPage() {
-  const [range, setRange] = useState(dateRange("month")); const [preset, setPreset] = useState<Preset>("month");
+  const [range, setRange] = useState(dateRange("month")); const [preset, setPreset] = useState<Preset>("today");
   const [report, setReport] = useState<LedgerReportView | null>(null); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm()); const [editing, setEditing] = useState<LedgerTransactionView | null>(null);

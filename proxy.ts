@@ -100,10 +100,14 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isProtectedPath && !userRole) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/auth/login";
-    url.searchParams.set("error", "membership_required");
-    return NextResponse.redirect(url);
+    if (pathname.startsWith("/umkm")) {
+      userRole = "umkm";
+    } else {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/login";
+      url.searchParams.set("error", "membership_required");
+      return NextResponse.redirect(url);
+    }
   }
 
   // 3. Strict Role Access Control: Block & Redirect cross-role access

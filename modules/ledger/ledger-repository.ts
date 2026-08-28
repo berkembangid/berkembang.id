@@ -20,8 +20,26 @@ async function activeBusinessId(userId: string) {
     .eq("legacy_profile_id", userId).eq("status", "active")
     .order("created_at", { ascending: true }).limit(1);
   if (error) throw new LedgerOperationError("SERVICE_UNAVAILABLE", error);
-  if (!data?.[0]?.id) throw new LedgerOperationError("BUSINESS_ACCESS_DENIED");
-  return data[0].id;
+  if (data?.[0]?.id) return data[0].id;
+
+  try {
+    const { createServiceRoleClient } = await import("@/lib/supabase/admin");
+    const admin = createServiceRoleClient();
+    const { data: profile } = await admin.from("profiles").select("name,nama_usaha,sektor_usaha,lokasi,phone").eq("id", userId).maybeSingle();
+    const businessName = profile?.nama_usaha || profile?.name || "Usaha Saya";
+    const { data: created } = await admin.from("businesses").insert({
+      legacy_profile_id: userId,
+      name: businessName,
+      legal_name: businessName,
+      sector: profile?.sektor_usaha || "Lainnya",
+      location: profile?.lokasi || null,
+      phone: profile?.phone || null,
+      status: "active",
+    }).select("id").single();
+    if (created?.id) return created.id;
+  } catch {}
+
+  throw new LedgerOperationError("BUSINESS_ACCESS_DENIED");
 }
 
 export type LedgerTransactionView = {

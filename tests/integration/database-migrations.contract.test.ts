@@ -30,6 +30,7 @@ const expectedMigrations = [
   "0024_umkm_owner_without_membership.sql",
   "0025_umkm_roleless_internal_plumbing.sql",
   "0026_auto_provision_umkm_business.sql",
+  "0027_umkm_complete_roleless_access.sql",
 ];
 
 describe("WP-03 migration contract", () => {

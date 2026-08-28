@@ -8,6 +8,7 @@ export async function GET() {
     if (!user) throw new ReadinessOperationError("UNAUTHENTICATED");
     return Response.json({ data: await getMyReadiness() }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
+    console.error("GET /api/v1/readiness error:", error);
     return readinessErrorResponse(error);
   }
 }
