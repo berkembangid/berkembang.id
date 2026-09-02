@@ -131,7 +131,7 @@ export default function InstitutionDetailPage() {
       <div className="flex items-center justify-between">
         <button
           onClick={() => router.push("/admin/institutions")}
-          className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-[#001b85] transition-colors bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm cursor-pointer"
+          className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-[#0b5f86] transition-colors bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm cursor-pointer"
         >
           <ArrowLeft size={16} />
           Kembali ke Daftar Institusi
@@ -141,11 +141,11 @@ export default function InstitutionDetailPage() {
 
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden p-6 md:p-8">
         <div className="flex items-center gap-4 mb-6 pb-6 border-b border-slate-100">
-          <div className="w-14 h-14 rounded-2xl bg-[#001b85]/10 text-[#001b85] flex items-center justify-center font-bold">
+          <div className="w-14 h-14 rounded-2xl bg-[#0b5f86]/10 text-[#0b5f86] flex items-center justify-center font-bold">
             <Building2 size={28} />
           </div>
           <div>
-            <h1 className="font-headline text-xl md:text-2xl font-extrabold text-[#141a34]">
+            <h1 className="font-headline text-xl md:text-2xl font-extrabold text-[#1b2a3a]">
               Detail & Edit Institusi
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -187,7 +187,7 @@ export default function InstitutionDetailPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Contoh: Bank BNI KUR"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 />
               </div>
 
@@ -198,7 +198,7 @@ export default function InstitutionDetailPage() {
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 >
                   <option value="Bank BUMN">Bank BUMN</option>
                   <option value="Bank Swasta">Bank Swasta</option>
@@ -218,7 +218,7 @@ export default function InstitutionDetailPage() {
                   min="1"
                   value={programsCount}
                   onChange={(e) => setProgramsCount(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 />
               </div>
 
@@ -254,7 +254,7 @@ export default function InstitutionDetailPage() {
                       value={contactName}
                       onChange={(e) => setContactName(e.target.value)}
                       placeholder="Nama Kontak"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                     />
                   </div>
 
@@ -267,7 +267,7 @@ export default function InstitutionDetailPage() {
                       value={contactEmail}
                       onChange={(e) => setContactEmail(e.target.value)}
                       placeholder="email@institusi.com"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                     />
                   </div>
 
@@ -296,7 +296,7 @@ export default function InstitutionDetailPage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="px-6 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2 cursor-pointer"
+                className="px-6 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2 cursor-pointer"
               >
                 <Save size={14} />
                 {saving ? "Menyimpan..." : "Simpan Perubahan"}

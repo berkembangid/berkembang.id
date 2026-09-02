@@ -10,6 +10,24 @@ type ComponentRow = { component_key: string; component_status: ReadinessComponen
 type MissionRow = { id: string; code: string; title: string; description: string | null; category: string; requirements: unknown; reward: unknown };
 type BusinessMissionRow = { id: string; mission_id: string; status: ReadinessMissionView["status"] };
 
+/**
+ * Kueri readiness berpindah antara klien sesi dan klien service role, dan
+ * beberapa tabelnya belum ada di tipe hasil generate. Bentuk minimal ini
+ * menggantikan `any` tanpa mengubah perilaku.
+ */
+type LooseQueryResult = { data: unknown; error: { message: string } | null };
+type LooseQueryBuilder = {
+  select(columns: string, options?: Record<string, unknown>): LooseQueryBuilder;
+  eq(column: string, value: unknown): LooseQueryBuilder;
+  neq(column: string, value: unknown): LooseQueryBuilder;
+  in(column: string, values: readonly unknown[]): LooseQueryBuilder;
+  order(column: string, options?: Record<string, unknown>): LooseQueryBuilder;
+  limit(count: number): LooseQueryBuilder;
+  single(): PromiseLike<LooseQueryResult>;
+  maybeSingle(): PromiseLike<LooseQueryResult>;
+} & PromiseLike<LooseQueryResult>;
+type LooseQueryClient = { from(table: string): LooseQueryBuilder };
+
 function jsonRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -26,12 +44,12 @@ export async function getMyReadiness(): Promise<ReadinessView> {
   const snapshotId = (recalculation.data as RecalculationResult | null)?.snapshotId;
   if (!snapshotId) throw new ReadinessOperationError("SERVICE_UNAVAILABLE");
 
-  let queryClient: any = client;
+  let queryClient = client as unknown as LooseQueryClient;
   let snapshotResult = await queryClient.from("readiness_score_snapshots").select("id,business_id,rule_set_id,total_score,summary,calculated_at").eq("id", snapshotId).single();
   if (snapshotResult.error || !snapshotResult.data) {
     try {
       const { createServiceRoleClient } = await import("@/lib/supabase/admin");
-      queryClient = createServiceRoleClient();
+      queryClient = createServiceRoleClient() as unknown as LooseQueryClient;
       snapshotResult = await queryClient.from("readiness_score_snapshots").select("id,business_id,rule_set_id,total_score,summary,calculated_at").eq("id", snapshotId).single();
     } catch {}
   }
@@ -61,7 +79,8 @@ export async function getMyReadiness(): Promise<ReadinessView> {
     return [{ id: assignment.id, code: mission.code, title: mission.title, description: mission.description ?? "", category: mission.category, status: assignment.status, impact: numberValue(jsonRecord(mission.reward).impact), effort, href: missionLinks[mission.code] ?? "/umkm" }];
   }).sort((a, b) => a.status === "completed" && b.status !== "completed" ? 1 : b.status === "completed" && a.status !== "completed" ? -1 : b.impact - a.impact || effortRank[a.effort] - effortRank[b.effort]);
 
-  const rules = jsonRecord(ruleResult.data?.rules);
+  const ruleSet = jsonRecord(ruleResult.data);
+  const rules = jsonRecord(ruleSet.rules);
   const summary = jsonRecord(snapshot.summary);
   const components = ((componentResult.data ?? []) as unknown as ComponentRow[]).map((item) => ({
     code: item.component_key,
@@ -82,11 +101,13 @@ export async function getMyReadiness(): Promise<ReadinessView> {
   try {
     const previousResult = await queryClient.from("readiness_score_snapshots").select("id,total_score").eq("business_id", snapshot.business_id)
       .neq("id", snapshot.id).order("calculated_at", { ascending: false }).limit(1).maybeSingle();
+    const previousSnapshot = jsonRecord(previousResult.data);
     if (previousResult.data) {
-      previousScore = numberValue(previousResult.data.total_score);
-      const oldComponents = await queryClient.from("readiness_score_components").select("component_key,weighted_score").eq("snapshot_id", previousResult.data.id);
+      previousScore = numberValue(previousSnapshot.total_score);
+      const oldComponents = await queryClient.from("readiness_score_components").select("component_key,weighted_score").eq("snapshot_id", previousSnapshot.id);
       if (oldComponents.data) {
-        const oldScores = new Map((oldComponents.data ?? []).map((item: any) => [item.component_key, item.weighted_score === null ? null : numberValue(item.weighted_score)]));
+        const oldRows = (oldComponents.data ?? []) as Array<{ component_key: string; weighted_score: number | null }>;
+        const oldScores = new Map(oldRows.map((item) => [item.component_key, item.weighted_score === null ? null : numberValue(item.weighted_score)]));
         const largestChange = components.map((item) => ({ label: item.label, delta: Math.abs((item.score ?? 0) - Number(oldScores.get(item.code) ?? 0)) })).sort((a, b) => b.delta - a.delta)[0];
         changeReason = largestChange?.delta ? `Perubahan terbesar berasal dari ${largestChange.label.toLowerCase()}.` : "Nilai tetap karena bukti usaha belum berubah.";
       }
@@ -95,7 +116,7 @@ export async function getMyReadiness(): Promise<ReadinessView> {
 
   return {
     snapshotId: snapshot.id,
-    ruleVersion: ruleResult.data?.version ?? "",
+    ruleVersion: typeof ruleSet.version === "string" ? ruleSet.version : "",
     score: numberValue(snapshot.total_score),
     previousScore,
     scoreChange: previousScore === null ? null : numberValue(snapshot.total_score) - previousScore,

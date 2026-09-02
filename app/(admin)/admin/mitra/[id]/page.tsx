@@ -93,7 +93,7 @@ export default function MitraDetailPage() {
       <div className="flex items-center justify-between">
         <button
           onClick={() => router.push("/admin/mitra")}
-          className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-[#001b85] transition-colors bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm cursor-pointer"
+          className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-[#0b5f86] transition-colors bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm cursor-pointer"
         >
           <ArrowLeft size={16} />
           Kembali ke Daftar Mitra
@@ -107,8 +107,8 @@ export default function MitraDetailPage() {
             <Handshake size={28} />
           </div>
           <div>
-            <h1 className="font-headline text-xl md:text-2xl font-extrabold text-[#141a34]">
-              Detail & Edit Mitra Komunitas
+            <h1 className="font-headline text-xl md:text-2xl font-extrabold text-[#1b2a3a]">
+              Detail & Edit Mitra komunitas
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
               Atur cakupan wilayah, tipe mitra, dan jumlah UMKM binaan
@@ -149,7 +149,7 @@ export default function MitraDetailPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Contoh: SMESCO Indonesia"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 />
               </div>
 
@@ -160,7 +160,7 @@ export default function MitraDetailPage() {
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 >
                   <option value="Pemerintah">Pemerintah / BUMD</option>
                   <option value="LSM">LSM / Komunitas</option>
@@ -178,7 +178,7 @@ export default function MitraDetailPage() {
                   value={coverage}
                   onChange={(e) => setCoverage(e.target.value)}
                   placeholder="Contoh: Nasional / Jawa Barat / Depok"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 />
               </div>
 
@@ -191,7 +191,7 @@ export default function MitraDetailPage() {
                   min="0"
                   value={umkmManaged}
                   onChange={(e) => setUmkmManaged(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 />
               </div>
 
@@ -228,7 +228,7 @@ export default function MitraDetailPage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="px-6 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2 cursor-pointer"
+                className="px-6 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2 cursor-pointer"
               >
                 <Save size={14} />
                 {saving ? "Menyimpan..." : "Simpan Perubahan"}

@@ -1,77 +1,47 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart2, FolderOpen, TrendingUp, LogOut, Building2 } from "lucide-react";
+import { BarChart2, Building2, FolderOpen, LogOut, Menu, Sparkles, TrendingUp, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import styles from "../dashboard-shell.module.css";
 
 const NAV_ITEMS = [
-  { href: "/institusi", label: "Cari Usaha", Icon: TrendingUp },
-  { href: "/institusi/dossiers", label: "Profil Berizin", Icon: FolderOpen },
-  { href: "/institusi/analytics", label: "Analitik", Icon: BarChart2 },
+  { href: "/institusi", label: "Cari usaha", Icon: TrendingUp },
+  { href: "/institusi/dossiers", label: "Profil berizin", Icon: FolderOpen },
+  { href: "/institusi/analytics", label: "Analitik program", Icon: BarChart2 },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const activeLabel = NAV_ITEMS.find((item) => item.href === "/institusi" ? pathname === item.href : pathname.startsWith(item.href))?.label ?? "Portal institusi";
 
-  const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.warn("Sign out warning:", e);
-    }
+  async function handleSignOut() {
+    await supabase.auth.signOut();
     window.location.href = "/auth/login";
-  };
+  }
 
   return (
-    <div className="min-h-screen flex bg-[#f8f8ff]">
-      <aside className="w-64 bg-white border-r border-[#e5e7ff] flex flex-col fixed h-screen z-30">
-        <div className="px-6 py-5 border-b border-[#e5e7ff]">
-          <img src="/logo/logo berkembang.webp" alt="Berkembang.id Logo" className="h-8 w-auto object-contain" />
-          <p className="text-xs text-[#444655] mt-2 font-semibold">Ruang kerja institusi</p>
-        </div>
-
-        <div className="px-4 py-4 border-b border-[#e5e7ff]">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#001b85] flex items-center justify-center">
-              <Building2 size={18} className="text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-[#141a34]">Akun Institusi</p>
-              <p className="text-xs text-emerald-700">Akses sesuai izin</p>
-            </div>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-3 py-4 space-y-1">
+    <div data-world="institusi" className={styles.portal}>
+      {mobileOpen && <button type="button" aria-label="Tutup menu" className={styles.backdrop} onClick={() => setMobileOpen(false)} />}
+      <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ""}`}>
+        <div className={styles.brand}><Link href="/institusi" className="flex items-center gap-3"><span className={styles.brandMark}><Sparkles size={17} /></span><span>berkembang.id</span></Link><button type="button" aria-label="Tutup menu" onClick={() => setMobileOpen(false)} className="ml-auto grid size-9 place-items-center rounded-lg text-[#6e859e] md:hidden"><X size={17} /></button></div>
+        <div className={styles.context}><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#eef8fd] text-[#0f73a3]"><Building2 size={17} /></span><div><p className={styles.contextTitle}>Akun institusi</p><p className={styles.contextMeta}>Akses hanya sesuai izin pemilik</p></div></div></div>
+        <nav aria-label="Menu portal institusi" className={styles.group}>
+          <p className={styles.groupLabel}>Ruang kerja</p>
           {NAV_ITEMS.map((item) => {
-            const isActive = item.href === "/institusi" ? pathname === "/institusi" : pathname.startsWith(item.href);
-            return (
-              <Link key={item.href} href={item.href}>
-                <div className={`sidebar-nav-item ${isActive ? "active" : ""}`}>
-                  <item.Icon size={18} className={isActive ? "text-[#001b85]" : ""} />
-                  <span>{item.label}</span>
-                </div>
-              </Link>
-            );
+            const active = item.href === "/institusi" ? pathname === item.href : pathname.startsWith(item.href);
+            return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} aria-current={active ? "page" : undefined} className={`${styles.navLink} ${active ? styles.navActive : ""}`}><item.Icon size={16} /><span>{item.label}</span></Link>;
           })}
         </nav>
-
-        <div className="px-4 py-4 border-t border-[#e5e7ff]">
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="w-full sidebar-nav-item border-none bg-transparent cursor-pointer"
-          >
-            <LogOut size={18} />
-            <span>Keluar</span>
-          </button>
-        </div>
+        <div className={styles.sidebarFooter}><button type="button" onClick={() => void handleSignOut()} className={`${styles.navLink} !m-0 w-full`}><LogOut size={16} /><span>Keluar akun</span></button></div>
       </aside>
-
-      <main className="ml-64 flex-1 min-h-screen">
+      <div className={styles.main}>
+        <header className={styles.topbar}><div className="flex items-center gap-3"><button type="button" onClick={() => setMobileOpen(true)} aria-label="Buka menu" className={styles.menuButton}><Menu size={19} /></button><div><p className="hidden text-[9px] font-bold uppercase tracking-[.12em] text-[#9fb0c2] sm:block">Portal institusi</p><p className={styles.pageLabel}>{activeLabel}</p></div></div><span className={styles.portalBadge}>Akses berizin</span></header>
         {children}
-      </main>
+      </div>
     </div>
   );
 }

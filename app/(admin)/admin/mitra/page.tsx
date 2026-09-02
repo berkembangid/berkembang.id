@@ -143,7 +143,7 @@ export default function AdminMitraPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div>
-          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Mitra Komunitas</h1>
+          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#1b2a3a]">Mitra komunitas</h1>
           <p className="text-sm text-slate-500 mt-1">Pendamping, LSM, dan komunitas penggerak UMKM mikro daerah</p>
         </div>
         <div className="flex items-center gap-2">
@@ -156,7 +156,7 @@ export default function AdminMitraPage() {
           </button>
           <button
             onClick={openAddModal}
-            className="bg-[#001b85] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+            className="bg-[#0b5f86] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0f73a3] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
           >
             <Plus size={16} />
             Tambah Mitra
@@ -185,7 +185,7 @@ export default function AdminMitraPage() {
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-[#141a34] text-base truncate">{m.name}</h3>
+                    <h3 className="font-bold text-[#1b2a3a] text-base truncate">{m.name}</h3>
                     <span className="text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
                       {m.type}
                     </span>
@@ -195,8 +195,8 @@ export default function AdminMitraPage() {
                       <MapPin size={12} className="text-slate-400" />
                       {m.coverage}
                     </span>
-                    <span className="flex items-center gap-1 text-[#001b85]">
-                      <Users size={12} className="text-[#001b85]/70" />
+                    <span className="flex items-center gap-1 text-[#0b5f86]">
+                      <Users size={12} className="text-[#0b5f86]/70" />
                       {m.umkmManaged} UMKM Dampingan
                     </span>
                   </div>
@@ -207,7 +207,7 @@ export default function AdminMitraPage() {
               <div className="flex gap-2 pt-2 border-t border-slate-100 justify-end">
                 <Link
                   href={`/admin/mitra/${m.id}`}
-                  className="text-xs font-bold text-[#001b85] border border-[#bac3ff] px-4 py-2 rounded-xl hover:bg-[#ececff] transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="text-xs font-bold text-[#0b5f86] border border-[#bac3ff] px-4 py-2 rounded-xl hover:bg-[#eef8fd] transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Edit size={12} />
                   Detail / Edit
@@ -243,7 +243,7 @@ export default function AdminMitraPage() {
               value={mitraName}
               onChange={(e) => setMitraName(e.target.value)}
               placeholder="Contoh: SMESCO Indonesia"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -252,7 +252,7 @@ export default function AdminMitraPage() {
               <select
                 value={mitraType}
                 onChange={(e) => setMitraType(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
               >
                 <option value="Pemerintah">Pemerintah / BUMD</option>
                 <option value="LSM">LSM / Komunitas</option>
@@ -267,7 +267,7 @@ export default function AdminMitraPage() {
                 value={mitraCoverage}
                 onChange={(e) => setMitraCoverage(e.target.value)}
                 placeholder="Nasional"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
               />
             </div>
           </div>
@@ -278,7 +278,7 @@ export default function AdminMitraPage() {
               min="0"
               value={mitraUmkmCount}
               onChange={(e) => setMitraUmkmCount(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
             />
           </div>
 
@@ -293,7 +293,7 @@ export default function AdminMitraPage() {
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
+              className="flex-1 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
             >
               {saving ? "Menyimpan..." : "Simpan Data Mitra"}
             </button>
