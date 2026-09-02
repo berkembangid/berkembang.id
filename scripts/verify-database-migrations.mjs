@@ -46,6 +46,8 @@ const expectedMigrations = [
   "0039_capture_text_only_path.sql",
   "0040_asset_keywords.sql",
   "0041_document_cabinet.sql",
+  "0042_document_attach_rpc.sql",
+  "0043_document_types.sql",
 ];
 
 const coreTables = [
@@ -2709,6 +2711,33 @@ async function verifyAccountingPeriodReports() {
   assert.equal(shelfProbe.doc_class, "bukti_transaksi", "a new upload must land on a shelf without being told");
   assert.equal(shelfProbe.needs_class_review, false, "a known type must not be sent back to the owner to sort");
 
+  // Jenis dokumen bukti mendarat di rak yang benar tanpa diberi tahu.
+  for (const [docType, shelf] of [
+    ["nota", "bukti_transaksi"],
+    ["kuitansi", "bukti_transaksi"],
+    ["bukti_transfer", "bukti_transaksi"],
+    ["sewa", "aset_kontrak"],
+    ["perjanjian_pinjaman", "aset_kontrak"],
+  ]) {
+    const row = (await client.query(
+      `insert into public.documents (business_id, user_id, name, doc_type, status)
+       values ('${businessB}', '${userB}', 'Uji ${docType}', '${docType}', 'uploaded')
+       returning doc_class, needs_class_review`,
+    )).rows[0];
+    assert.equal(row.doc_class, shelf, `${docType} must land on the ${shelf} shelf`);
+    assert.equal(row.needs_class_review, false, `${docType} shelf is certain`);
+  }
+
+  // Dua jenis yang selama ini lolos Zod lalu ditolak RPC. Layar unggah
+  // menawarkan keduanya sebagai ubin, jadi kegagalannya terlihat pemilik.
+  for (const docType of ["utilitas", "akta_pendirian", "nota"]) {
+    assert.equal(
+      await scalar(`select (private.document_type_is_known('${docType}'))::int as value`),
+      1,
+      `${docType} is offered to the owner, so the upload RPC must accept it`,
+    );
+  }
+
   // Kelengkapan sektor terisi dan bertingkat.
   assert.equal(
     await scalar(`
@@ -2831,6 +2860,92 @@ async function verifyAccountingPeriodReports() {
     `insert into public.document_attachments (business_id, document_id, target_type, target_id)
      values ('${businessB}', '${proofDocument}', 'transaction', '${anyAsset.source_transaction_id}')`,
     "42501",
+  );
+
+  // ---------------------------------------------------------------------
+  // Menempelkan bukti lewat RPC (0042)
+  // ---------------------------------------------------------------------
+  // Pemilik menempel lewat `attach_document`, bukan INSERT langsung. Yang
+  // diuji di sini bukan bahwa fungsinya ada, melainkan bahwa menempel ke
+  // pembelian ikut menempel ke alat yang lahir darinya tanpa layar mana pun
+  // perlu tahu soal itu.
+  const purchaseTx = (await client.query(
+    `select t.id from public.transactions t
+     join public.fixed_assets fa on fa.source_transaction_id = t.id
+     where t.business_id = '${businessB}' limit 1`,
+  )).rows[0];
+  assert.ok(purchaseTx, "the ledger scenario must still contain an asset purchase");
+
+  const rpcDocument = (await client.query(
+    `insert into public.documents (business_id, user_id, name, doc_type, status)
+     values ('${businessB}', '${userB}', 'Nota kulkas', 'nota', 'uploaded')
+     returning id`,
+  )).rows[0].id;
+
+  const attachResult = await asAuthenticatedCommitted(
+    userB,
+    "select public.attach_document($1, 'transaction', $2) as value",
+    [rpcDocument, purchaseTx.id],
+  );
+  const attached = attachResult.rows[0].value.attachments;
+  assert.equal(
+    attached.length,
+    2,
+    "attaching to an asset purchase must also prove the asset it created",
+  );
+  assert.ok(
+    attached.some((row) => row.target_type === "fixed_asset"),
+    "the database knows the purchase created an asset; no screen should have to",
+  );
+
+  // Ditekan dua kali karena jaringan warung putus: hasilnya sama, bukan galat.
+  const secondAttach = await asAuthenticatedCommitted(
+    userB,
+    "select public.attach_document($1, 'transaction', $2) as value",
+    [rpcDocument, purchaseTx.id],
+  );
+  assert.deepEqual(
+    secondAttach.rows[0].value.attachments.map((row) => row.id).sort(),
+    attached.map((row) => row.id).sort(),
+    "pressing attach twice must return the same links, not a duplicate error",
+  );
+
+  // Melepas menuntut alasan, lalu dokumen yang sama boleh ditempel lagi --
+  // batasan unik `0041` dulu mengunci pemilik yang keliru melepas.
+  const assetLink = attached.find((row) => row.target_type === "fixed_asset");
+  await expectAuthenticatedRejected(
+    userB,
+    `select public.detach_document('${assetLink.id}', 'x')`,
+    "22023",
+  );
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.detach_document($1, $2)",
+    [assetLink.id, "Nota tertukar dengan warung sebelah"],
+  );
+  const reattach = await asAuthenticatedCommitted(
+    userB,
+    "select public.attach_document($1, 'fixed_asset', $2) as value",
+    [rpcDocument, (await client.query(
+      `select id from public.fixed_assets where source_transaction_id = '${purchaseTx.id}'`,
+    )).rows[0].id],
+  );
+  assert.notEqual(
+    reattach.rows[0].value.attachments[0].id,
+    assetLink.id,
+    "a document detached by mistake must be attachable again",
+  );
+
+  // Bukti tidak pernah menempel ke usaha orang lain.
+  await expectAuthenticatedRejected(
+    userA,
+    `select public.attach_document('${rpcDocument}', 'transaction', '${purchaseTx.id}')`,
+    "42501",
+  );
+  await expectAuthenticatedRejected(
+    userB,
+    `select public.attach_document('${rpcDocument}', 'gudang', '${purchaseTx.id}')`,
+    "22023",
   );
 
   // Jurnal tetap tidak bisa disentuh setelah semua ini.

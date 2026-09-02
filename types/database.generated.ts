@@ -3668,6 +3668,14 @@ export type Database = {
         }
         Returns: Json
       }
+      attach_document: {
+        Args: {
+          p_document_id: string
+          p_target_type: string
+          p_target_id: string
+        }
+        Returns: Json
+      }
       cancel_ledger_transaction: {
         Args: {
           p_transaction_id: string
@@ -3834,6 +3842,13 @@ export type Database = {
           p_file_size?: number
           p_checksum_sha256?: string
           p_capture_path?: string
+        }
+        Returns: Json
+      }
+      detach_document: {
+        Args: {
+          p_attachment_id: string
+          p_reason: string
         }
         Returns: Json
       }

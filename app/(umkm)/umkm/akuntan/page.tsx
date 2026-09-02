@@ -25,6 +25,7 @@ import {
   BookOpenCheck,
   Download,
   LoaderCircle,
+  Paperclip,
   RefreshCcw,
   Scale,
 } from "lucide-react";
@@ -42,6 +43,8 @@ import type {
   JournalEntryView,
   TrialBalanceRow,
 } from "@/modules/accounting/reports";
+import { createDocumentSignedUrl } from "@/modules/documents/document-client";
+import { listTransactionAttachments } from "@/modules/documents/evidence-client";
 import { DashboardPage, DashboardPanel, EmptyState, PageHeader, PanelHeader } from "@/components/dashboard";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
 
@@ -252,12 +255,59 @@ function JournalPanel({ from, to }: { from: string; to: string }) {
   );
 }
 
+/**
+ * Klip bukti pada satu baris jurnal.
+ *
+ * Inilah gunanya seluruh rak bukti bagi orang yang memeriksa pembukuan:
+ * dari satu baris jurnal, bukti fisiknya bisa dibuka dalam satu ketukan tanpa
+ * meminta apa pun kepada pemilik usaha. Tautannya bertanda tangan dan hanya
+ * berlaku semenit, jadi ia diminta saat diketuk -- bukan diperoleh di muka
+ * untuk seluruh halaman.
+ */
+function EvidenceClip({ transactionId, count }: { transactionId: string; count: number }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        setFailed(false);
+        try {
+          const attachments = await listTransactionAttachments(transactionId);
+          const first = attachments[0];
+          if (!first) return;
+          const { signedUrl } = await createDocumentSignedUrl(first.documentId);
+          window.open(signedUrl, "_blank", "noopener,noreferrer");
+        } catch {
+          setFailed(true);
+        } finally {
+          setBusy(false);
+        }
+      }}
+      aria-label={`Lihat bukti (${count})`}
+      title={failed ? "Bukti belum bisa dibuka. Coba lagi." : `Lihat bukti (${count})`}
+      className={`inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+        failed ? "text-[#8a6412] hover:bg-[#fdf8ee]" : "text-[#0b5f86] hover:bg-[#eef8fd]"
+      } disabled:opacity-40`}
+    >
+      <Paperclip size={11} />
+      {count > 1 ? count : ""}
+    </button>
+  );
+}
+
 function JournalEntryRow({ entry }: { entry: JournalEntryView }) {
   return (
     <li className="py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <p className="text-xs font-bold text-[#1b2a3a]">
+        <p className="flex items-center gap-1.5 text-xs font-bold text-[#1b2a3a]">
           {entry.entryDate} · {sourceLabels[entry.source] ?? entry.source}
+          {entry.attachmentCount > 0 && entry.sourceId && (
+            <EvidenceClip transactionId={entry.sourceId} count={entry.attachmentCount} />
+          )}
         </p>
         <p className="text-xs font-bold tabular-nums text-[#1b2a3a]">{idr(entry.totalIdr)}</p>
       </div>

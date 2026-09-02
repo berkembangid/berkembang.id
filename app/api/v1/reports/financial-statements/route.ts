@@ -9,6 +9,7 @@ import { financialReportRequestSchema } from "@/modules/accounting/period-schema
 import { ensurePeriodPosted, getBalanceSheet, getCashFlow, getIndicators, getNotesData } from "@/modules/accounting/period";
 import { getIncomeStatement } from "@/modules/accounting/reports";
 import { activeBusinessId } from "@/modules/ledger/ledger-repository";
+import { hasAnyEvidence } from "@/modules/documents/attachment-repository";
 import { renderFinancialStatementsPdf, statementFileName } from "@/modules/accounting/statement-pdf";
 import { monthBounds, monthsEndingAt } from "@/modules/accounting/warung";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
@@ -46,14 +47,16 @@ export async function POST(request: Request) {
 
     const client = await createServerSupabaseClient();
     const businessId = await activeBusinessId(user.id);
-    const [profile, incomeStatement, balanceSheet, cashFlow, notes, indicators] = await Promise.all([
-      client.from("businesses").select("name").eq("id", businessId).maybeSingle(),
-      getIncomeStatement(user.id, from, to, true),
-      getBalanceSheet(user.id, to, true),
-      getCashFlow(user.id, from, to),
-      getNotesData(user.id, from, to),
-      getIndicators(user.id, from, to),
-    ]);
+    const [profile, incomeStatement, balanceSheet, cashFlow, notes, indicators, evidence] =
+      await Promise.all([
+        client.from("businesses").select("name").eq("id", businessId).maybeSingle(),
+        getIncomeStatement(user.id, from, to, true),
+        getBalanceSheet(user.id, to, true),
+        getCashFlow(user.id, from, to),
+        getNotesData(user.id, from, to),
+        getIndicators(user.id, from, to),
+        hasAnyEvidence(),
+      ]);
 
     const pdf = await renderFinancialStatementsPdf({
       documentId: crypto.randomUUID(),
@@ -67,6 +70,7 @@ export async function POST(request: Request) {
       notes,
       indicators,
       includeIndicators,
+      hasEvidence: evidence,
     });
 
     const fileName = statementFileName(profile.data?.name ?? "Usaha Saya", { from, to });

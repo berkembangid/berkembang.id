@@ -13,6 +13,14 @@ export const documentTypes = [
   "laporan_keuangan",
   "utilitas",
   "akta_pendirian",
+  // Rak bukti transaksi dan rak alat & perjanjian. Jenis-jenis ini tidak
+  // pernah ditawarkan di layar unggah dokumen legalitas: mereka datang dari
+  // foto nota di kartu konfirmasi dan dari tombol "Tambah bukti".
+  "nota",
+  "kuitansi",
+  "bukti_transfer",
+  "sewa",
+  "perjanjian_pinjaman",
 ] as const;
 
 export const documentTypeSchema = z.enum(documentTypes);
@@ -102,6 +110,11 @@ export const documentTypeLabels: Record<DocumentType, string> = {
   laporan_keuangan: "Laporan Keuangan",
   utilitas: "Bukti Utilitas",
   akta_pendirian: "Akta Pendirian / SK",
+  nota: "Nota / Struk",
+  kuitansi: "Kuitansi",
+  bukti_transfer: "Bukti Transfer",
+  sewa: "Perjanjian Sewa",
+  perjanjian_pinjaman: "Perjanjian Pinjaman",
 };
 
 const fiveMiB = 5 * 1024 * 1024;

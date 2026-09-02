@@ -3,7 +3,7 @@ import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { buildBalanceSheet, buildCashFlow } from "@/modules/accounting/balance-sheet";
 import type { StatementDocumentData } from "@/modules/accounting/statement-document";
-import { accountingPolicyNotes, statementDisclaimer } from "@/modules/accounting/statement-document";
+import { accountingPolicyNotes, accountingPolicyNotesFor, evidencePolicyNote, statementDisclaimer } from "@/modules/accounting/statement-document";
 import { renderFinancialStatementsPdf, statementFileName } from "@/modules/accounting/statement-pdf";
 import type { IncomeStatementView } from "@/modules/accounting/reports";
 import { indicatorFormulaVersion } from "@/modules/accounting/statement-document";
@@ -108,6 +108,7 @@ function documentData(overrides: Partial<StatementDocumentData> = {}): Statement
       formulaVersion: indicatorFormulaVersion,
     })),
     includeIndicators: true,
+    hasEvidence: false,
     ...overrides,
   };
 }
@@ -292,5 +293,17 @@ describe("financial statement PDF", () => {
     expect(statementDisclaimer).toContain("bukan penilaian kelayakan pembiayaan");
     expect(accountingPolicyNotes.map((policy) => policy.title)).toContain("Pernyataan kepatuhan");
     expect(accountingPolicyNotes).toHaveLength(8);
+  });
+
+  it("only claims transactions are backed by evidence when they actually are", () => {
+    // Catatan atas laporan keuangan adalah tempat terakhir yang boleh memuat
+    // kalimat yang tidak bisa ditunjukkan buktinya.
+    const without = accountingPolicyNotesFor({ hasEvidence: false });
+    expect(without).toHaveLength(8);
+    expect(without.map((policy) => policy.title)).not.toContain(evidencePolicyNote.title);
+
+    const withEvidence = accountingPolicyNotesFor({ hasEvidence: true });
+    expect(withEvidence).toHaveLength(9);
+    expect(withEvidence.at(-1)?.body).toContain("bukti digital yang tertaut pada jurnal");
   });
 });

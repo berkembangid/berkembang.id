@@ -48,6 +48,8 @@ export type LedgerTransactionView = {
   quantity: number | null; unit: string | null; unitPriceIdr: number | null; paymentMethod: string | null;
   salesChannel: string | null; counterparty: string | null; status: "confirmed" | "cancelled";
   changeCount: number; createdAt: string; updatedAt: string;
+  /** Berapa bukti yang menempel. Dihitung bersama daftarnya, bukan per baris. */
+  attachmentCount: number;
 };
 
 export type DailyClosingView = {
@@ -82,6 +84,16 @@ export async function getLedgerReport(userId: string, range: LedgerRange): Promi
   if (changes.error) throw new LedgerOperationError("SERVICE_UNAVAILABLE", changes.error);
   const changeCounts = new Map<string, number>();
   for (const row of changes.data ?? []) changeCounts.set(row.transaction_id, (changeCounts.get(row.transaction_id) ?? 0) + 1);
+  // Bukti ikut dalam satu permintaan yang sama, dengan pola yang sama seperti
+  // riwayat perubahan. Menanyakannya per baris akan mengubah satu layar
+  // riwayat menjadi puluhan permintaan.
+  const attachments = transactionIds.length > 0
+    ? await client.from("document_attachments").select("target_id")
+        .eq("target_type", "transaction").in("target_id", transactionIds).is("removed_at", null)
+    : { data: [], error: null };
+  if (attachments.error) throw new LedgerOperationError("SERVICE_UNAVAILABLE", attachments.error);
+  const attachmentCounts = new Map<string, number>();
+  for (const row of attachments.data ?? []) attachmentCounts.set(row.target_id, (attachmentCounts.get(row.target_id) ?? 0) + 1);
   const transactions: LedgerTransactionView[] = (transactionResult.data ?? []).map((row) => {
     const direction = row.direction === "expense" || row.type === "keluar" ? "expense" : "income";
     const code = row.category_code ?? "other";
@@ -94,6 +106,7 @@ export async function getLedgerReport(userId: string, range: LedgerRange): Promi
       unitPriceIdr: row.unit_price_idr === null ? null : Number(row.unit_price_idr), paymentMethod: row.payment_method,
       salesChannel: row.sales_channel, counterparty: row.counterparty,
       status: row.ledger_status === "cancelled" ? "cancelled" : "confirmed", changeCount: changeCounts.get(row.id) ?? 0,
+      attachmentCount: attachmentCounts.get(row.id) ?? 0,
       createdAt: row.created_at ?? "", updatedAt: row.updated_at ?? "",
     };
   });

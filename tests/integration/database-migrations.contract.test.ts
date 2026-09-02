@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from "node:fs";
+import { documentTypes } from "@/modules/documents/document-schema";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -45,6 +46,8 @@ const expectedMigrations = [
   "0039_capture_text_only_path.sql",
   "0040_asset_keywords.sql",
   "0041_document_cabinet.sql",
+  "0042_document_attach_rpc.sql",
+  "0043_document_types.sql",
 ];
 
 describe("WP-03 migration contract", () => {
@@ -1061,5 +1064,43 @@ describe("document cabinet contract (0041)", () => {
   it("gives each issued report an identifier that cannot collide", () => {
     expect(migration).toContain("document_uid");
     expect(migration).toMatch(/document_uid text not null unique/);
+  });
+});
+
+describe("document type list contract (0043)", () => {
+  const migration = readFileSync(join(migrationDirectory, "0043_document_types.sql"), "utf8");
+
+  function sqlKnownTypes(): string[] {
+    const start = migration.indexOf("function private.known_document_types");
+    const body = migration.slice(start, migration.indexOf("$fn$;", start));
+    return [...body.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]);
+  }
+
+  it("accepts in the database every type the client is allowed to send", () => {
+    // Daftar ini pernah berbeda diam-diam: `utilitas` dan `akta_pendirian`
+    // lolos Zod lalu ditolak RPC, jadi dua ubin di layar unggah selalu gagal
+    // tanpa pemilik tahu sebabnya. Uji ini yang menjaganya tetap sama.
+    const known = sqlKnownTypes();
+    for (const docType of documentTypes) {
+      expect(known, docType).toContain(docType);
+    }
+  });
+
+  it("keeps the receipt shelf reachable", () => {
+    for (const docType of ["nota", "kuitansi", "bukti_transfer", "sewa", "perjanjian_pinjaman"]) {
+      expect(documentTypes as readonly string[], docType).toContain(docType);
+      expect(sqlKnownTypes(), docType).toContain(docType);
+    }
+  });
+
+  it("gives every allowed type a shelf that is certain, or asks the owner", () => {
+    // Tidak ada jenis yang mendarat di rak tanpa keputusan sadar: entah
+    // pemetaannya pasti, entah ditandai untuk dipilah pemilik.
+    const certainStart = migration.indexOf("function private.document_shelf_is_certain");
+    const certain = migration.slice(certainStart, migration.indexOf("$fn$;", certainStart));
+    const uncertain = ["utilitas", "qris", "laporan_keuangan", "foto_tempat_usaha"];
+    for (const docType of uncertain) {
+      expect(certain, docType).not.toContain(`'${docType}'`);
+    }
   });
 });

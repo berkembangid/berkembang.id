@@ -24,7 +24,7 @@ import {
 import { accountByCode } from "@/modules/accounting/coa";
 import { pilotCategoryTemplates } from "@/modules/accounting/templates";
 import {
-  accountingPolicyNotes,
+  accountingPolicyNotesFor,
   indicatorFormulaVersion,
   indicatorFormulas,
   statementDisclaimer,
@@ -352,7 +352,7 @@ function NotesPage({ data }: { data: StatementDocumentData }) {
       </Text>
 
       <Text style={styles.heading}>2. Ikhtisar kebijakan akuntansi</Text>
-      {accountingPolicyNotes.map((policy) => (
+      {accountingPolicyNotesFor({ hasEvidence: data.hasEvidence }).map((policy) => (
         <Text key={policy.title} style={styles.paragraph}>
           <Text style={{ fontFamily: "Helvetica-Bold" }}>{policy.title}. </Text>
           {policy.body}

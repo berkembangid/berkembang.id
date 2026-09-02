@@ -40,8 +40,17 @@ export type JournalEntryView = {
   memo: string | null;
   reason: string | null;
   reversesEntryId: string | null;
+  /**
+   * Catatan asal entry ini. Untuk `source = 'TRANSACTION'` isinya id transaksi,
+   * dan lewat inilah bukti yang menempel di transaksi bisa ditemukan dari sisi
+   * pembukuan. Sebelumnya kolom ini tidak pernah ikut terbaca, sehingga baris
+   * jurnal tidak punya jalan kembali ke catatan yang melahirkannya.
+   */
+  sourceId: string | null;
   lines: JournalLineView[];
   totalIdr: number;
+  /** Berapa bukti menempel pada catatan asalnya. */
+  attachmentCount: number;
 };
 
 export async function getJournal(userId: string, query: JournalQuery): Promise<{
@@ -53,7 +62,7 @@ export async function getJournal(userId: string, query: JournalQuery): Promise<{
 
   let entryQuery = client
     .from("journal_entries")
-    .select("id,entry_date,posted_at,source,memo,reason,reverses_entry_id")
+    .select("id,entry_date,posted_at,source,memo,reason,reverses_entry_id,source_id")
     .eq("business_id", businessId)
     .order("entry_date", { ascending: false })
     .order("posted_at", { ascending: false })
@@ -75,6 +84,24 @@ export async function getJournal(userId: string, query: JournalQuery): Promise<{
     .in("entry_id", page.map((row) => row.id))
     .order("line_order", { ascending: true });
   fail(lineResult.error);
+
+  // Bukti dihitung untuk seluruh halaman sekaligus, bukan per baris jurnal.
+  const transactionIds = page
+    .filter((row) => row.source === "TRANSACTION" && row.source_id)
+    .map((row) => row.source_id as string);
+  const attachmentCounts = new Map<string, number>();
+  if (transactionIds.length > 0) {
+    const attachmentResult = await client
+      .from("document_attachments")
+      .select("target_id")
+      .eq("target_type", "transaction")
+      .in("target_id", transactionIds)
+      .is("removed_at", null);
+    fail(attachmentResult.error);
+    for (const row of attachmentResult.data ?? []) {
+      attachmentCounts.set(row.target_id, (attachmentCounts.get(row.target_id) ?? 0) + 1);
+    }
+  }
 
   const linesByEntry = new Map<string, JournalLineView[]>();
   for (const line of lineResult.data ?? []) {
@@ -100,8 +127,10 @@ export async function getJournal(userId: string, query: JournalQuery): Promise<{
         memo: row.memo,
         reason: row.reason,
         reversesEntryId: row.reverses_entry_id,
+        sourceId: row.source_id,
         lines,
         totalIdr: lines.reduce((sum, line) => sum + line.debitIdr, 0),
+        attachmentCount: row.source_id ? attachmentCounts.get(row.source_id) ?? 0 : 0,
       };
     }),
   };

@@ -53,6 +53,32 @@ export const accountingPolicyNotes = [
   },
 ] as const;
 
+/**
+ * Kebijakan bukti transaksi (spek Bagian 8).
+ *
+ * Dipisahkan dari daftar tetap di atas karena kalimat ini hanya boleh muncul
+ * bila usahanya memang punya bukti yang tertaut. Menuliskannya pada laporan
+ * yang tidak punya satu pun lampiran adalah klaim yang tidak benar, dan
+ * catatan atas laporan keuangan adalah tempat terakhir yang boleh berisi
+ * kalimat yang tidak bisa ditunjukkan buktinya.
+ */
+export const evidencePolicyNote = {
+  title: "Bukti transaksi",
+  body: "Transaksi didukung bukti digital yang tertaut pada jurnal. Bukti disimpan pada penyimpanan privat entitas dan dapat ditelusuri dari setiap catatan jurnal yang bersangkutan.",
+} as const;
+
+/**
+ * Ikhtisar kebijakan yang benar-benar dicetak untuk satu laporan.
+ *
+ * Delapan kebijakan tetap selalu ada; yang kesembilan menyusul hanya bila ada
+ * buktinya.
+ */
+export function accountingPolicyNotesFor(options: { hasEvidence: boolean }) {
+  return options.hasEvidence
+    ? [...accountingPolicyNotes, evidencePolicyNote]
+    : [...accountingPolicyNotes];
+}
+
 
 /**
  * Versi rumus indikator. Harus sama persis dengan
@@ -144,4 +170,6 @@ export type StatementDocumentData = {
   notes: NotesPayload;
   indicators: IndicatorMonthlyRow[];
   includeIndicators: boolean;
+  /** Menentukan apakah kalimat kebijakan bukti ikut dicetak. */
+  hasEvidence: boolean;
 };

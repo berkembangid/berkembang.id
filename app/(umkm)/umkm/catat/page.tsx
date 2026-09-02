@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Mic, RefreshCw, Trash2, Edit2, Check, X,
-  Sparkles, Type, Square, Volume2, PenLine, RotateCcw, AlertCircle,
+  Sparkles, Type, Square, Volume2, PenLine, RotateCcw, AlertCircle, CheckCircle2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -25,6 +25,8 @@ import { InlineMoneyInput } from "@/components/warung/MoneyInput";
 import { categoryLabel, normalizeCategory, sectorFromAnswer } from "@/modules/accounting/templates";
 import { pilotSector, type AccountingSector } from "@/modules/accounting/coa";
 import { DashboardPage, PageHeader } from "@/components/dashboard";
+import { EvidencePrompt, type EvidenceTarget } from "@/components/warung/EvidencePrompt";
+import { nudgeCopy, nudgeLevelForBatch, type NudgeLevel } from "@/modules/ledger/evidence-nudge";
 
 // ───────── TYPES ─────────
 type Step = "ready" | "recording" | "uploading" | "processing" | "needs_review" | "saving" | "success" | "failed";
@@ -174,6 +176,12 @@ export default function CatatPage() {
   const [editFields, setEditFields] = useState<{ item: string; qty: string; nominal: number }>({ item: "", qty: "", nominal: 0 });
   const [saving, setSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  // Transaksi yang baru tersimpan. Satu nota belanja sering memuat beberapa
+  // barang yang tercatat sebagai beberapa transaksi, jadi fotonya menempel
+  // ke semuanya, bukan ke salah satu yang ditebak dari urutan.
+  const [savedTargets, setSavedTargets] = useState<EvidenceTarget[]>([]);
+  const [savedNudge, setSavedNudge] = useState<NudgeLevel>("none");
+  const [savedIsAsset, setSavedIsAsset] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -446,17 +454,33 @@ export default function CatatPage() {
       if (!captureId) {
         throw new CaptureClientError("CAPTURE_NOT_FOUND", "Draft catatan tidak ditemukan.", false);
       }
-      await confirmCapture(captureId, toDraftItems(items), `confirm:${captureId}`);
+      const saved = await confirmCapture(captureId, toDraftItems(items), `confirm:${captureId}`);
       localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
       setCaptureId(null);
 
     setToastMessage("✓ Catatan berhasil disimpan.");
       setStep("success");
+      setSavedTargets(
+        saved.transactionIds.map((id) => ({ targetType: "transaction" as const, targetId: id })),
+      );
+      // Ajakan memotret bertingkat: belanja kecil sehari-hari tidak diganggu,
+      // sementara alat dan pinjaman selalu diajak berbukti.
+      setSavedNudge(nudgeLevelForBatch(items.map((item) => ({
+        amountIdr: item.nominal,
+        categoryCode: item.category.emkmCategoryCode,
+        isLoanDisbursement:
+          item.category.emkmCategoryCode === 4 && item.category.emkmCategorySubtype === "4b",
+      }))));
+      setSavedIsAsset(items.some((item) => item.category.emkmCategoryCode === 8));
       setItems([]);
       setTranscription("");
       setEditableCaption("");
       setTypedText("");
-      setTimeout(() => { setToastMessage(""); router.push("/umkm/laporan"); }, 1200);
+      // Tidak langsung dialihkan ke laporan. Ajakan memotret nota hanya berguna
+      // selagi notanya masih di tangan; sedetik kemudian pemilik sudah pindah
+      // layar dan notanya masuk laci. Yang memutuskan pindah adalah pemilik.
+      setTimeout(() => setToastMessage(""), 1200);
+      if (saved.transactionIds.length === 0) router.push("/umkm/laporan");
     } catch (error) {
       setErrorMessage(captureErrorMessage(error, "Catatan belum tersimpan. Silakan periksa kembali."));
       setStep("needs_review");
@@ -703,11 +727,48 @@ export default function CatatPage() {
         )}
 
         {/* ── PROCESSING ─────────────────────────────────────────── */}
-        {(["uploading", "processing", "saving", "success"] as Step[]).includes(step) && (
+        {(["uploading", "processing", "saving"] as Step[]).includes(step) && (
           <div role="status" aria-live="polite" className="bg-white rounded-3xl p-10 border border-[#e3e9f0] shadow-card text-center space-y-4 animate-fade-in">
             <RefreshCw size={36} className="animate-spin text-[#0b5f86] mx-auto" />
-            <h2 className="font-headline text-lg font-bold text-[#1b2a3a]">{step === "uploading" ? "Mengirim rekaman dengan aman..." : step === "processing" ? "Membaca isi catatan..." : step === "saving" ? "Menyimpan catatan..." : "Catatan berhasil disimpan"}</h2>
-            <p className="text-xs text-[#4a6280]">{step === "uploading" ? "Jangan tutup halaman sampai rekaman selesai dikirim." : step === "processing" ? "Nominal dan jenis transaksi sedang disiapkan untuk Anda periksa." : step === "saving" ? "Data yang sudah Anda periksa sedang dimasukkan ke buku kas." : "Anda akan diarahkan ke laporan."}</p>
+            <h2 className="font-headline text-lg font-bold text-[#1b2a3a]">{step === "uploading" ? "Mengirim rekaman dengan aman..." : step === "processing" ? "Membaca isi catatan..." : "Menyimpan catatan..."}</h2>
+            <p className="text-xs text-[#4a6280]">{step === "uploading" ? "Jangan tutup halaman sampai rekaman selesai dikirim." : step === "processing" ? "Nominal dan jenis transaksi sedang disiapkan untuk Anda periksa." : "Data yang sudah Anda periksa sedang dimasukkan ke buku kas."}</p>
+          </div>
+        )}
+
+        {/* ── TERSIMPAN, LALU PINTU A ────────────────────────────── */}
+        {step === "success" && (
+          <div role="status" aria-live="polite" className="space-y-3 animate-fade-in">
+            <div className="rounded-3xl border border-[#bde5c8] bg-white p-8 text-center shadow-card">
+              <CheckCircle2 size={36} className="mx-auto text-[#1d6b39]" />
+              <h2 className="font-headline mt-3 text-lg font-bold text-[#1b2a3a]">Catatan berhasil disimpan</h2>
+              <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-[#4a6280]">
+                {savedTargets.length > 1
+                  ? `${savedTargets.length} catatan masuk ke buku kas.`
+                  : "Catatannya sudah masuk ke buku kas."}
+              </p>
+            </div>
+
+            {(() => {
+              const copy = nudgeCopy(savedNudge, savedIsAsset);
+              if (!copy) return null;
+              return (
+                <EvidencePrompt
+                  targets={savedTargets}
+                  docType={savedNudge === "clear" && !savedIsAsset ? "perjanjian_pinjaman" : "nota"}
+                  title={copy.title}
+                  hint={copy.hint}
+                  buttonLabel={copy.buttonLabel}
+                />
+              );
+            })()}
+
+            <button
+              type="button"
+              onClick={() => router.push("/umkm/laporan")}
+              className="min-h-11 w-full rounded-xl border border-[#e3e9f0] bg-white text-xs font-bold text-[#4a6280] transition-colors hover:bg-[#f7f9fb]"
+            >
+              Selesai
+            </button>
           </div>
         )}
 

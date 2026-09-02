@@ -6,7 +6,8 @@ import {
 } from "@/modules/accounting/accounting-errors";
 import { reportPeriodQuerySchema } from "@/modules/accounting/period-schema";
 import { getNotesData } from "@/modules/accounting/period";
-import { accountingPolicyNotes } from "@/modules/accounting/statement-document";
+import { accountingPolicyNotesFor } from "@/modules/accounting/statement-document";
+import { hasAnyEvidence } from "@/modules/documents/attachment-repository";
 
 export async function GET(request: Request) {
   try {
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
     return Response.json(
       {
         data: {
-          policies: accountingPolicyNotes,
+          policies: accountingPolicyNotesFor({ hasEvidence: await hasAnyEvidence() }),
           notes: await getNotesData(user.id, range.data.from, range.data.to),
         },
       },
