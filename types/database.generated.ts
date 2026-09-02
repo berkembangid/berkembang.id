@@ -4061,6 +4061,23 @@ export type Database = {
         }
         Returns: Json
       }
+      record_report_issue: {
+        Args: {
+          p_document_id: string
+          p_document_uid: string
+          p_report_kind: string
+          p_storage_path: string
+          p_file_size: number
+          p_checksum_sha256: string
+          p_name: string
+          p_period_from?: string
+          p_period_to?: string
+          p_audience?: string
+          p_institution_id?: string
+          p_formula_version?: string
+        }
+        Returns: Json
+      }
       register_fixed_asset: {
         Args: {
           p_name: string

@@ -202,7 +202,7 @@ function PageChrome({ data }: { data: StatementDocumentData }) {
         <Text>{statementDisclaimer}</Text>
         <View style={styles.footerRow}>
           <Text>
-            ID dokumen {data.documentId} · dicetak {longDate(data.printedAt.slice(0, 10))}
+            No. dokumen {data.documentUid} · dicetak {longDate(data.printedAt.slice(0, 10))}
           </Text>
           <Text render={({ pageNumber, totalPages }) => `Halaman ${pageNumber} dari ${totalPages}`} />
         </View>

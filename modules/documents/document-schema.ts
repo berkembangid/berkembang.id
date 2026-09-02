@@ -21,6 +21,10 @@ export const documentTypes = [
   "bukti_transfer",
   "sewa",
   "perjanjian_pinjaman",
+  // Rak arsip keluaran. Ditulis generator laporan, tidak pernah diunggah
+  // pemilik, dan namanya sama dengan `report_issues.report_kind`.
+  "pdf_sak_emkm",
+  "snapshot_dossier",
 ] as const;
 
 export const documentTypeSchema = z.enum(documentTypes);
@@ -115,6 +119,8 @@ export const documentTypeLabels: Record<DocumentType, string> = {
   bukti_transfer: "Bukti Transfer",
   sewa: "Perjanjian Sewa",
   perjanjian_pinjaman: "Perjanjian Pinjaman",
+  pdf_sak_emkm: "Laporan Keuangan (PDF)",
+  snapshot_dossier: "Ringkasan untuk Institusi",
 };
 
 const fiveMiB = 5 * 1024 * 1024;

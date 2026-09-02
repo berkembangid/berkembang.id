@@ -10,6 +10,9 @@ import { ensurePeriodPosted, getBalanceSheet, getCashFlow, getIndicators, getNot
 import { getIncomeStatement } from "@/modules/accounting/reports";
 import { activeBusinessId } from "@/modules/ledger/ledger-repository";
 import { hasAnyEvidence } from "@/modules/documents/attachment-repository";
+import { archiveIssuedReport } from "@/modules/accounting/report-archive";
+import { buildDocumentUid } from "@/modules/accounting/report-issue";
+import { indicatorFormulaVersion } from "@/modules/accounting/statement-document";
 import { renderFinancialStatementsPdf, statementFileName } from "@/modules/accounting/statement-pdf";
 import { monthBounds, monthsEndingAt } from "@/modules/accounting/warung";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
@@ -58,9 +61,18 @@ export async function POST(request: Request) {
         hasAnyEvidence(),
       ]);
 
+    // Nomor penerbitan dibuat SEBELUM berkasnya dirender, karena nomor itu
+    // tercetak di kaki setiap halaman. Berkas dan barisnya di arsip harus
+    // menyebut nomor yang sama persis; kalau tidak, nomor di kaki halaman
+    // tidak menunjuk apa pun.
+    const documentId = crypto.randomUUID();
+    const printedAt = new Date().toISOString();
+    const documentUid = buildDocumentUid(printedAt);
+
     const pdf = await renderFinancialStatementsPdf({
-      documentId: crypto.randomUUID(),
-      printedAt: new Date().toISOString(),
+      documentId,
+      documentUid,
+      printedAt,
       period: { from, to },
       comparisonPeriod: incomeStatement.previous?.period ?? null,
       businessName: profile.data?.name ?? "Usaha Saya",
@@ -74,6 +86,28 @@ export async function POST(request: Request) {
     });
 
     const fileName = statementFileName(profile.data?.name ?? "Usaha Saya", { from, to });
+
+    // Berkas yang keluar disimpan apa adanya. Laporan yang dibuat ulang bulan
+    // depan tidak akan sama dengan yang dikirim hari ini -- transaksi baru
+    // masuk, penyusutan bertambah, hitungan stok mengoreksi periode
+    // sebelumnya. Begitu berkasnya terkirim, satu-satunya cara mengetahui
+    // angka di dalamnya adalah menyimpan berkasnya.
+    //
+    // Kegagalan mengarsip tidak menahan unduhannya: pemilik menekan tombol
+    // untuk mendapatkan berkasnya, dan arsip adalah catatan kita.
+    await archiveIssuedReport({
+      userId: user.id,
+      businessId,
+      documentId,
+      documentUid,
+      reportKind: "pdf_sak_emkm",
+      name: fileName,
+      bytes: pdf,
+      periodFrom: from,
+      periodTo: to,
+      audience: "self",
+      formulaVersion: indicatorFormulaVersion,
+    });
     return new Response(pdf as BodyInit, {
       status: 200,
       headers: {
@@ -81,6 +115,9 @@ export async function POST(request: Request) {
         "Content-Length": String(pdf.byteLength),
         "Cache-Control": "private, no-store",
         "Content-Disposition": `attachment; filename="${fileName}"`,
+        // Nomor yang tercetak di kaki halaman, supaya pemanggil bisa
+        // mencocokkan berkas ini dengan barisnya di arsip.
+        "X-Document-Uid": documentUid,
       },
     });
   } catch (error) {

@@ -109,6 +109,7 @@ function documentData(overrides: Partial<StatementDocumentData> = {}): Statement
     })),
     includeIndicators: true,
     hasEvidence: false,
+    documentUid: "BRK-20260902-ABCDEFGH",
     ...overrides,
   };
 }

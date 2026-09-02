@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -48,6 +49,7 @@ const expectedMigrations = [
   "0041_document_cabinet.sql",
   "0042_document_attach_rpc.sql",
   "0043_document_types.sql",
+  "0044_report_archive.sql",
 ];
 
 const coreTables = [
@@ -2947,6 +2949,71 @@ async function verifyAccountingPeriodReports() {
     `select public.attach_document('${rpcDocument}', 'gudang', '${purchaseTx.id}')`,
     "22023",
   );
+
+  // ---------------------------------------------------------------------
+  // Rak E: arsip laporan yang pernah diterbitkan (0044)
+  // ---------------------------------------------------------------------
+  const issueDocumentId = randomUUID();
+  const issueBusiness = (await client.query(
+    `select private.get_or_create_user_business('${userB}') as value`,
+  )).rows[0].value;
+  const issuePathFor = (documentId) => `${userB}/${issueBusiness}/${documentId}/${documentId}.pdf`;
+  const issuePath = issuePathFor(issueDocumentId);
+  const issueChecksum = "a".repeat(64);
+
+  const issued = await asAuthenticatedCommitted(
+    userB,
+    `select public.record_report_issue($1, $2, 'pdf_sak_emkm', $3, 12345, $4,
+      'Laporan Keuangan Sep 2026', '2026-03-01', '2026-08-31', 'self', null, 'indikator-v1') as value`,
+    [issueDocumentId, "BRK-20260903-ABCD1234", issuePath, issueChecksum],
+  );
+  assert.equal(issued.rows[0].value.ok, true, "issuing a report must record it");
+
+  // Berkasnya mendarat di rak arsip tanpa diberi tahu, dan menjadi dokumen
+  // yang bisa diunduh ulang.
+  const issuedDocument = (await client.query(
+    `select doc_class, needs_class_review, storage_path, checksum_sha256, mime_type
+     from public.documents where id = '${issueDocumentId}'`,
+  )).rows[0];
+  assert.equal(issuedDocument.doc_class, "arsip_keluaran", "an issued report belongs on the archive shelf");
+  assert.equal(issuedDocument.needs_class_review, false, "the owner must not be asked to sort their own report");
+  assert.equal(issuedDocument.checksum_sha256, issueChecksum, "the bytes that went out are the bytes recorded");
+  assert.equal(issuedDocument.mime_type, "application/pdf");
+
+  // Nomor penerbitan tidak pernah bertabrakan: itu yang dikutip pembacanya.
+  const duplicateId = randomUUID();
+  await expectAuthenticatedRejected(
+    userB,
+    `select public.record_report_issue('${duplicateId}', 'BRK-20260903-ABCD1234', 'pdf_sak_emkm',
+      '${issuePathFor(duplicateId)}', 12345, '${issueChecksum}', 'Laporan kedua')`,
+    "23505",
+  );
+
+  // Jalur simpan di luar ruang pemilik ditolak. Tanpa ini satu baris arsip
+  // bisa dibuat menunjuk berkas usaha lain.
+  const strayId = randomUUID();
+  await expectAuthenticatedRejected(
+    userB,
+    `select public.record_report_issue('${strayId}', 'BRK-20260903-STRAY001', 'pdf_sak_emkm',
+      '${userA}/${issueBusiness}/${strayId}/${strayId}.pdf', 999, '${issueChecksum}', 'Laporan nyasar')`,
+    "22023",
+  );
+
+  // Jenis laporan di luar dua yang dikenal ditolak.
+  const strangeKindId = randomUUID();
+  await expectAuthenticatedRejected(
+    userB,
+    `select public.record_report_issue('${strangeKindId}', 'BRK-20260903-XX000001', 'ringkasan_bebas',
+      '${issuePathFor(strangeKindId)}', 100, '${issueChecksum}', 'Laporan asal')`,
+    "22023",
+  );
+
+  // Arsip usaha lain tidak pernah terbaca.
+  const foreignIssues = await asAuthenticated(
+    userA,
+    `select count(*)::int as value from public.report_issues where document_uid = 'BRK-20260903-ABCD1234'`,
+  );
+  assert.equal(Number(foreignIssues.rows[0].value), 0, "one business must never see another's issued reports");
 
   // Jurnal tetap tidak bisa disentuh setelah semua ini.
   await expectRejected(

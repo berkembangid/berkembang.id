@@ -172,4 +172,9 @@ export type StatementDocumentData = {
   includeIndicators: boolean;
   /** Menentukan apakah kalimat kebijakan bukti ikut dicetak. */
   hasEvidence: boolean;
+  /**
+   * Nomor penerbitan yang tercetak di kaki tiap halaman. Nomor inilah yang
+   * dikutip pembaca berkas ini, bukan id internalnya.
+   */
+  documentUid: string;
 };

@@ -48,6 +48,7 @@ const expectedMigrations = [
   "0041_document_cabinet.sql",
   "0042_document_attach_rpc.sql",
   "0043_document_types.sql",
+  "0044_report_archive.sql",
 ];
 
 describe("WP-03 migration contract", () => {
@@ -1070,10 +1071,23 @@ describe("document cabinet contract (0041)", () => {
 describe("document type list contract (0043)", () => {
   const migration = readFileSync(join(migrationDirectory, "0043_document_types.sql"), "utf8");
 
+  /**
+   * Definisi TERAKHIR dari daftar jenis dokumen, bukan yang ada di `0043`.
+   *
+   * Versi pertama uji ini membaca berkas `0043` saja, dan `0044` yang menulis
+   * ulang fungsinya lolos begitu saja -- persis jenis pergeseran yang uji ini
+   * ada untuk mencegahnya. Yang berlaku adalah `create or replace` terakhir.
+   */
   function sqlKnownTypes(): string[] {
-    const start = migration.indexOf("function private.known_document_types");
-    const body = migration.slice(start, migration.indexOf("$fn$;", start));
-    return [...body.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]);
+    const files = readdirSync(migrationDirectory).filter((name) => name.endsWith(".sql")).sort();
+    let latest = "";
+    for (const file of files) {
+      const sql = readFileSync(join(migrationDirectory, file), "utf8");
+      const start = sql.lastIndexOf("function private.known_document_types");
+      if (start >= 0) latest = sql.slice(start, sql.indexOf("$fn$;", start));
+    }
+    expect(latest, "known_document_types must exist in some migration").not.toBe("");
+    return [...latest.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]);
   }
 
   it("accepts in the database every type the client is allowed to send", () => {
@@ -1096,11 +1110,58 @@ describe("document type list contract (0043)", () => {
   it("gives every allowed type a shelf that is certain, or asks the owner", () => {
     // Tidak ada jenis yang mendarat di rak tanpa keputusan sadar: entah
     // pemetaannya pasti, entah ditandai untuk dipilah pemilik.
-    const certainStart = migration.indexOf("function private.document_shelf_is_certain");
-    const certain = migration.slice(certainStart, migration.indexOf("$fn$;", certainStart));
+    const files = readdirSync(migrationDirectory).filter((name) => name.endsWith(".sql")).sort();
+    let certain = "";
+    for (const file of files) {
+      const sql = readFileSync(join(migrationDirectory, file), "utf8");
+      const start = sql.lastIndexOf("function private.document_shelf_is_certain");
+      if (start >= 0) certain = sql.slice(start, sql.indexOf("$fn$;", start));
+    }
     const uncertain = ["utilitas", "qris", "laporan_keuangan", "foto_tempat_usaha"];
     for (const docType of uncertain) {
       expect(certain, docType).not.toContain(`'${docType}'`);
     }
+  });
+});
+
+describe("report archive contract (0044)", () => {
+  const migration = readFileSync(join(migrationDirectory, "0044_report_archive.sql"), "utf8");
+
+  it("keeps an issued report on the archive shelf without asking the owner", () => {
+    expect(migration).toContain("'pdf_sak_emkm', 'snapshot_dossier'");
+    expect(migration).toContain("then 'arsip_keluaran'");
+  });
+
+  it("uses the same names for a document and its archive row", () => {
+    // `report_issues.report_kind` dan `documents.doc_type` menyebut hal yang
+    // sama; dua nama berbeda untuk satu hal akan bercabang cepat atau lambat.
+    for (const kind of ["pdf_sak_emkm", "snapshot_dossier"]) {
+      expect(documentTypes as readonly string[], kind).toContain(kind);
+    }
+  });
+
+  it("refuses to file a report outside its owner's own space", () => {
+    // Tanpa pemeriksaan ini satu baris arsip bisa dibuat menunjuk berkas
+    // usaha lain, dan unduh ulang akan menyajikan berkas orang.
+    expect(migration).toContain("REPORT_STORAGE_PATH_INVALID");
+  });
+
+  it("writes the document row and the archive row together", () => {
+    // Kalau salah satunya bisa gagal sendiri, arsipnya menunjuk berkas yang
+    // tidak ada atau berkasnya tidak pernah muncul di lemari.
+    const fn = migration.slice(migration.indexOf("function public.record_report_issue"));
+    expect(fn).toContain("insert into public.documents");
+    expect(fn).toContain("insert into public.report_issues");
+  });
+
+  it("stores the checksum of the bytes that actually went out", () => {
+    expect(migration).toContain("checksum_sha256");
+    expect(migration).toMatch(/\^\[a-f0-9\]\{64\}\$/);
+  });
+
+  it("keeps the write path a security definer RPC, not a table grant", () => {
+    expect(migration).toContain("security definer");
+    expect(migration).toContain("grant execute on function public.record_report_issue");
+    expect(migration).not.toMatch(/grant insert on public\.report_issues/);
   });
 });

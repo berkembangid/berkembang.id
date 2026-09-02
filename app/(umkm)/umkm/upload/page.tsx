@@ -12,6 +12,7 @@ import {
   Upload,
 } from "lucide-react";
 import { DocumentOcrReviewDialog } from "@/components/documents/DocumentOcrReviewDialog";
+import { ReportArchivePanel } from "@/components/warung/ReportArchivePanel";
 import { DocumentUploadConsentDialog } from "@/components/documents/DocumentUploadConsentDialog";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { supabase } from "@/lib/supabase";
@@ -505,6 +506,22 @@ export default function UploadPage() {
           })}
         </div>
       )}
+
+      {/* Rak E. Ditempatkan di halaman Dokumen -- lemarinya -- bukan sebagai
+          menu baru, supaya jumlah menu tidak bertambah lagi. */}
+      <section aria-labelledby="arsip-laporan" className="space-y-3">
+        <div>
+          <h2 id="arsip-laporan" className="text-sm font-bold text-[#1b2a3a]">
+            Laporan yang pernah dibuat
+          </h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
+            Berkas yang Anda unduh tersimpan di sini persis seperti saat dibuat, lengkap dengan
+            nomornya. Kalau ada yang menanyakan angka di laporan lama, ini yang dibuka.
+          </p>
+        </div>
+        <ReportArchivePanel />
+      </section>
+
       {ocrReview && (
         <DocumentOcrReviewDialog
           docType={ocrReview.docType}
