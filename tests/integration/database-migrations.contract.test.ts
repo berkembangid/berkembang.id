@@ -417,7 +417,11 @@ describe("WP-06 private-document contract", () => {
     expect(page).toContain("completeDocumentVersion");
     expect(page).toContain("confirmDocumentExtraction");
     expect(page).toContain("retryDocumentExtraction");
-    expect(page).toContain("Identitas & Legalitas");
+    // Judul rak datang dari `cabinet-shelves`, bukan ditulis di halaman. Uji
+    // ini dulu mematok teks "Identitas & Legalitas" dan ikut merah setiap kali
+    // salinan katanya berubah, padahal yang perlu dijaga adalah strukturnya.
+    expect(page).toContain("cabinetShelves");
+    expect(page).toContain("uploadCardsFor");
     expect(page).toContain("DocumentUploadConsentDialog");
     expect(consentDialog).toContain("Persetujuan ini hanya berlaku untuk file");
     expect(consentDialog).toContain("Saya sudah membaca dan menyetujui");

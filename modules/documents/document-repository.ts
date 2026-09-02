@@ -127,6 +127,21 @@ export type DocumentView = {
   rejectionReason: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Rak tempat dokumen ini berada (`0041`). */
+  docClass: string | null;
+  /** Metadata izin, ditampilkan di kartu rak "Izin usaha" (`0041`). */
+  docNumber: string | null;
+  issuer: string | null;
+  issuedOn: string | null;
+  validUntil: string | null;
+  assuranceLevel: string;
+  needsClassReview: boolean;
+  /**
+   * Dokumen tanpa berkas adalah nomor yang diketik pemilik, bukan izin yang
+   * sudah difoto. Layar harus bisa membedakannya, dan mesin kesiapan tidak
+   * menghitungnya (`0045`).
+   */
+  hasFile: boolean;
   currentExtraction: CurrentDocumentExtractionView | null;
   versions: DocumentVersionView[];
 };
@@ -310,6 +325,14 @@ function parseDocumentBase(
     rejectionReason: row.rejection_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    docClass: row.doc_class,
+    docNumber: row.doc_number,
+    issuer: row.issuer,
+    issuedOn: row.issued_on,
+    validUntil: row.valid_until,
+    assuranceLevel: row.assurance_level,
+    needsClassReview: row.needs_class_review,
+    hasFile: row.storage_path !== null,
   };
 }
 
