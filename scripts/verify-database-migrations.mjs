@@ -45,6 +45,7 @@ const expectedMigrations = [
   "0038_sector_aware_templates.sql",
   "0039_capture_text_only_path.sql",
   "0040_asset_keywords.sql",
+  "0041_document_cabinet.sql",
 ];
 
 const coreTables = [
@@ -2670,6 +2671,166 @@ async function verifyAccountingPeriodReports() {
     `update public.profiles set sektor_usaha = $1 where id = (
        select legacy_profile_id from public.businesses where id = '${businessB}')`,
     [originalSector],
+  );
+
+  // ---------------------------------------------------------------------
+  // Lemari dokumen: bukti yang menempel ke jurnal.
+  // ---------------------------------------------------------------------
+  // Setiap dokumen punya rak. Menebak rak berarti menebak kebijakan
+  // berbaginya, dan salah tebak di sini berarti KTP ikut terkirim.
+  assert.equal(
+    await scalar("select count(*)::int as value from public.documents where doc_class is null"),
+    0,
+    "every document must land on a shelf; guessing a shelf guesses a sharing policy",
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.documents
+      where doc_type in ('ktp', 'npwp') and doc_class <> 'identitas'
+    `),
+    0,
+    "identity documents must never sit outside the identity shelf",
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.documents
+      where doc_type in ('ktp', 'npwp', 'nib', 'pirt', 'halal') and needs_class_review
+    `),
+    0,
+    "a document whose shelf is certain must not be sent back to the owner to sort",
+  );
+
+  // Rak terisi sendiri untuk dokumen yang baru masuk, bukan hanya baris lama.
+  const shelfProbe = (await client.query(
+    `insert into public.documents (business_id, user_id, name, doc_type, status)
+     values ('${businessB}', '${userB}', 'Struk baru', 'struk', 'uploaded')
+     returning doc_class, needs_class_review`,
+  )).rows[0];
+  assert.equal(shelfProbe.doc_class, "bukti_transaksi", "a new upload must land on a shelf without being told");
+  assert.equal(shelfProbe.needs_class_review, false, "a known type must not be sent back to the owner to sort");
+
+  // Kelengkapan sektor terisi dan bertingkat.
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.document_requirements
+      where sector = 'PERDAGANGAN_KULINER' and requirement = 'wajib'
+    `),
+    4,
+    "pangan olahan has four mandatory documents",
+  );
+
+  // Bukti menempel ke transaksi DAN ke alat sekaligus: satu dokumen, dua
+  // sasaran. Inilah kenapa tautannya tabel tersendiri, bukan kolom di
+  // transaksi.
+  const anyAsset = (await client.query(
+    `select id, source_transaction_id from public.fixed_assets
+     where business_id = '${businessB}' and source_transaction_id is not null limit 1`,
+  )).rows[0];
+  assert.ok(anyAsset, "the ledger scenario must have produced an asset from a purchase");
+
+  const proofDocument = (await client.query(
+    `insert into public.documents (business_id, user_id, name, doc_type, doc_class, status)
+     values ('${businessB}', '${userB}', 'Nota etalase', 'nota', 'bukti_transaksi', 'uploaded')
+     returning id`,
+  )).rows[0].id;
+
+  await client.query(
+    `insert into public.document_attachments (business_id, document_id, target_type, target_id, created_by)
+     values ('${businessB}', '${proofDocument}', 'transaction', '${anyAsset.source_transaction_id}', '${userB}'),
+            ('${businessB}', '${proofDocument}', 'fixed_asset', '${anyAsset.id}', '${userB}')`,
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.document_attachments where document_id = '${proofDocument}'`),
+    2,
+    "one document may prove both the purchase and the asset it created",
+  );
+
+  // Sasaran yang sama tidak bisa ditempeli dokumen yang sama dua kali.
+  await expectRejected(
+    `insert into public.document_attachments (business_id, document_id, target_type, target_id)
+     values ('${businessB}', '${proofDocument}', 'transaction', '${anyAsset.source_transaction_id}')`,
+    "23505",
+  );
+
+  // Bukti tidak pernah disunting dan tidak pernah dihapus.
+  await expectRejected(
+    `update public.document_attachments set target_type = 'loan' where document_id = '${proofDocument}'`,
+    "P0001",
+  );
+  await expectRejected(
+    `delete from public.document_attachments where document_id = '${proofDocument}'`,
+    "P0001",
+  );
+
+  // Yang boleh: menandainya lepas, dengan alasan.
+  await client.query(
+    `update public.document_attachments
+     set removed_at = now(), removed_reason = 'Nota salah tempel'
+     where document_id = '${proofDocument}' and target_type = 'fixed_asset'`,
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.document_attachments
+      where document_id = '${proofDocument}' and removed_at is not null
+    `),
+    1,
+    "detaching is recorded, never erased",
+  );
+  await expectRejected(
+    `update public.document_attachments set removed_reason = 'x'
+     where document_id = '${proofDocument}' and target_type = 'fixed_asset'`,
+    "P0001",
+  );
+  // Alasan lepas wajib bermakna; satu huruf bukan alasan.
+  await expectRejected(
+    `update public.document_attachments set removed_at = now(), removed_reason = 'x'
+     where document_id = '${proofDocument}' and target_type = 'transaction'`,
+    "23514",
+  );
+
+  // Membalikkan transaksi TIDAK menghapus buktinya. Nota tetap bukti bahwa
+  // uangnya pernah keluar, apa pun yang terjadi pada jurnalnya kemudian.
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.cancel_ledger_transaction($1, 'Uji: bukti harus tetap ada')",
+    [anyAsset.source_transaction_id],
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.document_attachments where document_id = '${proofDocument}'`),
+    2,
+    "reversing a transaction must never destroy the evidence that it happened",
+  );
+
+  // Arsip keluaran: satu ID per penerbitan, tidak pernah bertabrakan.
+  await client.query(
+    `insert into public.report_issues (business_id, document_id, report_kind, document_uid, audience, formula_version)
+     values ('${businessB}', '${proofDocument}', 'pdf_sak_emkm', 'uji-arsip-1', 'self', 'indikator-v1')`,
+  );
+  await expectRejected(
+    `insert into public.report_issues (business_id, report_kind, document_uid, audience)
+     values ('${businessB}', 'pdf_sak_emkm', 'uji-arsip-1', 'self')`,
+    "23505",
+  );
+  await expectRejected(
+    `insert into public.report_issues (business_id, report_kind, document_uid, audience)
+     values ('${businessB}', 'snapshot_dossier', 'uji-arsip-2', 'institution')`,
+    "23514",
+  );
+
+  // Isolasi: lemari usaha lain tidak pernah terbaca, dan tabelnya tidak dapat
+  // ditulis dari sesi pemilik.
+  for (const table of ["document_attachments", "document_reminders", "report_issues"]) {
+    const foreign = await asAuthenticated(
+      userA,
+      `select count(*)::int as value from public.${table} where business_id = '${businessB}'`,
+    );
+    assert.equal(Number(foreign.rows[0].value), 0, `${table} must not leak across businesses`);
+  }
+  await expectAuthenticatedRejected(
+    userB,
+    `insert into public.document_attachments (business_id, document_id, target_type, target_id)
+     values ('${businessB}', '${proofDocument}', 'transaction', '${anyAsset.source_transaction_id}')`,
+    "42501",
   );
 
   // Jurnal tetap tidak bisa disentuh setelah semua ini.

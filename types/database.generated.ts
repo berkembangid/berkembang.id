@@ -891,6 +891,64 @@ export type Database = {
           }
         ]
       }
+      document_attachments: {
+        Row: {
+          id: string
+          business_id: string
+          document_id: string
+          target_type: string
+          target_id: string
+          created_by: string | null
+          created_at: string
+          removed_at: string | null
+          removed_reason: string | null
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          document_id: string
+          target_type: string
+          target_id: string
+          created_by?: string | null
+          created_at?: string
+          removed_at?: string | null
+          removed_reason?: string | null
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          document_id?: string
+          target_type?: string
+          target_id?: string
+          created_by?: string | null
+          created_at?: string
+          removed_at?: string | null
+          removed_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_attachments_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_attachments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_attachments_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       document_extractions: {
         Row: {
           id: string
@@ -962,6 +1020,87 @@ export type Database = {
             referencedColumns: ["id"]
           }
         ]
+      }
+      document_reminders: {
+        Row: {
+          id: string
+          business_id: string
+          document_id: string | null
+          remind_on: string
+          kind: string
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          document_id?: string | null
+          remind_on: string
+          kind: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          document_id?: string | null
+          remind_on?: string
+          kind?: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_reminders_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_reminders_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      document_requirements: {
+        Row: {
+          id: string
+          sector: string
+          doc_type: string
+          requirement: string
+          order_index: number
+          mission_key: string | null
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          sector: string
+          doc_type: string
+          requirement: string
+          order_index?: number
+          mission_key?: string | null
+          note?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          sector?: string
+          doc_type?: string
+          requirement?: string
+          order_index?: number
+          mission_key?: string | null
+          note?: string | null
+          created_at?: string
+        }
+        Relationships: []
       }
       document_upload_sessions: {
         Row: {
@@ -1185,6 +1324,17 @@ export type Database = {
           rejection_code: string | null
           rejection_reason: string | null
           legacy_public_url_sha256: string | null
+          doc_class: string | null
+          doc_number: string | null
+          issuer: string | null
+          issued_on: string | null
+          valid_until: string | null
+          name_on_doc: string | null
+          assurance_level: string
+          attested_by: string | null
+          attested_at: string | null
+          needs_class_review: boolean
+          content_hash: string | null
         }
         Insert: {
           id?: string
@@ -1206,6 +1356,17 @@ export type Database = {
           rejection_code?: string | null
           rejection_reason?: string | null
           legacy_public_url_sha256?: string | null
+          doc_class?: string | null
+          doc_number?: string | null
+          issuer?: string | null
+          issued_on?: string | null
+          valid_until?: string | null
+          name_on_doc?: string | null
+          assurance_level?: string
+          attested_by?: string | null
+          attested_at?: string | null
+          needs_class_review?: boolean
+          content_hash?: string | null
         }
         Update: {
           id?: string
@@ -1227,8 +1388,26 @@ export type Database = {
           rejection_code?: string | null
           rejection_reason?: string | null
           legacy_public_url_sha256?: string | null
+          doc_class?: string | null
+          doc_number?: string | null
+          issuer?: string | null
+          issued_on?: string | null
+          valid_until?: string | null
+          name_on_doc?: string | null
+          assurance_level?: string
+          attested_by?: string | null
+          attested_at?: string | null
+          needs_class_review?: boolean
+          content_hash?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "documents_attested_by_fkey"
+            columns: ["attested_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "documents_business_id_fkey"
             columns: ["business_id"]
@@ -2854,6 +3033,80 @@ export type Database = {
             columns: ["rule_set_id"]
             isOneToOne: false
             referencedRelation: "readiness_rule_sets"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      report_issues: {
+        Row: {
+          id: string
+          business_id: string
+          document_id: string | null
+          report_kind: string
+          period_from: string | null
+          period_to: string | null
+          document_uid: string
+          audience: string
+          institution_id: string | null
+          formula_version: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          document_id?: string | null
+          report_kind: string
+          period_from?: string | null
+          period_to?: string | null
+          document_uid: string
+          audience?: string
+          institution_id?: string | null
+          formula_version?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          document_id?: string | null
+          report_kind?: string
+          period_from?: string | null
+          period_to?: string | null
+          document_uid?: string
+          audience?: string
+          institution_id?: string | null
+          formula_version?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_issues_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_issues_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_issues_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_issues_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
             referencedColumns: ["id"]
           }
         ]

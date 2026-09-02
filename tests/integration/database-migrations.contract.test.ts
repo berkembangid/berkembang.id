@@ -44,6 +44,7 @@ const expectedMigrations = [
   "0038_sector_aware_templates.sql",
   "0039_capture_text_only_path.sql",
   "0040_asset_keywords.sql",
+  "0041_document_cabinet.sql",
 ];
 
 describe("WP-03 migration contract", () => {
@@ -1008,5 +1009,57 @@ describe("owner dictionary and asset keywords contract (0040)", () => {
     expect(laporan).toContain("closingTargetDate");
     // Tanggalnya ikut di tautan; penanda "1" saja akan selalu menutup hari ini.
     expect(beranda).toContain("tutup-kas=${closingTargetDate(new Date())}");
+  });
+});
+
+describe("document cabinet contract (0041)", () => {
+  const migration = readFileSync(join(migrationDirectory, "0041_document_cabinet.sql"), "utf8");
+
+  it("gives every document a shelf, including the ones uploaded tomorrow", () => {
+    // Backfill hanya mengurus masa lalu. Jalur tulis dokumen ada lebih dari
+    // satu, dan satu yang lupa mengisi rak menghasilkan dokumen yang raknya
+    // harus ditebak layar -- salah tebak berarti KTP ikut terkirim.
+    expect(migration).toContain("private.document_shelf_for_type");
+    expect(migration).toContain("before insert on public.documents");
+    expect(migration).toContain("DOCUMENT_BACKFILL_INCOMPLETE");
+  });
+
+  it("keeps identity and outgoing reports on separate shelves", () => {
+    for (const shelf of ["identitas", "legalitas", "bukti_transaksi", "aset_kontrak", "arsip_keluaran"]) {
+      expect(migration, shelf).toContain(`'${shelf}'`);
+    }
+  });
+
+  it("treats evidence the way it treats journals: never edited, never deleted", () => {
+    // Jurnal tidak bisa disunting; buktinya tidak boleh lebih longgar, atau
+    // catatan bisa berubah arti setelah dibaca institusi.
+    expect(migration).toContain("document_attachment_is_immutable");
+    expect(migration).toContain("removed_reason");
+    expect(migration).toContain("removed_at");
+  });
+
+  it("routes ownership through the strict accounting helper", () => {
+    // `private.business_role` pernah mengembalikan 'owner' tanpa syarat.
+    expect(migration).toContain("private.accounting_business_access");
+    // Disebut di catatan kepala berkas sebagai yang DIHINDARI; yang dilarang
+    // adalah memanggilnya.
+    expect(migration).not.toMatch(/private\.business_role\s*\(/);
+  });
+
+  it("keeps every new table select-only for owners", () => {
+    for (const table of [
+      "document_attachments",
+      "document_requirements",
+      "document_reminders",
+      "report_issues",
+    ]) {
+      expect(migration, table).toMatch(new RegExp(`grant select on public\.${table} to authenticated`));
+      expect(migration, table).not.toMatch(new RegExp(`grant insert on public\.${table} to authenticated`));
+    }
+  });
+
+  it("gives each issued report an identifier that cannot collide", () => {
+    expect(migration).toContain("document_uid");
+    expect(migration).toMatch(/document_uid text not null unique/);
   });
 });
