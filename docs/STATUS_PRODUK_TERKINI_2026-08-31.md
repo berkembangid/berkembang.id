@@ -572,6 +572,58 @@ meninggalkan baris arsip yang menjanjikan berkas yang tidak pernah ada, dan
 pemilik baru mengetahuinya tepat ketika berkas itu diminta. Kegagalan mengarsip
 juga tidak pernah menahan unduhannya.
 
+### 4.5.3 Lemari lima rak, profil, dan hak atas data — Tahap D-P (3 September 2026)
+
+Ronde perbaikan setelah tinjauan layar. Migrasi `0045`–`0046`.
+
+**Halaman Dokumen** menjadi lima rak berurutan sesuai perjalanan pemilik:
+Identitas saya → Izin usaha → Nota & bukti → Alat & perjanjian → Laporan yang
+pernah dibuat. Kelompok lama ("Keuangan & Transaksi", "Bukti Pendukung Usaha")
+menyusun berkas menurut cara bank memandangnya, bukan cara pemilik mencarinya.
+
+Dua kartu unggah dibubarkan. **Laporan Keuangan** karena produk ini
+MENGHASILKAN laporan dari catatan harian; menerima unggahan laporan jadi
+menyediakan jalan pintas yang melewati intinya, dan angka yang masuk lewat situ
+tidak bisa ditelusuri ke satu transaksi pun. **Riwayat QRIS** karena itu sumber
+data untuk rekonsiliasi, bukan dokumen. Berkas yang telanjur diunggah dipindah,
+tidak dihapus.
+
+Status wajib/disarankan dibaca dari `document_requirements`, bukan ditulis
+tangan. Lencana merah "Wajib" menjadi **"Fondasi"** amber: merah di produk ini
+hanya untuk kegagalan sistem, dan dokumen yang belum ada bukan kerusakan.
+Kartu Akta Pendirian hanya tampil untuk badan usaha. Unggah menjadi kamera-dulu
+dengan galeri sebagai pilihan kedua, memakai kompresi klien D-A.
+
+**Profil** menjadi empat blok. Kolom ketik NIB dihapus dan diganti blok
+"Ringkasan legalitas" read-only yang membaca metadata dokumen — sebelumnya nomor
+di profil dan berkas di halaman Dokumen adalah dua tempat menyimpan hal yang
+sama dan keduanya bisa berbeda. Kolom baru: bentuk usaha, tahun mulai usaha,
+jumlah orang yang bekerja, kanal penjualan. Badge "Akun Terverifikasi" menjadi
+"Email terverifikasi" — itu satu-satunya yang benar-benar kita ketahui.
+
+**Klaim bukanlah bukti.** Nomor NIB ketikan yang dimigrasikan menjadi dokumen
+tanpa berkas TIDAK dihitung mesin kesiapan; `recalculate_my_readiness` hanya
+menghitung dokumen yang punya `storage_path`. Tanpa itu, mengetik nomor akan
+menaikkan tingkat kesiapan tanpa satu berkas pun pernah diunggah.
+
+**Pemetaan sektor** menjadi tabel eksplisit (`modules/accounting/sector-mapping.ts`).
+Sebelumnya jembatannya satu baris tersembunyi, sehingga pemilik kerajinan
+mendapat kategori "bahan baku pangan" tanpa peringatan. Sekarang yang belum
+punya template jatuh ke template dasar sambil mencatat peringatan.
+
+**"17/100" diganti tangga:** "Perunggu — 3 dari 7 fondasi lengkap". Nilai
+ulangan memberi tahu pemilik bahwa ia gagal tanpa memberi tahu apa yang kurang.
+Angkanya tetap tersimpan dan tetap dikirim ke institusi. Kamus lint mendapat
+kategori baru untuk kata yang dilarang hanya di teks yang dibaca pemilik.
+
+**Hak atas data.** Dua tombol baru di Profil: "Unduh semua data saya" (ZIP
+berisi profil, jurnal CSV, daftar dan berkas dokumen) dan "Hapus akun"
+(konfirmasi dua langkah). Permintaan hapus mencabut setiap izin akses institusi
+SEKETIKA; datanya menunggu 30 hari dan pemilik bisa membatalkan sendiri.
+**Penghapusan permanennya belum dibangun** — `private.purge_deleted_accounts()`
+adalah kerangka yang mengembalikan `implemented: false`, dan tidak ada penjadwal
+yang memanggilnya.
+
 ### 4.6 Kesiapan Data Usaha dan Misi
 
 Endpoint `/api/v1/readiness` menghitung snapshot kesiapan di server menggunakan bukti yang tersedia. Halaman terkait:
