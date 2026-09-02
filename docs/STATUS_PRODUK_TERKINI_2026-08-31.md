@@ -478,6 +478,100 @@ Kondisi OCR berdasarkan provider lokal:
 
 Status yang ditampilkan kepada pengguna membedakan “sedang dibaca”, “data siap diperiksa”, “dikonfirmasi pemilik”, dan “terverifikasi”.
 
+### 4.5.1 Lemari lima rak dan bukti yang menempel — Tahap D-A dan rak E (3 September 2026)
+
+Dokumen selama ini satu tumpukan. Sekarang setiap dokumen punya rak, dan bukti
+bisa menempel langsung ke pembukuan.
+
+**Lima rak** (`documents.doc_class`, migrasi `0041`): Identitas saya, Izin
+usaha, Nota & bukti, Alat & perjanjian, Laporan yang pernah dibuat. Raknya
+diisi fungsi `private.document_shelf_for_type()` yang dipakai backfill sekaligus
+trigger `before insert`, bukan sekali jalan — jalur tulis dokumen lebih dari
+satu, dan satu jalur yang lupa mengisi rak menghasilkan dokumen yang raknya
+harus ditebak layar. Salah tebak di sini berarti KTP ikut terkirim ke institusi.
+Yang raknya tidak pasti (`utilitas`, `qris`, `laporan_keuangan`,
+`foto_tempat_usaha`) ditandai `needs_class_review` dan menunggu pemilik memilah.
+
+**Tiga pintu bukti** (migrasi `0042`):
+
+| Pintu | Di mana | Perilaku |
+|---|---|---|
+| A | Kartu setelah simpan di `/umkm/catat` | Ajakan foto nota, bisa dilewati |
+| C | Ikon kamera di baris riwayat `/umkm/laporan` | Menempel belakangan |
+| D | Otomatis, tanpa layar | Bukti pembelian ikut menempel ke alat/pinjaman yang lahir darinya |
+
+Pintu D dikerjakan RPC `public.attach_document`, bukan layar. Yang tahu bahwa
+pembelian kategori 8 melahirkan baris `fixed_assets` adalah basis data lewat
+`source_transaction_id`; kalau layar yang harus tahu, setiap layar baru yang
+menempelkan bukti harus mengingatnya lagi, dan yang lupa menghasilkan alat
+tanpa bukti tanpa ada yang tahu.
+
+**Catatan disimpan lebih dulu, fotonya menyusul.** Foto nota tidak pernah
+menjadi syarat tersimpannya sebuah catatan. Unggahan yang gagal berbunyi "bukti
+belum terkirim" dengan tombol coba lagi yang menyimpan fotonya di memori —
+bukan "catatan gagal". Sinyal di pasar hilang timbul, dan pemilik tidak boleh
+kehilangan angka yang sudah benar demi bukti yang bisa menyusul kapan saja.
+
+**Ajakan bertingkat** (`modules/ledger/evidence-nudge.ts`): di bawah Rp100 ribu
+pemilik tidak diganggu sama sekali; di atasnya satu ajakan lembut; alat
+(kategori 8) dan pinjaman cair (4b) selalu diajak, berapa pun nilainya, karena
+keduanya melahirkan baris yang hidup bertahun-tahun di pembukuan.
+
+**Bukti diperlakukan seperti jurnal:** tidak pernah disunting, tidak pernah
+dihapus, hanya ditandai lepas dengan alasan 3–240 karakter. Membalikkan sebuah
+transaksi tidak menghapus notanya — nota tetap bukti bahwa uangnya pernah
+keluar, apa pun yang terjadi pada jurnalnya kemudian.
+
+**Kompresi klien** (`modules/documents/image-compression.ts`, sebelumnya tidak
+ada di repo): sisi terpanjang 1600 px, tangga mutu 0,75 → 0,5, sasaran 600 KB,
+dan EXIF diputar sesuai orientasi — nota yang dipotret tegak tanpa itu tersimpan
+miring, dan nota miring tidak terbaca siapa pun. Hasilnya dilaporkan ke pemilik
+sebagai "0,3 MB — hemat kuota". Kegagalan apa pun mengembalikan berkas asli:
+bukti besar jauh lebih baik daripada tidak ada bukti.
+
+**Klip di Mode Akuntan.** Baris jurnal yang punya bukti menampilkan 📎; satu
+ketukan membuka berkasnya lewat tautan bertanda tangan 60 detik yang tercatat di
+`audit_events`. Untuk ini `JournalEntryView` kini membawa `sourceId`, yang
+sebelumnya tidak pernah ikut terbaca sehingga baris jurnal tidak punya jalan
+kembali ke catatan yang melahirkannya.
+
+**CALK** memuat kalimat kebijakan bukti hanya bila usahanya benar-benar punya
+lampiran (`accountingPolicyNotesFor({ hasEvidence })`). Catatan atas laporan
+keuangan adalah tempat terakhir yang boleh memuat kalimat yang tidak bisa
+ditunjukkan buktinya.
+
+**Cacat lama yang ikut diperbaiki (`0043`).** Daftar jenis dokumen hidup di dua
+tempat yang tidak pernah dibandingkan, dan keduanya sudah berbeda: `utilitas`
+dan `akta_pendirian` ditawarkan sebagai ubin di layar unggah tetapi ditolak RPC
+dengan `VALIDATION_FAILED`. Dua jenis dokumen mustahil diunggah, dan pemilik
+hanya melihat unggahan gagal tanpa sebab. Daftarnya kini satu,
+`private.known_document_types()`, dengan uji kontrak yang menjaganya tetap sama
+dengan daftar TypeScript.
+
+### 4.5.2 Rak E: arsip laporan yang pernah diterbitkan (3 September 2026)
+
+Setiap berkas laporan yang diunduh disimpan apa adanya ke penyimpanan privat,
+dicatat di `report_issues` (migrasi `0044`), dan membawa nomor penerbitan yang
+tercetak di kaki setiap halamannya.
+
+Berkasnya disimpan, bukan dibuat ulang, karena laporan yang dibuat ulang bulan
+depan **tidak akan sama** dengan yang dikirim bulan ini: transaksi baru masuk,
+penyusutan bertambah, hitungan stok mengoreksi periode sebelumnya. Begitu sebuah
+berkas terkirim ke koperasi, satu-satunya cara mengetahui angka apa yang ada di
+dalamnya adalah menyimpan berkasnya. Unduh ulang menyajikan bita yang sama
+persis.
+
+Nomornya berbentuk `BRK-20260903-QRSTVWXY` dan sengaja bisa dibacakan lewat
+telepon: alfabetnya membuang I, L, O, U, 0, dan 1. Daftarnya ada di halaman
+Dokumen sebagai bagian "Laporan yang pernah dibuat" — bukan menu baru, supaya
+jumlah menu tidak bertambah.
+
+Urutan simpannya disengaja: bita dulu, catatan kemudian. Kegagalan mencatat
+hanya meninggalkan objek yatim yang langsung dibersihkan; urutan sebaliknya
+meninggalkan baris arsip yang menjanjikan berkas yang tidak pernah ada, dan
+pemilik baru mengetahuinya tepat ketika berkas itu diminta. Kegagalan mengarsip
+juga tidak pernah menahan unduhannya.
+
 ### 4.6 Kesiapan Data Usaha dan Misi
 
 Endpoint `/api/v1/readiness` menghitung snapshot kesiapan di server menggunakan bukti yang tersedia. Halaman terkait:
