@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AccountDataPanel } from "@/components/warung/AccountDataPanel";
 import { profileSectorOptions } from "@/modules/accounting/sector-mapping";
 import { LegalitySummary } from "@/components/warung/LegalitySummary";
 import Image from "next/image";
@@ -44,6 +45,7 @@ interface ProfileRecord {
   nib?: string | null;
   alamat?: string | null;
   avatar_url?: string | null;
+  deletion_scheduled_for?: string | null;
   bentuk_usaha?: string | null;
   tahun_mulai_usaha?: number | null;
   jumlah_karyawan?: string | null;
@@ -55,6 +57,7 @@ export default function ProfilPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewAvatar, setPreviewAvatar] = useState<string | null>(null);
+  const [deletionScheduledFor, setDeletionScheduledFor] = useState<string | null>(null);
 
   // Form Fields for Business Profile
   const [form, setForm] = useState({
@@ -116,6 +119,7 @@ export default function ProfilPage() {
           });
 
           if (avatar) setPreviewAvatar(avatar);
+          setDeletionScheduledFor(dbProfile?.deletion_scheduled_for ?? null);
         }
       } catch (err) {
         console.error("Error loading profile:", err);
@@ -241,7 +245,19 @@ export default function ProfilPage() {
     <>
       <DashboardPage width="compact">
         <PageHeader title="Profil & identitas usaha" description="Pastikan informasi usaha tetap lengkap dan terbaru agar dokumen serta laporan mudah dikenali." icon={Building2} actions={<button onClick={handleSignOut} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-[#c8d3de] bg-white px-4 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"><LogOut size={14} /> Keluar akun</button>} />
+        {/* Blok Privasi & akun: izin akses yang sudah ada, ditambah dua hak
+            yang selama ini tidak punya tombol -- membawa pergi datanya, dan
+            berhenti. */}
         <OwnerConsentPanel />
+        <section aria-labelledby="privasi-akun" className="space-y-3">
+          <div>
+            <h2 id="privasi-akun" className="text-sm font-bold text-[#1b2a3a]">Data & akun Anda</h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
+              Catatan usaha ini milik Anda. Anda boleh membawanya pergi kapan saja.
+            </p>
+          </div>
+          <AccountDataPanel scheduledFor={deletionScheduledFor} />
+        </section>
 
         {message && (
           <FeedbackBanner tone={message.type === "success" ? "success" : "error"} live>{message.text}</FeedbackBanner>

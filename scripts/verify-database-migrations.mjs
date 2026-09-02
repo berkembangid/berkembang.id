@@ -51,6 +51,7 @@ const expectedMigrations = [
   "0043_document_types.sql",
   "0044_report_archive.sql",
   "0045_profile_and_document_cleanup.sql",
+  "0046_account_deletion.sql",
 ];
 
 const coreTables = [
@@ -3099,6 +3100,99 @@ async function verifyAccountingPeriodReports() {
     "a newly uploaded qris file still lands somewhere; the migration only moves old ones",
   );
   assert.equal(movedDocument.needs_class_review, true, "the owner sorts what we cannot know");
+
+  // ---------------------------------------------------------------------
+  // Hapus akun dengan masa tenggang (0046)
+  // ---------------------------------------------------------------------
+  const activeBefore = Number((await client.query(
+    `select count(*)::int as value from public.consent_grants g
+     join public.businesses b on b.id = g.business_id
+     where g.status = 'active' and b.legacy_profile_id = '${userB}'`,
+  )).rows[0].value);
+
+  const requested = await asAuthenticatedCommitted(
+    userB,
+    "select public.request_account_deletion('Pindah aplikasi') as value",
+  );
+  const deletion = requested.rows[0].value;
+  assert.equal(deletion.ok, true, "an owner may always ask to leave");
+
+  // Tenggangnya 30 hari, dan tanggalnya dihitung di zona Jakarta.
+  const scheduled = (await client.query(
+    `select deletion_scheduled_for::text as value,
+            ((now() at time zone 'Asia/Jakarta')::date + 30)::text as expected
+     from public.profiles where auth_user_id = '${userB}'`,
+  )).rows[0];
+  assert.equal(scheduled.value, scheduled.expected, "the grace period is thirty days");
+
+  // YANG BERHENTI SEKETIKA ADALAH AKSESNYA. Selama izin masih hidup, ada pihak
+  // lain yang bisa membuka berkas usaha orang yang sudah pamit.
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.consent_grants g
+      join public.businesses b on b.id = g.business_id
+      where g.status = 'active' and b.legacy_profile_id = '${userB}'
+    `),
+    0,
+    "asking to leave revokes every live institution grant at once",
+  );
+  if (activeBefore > 0) {
+    assert.ok(
+      Number(deletion.revokedGrants) >= 1,
+      "the number of revoked grants is reported back to the owner",
+    );
+  }
+
+  // Datanya masih ada: itu inti dari masa tenggang.
+  assert.ok(
+    Number(await scalar(
+      `select count(*)::int as value from public.journal_entries where business_id = '${businessB}'`,
+    )) > 0,
+    "the ledger survives the grace period; deletion is not instant",
+  );
+
+  // Menekan tombolnya dua kali tidak memperpanjang tenggang -- kalau
+  // memperpanjang, mengulang justru menjauhkan tanggal penghapusan.
+  const again = await asAuthenticatedCommitted(
+    userB,
+    "select public.request_account_deletion('Berubah pikiran lagi') as value",
+  );
+  assert.equal(again.rows[0].value.idempotent, true, "a second request changes nothing");
+  assert.equal(
+    (await client.query(
+      `select deletion_scheduled_for::text as value from public.profiles where auth_user_id = '${userB}'`,
+    )).rows[0].value,
+    scheduled.value,
+    "pressing delete again must not push the date further away",
+  );
+
+  // Membatalkan tidak memerlukan siapa pun dari pihak kami.
+  await asAuthenticatedCommitted(userB, "select public.cancel_account_deletion()");
+  assert.equal(
+    await scalar(
+      `select count(*)::int as value from public.profiles
+       where auth_user_id = '${userB}' and deletion_requested_at is not null`,
+    ),
+    0,
+    "cancelling is one call and restores the account",
+  );
+
+  // Izin yang sudah dicabut TIDAK hidup kembali: mencabut adalah keputusan
+  // yang sudah sampai ke pihak lain.
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.consent_grants g
+      join public.businesses b on b.id = g.business_id
+      where g.status = 'active' and b.legacy_profile_id = '${userB}'
+    `),
+    0,
+    "cancelling deletion must not silently hand access back to institutions",
+  );
+
+  // Penghapusan permanen belum dibangun, dan mengatakannya apa adanya.
+  const purge = (await client.query("select private.purge_deleted_accounts() as value")).rows[0].value;
+  assert.equal(purge.implemented, false, "the purge job is a stub and says so");
+  assert.equal(purge.purged, 0, "nothing is deleted yet");
 
   // Jurnal tetap tidak bisa disentuh setelah semua ini.
   await expectRejected(

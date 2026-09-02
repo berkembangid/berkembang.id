@@ -51,6 +51,7 @@ const expectedMigrations = [
   "0043_document_types.sql",
   "0044_report_archive.sql",
   "0045_profile_and_document_cleanup.sql",
+  "0046_account_deletion.sql",
 ];
 
 describe("WP-03 migration contract", () => {

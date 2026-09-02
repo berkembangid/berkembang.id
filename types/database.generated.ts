@@ -2622,6 +2622,9 @@ export type Database = {
           tahun_mulai_usaha: number | null
           jumlah_karyawan: string | null
           kanal_penjualan: string[]
+          deletion_requested_at: string | null
+          deletion_scheduled_for: string | null
+          deletion_reason: string | null
         }
         Insert: {
           id?: string
@@ -2649,6 +2652,9 @@ export type Database = {
           tahun_mulai_usaha?: number | null
           jumlah_karyawan?: string | null
           kanal_penjualan?: string[]
+          deletion_requested_at?: string | null
+          deletion_scheduled_for?: string | null
+          deletion_reason?: string | null
         }
         Update: {
           id?: string
@@ -2676,6 +2682,9 @@ export type Database = {
           tahun_mulai_usaha?: number | null
           jumlah_karyawan?: string | null
           kanal_penjualan?: string[]
+          deletion_requested_at?: string | null
+          deletion_scheduled_for?: string | null
+          deletion_reason?: string | null
         }
         Relationships: [
           {
@@ -3688,6 +3697,10 @@ export type Database = {
         }
         Returns: Json
       }
+      cancel_account_deletion: {
+        Args: Record<string, never>
+        Returns: Json
+      }
       cancel_ledger_transaction: {
         Args: {
           p_transaction_id: string
@@ -4120,6 +4133,12 @@ export type Database = {
           p_rejection_reason: string
         }
         Returns: never
+      }
+      request_account_deletion: {
+        Args: {
+          p_reason?: string
+        }
+        Returns: Json
       }
       respond_to_dossier_request: {
         Args: {
