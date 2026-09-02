@@ -395,8 +395,15 @@ export default function CatatPage() {
         localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
         setCaptureId(null);
       }
+      // Ketikan melewati router yang sama dengan ucapan: transkrip berkeyakinan
+      // penuh dengan engine "typed". Satu jalur, satu perilaku -- dan pemilik
+      // tanpa mikrofon mendapat gating serta pertanyaan yang persis sama.
       const created = await createCapture(
-        { inputMethod: "manual", sourceText: text },
+        {
+          inputMethod: "manual",
+          sourceText: text,
+          clientTranscript: { text, confidence: 1, engine: "typed", lang: "id-ID" },
+        },
         `capture:${crypto.randomUUID()}`,
       );
       setCaptureId(created.capture.id);

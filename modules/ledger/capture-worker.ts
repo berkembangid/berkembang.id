@@ -213,8 +213,12 @@ export async function processQueuedCaptureJob(
 
     const startedAt = Date.now();
     try {
+      // Capture bermetode suara kini bisa datang tanpa audio: jalur TEXT_ONLY
+      // memakai transkrip peramban dan sengaja tidak pernah mengunggah apa pun.
+      // Yang tetap terlarang adalah capture tanpa audio DAN tanpa teks — di
+      // situ memang tidak ada bahan untuk diproses.
       let audio: AudioInput | undefined;
-      if (claim.inputMethod === "voice") {
+      if (claim.inputMethod === "voice" && (claim.storagePath || !claim.sourceText)) {
         if (!claim.storagePath || !claim.mimeType) {
           throw new CaptureProviderError("CAPTURE_AUDIO_UNAVAILABLE", false);
         }

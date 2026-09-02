@@ -99,6 +99,10 @@ export async function createCapture(
       idempotent: boolean;
     };
     upload: CaptureClientUpload | null;
+    path?: "TEXT_ONLY" | "WHISPER";
+    drafts?: unknown[];
+    questions?: unknown[];
+    processingMs?: number;
   }>("/api/v1/captures", {
     method: "POST",
     headers: {
