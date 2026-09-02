@@ -67,7 +67,7 @@ const DOCUMENT_REQUIREMENTS: Array<{
   { type: "izin_edar", description: "Izin edar produk jika diwajibkan", required: false, category: "product" },
   { type: "rekening_koran", description: "Mutasi rekening usaha", required: false, category: "finance" },
   { type: "qris", description: "Riwayat transaksi QRIS", required: false, category: "finance" },
-  { type: "laporan_keuangan", description: "Laporan atau arus kas usaha", required: false, category: "finance" },
+  { type: "laporan_keuangan", description: "Laporan keuangan atau ringkasan uang usaha", required: false, category: "finance" },
   { type: "foto_tempat_usaha", description: "Foto tempat atau aktivitas usaha", required: false, category: "supporting" },
   { type: "utilitas", description: "Tagihan listrik, air, atau internet tempat usaha", required: false, category: "supporting" },
 ];

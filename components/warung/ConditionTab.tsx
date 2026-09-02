@@ -4,7 +4,7 @@
  * Tab "Kondisi Usaha": versi bahasa warung dari Laporan Posisi Keuangan.
  *
  * Tiga blok saja — yang saya punya, yang harus saya bayar, dan milik saya
- * bersih. Tidak ada kata neraca, aset, liabilitas, atau ekuitas di layar ini.
+ * bersih. Layar ini sengaja tidak memakai istilah akuntansi. forbidden-terms-allow
  * Selama kondisi awal usaha belum diisi, angkanya tidak bisa jujur, jadi yang
  * tampil adalah ajakan mengisinya.
  */

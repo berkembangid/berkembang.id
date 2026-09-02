@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CalendarCheck, CheckCircle2, ChevronRight, CircleEllipsis, FileText, Mic, Plus, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ReminderStrip } from "@/components/warung/ReminderStrip";
+import { closingPromptText, closingTargetDate } from "@/modules/ledger/closing-day";
 import { ReclassCard } from "@/components/warung/ReclassCard";
 import type { ReadinessView } from "@/modules/readiness/readiness-schema";
 import styles from "../umkm-dashboard.module.css";
@@ -26,6 +27,7 @@ export default function BerandaPage() {
   const [readiness, setReadiness] = useState<ReadinessView | null>(null);
   const [todayTransactions, setTodayTransactions] = useState<TransactionRow[]>([]);
   const [actions, setActions] = useState<ActionItem[]>([]);
+  const [unchecked, setUnchecked] = useState(0);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -67,6 +69,10 @@ export default function BerandaPage() {
         }
         for (const request of requests) required.push({ id: `request-${request.id}`, title: "Ada permintaan akses data", description: request.purpose, href: "/umkm/profil" });
         setActions(required.slice(0, 5));
+        // Kartu uang hari ini hanya menghitung catatan yang SUDAH dikonfirmasi.
+        // Tanpa menyebutkan berapa yang belum diperiksa, angkanya terbaca
+        // sebagai seluruh hari padahal belum tentu.
+        setUnchecked(captures.filter((capture) => capture.status === "needs_review").length);
 
         const realActivities: ActivityItem[] = ((recentResult.data ?? []) as TransactionRow[]).map((row) => ({
           id: `transaction-${row.id}`,
@@ -106,15 +112,27 @@ export default function BerandaPage() {
           {error && <div role="alert" className="flex gap-2 rounded-2xl border border-[#f4b0a8] bg-[#feecea] p-4 text-xs text-[#8a1c12]"><AlertCircle size={17} />{error}</div>}
 
           <section aria-labelledby="cash-flow-title" className={styles.balanceCard}>
-            <p className={styles.eyebrow}>Arus kas hari ini</p>
+            <p className={styles.eyebrow}>Sisa uang hari ini</p>
             <h2 id="cash-flow-title" className={styles.balance}>{cashFlow < 0 ? "−" : ""}{formatIdr(Math.abs(cashFlow))}</h2>
+            <p className="mt-1 text-[10px] text-white/75">Dari catatan yang sudah Anda cek</p>
             <div className={styles.balanceMeta}>
               <span className={styles.balancePill}>{todayTransactions.length} catatan</span>
               <span>Masuk {formatIdr(income)}</span>
+              {unchecked > 0 && (
+                <Link href="/umkm/catat" className={styles.balancePill}>
+                  {unchecked} belum dicek
+                </Link>
+              )}
             </div>
             <div className={styles.quickActions}>
               <Link href="/umkm/catat" className={styles.quickAction}><Plus size={16} /> Catat uang</Link>
-              <Link href="/umkm/laporan?tutup-kas=1" className={styles.quickAction}><CalendarCheck size={15} /> Tutup kas</Link>
+              <Link
+                href={`/umkm/laporan?tutup-kas=${closingTargetDate(new Date())}`}
+                className={styles.quickAction}
+                title={closingPromptText(new Date())}
+              >
+                <CalendarCheck size={15} /> Tutup kas
+              </Link>
               <Link href="/umkm/catat" aria-label="Pilihan catat lainnya" className={`${styles.quickAction} ${styles.quickActionRound}`}><CircleEllipsis size={18} /></Link>
             </div>
           </section>
@@ -162,7 +180,7 @@ export default function BerandaPage() {
         <div className={styles.desktopPage}>
           <header>
             <h1 className={styles.desktopHeading}>Ringkasan usaha</h1>
-            <p className={styles.desktopSubheading}>Pantau arus kas, catatan, dan kesiapan data usaha Anda dalam satu tempat.</p>
+            <p className={styles.desktopSubheading}>Pantau uang masuk, biaya, dan kesiapan data usaha Anda dalam satu tempat.</p>
           </header>
 
           {error && <div role="alert" className="mt-5 flex gap-2 rounded-xl border border-[#f4b0a8] bg-[#feecea] p-4 text-xs text-[#8a1c12]"><AlertCircle size={17} />{error}</div>}
@@ -172,7 +190,7 @@ export default function BerandaPage() {
           </div>
 
           <section aria-label="Ringkasan hari ini" className={styles.kpiGrid}>
-            <KpiCard label="Arus kas hari ini" value={formatIdr(cashFlow)} meta="Pemasukan dikurangi pengeluaran" Icon={WalletCards} tone="neutral" />
+            <KpiCard label="Sisa uang hari ini" value={formatIdr(cashFlow)} meta="Pemasukan dikurangi pengeluaran" Icon={WalletCards} tone="neutral" />
             <KpiCard label="Uang masuk" value={formatIdr(income)} meta="Dari catatan hari ini" Icon={ArrowDownLeft} tone="positive" />
             <KpiCard label="Uang keluar" value={formatIdr(expense)} meta="Belanja dan biaya hari ini" Icon={ArrowUpRight} tone="neutral" />
             <KpiCard label="Kesiapan data" value={readiness ? `${score}/100` : "—"} meta={readiness?.scoreChange ? `${readiness.scoreChange > 0 ? "+" : ""}${Math.round(readiness.scoreChange)} poin dari sebelumnya` : "Berdasarkan bukti tersedia"} Icon={ShieldCheck} tone="positive" />

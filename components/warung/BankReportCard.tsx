@@ -300,7 +300,9 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
           <p className="text-sm font-bold text-[#1b2a3a]">Perincian pembukuan</p>
           <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
             Untuk pendamping, koperasi, atau petugas bank yang ingin menelusuri satu angka sampai ke catatan
-            hariannya: jurnal, buku besar, dan neraca saldo. Hanya bisa dibaca — tidak ada yang dapat diubah
+            {/* Pintu ke Mode Akuntan: harus menyebut isinya dengan tepat supaya
+                pendamping tahu apa yang akan ia temukan di sana. */}
+            hariannya: jurnal, buku besar, dan neraca saldo. Hanya bisa dibaca — tidak ada yang dapat diubah {/* forbidden-terms-allow */}
             dari sana.
           </p>
         </div>

@@ -44,6 +44,7 @@ const expectedMigrations = [
   "0037_pending_reminders.sql",
   "0038_sector_aware_templates.sql",
   "0039_capture_text_only_path.sql",
+  "0040_asset_keywords.sql",
 ];
 
 const coreTables = [

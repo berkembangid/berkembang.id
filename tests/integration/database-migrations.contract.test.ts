@@ -43,6 +43,7 @@ const expectedMigrations = [
   "0037_pending_reminders.sql",
   "0038_sector_aware_templates.sql",
   "0039_capture_text_only_path.sql",
+  "0040_asset_keywords.sql",
 ];
 
 describe("WP-03 migration contract", () => {
@@ -786,7 +787,7 @@ describe("pending reminders contract (0037)", () => {
     // memberi tahu tanpa menunjukkan jalannya membuat pemilik mencari sendiri,
     // dan pencarian sekecil apa pun cukup untuk menundanya ke besok.
     expect(strip).toContain("reminderHref");
-    expect(strip).toContain("/umkm/laporan?tutup-kas=1");
+    expect(strip).toContain("tutup-kas=${dueDate}");
 
     // Tempatnya di Beranda, bukan di halaman Laporan. Tutup kas dan hitung
     // stok adalah pekerjaan HARI INI, dan Beranda satu-satunya halaman yang
@@ -935,5 +936,77 @@ describe("owner screen design-system contract", () => {
     // memberi tahu apa pun yang belum tertulis di kartu ringkasan di atasnya.
     const report = readFileSync(ownerScreens[0], "utf8");
     expect(report).toContain("cashFlowData(report.transactions).length >= 2");
+  });
+});
+
+describe("owner dictionary and asset keywords contract (0040)", () => {
+  const migration = readFileSync(join(migrationDirectory, "0040_asset_keywords.sql"), "utf8");
+  const lexicon = readFileSync(
+    join(process.cwd(), "modules", "nominal-parser", "lexicon.ts"),
+    "utf8",
+  );
+  const terms = readFileSync(join(process.cwd(), "scripts", "forbidden-terms.mjs"), "utf8");
+
+  it("teaches the database the nouns a warung actually buys", () => {
+    // "beli meja 800 ribu" dulu mendarat di kategori 6 dan tidak pernah masuk
+    // daftar alat: kata "meja" tidak ada di trigger_keywords mana pun.
+    for (const noun of ["meja", "kursi", "rak", "lemari", "blender", "oven", "timbangan"]) {
+      expect(migration).toContain(`'${noun}'`);
+    }
+    expect(migration).toContain("category_code = 8");
+  });
+
+  it("refuses to let an asset noun mean two categories at once", () => {
+    expect(migration).toContain("ASSET_KEYWORD_CONFLICT");
+  });
+
+  it("keeps the parser's offline table agreeing with the database", () => {
+    // Kata kunci hidup di dua tempat: basis data (dipakai server) dan tabel
+    // bawaan parser (dipakai klien saat luring). Keduanya boleh berbeda
+    // panjangnya, tidak boleh berbeda ARTINYA.
+    const assetSection = lexicon.slice(lexicon.indexOf('keyword: "beli kulkas"'));
+    for (const noun of ["meja", "kursi", "rak", "lemari", "blender", "oven", "timbangan"]) {
+      expect(assetSection, noun).toContain(`{ keyword: "${noun}", code: 8 }`);
+    }
+  });
+
+  it("routes the server through the database table, not the parser fallback", () => {
+    // Tanpa ini, menambah kata benda alat ke basis data tidak pernah mengubah
+    // apa pun -- persis kenapa "meja" tidak pernah terbaca sebagai alat usaha.
+    const route = readFileSync(
+      join(process.cwd(), "app", "api", "v1", "captures", "route.ts"),
+      "utf8",
+    );
+    expect(route).toContain("categoryKeywordsForSector");
+    expect(route).toContain("sectorForCurrentUser");
+  });
+
+  it("bans accountant vocabulary on the owner's screens, and only there", () => {
+    for (const term of ["arus kas", "debit", "kredit", "ekuitas", "liabilitas", "neraca", "jurnal"]) {
+      expect(terms).toContain(`"${term}"`);
+    }
+    expect(terms).toContain("app/(umkm)/umkm/akuntan");
+    expect(terms).toContain("ownerLanguageSurfaces");
+  });
+
+  it('no longer calls the day\'s money "arus kas" on the home screen', () => {
+    const beranda = readFileSync(join(process.cwd(), "app", "(umkm)", "umkm", "page.tsx"), "utf8");
+    expect(beranda).toContain("Sisa uang hari ini");
+    expect(beranda).not.toContain("Arus kas");
+    // Angkanya hanya dari catatan terkonfirmasi, dan kartunya harus mengatakannya.
+    expect(beranda).toContain("Dari catatan yang sudah Anda cek");
+    expect(beranda).toContain("belum dicek");
+  });
+
+  it("offers to close yesterday's till before four in the morning", () => {
+    const beranda = readFileSync(join(process.cwd(), "app", "(umkm)", "umkm", "page.tsx"), "utf8");
+    const laporan = readFileSync(
+      join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "page.tsx"),
+      "utf8",
+    );
+    expect(beranda).toContain("closingTargetDate");
+    expect(laporan).toContain("closingTargetDate");
+    // Tanggalnya ikut di tautan; penanda "1" saja akan selalu menutup hari ini.
+    expect(beranda).toContain("tutup-kas=${closingTargetDate(new Date())}");
   });
 });

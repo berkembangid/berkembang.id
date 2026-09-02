@@ -29,6 +29,38 @@ export const globalForbiddenTerms = [
  */
 export const financialSurfaceForbiddenTerms = ["disetujui", "ditolak"];
 
+/**
+ * Kamus Mode Warung: istilah akuntan yang tidak boleh muncul di layar pemilik.
+ *
+ * Bukan karena kata-kata ini salah -- semuanya benar secara akuntansi. Justru
+ * itu masalahnya: benar bagi orang yang sudah tahu, dan menutup pintu bagi
+ * yang belum. Pemilik warung yang membaca "arus kas" berhenti sejenak; yang
+ * membaca "sisa uang hari ini" tidak.
+ *
+ * Mode Akuntan dikecualikan seluruhnya. Di sana istilah ini justru kosakata
+ * pembacanya, dan menggantinya akan membuat pendamping menebak-nebak.
+ */
+export const accountantTerms = [
+  "arus kas",
+  "debit",
+  "kredit",
+  "ekuitas",
+  "liabilitas",
+  "neraca",
+  "akrual",
+  "jurnal",
+  "buku besar",
+  "prive",
+  "aset tetap",
+  "beban pokok",
+];
+
+/** Layar yang dibaca pemilik usaha, tempat kamus di atas berlaku. */
+export const ownerLanguageSurfaces = ["app/(umkm)", "components/warung"];
+
+/** Satu-satunya pengecualian: layar yang memang ditujukan ke pendamping. */
+export const accountantSurfaces = ["app/(umkm)/umkm/akuntan"];
+
 /** Permukaan keuangan yang diperiksa dengan aturan yang lebih ketat. */
 export const financialSurfaces = [
   "modules/accounting",
@@ -74,9 +106,14 @@ export function termPattern(term) {
 export function scanContent(relativePath, content) {
   const posixPath = toPosix(relativePath);
   const isFinancialSurface = financialSurfaces.some((surface) => posixPath.startsWith(surface));
-  const terms = isFinancialSurface
-    ? [...globalForbiddenTerms, ...financialSurfaceForbiddenTerms]
-    : globalForbiddenTerms;
+  const isOwnerLanguageSurface =
+    ownerLanguageSurfaces.some((surface) => posixPath.startsWith(surface)) &&
+    !accountantSurfaces.some((surface) => posixPath.startsWith(surface));
+  const terms = [
+    ...globalForbiddenTerms,
+    ...(isFinancialSurface ? financialSurfaceForbiddenTerms : []),
+    ...(isOwnerLanguageSurface ? accountantTerms : []),
+  ];
 
   const findings = [];
   const lines = content.split(/\r?\n/);

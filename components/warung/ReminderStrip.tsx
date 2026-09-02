@@ -87,8 +87,12 @@ export function reminderGroupText(group: ReminderGroup): { title: string; becaus
  * layar tempat pekerjaan itu dilakukan, dan pencarian sekecil apa pun cukup
  * untuk membuatnya ditunda ke besok.
  */
-export function reminderHref(kind: ReminderKind): string {
-  return kind === "TUTUP_KAS" ? "/umkm/laporan?tutup-kas=1" : "/umkm/laporan";
+export function reminderHref(kind: ReminderKind, dueDate?: string): string {
+  // Tanggalnya ikut, bukan sekadar penanda: sebelum pukul 04.00 yang perlu
+  // ditutup adalah dagangan kemarin, dan dialog harus membuka hari itu.
+  return kind === "TUTUP_KAS" && dueDate
+    ? `/umkm/laporan?tutup-kas=${dueDate}`
+    : "/umkm/laporan";
 }
 
 export function groupReminders(reminders: ReminderView[]): ReminderGroup[] {
@@ -134,7 +138,7 @@ export function ReminderStrip({ asOf = jakartaDate() }: { asOf?: string }) {
         return (
           <Link
             key={group.kind}
-            href={reminderHref(group.kind)}
+            href={reminderHref(group.kind, group.items[0]?.dueDate)}
             className={`flex items-start gap-3 rounded-2xl border px-3.5 py-3 transition-colors ${
               group.urgent
                 ? "border-[#f0d9a8] bg-[#fdf8ee] hover:bg-[#fbf2e2]"

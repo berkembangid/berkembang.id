@@ -24,7 +24,8 @@ import {
   clientTranscriptMinConfidence,
   draftReturnedEvent,
 } from "@/modules/ledger/capture-routing";
-import { parseUtterance } from "@/modules/nominal-parser";
+import { parseUtterance, type KeywordEntry } from "@/modules/nominal-parser";
+import { categoryKeywordsForSector, sectorForCurrentUser } from "@/modules/ledger/category-keywords";
 
 type AuthenticatedUser = { id: string };
 
@@ -38,6 +39,8 @@ export type CreateCaptureRouteDependencies = {
   createUploadSession: (path: string) => Promise<CaptureUploadSession>;
   minConfidence?: number;
   now?: Date;
+  /** Disuntik uji; produksi membacanya dari `category_templates`. */
+  keywords?: readonly KeywordEntry[];
 };
 
 const defaultDependencies: CreateCaptureRouteDependencies = {
@@ -108,10 +111,30 @@ export async function handleCreateCaptureRequest(
         : null);
 
     const minConfidence = dependencies.minConfidence ?? clientTranscriptMinConfidence();
+
+    // Kata kunci kategori berasal dari `category_templates`, bukan dari tabel
+    // bawaan parser. Tanpa ini, menambah kata benda alat baru di basis data
+    // tidak pernah mengubah apa pun -- persis kenapa "meja" tidak pernah
+    // terbaca sebagai alat usaha.
+    // Gagal membaca tabel referensi TIDAK BOLEH menggagalkan pencatatan.
+    // Pemilik yang sedang mengetik transaksi tidak peduli tabel kata kunci
+    // sedang tak terbaca; parser punya tabel bawaannya sendiri, dan yang
+    // hilang paling jauh hanyalah tebakan kategori yang bisa ia betulkan
+    // sendiri di layar konfirmasi.
+    let keywords: readonly KeywordEntry[] = dependencies.keywords ?? [];
+    if (!dependencies.keywords) {
+      try {
+        keywords = await categoryKeywordsForSector(await sectorForCurrentUser(user.id));
+      } catch {
+        keywords = [];
+      }
+    }
+
     const routing = chooseCapturePath({
       transcript,
       hasAudio: Boolean(input.file),
       minConfidence,
+      ...(keywords.length > 0 ? { keywords } : {}),
       ...(dependencies.now ? { now: dependencies.now } : {}),
     });
 
@@ -132,6 +155,7 @@ export async function handleCreateCaptureRequest(
     let questions: ReturnType<typeof buildQuestions> = [];
     if (routing.path === "TEXT_ONLY") {
       const parsed = parseUtterance(routing.transcript, {
+        ...(keywords.length > 0 ? { keywords } : {}),
         ...(dependencies.now ? { now: dependencies.now } : {}),
       });
       drafts = buildDrafts(parsed, routing.transcriptConfidence, minConfidence);
