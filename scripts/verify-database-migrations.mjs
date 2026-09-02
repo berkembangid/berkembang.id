@@ -50,6 +50,7 @@ const expectedMigrations = [
   "0042_document_attach_rpc.sql",
   "0043_document_types.sql",
   "0044_report_archive.sql",
+  "0045_profile_and_document_cleanup.sql",
 ];
 
 const coreTables = [
@@ -111,6 +112,11 @@ async function resetManagedTestSchemas() {
     create table auth.users (
       id uuid primary key,
       email text,
+      -- Supabase menyimpan metadata pendaftaran di sini. Tiruan ini sempat
+      -- tidak punya kolomnya, dan migrasi yang membacanya gagal di uji padahal
+      -- benar di produksi -- tiruan yang lebih miskin dari aslinya menghasilkan
+      -- kegagalan palsu.
+      raw_user_meta_data jsonb not null default '{}'::jsonb,
       created_at timestamptz not null default now()
     );
     create function auth.uid()
@@ -3014,6 +3020,85 @@ async function verifyAccountingPeriodReports() {
     `select count(*)::int as value from public.report_issues where document_uid = 'BRK-20260903-ABCD1234'`,
   );
   assert.equal(Number(foreignIssues.rows[0].value), 0, "one business must never see another's issued reports");
+
+  // ---------------------------------------------------------------------
+  // Profil usaha dan ringkasan legalitas (0045)
+  // ---------------------------------------------------------------------
+  // Bentuk usaha menentukan apakah kartu Akta Pendirian tampil. Nilai di luar
+  // dua yang dikenal akan membuat layar menebak.
+  await expectRejected(
+    `update public.profiles set bentuk_usaha = 'koperasi' where auth_user_id = '${userB}'`,
+    "23514",
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.profiles
+      where bentuk_usaha <> 'perorangan'
+    `),
+    0,
+    "every existing owner defaults to perorangan; the form is asked, never guessed",
+  );
+
+  // Tahun mulai usaha dipakai dossier sebagai "lama usaha".
+  await expectRejected(
+    `update public.profiles set tahun_mulai_usaha = 1800 where auth_user_id = '${userB}'`,
+    "23514",
+  );
+  await expectRejected(
+    `update public.profiles set jumlah_karyawan = 'banyak' where auth_user_id = '${userB}'`,
+    "23514",
+  );
+  await expectRejected(
+    `update public.profiles set kanal_penjualan = array['tiktok'] where auth_user_id = '${userB}'`,
+    "23514",
+  );
+  await client.query(
+    `update public.profiles set kanal_penjualan = array['warung', 'whatsapp']
+     where auth_user_id = '${userB}'`,
+  );
+
+  // KLAIM BUKANLAH BUKTI.
+  //
+  // Nomor NIB yang diketik pemilik disimpan sebagai dokumen supaya ringkasan
+  // legalitas punya satu sumber. Dokumen itu TIDAK punya berkas, dan karena
+  // itu tidak boleh dihitung mesin kesiapan -- kalau dihitung, mengetik nomor
+  // menaikkan tingkat kesiapan tanpa satu berkas pun pernah diunggah.
+  const claimedDocument = (await client.query(
+    `insert into public.documents (business_id, user_id, name, doc_type, status, doc_number, assurance_level)
+     values ('${businessB}', '${userB}', 'NIB (nomor diketik pemilik)', 'nib', 'uploaded',
+       '1234567890123', 'self_declared')
+     returning id, storage_path, doc_class`,
+  )).rows[0];
+  assert.equal(claimedDocument.storage_path, null, "a typed number has no file behind it");
+  assert.equal(claimedDocument.doc_class, "legalitas", "a permit number still belongs on the permit shelf");
+
+  const readinessAfterClaim = await asAuthenticatedCommitted(
+    userB,
+    "select public.recalculate_my_readiness() as value",
+  );
+  const components = readinessAfterClaim.rows[0].value;
+  assert.ok(components, "readiness must still compute");
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.documents
+      where business_id = '${businessB}' and doc_type = 'nib' and storage_path is null
+    `),
+    1,
+    "the claim is stored, so the owner sees their own number",
+  );
+
+  // Kartu sumber data yang dibubarkan: berkasnya dipindah, tidak dihapus.
+  const movedDocument = (await client.query(
+    `insert into public.documents (business_id, user_id, name, doc_type, status)
+     values ('${businessB}', '${userB}', 'Riwayat QRIS lama', 'qris', 'uploaded')
+     returning doc_class, needs_class_review`,
+  )).rows[0];
+  assert.equal(
+    movedDocument.doc_class,
+    "legalitas",
+    "a newly uploaded qris file still lands somewhere; the migration only moves old ones",
+  );
+  assert.equal(movedDocument.needs_class_review, true, "the owner sorts what we cannot know");
 
   // Jurnal tetap tidak bisa disentuh setelah semua ini.
   await expectRejected(

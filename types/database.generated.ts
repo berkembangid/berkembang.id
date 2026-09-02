@@ -2618,6 +2618,10 @@ export type Database = {
           status: string
           created_at: string
           updated_at: string
+          bentuk_usaha: string
+          tahun_mulai_usaha: number | null
+          jumlah_karyawan: string | null
+          kanal_penjualan: string[]
         }
         Insert: {
           id?: string
@@ -2641,6 +2645,10 @@ export type Database = {
           status?: string
           created_at?: string
           updated_at?: string
+          bentuk_usaha?: string
+          tahun_mulai_usaha?: number | null
+          jumlah_karyawan?: string | null
+          kanal_penjualan?: string[]
         }
         Update: {
           id?: string
@@ -2664,6 +2672,10 @@ export type Database = {
           status?: string
           created_at?: string
           updated_at?: string
+          bentuk_usaha?: string
+          tahun_mulai_usaha?: number | null
+          jumlah_karyawan?: string | null
+          kanal_penjualan?: string[]
         }
         Relationships: [
           {

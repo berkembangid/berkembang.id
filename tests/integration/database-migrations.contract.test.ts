@@ -49,6 +49,7 @@ const expectedMigrations = [
   "0042_document_attach_rpc.sql",
   "0043_document_types.sql",
   "0044_report_archive.sql",
+  "0045_profile_and_document_cleanup.sql",
 ];
 
 describe("WP-03 migration contract", () => {
