@@ -5,14 +5,14 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LedgerOperationError, ledgerOperationError } from "@/modules/ledger/ledger-errors";
 import { categoryGroupLabels, categoryLabels, paymentMethodLabels, type CloseLedgerDayInput, type LedgerRange, type LedgerTransactionInput } from "@/modules/ledger/ledger-schema";
 
-const mutationResultSchema = z.object({ transactionId: z.uuid(), idempotent: z.boolean().optional(), status: z.string().optional() });
+const mutationResultSchema = z.object({ transactionId: z.uuid(), idempotent: z.boolean().optional(), status: z.string().optional(), journalEntryId: z.uuid().nullable().optional() });
 const closingResultSchema = z.object({ closingId: z.uuid(), status: z.literal("closed"), idempotent: z.boolean() });
 
 function rpcError(error: { message: string } | null) {
   return error ? ledgerOperationError(new Error(error.message), "SERVICE_UNAVAILABLE") : null;
 }
 
-async function activeBusinessId(userId: string) {
+export async function activeBusinessId(userId: string) {
   const client = await createServerSupabaseClient();
   // UMKM gratis satu pemilik: usaha aktif ditentukan dari kepemilikan profil,
   // tanpa konsep role ataupun keanggotaan.
@@ -125,7 +125,9 @@ function rpcArgs(input: LedgerTransactionInput) {
   return { p_transaction_type: input.transactionType, p_amount_idr: input.amountIdr, p_transaction_date: input.transactionDate,
     p_category_group: input.categoryGroup, p_category_code: input.categoryCode, p_description: input.description,
     p_quantity: input.quantity ?? undefined, p_unit: input.unit ?? undefined, p_unit_price_idr: input.unitPriceIdr ?? undefined,
-    p_payment_method: input.paymentMethod ?? undefined, p_sales_channel: input.salesChannel ?? undefined, p_counterparty: input.counterparty ?? undefined };
+    p_payment_method: input.paymentMethod ?? undefined, p_sales_channel: input.salesChannel ?? undefined, p_counterparty: input.counterparty ?? undefined,
+    p_emkm_category_code: input.emkmCategoryCode ?? undefined, p_emkm_category_subtype: input.emkmCategorySubtype ?? undefined,
+    p_counterparty_id: input.counterpartyId ?? undefined, p_interest_amount_idr: input.interestAmountIdr ?? undefined };
 }
 export async function createLedgerTransaction(input: LedgerTransactionInput, idempotencyKey: string) {
   const client = await createServerSupabaseClient(); const { data, error } = await client.rpc("create_ledger_transaction", { p_idempotency_key: idempotencyKey, ...rpcArgs(input) });
@@ -144,7 +146,12 @@ export async function closeLedgerDay(input: CloseLedgerDayInput) {
   const operationError = rpcError(error); if (operationError) throw operationError; return closingResultSchema.parse(data);
 }
 
-function csvCell(value: string | number) {
+/**
+ * Satu sel CSV. Awalan `=`, `+`, `-`, dan `@` diberi kutip tunggal lebih dulu
+ * supaya berkasnya tidak menjalankan rumus saat dibuka di Excel atau Sheets --
+ * berkas ini dikirim ke bank dan koperasi, bukan hanya dibaca pemiliknya.
+ */
+export function csvCell(value: string | number) {
   let text = String(value);
   if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;

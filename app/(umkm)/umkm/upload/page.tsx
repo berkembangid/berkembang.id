@@ -9,11 +9,11 @@ import {
   FileText,
   LoaderCircle,
   RefreshCcw,
-  ShieldCheck,
   Upload,
 } from "lucide-react";
 import { DocumentOcrReviewDialog } from "@/components/documents/DocumentOcrReviewDialog";
 import { DocumentUploadConsentDialog } from "@/components/documents/DocumentUploadConsentDialog";
+import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { supabase } from "@/lib/supabase";
 import {
   archiveDocument,
@@ -359,43 +359,19 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 pb-28 md:p-6 md:pb-8">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 className="text-xl font-black text-slate-800 md:text-2xl">Dokumen Usaha</h1>
-          <p className="mt-1 max-w-3xl text-xs text-slate-500 md:text-sm">
-            Lengkapi dokumen usaha Anda. Dokumen disimpan secara privat dan tidak menjamin penerimaan pembiayaan.
-          </p>
-        </div>
-        <button
+    <DashboardPage>
+      <PageHeader title="Dokumen usaha" description="Simpan dan perbarui dokumen usaha di satu tempat. Anda tetap mengendalikan siapa yang dapat mengaksesnya." icon={FileText} actions={<button
           type="button"
           onClick={() => void loadDocuments()}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"
         >
           <RefreshCcw size={14} /> Muat ulang
-        </button>
-      </div>
+        </button>} />
 
-      <div className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-800">
-        <ShieldCheck className="mt-0.5 shrink-0" size={18} />
-        <div>
-          <p className="font-bold">Dokumen Anda disimpan dengan aman</p>
-          <p className="mt-1 leading-relaxed text-blue-700">
-            Format dan ukuran file diperiksa. Tautan untuk melihat dokumen hanya berlaku sebentar dan setiap akses dicatat.
-          </p>
-        </div>
-      </div>
+      <FeedbackBanner title="Dokumen Anda disimpan secara privat">Format dan ukuran file diperiksa. Tautan untuk melihat dokumen hanya berlaku sebentar dan setiap akses dicatat.</FeedbackBanner>
 
       {message && (
-        <div className={`rounded-xl border p-3.5 text-xs font-semibold ${
-          message.tone === "error"
-            ? "border-red-200 bg-red-50 text-red-700"
-            : message.tone === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-blue-200 bg-blue-50 text-blue-700"
-        }`}>
-          {message.text}
-        </div>
+        <FeedbackBanner tone={message.tone === "error" ? "error" : message.tone} live>{message.text}</FeedbackBanner>
       )}
 
       {loading ? (
@@ -551,6 +527,6 @@ export default function UploadPage() {
           }}
         />
       )}
-    </div>
+    </DashboardPage>
   );
 }

@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // @react-pdf/renderer memuat metrik font bawaan dari berkas di dalam paketnya.
+  // Membundelnya lewat webpack merusak resolusi berkas itu, jadi paketnya
+  // dibiarkan dimuat langsung oleh Node di sisi server.
+  serverExternalPackages: ["@react-pdf/renderer"],
   // Increase max header size to avoid HTTP 431 with Supabase SSR cookies
   experimental: {
     serverActions: {

@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect } from "react";
-import { User, Mail, Building2, Phone, Save, FileText, Camera, Check, AlertCircle, LogOut, ArrowLeft, ShieldCheck } from "lucide-react";
+import { User, Mail, Building2, Phone, Save, FileText, Camera, LogOut, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 import OwnerConsentPanel from "@/modules/consent/owner-consent-panel";
+import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 
 const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
 
@@ -196,53 +198,26 @@ export default function ProfilPage() {
 
   return (
     <>
-      {/* Header - Mobile only */}
-      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-4 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30 gap-2">
-        <Link href="/umkm" className="flex-shrink-0">
-          <button className="flex items-center gap-1.5 text-xs font-bold text-[#001b85]">
-            <ArrowLeft size={16} /> Beranda
-          </button>
-        </Link>
-        <span className="text-xs font-bold text-[#141a34] truncate">Profil Usaha</span>
-        <button onClick={handleSignOut} className="text-xs text-red-600 font-bold flex items-center gap-1 cursor-pointer flex-shrink-0">
-          <LogOut size={14} />
-        </button>
-      </header>
-
-      <main className="px-4 md:px-0 py-5 space-y-6 pb-28 md:pb-8 max-w-4xl mx-auto">
+      <DashboardPage width="compact">
+        <PageHeader title="Profil & identitas usaha" description="Pastikan informasi usaha tetap lengkap dan terbaru agar dokumen serta laporan mudah dikenali." icon={Building2} actions={<button onClick={handleSignOut} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-[#c8d3de] bg-white px-4 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"><LogOut size={14} /> Keluar akun</button>} />
         <OwnerConsentPanel />
-        {/* Title Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#141a34]">Profil & Identitas Usaha</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Kelola detail informasi nama, sektor, lokasi, NIB, dan foto profil usaha Anda</p>
-          </div>
-          <button onClick={handleSignOut} className="hidden md:flex text-xs font-bold text-red-600 border border-red-200 bg-red-50 px-4 py-2 rounded-xl hover:bg-red-100 items-center gap-1.5 transition-colors cursor-pointer">
-            <LogOut size={14} /> Keluar dari Akun
-          </button>
-        </div>
 
         {message && (
-          <div className={`p-4 rounded-xl border text-xs font-bold flex items-center gap-2 animate-fade-in ${
-            message.type === "success" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-600 border-red-200"
-          }`}>
-            {message.type === "success" ? <Check size={16} /> : <AlertCircle size={16} />}
-            <span>{message.text}</span>
-          </div>
+          <FeedbackBanner tone={message.type === "success" ? "success" : "error"} live>{message.text}</FeedbackBanner>
         )}
 
         <form onSubmit={handleSave} className="space-y-6">
           {/* Avatar & Basic Info Header Card */}
-          <div className="bg-white rounded-2xl p-6 border border-[#e5e7ff] shadow-card flex flex-col sm:flex-row items-center gap-6">
+          <div className="bg-white rounded-2xl p-6 border border-[#e3e9f0] shadow-card flex flex-col sm:flex-row items-center gap-6">
             <div className="relative group flex-shrink-0">
-              <div className="w-24 h-24 rounded-2xl bg-[#001b85] text-white flex items-center justify-center font-bold text-3xl shadow-md overflow-hidden border-2 border-[#001b85]/20">
+              <div className="w-24 h-24 rounded-2xl bg-[#0b5f86] text-white flex items-center justify-center font-bold text-3xl shadow-md overflow-hidden border-2 border-[#0b5f86]/20">
                 {previewAvatar ? (
-                  <img src={previewAvatar} alt="Foto Profil Usaha" className="w-full h-full object-cover" />
+                  <Image src={previewAvatar} alt="Foto profil usaha" width={96} height={96} unoptimized className="h-full w-full object-cover" />
                 ) : (
                   form.namaUsaha ? form.namaUsaha.charAt(0).toUpperCase() : "U"
                 )}
               </div>
-              <label htmlFor="avatar-upload" className="absolute -bottom-2 -right-2 bg-[#001b85] text-white p-2 rounded-xl shadow-lg cursor-pointer hover:bg-[#0e32c2] transition-colors" title="Unggah foto profil ke Storage">
+              <label htmlFor="avatar-upload" className="absolute -bottom-2 -right-2 bg-[#0b5f86] text-white p-2 rounded-xl shadow-lg cursor-pointer hover:bg-[#0f73a3] transition-colors" title="Unggah foto profil">
                 <Camera size={14} />
                 <input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
               </label>
@@ -250,32 +225,32 @@ export default function ProfilPage() {
 
             <div className="flex-1 text-center sm:text-left space-y-1">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                <h2 className="font-headline text-xl font-bold text-[#141a34]">{form.namaUsaha || "Nama Usaha Belum Diisi"}</h2>
+                <h2 className="font-headline text-xl font-bold text-[#1b2a3a]">{form.namaUsaha || "Nama Usaha Belum Diisi"}</h2>
                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                   <ShieldCheck size={12} /> Akun Terverifikasi
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium">Pemilik: <span className="font-bold text-slate-700">{form.namaPemilik || "Belum Diisi"}</span> · {form.email}</p>
-              <p className="text-xs text-[#001b85] font-semibold">{form.sektor} · {form.lokasi || "Lokasi belum diisi"}</p>
+              <p className="text-xs text-[#0b5f86] font-semibold">{form.sektor} · {form.lokasi || "Lokasi belum diisi"}</p>
             </div>
           </div>
 
           {/* Form Sections Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Section 1: Informasi Usaha */}
-            <div className="bg-white rounded-2xl p-6 border border-[#e5e7ff] shadow-card space-y-4">
-              <h3 className="font-headline text-sm font-bold text-[#141a34] flex items-center gap-2 border-b border-slate-100 pb-3">
-                <Building2 size={16} className="text-[#001b85]" /> Detail Informasi Usaha
+            <div className="bg-white rounded-2xl p-6 border border-[#e3e9f0] shadow-card space-y-4">
+              <h3 className="font-headline text-sm font-bold text-[#1b2a3a] flex items-center gap-2 border-b border-slate-100 pb-3">
+                <Building2 size={16} className="text-[#0b5f86]" /> Detail Informasi Usaha
               </h3>
 
               <div>
-                <label className="block text-xs font-bold text-[#444655] mb-1.5">Nama Usaha</label>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Nama Usaha</label>
                 <div className="relative">
                   <input
                     value={form.namaUsaha}
                     onChange={(e) => setForm({ ...form, namaUsaha: e.target.value })}
                     placeholder="Contoh: Warung Ayam Geprek Ibu Sari"
-                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none"
+                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none"
                     required
                   />
                   <Building2 size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -283,7 +258,7 @@ export default function ProfilPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#444655] mb-1.5">Sektor Usaha</label>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Sektor Usaha</label>
                 <div className="flex flex-wrap gap-2">
                   {SECTORS.map((s) => (
                     <button
@@ -291,7 +266,7 @@ export default function ProfilPage() {
                       type="button"
                       onClick={() => setForm({ ...form, sektor: s })}
                       className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
-                        form.sektor === s ? "bg-[#001b85] text-white border-[#001b85]" : "bg-white text-[#444655] border-[#c5c5d7]"
+                        form.sektor === s ? "bg-[#0b5f86] text-white border-[#0b5f86]" : "bg-white text-[#4a6280] border-[#c8d3de]"
                       }`}
                     >
                       {s}
@@ -301,7 +276,7 @@ export default function ProfilPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#444655] mb-1.5">Kota / Kabupaten Usaha *</label>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Kota / Kabupaten Usaha *</label>
                 <CitySelect
                   value={form.lokasi}
                   onChange={(val) => setForm({ ...form, lokasi: val })}
@@ -311,32 +286,32 @@ export default function ProfilPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#444655] mb-1.5">Alamat Lengkap Kios / Toko</label>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Alamat Lengkap Kios / Toko</label>
                 <textarea
                   rows={3}
                   value={form.alamat}
                   onChange={(e) => setForm({ ...form, alamat: e.target.value })}
                   placeholder="Jl. Merdeka No. 12, Kelurahan X, Kecamatan Y"
-                  className="w-full px-4 py-3 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none"
+                  className="w-full px-4 py-3 rounded-xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none"
                 />
               </div>
             </div>
 
             {/* Section 2: Kontak & Legalitas NIB */}
-            <div className="bg-white rounded-2xl p-6 border border-[#e5e7ff] shadow-card space-y-4">
-              <h3 className="font-headline text-sm font-bold text-[#141a34] flex items-center gap-2 border-b border-slate-100 pb-3">
-                <FileText size={16} className="text-[#001b85]" /> Kontak & Legalitas Usaha
+            <div className="bg-white rounded-2xl p-6 border border-[#e3e9f0] shadow-card space-y-4">
+              <h3 className="font-headline text-sm font-bold text-[#1b2a3a] flex items-center gap-2 border-b border-slate-100 pb-3">
+                <FileText size={16} className="text-[#0b5f86]" /> Kontak & Legalitas Usaha
               </h3>
 
               <div>
-                <label className="block text-xs font-bold text-[#444655] mb-1.5">Nama Pemilik Usaha (Owner)</label>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Nama Pemilik Usaha (Owner)</label>
                 <div className="relative">
                   <input
                     type="text"
                     value={form.namaPemilik}
                     onChange={(e) => setForm({ ...form, namaPemilik: e.target.value })}
                     placeholder="Contoh: Ibu Sari / Pak Pur"
-                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none font-medium"
+                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none font-medium"
                     required
                   />
                   <User size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -344,7 +319,7 @@ export default function ProfilPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#444655] mb-1.5">Email Terdaftar</label>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Email Terdaftar</label>
                 <div className="relative">
                   <input
                     type="email"
@@ -357,28 +332,28 @@ export default function ProfilPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#444655] mb-1.5">Nomor Telepon / WhatsApp</label>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Nomor Telepon / WhatsApp</label>
                 <div className="relative">
                   <input
                     type="tel"
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                     placeholder="Contoh: 081234567890"
-                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none"
+                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none"
                   />
                   <Phone size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#444655] mb-1.5">NIB (Nomor Induk Berusaha)</label>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">NIB (Nomor Induk Berusaha)</label>
                 <div className="relative">
                   <input
                     value={form.nib}
                     onChange={(e) => setForm({ ...form, nib: e.target.value })}
                     placeholder="13 Digit NIB (Opsional, dari OSS.go.id)"
-                    className={`w-full px-4 py-3 pl-10 pr-4 rounded-xl border text-sm focus:border-[#001b85] focus:outline-none font-mono ${
-                      form.nib ? "border-emerald-300 bg-emerald-50/40" : "border-[#c5c5d7]"
+                    className={`w-full px-4 py-3 pl-10 pr-4 rounded-xl border text-sm focus:border-[#0b5f86] focus:outline-none font-mono ${
+                      form.nib ? "border-emerald-300 bg-emerald-50/40" : "border-[#c8d3de]"
                     }`}
                   />
                   <FileText size={17} className={`absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none ${form.nib ? "text-emerald-500" : "text-slate-400"}`} />
@@ -392,8 +367,8 @@ export default function ProfilPage() {
                 ) : (
                   <p className="text-[11px] text-slate-400 mt-1">
                     💡 Pengisian NIB akan menaikkan Readiness Score usaha Anda secara signifikan.{" "}
-                    <Link href="/umkm/upload" className="text-[#001b85] underline font-semibold">
-                      Upload dokumen NIB untuk ekstraksi otomatis →
+                    <Link href="/umkm/upload" className="text-[#0b5f86] underline font-semibold">
+                      Unggah dokumen NIB agar datanya dapat dibaca otomatis →
                     </Link>
                   </p>
                 )}
@@ -406,14 +381,14 @@ export default function ProfilPage() {
             <button
               type="submit"
               disabled={saving}
-              className="w-full sm:w-auto bg-[#001b85] text-white font-bold px-8 py-3.5 rounded-xl text-sm hover:bg-[#0e32c2] transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+              className="w-full sm:w-auto bg-[#0b5f86] text-white font-bold px-8 py-3.5 rounded-xl text-sm hover:bg-[#0f73a3] transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
             >
               <Save size={16} />
-              {saving ? "Menyimpan ke Storage..." : "Simpan Perubahan Profil 🚀"}
+              {saving ? "Menyimpan perubahan..." : "Simpan perubahan"}
             </button>
           </div>
         </form>
-      </main>
+      </DashboardPage>
     </>
   );
 }

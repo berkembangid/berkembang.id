@@ -12,6 +12,10 @@ import {
   transactionTypeSchema,
   type TransactionDraftItem,
 } from "@/modules/ledger/capture-schema";
+import {
+  EXTRACTION_SYSTEM_PROMPT_V2 as EXTRACTION_SYSTEM_PROMPT,
+  applyHouseholdPrior,
+} from "@/modules/ai/extraction-prompt";
 
 export type AudioInput = { file: File; mimeType: string };
 export type TranscriptInput = { transcription: string; transactionDate: string };
@@ -69,43 +73,18 @@ const providerItemSchema = z.object({
   paymentMethod: paymentMethodSchema.nullable().optional(),
   salesChannel: z.string().trim().min(1).max(80).nullable().optional(),
   confidence: z.number().min(0).max(1).nullable().optional(),
+  emkmCategoryCode: z.number().int().min(1).max(10).nullable().optional(),
+  emkmCategorySubtype: z
+    .enum(["4a", "4b", "5210", "5220", "5230", "5240", "5250", "5260", "5270", "5280", "5290"])
+    .nullable()
+    .optional(),
+  counterpartyName: z.string().trim().min(1).max(120).nullable().optional(),
+  interestAmountIdr: z.number().int().nonnegative().max(9_000_000_000_000).nullable().optional(),
 });
 
 const providerPayloadSchema = z.object({
   items: z.array(providerItemSchema).min(1).max(20),
 });
-
-const EXTRACTION_SYSTEM_PROMPT = `Anda mengekstrak transaksi UMKM Indonesia dari transkrip pengguna.
-
-Aturan wajib:
-- Jangan menambah transaksi, nominal, kuantitas, tanggal, atau detail yang tidak dinyatakan pengguna.
-- Jika nominal tidak jelas, kembalikan items kosong.
-- amountIdr harus bilangan bulat rupiah positif. "50 ribu", "50rb", dan "50k" berarti 50000.
-- transactionType hanya "income" atau "expense".
-- categoryCode hanya "sales", "materials", "operations", "payroll", atau "other".
-- paymentMethod jika diketahui hanya "cash", "qris", "bank_transfer", "ewallet", "credit", atau "other".
-- Gunakan tanggal default yang diberikan bila pengguna tidak menyebut tanggal.
-- confidence harus 0 sampai 1 dan hanya merupakan petunjuk untuk review manusia.
-- Kembalikan JSON saja, tanpa markdown.
-
-Format:
-{
-  "items": [
-    {
-      "transactionType": "income",
-      "amountIdr": 50000,
-      "transactionDate": "YYYY-MM-DD",
-      "categoryCode": "sales",
-      "description": "deskripsi yang dinyatakan pengguna",
-      "quantity": 2,
-      "unit": "porsi",
-      "unitPriceIdr": 25000,
-      "paymentMethod": "cash",
-      "salesChannel": null,
-      "confidence": 0.9
-    }
-  ]
-}`;
 
 function parseJsonPayload(raw: string): unknown {
   try {
@@ -121,17 +100,26 @@ function parseJsonPayload(raw: string): unknown {
   }
 }
 
-function normalizeProviderItems(value: unknown, defaultDate: string): TransactionDraftItem[] {
+function normalizeProviderItems(
+  value: unknown,
+  defaultDate: string,
+  transcription = "",
+): TransactionDraftItem[] {
   const parsed = providerPayloadSchema.safeParse(value);
   if (!parsed.success) {
     throw new CaptureProviderError("AI_VALIDATION_FAILED", false, { cause: parsed.error });
   }
 
-  const normalized = parsed.data.items.map((item, index) => ({
-    clientItemId: `item-${index + 1}`,
-    ...item,
-    transactionDate: item.transactionDate ?? defaultDate,
-  }));
+  const normalized = parsed.data.items.map((item, index) =>
+    applyHouseholdPrior(
+      {
+        clientItemId: `item-${index + 1}`,
+        ...item,
+        transactionDate: item.transactionDate ?? defaultDate,
+      },
+      transcription,
+    ),
+  );
   const validated = transactionDraftItemsSchema.safeParse(normalized);
   if (!validated.success) {
     throw new CaptureProviderError("AI_VALIDATION_FAILED", false, { cause: validated.error });
@@ -228,7 +216,7 @@ function createGroqProviders(apiKey: string): {
           const content = response.choices[0]?.message?.content;
           if (!content) throw new CaptureProviderError("AI_VALIDATION_FAILED", false);
           return {
-            items: normalizeProviderItems(parseJsonPayload(content), input.transactionDate),
+            items: normalizeProviderItems(parseJsonPayload(content), input.transactionDate, input.transcription),
             promptTokens: response.usage?.prompt_tokens,
             completionTokens: response.usage?.completion_tokens,
           };
@@ -280,7 +268,7 @@ function createOpenAiProviders(apiKey: string): {
           const content = response.choices[0]?.message?.content;
           if (!content) throw new CaptureProviderError("AI_VALIDATION_FAILED", false);
           return {
-            items: normalizeProviderItems(parseJsonPayload(content), input.transactionDate),
+            items: normalizeProviderItems(parseJsonPayload(content), input.transactionDate, input.transcription),
             promptTokens: response.usage?.prompt_tokens,
             completionTokens: response.usage?.completion_tokens,
           };
@@ -331,6 +319,7 @@ function createGeminiProviders(apiKey: string): {
             items: normalizeProviderItems(
               parseJsonPayload(response.response.text()),
               input.transactionDate,
+              input.transcription,
             ),
             promptTokens: metadata?.promptTokenCount,
             completionTokens: metadata?.candidatesTokenCount,

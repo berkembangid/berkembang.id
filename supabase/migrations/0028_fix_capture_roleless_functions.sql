@@ -254,6 +254,7 @@ begin
       v_capture.id::text,
       jsonb_build_object('captureId', v_capture.id),
       3
+    )
     returning * into v_job;
   end if;
 

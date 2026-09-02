@@ -12,7 +12,11 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "db:test": "node scripts/verify-database-migrations.mjs",
+    "lint:terms": "node scripts/lint-forbidden-terms.mjs",
+    "report:sample": "node scripts/render-sample-statement.mjs",
     "db:types": "node scripts/generate-database-types.mjs",
+    "db:push:pooler": "node scripts/db-push-pooler.mjs",
+    "seed:demo": "node scripts/seed-demo-account.mjs",
     "db:types:check": "node scripts/generate-database-types.mjs --check",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke"
@@ -20,6 +24,7 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@google/generative-ai": "^0.24.1",
+    "@react-pdf/renderer": "^4.9.0",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.7",
     "class-variance-authority": "^0.7.1",

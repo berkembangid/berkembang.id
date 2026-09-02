@@ -31,6 +31,19 @@ const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
 
 export const ledgerDateSchema = dateSchema.refine((value) => value >= "2000-01-01" && value <= jakartaDate(), "Tanggal tidak boleh melewati hari ini.");
 
+export const emkmLedgerFieldsSchema = z.object({
+  // Kategori bahasa warung 1..10 dan sub-biaya 5210..5290. Kalau tidak dikirim,
+  // basis data menurunkannya dari pasangan kategori lama supaya setiap catatan
+  // tetap punya jurnal.
+  emkmCategoryCode: z.number().int().min(1).max(10).nullable().optional(),
+  emkmCategorySubtype: z.enum([
+    "4a", "4b",
+    "5210", "5220", "5230", "5240", "5250", "5260", "5270", "5280", "5290",
+  ]).nullable().optional(),
+  counterpartyId: z.uuid().nullable().optional(),
+  interestAmountIdr: z.number().int().nonnegative().max(9_000_000_000_000).optional(),
+});
+
 export const ledgerTransactionInputSchema = z.object({
   transactionType: transactionTypeSchema,
   amountIdr: z.number().int().positive().max(9_000_000_000_000),
@@ -44,10 +57,16 @@ export const ledgerTransactionInputSchema = z.object({
   paymentMethod: paymentMethodSchema.nullable().optional(),
   salesChannel: z.string().trim().min(1).max(80).nullable().optional(),
   counterparty: z.string().trim().min(1).max(120).nullable().optional(),
-}).superRefine((value, context) => {
+}).extend(emkmLedgerFieldsSchema.shape).superRefine((value, context) => {
   const category = categoryOptions.find((option) => option.code === value.categoryCode);
   if (!category || category.group !== value.categoryGroup || (category.type !== "both" && category.type !== value.transactionType)) {
     context.addIssue({ code: "custom", path: ["categoryCode"], message: "Kategori tidak sesuai dengan jenis transaksi." });
+  }
+  if ((value.interestAmountIdr ?? 0) > value.amountIdr) {
+    context.addIssue({ code: "custom", path: ["interestAmountIdr"], message: "Bunga tidak boleh lebih besar dari nominal." });
+  }
+  if ((value.interestAmountIdr ?? 0) > 0 && value.emkmCategoryCode !== 7) {
+    context.addIssue({ code: "custom", path: ["interestAmountIdr"], message: "Bunga hanya berlaku untuk pembayaran cicilan." });
   }
 });
 
@@ -78,5 +97,5 @@ export const categoryGroupLabels: Record<string, string> = {
   sales: "Penjualan", cost_of_goods: "Bahan & Produksi", operating_expense: "Operasional", asset: "Peralatan", other: "Lainnya",
 };
 export const paymentMethodLabels: Record<string, string> = {
-  cash: "Tunai", qris: "QRIS", bank_transfer: "Transfer bank", ewallet: "Dompet digital", credit: "Tempo", other: "Lainnya", unknown: "Belum dicatat",
+  cash: "Tunai", qris: "QRIS", bank_transfer: "Transfer bank", ewallet: "Dompet digital", edc: "Mesin EDC", credit: "Tempo", unpaid: "Belum dibayar", other: "Lainnya", unknown: "Belum dicatat",
 };

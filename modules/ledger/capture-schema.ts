@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+/**
+ * Kategori bahasa warung dinyatakan langsung di sini (bukan diimpor dari
+ * `modules/accounting`) supaya modul capture tidak bergantung pada modul
+ * akuntansi; keduanya dijaga sinkron oleh test unit.
+ */
+const emkmCategoryCodeSchema = z.number().int().min(1).max(10);
+const emkmCategorySubtypeSchema = z.enum([
+  "4a", "4b",
+  "5210", "5220", "5230", "5240", "5250", "5260", "5270", "5280", "5290",
+]);
+
 export const captureStatusSchema = z.enum([
   "draft",
   "queued",
@@ -24,7 +35,11 @@ export const paymentMethodSchema = z.enum([
   "qris",
   "bank_transfer",
   "ewallet",
+  "edc",
   "credit",
+  // "unpaid" adalah "belum dibayar" pada spek SAK EMKM: barang sudah
+  // diserahkan atau diterima tetapi uangnya belum berpindah.
+  "unpaid",
   "other",
 ]);
 
@@ -48,6 +63,12 @@ export const transactionDraftItemSchema = z.object({
   paymentMethod: paymentMethodSchema.nullable().optional(),
   salesChannel: z.string().trim().min(1).max(80).nullable().optional(),
   confidence: z.number().min(0).max(1).nullable().optional(),
+  // Kategori bahasa warung 1..10. Yang menentukan akun adalah
+  // `category_templates`, bukan tebakan AI di sini.
+  emkmCategoryCode: emkmCategoryCodeSchema.nullable().optional(),
+  emkmCategorySubtype: emkmCategorySubtypeSchema.nullable().optional(),
+  counterpartyName: z.string().trim().min(1).max(120).nullable().optional(),
+  interestAmountIdr: z.number().int().nonnegative().max(9_000_000_000_000).nullable().optional(),
 });
 
 export const transactionDraftItemsSchema = z

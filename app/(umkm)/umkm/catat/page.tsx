@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Mic, RefreshCw, Trash2, Edit2, Check, X,
+  Mic, RefreshCw, Trash2, Edit2, Check, X,
   Sparkles, Type, Square, Volume2, PenLine, RotateCcw, AlertCircle,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -21,6 +20,11 @@ import {
   categoryLabels,
   type TransactionDraftItem,
 } from "@/modules/ledger/capture-schema";
+import { CategoryChips, emptySelection, type CategorySelection } from "@/components/warung/CategoryChips";
+import { InlineMoneyInput } from "@/components/warung/MoneyInput";
+import { categoryLabel, normalizeCategory, sectorFromAnswer } from "@/modules/accounting/templates";
+import { pilotSector, type AccountingSector } from "@/modules/accounting/coa";
+import { DashboardPage, PageHeader } from "@/components/dashboard";
 
 // ───────── TYPES ─────────
 type Step = "ready" | "recording" | "uploading" | "processing" | "needs_review" | "saving" | "success" | "failed";
@@ -40,6 +44,7 @@ interface ExtractedItem {
   unitPriceIdr: number | null;
   paymentMethod: TransactionDraftItem["paymentMethod"];
   salesChannel: string | null;
+  category: CategorySelection;
 }
 
 // ───────── CONSTANTS ─────────
@@ -72,23 +77,44 @@ function formatDraftItems(items: TransactionDraftItem[]): ExtractedItem[] {
     unitPriceIdr: it.unitPriceIdr ?? null,
     paymentMethod: it.paymentMethod ?? null,
     salesChannel: it.salesChannel ?? null,
+    category: {
+      ...emptySelection(it.transactionType),
+      ...(it.emkmCategoryCode
+        ? { emkmCategoryCode: it.emkmCategoryCode, emkmCategorySubtype: it.emkmCategorySubtype ?? null }
+        : {}),
+      counterpartyName: it.counterpartyName ?? null,
+      interestAmountIdr: it.interestAmountIdr ?? 0,
+    },
   }));
 }
 
 function toDraftItems(items: ExtractedItem[]): TransactionDraftItem[] {
-  return items.map((item) => ({
-    clientItemId: item.clientItemId,
-    transactionType: item.type === "masuk" ? "income" : "expense",
-    amountIdr: item.nominal,
-    transactionDate: item.transactionDate,
-    categoryCode: item.categoryCode,
-    description: item.item,
-    quantity: item.quantity,
-    unit: item.unit,
-    unitPriceIdr: item.unitPriceIdr,
-    paymentMethod: item.paymentMethod,
-    salesChannel: item.salesChannel,
-  }));
+  return items.map((item) => {
+    // Kategori menentukan arah uang, bukan sebaliknya: jualan yang belum
+    // dibayar tetap tercatat sebagai pelanggan yang belum bayar.
+    const category = normalizeCategory(
+      item.category.emkmCategoryCode,
+      item.category.emkmCategorySubtype,
+      item.paymentMethod,
+    );
+    return {
+      clientItemId: item.clientItemId,
+      transactionType: category.direction,
+      amountIdr: item.nominal,
+      transactionDate: item.transactionDate,
+      categoryCode: item.categoryCode,
+      description: item.item,
+      quantity: item.quantity,
+      unit: item.unit,
+      unitPriceIdr: item.unitPriceIdr,
+      paymentMethod: category.paymentMethod,
+      salesChannel: item.salesChannel,
+      emkmCategoryCode: category.categoryCode,
+      emkmCategorySubtype: category.subtype as TransactionDraftItem["emkmCategorySubtype"],
+      counterpartyName: item.category.counterpartyName,
+      interestAmountIdr: item.category.interestAmountIdr || null,
+    };
+  });
 }
 
 function captureErrorMessage(error: unknown, fallback: string) {
@@ -123,6 +149,27 @@ export default function CatatPage() {
   const [editableCaption, setEditableCaption] = useState("");
   const [isEditingCaption, setIsEditingCaption] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
+  // Sektor yang dijawab pemilik di halaman Profil menentukan kata-kata chip
+  // kategori. Akun jurnalnya tidak berubah; yang berubah hanya pertanyaannya,
+  // supaya penjual jasa berhenti ditanya soal stok dan kemasan.
+  const [sector, setSector] = useState<AccountingSector>(pilotSector);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data: session } = await supabase.auth.getUser();
+      if (!session.user) return;
+      const { data } = await supabase
+        .from("profiles")
+        .select("sektor_usaha")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      if (!cancelled) setSector(sectorFromAnswer(data?.sektor_usaha));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editFields, setEditFields] = useState<{ item: string; qty: string; nominal: number }>({ item: "", qty: "", nominal: 0 });
   const [saving, setSaving] = useState(false);
@@ -427,6 +474,25 @@ export default function CatatPage() {
   // ── Item editing ────────────────────────────────────────────────
   const handleDeleteItem = useCallback((id: number) => setItems((prev) => prev.filter((i) => i.id !== id)), []);
 
+  // Kategori menentukan arah uang, jadi tanda + / - ikut berubah saat dipilih.
+  const updateItemCategory = useCallback((id: number, category: CategorySelection) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const normalized = normalizeCategory(
+          category.emkmCategoryCode,
+          category.emkmCategorySubtype,
+          item.paymentMethod,
+        );
+        return {
+          ...item,
+          category,
+          type: normalized.direction === "income" ? "masuk" : "keluar",
+        };
+      }),
+    );
+  }, []);
+
   const startEditing = useCallback((item: ExtractedItem) => {
     setEditingId(item.id);
     setEditFields({ item: item.item, qty: item.qty, nominal: item.nominal });
@@ -464,18 +530,8 @@ export default function CatatPage() {
   // ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Mobile Header */}
-      <header className="md:hidden sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-4 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30 gap-2">
-        <Link href="/umkm" className="flex-shrink-0">
-          <button className="flex items-center gap-1.5 text-xs font-bold text-[#001b85]">
-            <ArrowLeft size={16} /> Beranda
-          </button>
-        </Link>
-        <span className="text-xs font-bold text-[#141a34] truncate">Catat transaksi</span>
-      </header>
-
       {toastMessage && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in">
+        <div role="status" aria-live="polite" className="fixed left-1/2 top-4 z-50 flex -translate-x-1/2 items-center gap-2 rounded-xl bg-[#0b7a55] px-4 py-2.5 text-xs font-bold text-white shadow-lg animate-fade-in">
           {toastMessage}
         </div>
       )}
@@ -490,25 +546,21 @@ export default function CatatPage() {
         </div>
       )}
 
-      <main className="px-5 md:px-0 py-6 space-y-6 pb-28 md:pb-8 max-w-4xl mx-auto">
-        {/* Desktop Title */}
-        <div className="hidden md:block mb-2">
-          <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#141a34]">Catat transaksi</h1>
-          <p className="text-xs text-[#444655] mt-1">Ceritakan atau tulis pemasukan dan pengeluaran, lalu periksa hasilnya sebelum disimpan.</p>
-        </div>
+      <DashboardPage width="compact">
+        <PageHeader title="Catat transaksi" description="Ceritakan atau tulis transaksi dengan bahasa sehari-hari. Anda selalu dapat memeriksa hasilnya sebelum disimpan." icon={Mic} />
 
         {/* ── IDLE ───────────────────────────────────────────────── */}
         {step === "ready" && (
           <div className="space-y-6">
             {/* Mode Tabs */}
-            <div className="flex bg-[#ececff] p-1.5 rounded-2xl max-w-sm mx-auto">
+            <div className="flex bg-[#eef8fd] p-1.5 rounded-2xl max-w-sm mx-auto">
               {(["voice", "text"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setInputMode(mode)}
                   className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-xl transition-all cursor-pointer ${
-                    inputMode === mode ? "bg-[#001b85] text-white shadow-sm" : "text-[#444655] hover:text-[#001b85]"
+                    inputMode === mode ? "bg-[#0b5f86] text-white shadow-sm" : "text-[#4a6280] hover:text-[#0b5f86]"
                   }`}
                 >
                   {mode === "voice" ? <><Mic size={16} /> Gunakan suara</> : <><Type size={16} /> Tulis transaksi</>}
@@ -518,58 +570,58 @@ export default function CatatPage() {
 
             {/* Voice Box */}
             {inputMode === "voice" && (
-              <div className="bg-white rounded-3xl p-8 border border-[#e5e7ff] shadow-card text-center space-y-6 animate-fade-in">
-                <div className="w-16 h-16 rounded-2xl bg-[#ececff] flex items-center justify-center mx-auto text-[#001b85]">
+              <div className="bg-white rounded-3xl p-8 border border-[#e3e9f0] shadow-card text-center space-y-6 animate-fade-in">
+                <div className="w-16 h-16 rounded-2xl bg-[#eef8fd] flex items-center justify-center mx-auto text-[#0b5f86]">
                   <Mic size={32} />
                 </div>
                 <div>
-                  <h2 className="font-headline text-xl font-bold text-[#141a34]">Ceritakan Transaksi Usahamu</h2>
-                  <p className="text-xs text-[#444655] mt-1 max-w-md mx-auto">
-                    Bicaralah seperti bercerita ke teman. Contoh: <span className="font-semibold text-[#001b85]">&quot;Laku 15 porsi ayam 300 ribu, beli minyak 50 ribu&quot;</span>
+                  <h2 className="font-headline text-xl font-bold text-[#1b2a3a]">Ceritakan transaksi usaha Anda</h2>
+                  <p className="text-xs text-[#4a6280] mt-1 max-w-md mx-auto">
+                    Bicaralah seperti bercerita ke teman. Contoh: <span className="font-semibold text-[#0b5f86]">&quot;Laku 15 porsi ayam 300 ribu, beli minyak 50 ribu&quot;</span>
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={startMediaRecording}
-                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#001b85] to-[#0ea5e9] text-white flex items-center justify-center mx-auto shadow-xl hover:scale-105 transition-transform cursor-pointer group"
+                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#0b5f86] to-[#0ea5e9] text-white flex items-center justify-center mx-auto shadow-xl hover:scale-105 transition-transform cursor-pointer group"
                 >
                   <Mic size={40} className="group-hover:scale-110 transition-transform" />
                 </button>
-                <p className="text-[11px] text-[#757686] font-medium">Tekan tombol mikrofon, bicara, lalu tekan lagi untuk selesai</p>
+                <p className="text-[11px] text-[#6e859e] font-medium">Tekan tombol mikrofon, bicara, lalu tekan lagi untuk selesai</p>
               </div>
             )}
 
             {/* Text Box */}
             {inputMode === "text" && (
-              <form onSubmit={handleProcessTypedText} className="bg-white rounded-3xl p-6 border border-[#e5e7ff] shadow-card space-y-4 animate-fade-in">
+              <form onSubmit={handleProcessTypedText} className="bg-white rounded-3xl p-6 border border-[#e3e9f0] shadow-card space-y-4 animate-fade-in">
                 <div className="flex items-center gap-2">
-                  <Sparkles size={18} className="text-[#001b85]" />
-                  <h2 className="font-headline text-base font-bold text-[#141a34]">Tuliskan Transaksi Kalimat Bebas</h2>
+                  <Sparkles size={18} className="text-[#0b5f86]" />
+                  <h2 className="font-headline text-base font-bold text-[#1b2a3a]">Tulis transaksi dengan kalimat bebas</h2>
                 </div>
                 <textarea
                   rows={4}
                   value={typedText}
                   onChange={(e) => setTypedText(e.target.value)}
                   placeholder="Contoh: Ada pesanan nasi goreng 10 porsi 150 ribu lunas, dan tadi bayar listrik kios 50 ribu"
-                  className="w-full p-4 rounded-2xl border border-[#c5c5d7] text-sm focus:border-[#001b85] focus:outline-none"
+                  className="w-full p-4 rounded-2xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none"
                   required
                 />
                 <div className="flex justify-end">
                   <button
                     type="submit"
                     disabled={!typedText.trim()}
-                    className="bg-[#001b85] text-white font-bold px-6 py-3 rounded-xl text-xs hover:bg-[#0e32c2] transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="bg-[#0b5f86] text-white font-bold px-6 py-3 rounded-xl text-xs hover:bg-[#0f73a3] transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
-                    <Sparkles size={14} /> Ekstrak Transaksi AI ✨
+                    <Sparkles size={14} /> Baca transaksi
                   </button>
                 </div>
               </form>
             )}
 
             {/* Suggestions */}
-            <div className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card space-y-3">
-              <h3 className="text-xs font-bold text-[#141a34] uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles size={14} className="text-[#001b85]" /> Contoh Kalimat Langsung Coba
+            <div className="bg-white rounded-2xl p-5 border border-[#e3e9f0] shadow-card space-y-3">
+              <h3 className="text-xs font-bold text-[#1b2a3a] uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles size={14} className="text-[#0b5f86]" /> Contoh Kalimat Langsung Coba
               </h3>
               <div className="space-y-2">
                 {SUGGESTIONS.map((sug) => (
@@ -577,10 +629,10 @@ export default function CatatPage() {
                     key={sug.label}
                     type="button"
                     onClick={() => handleSuggestionClick(sug.text)}
-                    className="w-full text-left p-3 rounded-xl bg-[#f3f2ff] hover:bg-[#ececff] border border-[#e5e7ff] transition-colors flex items-center justify-between text-xs font-semibold text-[#141a34] cursor-pointer"
+                    className="w-full text-left p-3 rounded-xl bg-[#f3f2ff] hover:bg-[#eef8fd] border border-[#e3e9f0] transition-colors flex items-center justify-between text-xs font-semibold text-[#1b2a3a] cursor-pointer"
                   >
                     <span>{sug.label}</span>
-                    <span className="text-[11px] font-bold text-[#001b85]">Coba AI →</span>
+                    <span className="text-[11px] font-bold text-[#0b5f86]">Coba AI →</span>
                   </button>
                 ))}
               </div>
@@ -592,16 +644,16 @@ export default function CatatPage() {
         {step === "recording" && (
           <div className="bg-white rounded-3xl p-8 border border-red-200 shadow-card text-center space-y-5 animate-fade-in">
             <div className="flex flex-col items-center gap-3">
-              <div className="w-20 h-20 rounded-full bg-red-100 text-red-600 flex items-center justify-center border-4 border-red-500 animate-pulse">
+              <div className="w-20 h-20 rounded-full bg-[#d6eefa] text-[#0f73a3] flex items-center justify-center border-4 border-[#29abe2] animate-pulse">
                 <Mic size={36} />
               </div>
               <div>
-                <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 px-3 py-1 rounded-full mb-2">
+                <div className="inline-flex items-center gap-2 bg-[#eef8fd] border border-[#addcf4] px-3 py-1 rounded-full mb-2">
                   <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
-                  <span className="text-xs font-mono font-bold text-red-600">{formatSeconds(recordSeconds)}</span>
+                  <span className="text-xs font-mono font-bold text-[#0b5f86]">{formatSeconds(recordSeconds)}</span>
                 </div>
-                <h2 className="font-headline text-xl font-bold text-red-600">Sedang Mendengarkan...</h2>
-                <p className="text-xs text-[#444655] mt-1">Bicaralah dengan jelas dan natural. Klik tombol di bawah jika sudah selesai.</p>
+                <h2 className="font-headline text-xl font-bold text-[#0b5f86]">Sedang mendengarkan...</h2>
+                <p className="text-xs text-[#4a6280] mt-1">Bicaralah dengan jelas dan natural. Klik tombol di bawah jika sudah selesai.</p>
               </div>
             </div>
 
@@ -610,15 +662,15 @@ export default function CatatPage() {
               {WAVE_BARS.map((h, idx) => (
                 <div
                   key={idx}
-                  className="w-1.5 bg-red-500 rounded-full animate-bounce"
+                  className="w-1.5 bg-[#29abe2] rounded-full animate-bounce"
                   style={{ height: `${h}%`, animationDelay: `${idx * 0.1}s` }}
                 />
               ))}
             </div>
 
             {/* Caption placeholder */}
-            <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-left">
-              <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+            <div className="bg-[#eef8fd] border border-[#d6eefa] rounded-2xl px-4 py-3 text-left">
+              <p className="text-[10px] font-bold text-[#0f73a3] uppercase tracking-wider mb-1.5 flex items-center gap-1">
                 <Volume2 size={11} /> Transkripsi akan muncul setelah selesai
               </p>
               <div className="flex items-center gap-2">
@@ -645,10 +697,10 @@ export default function CatatPage() {
 
         {/* ── PROCESSING ─────────────────────────────────────────── */}
         {(["uploading", "processing", "saving", "success"] as Step[]).includes(step) && (
-          <div role="status" aria-live="polite" className="bg-white rounded-3xl p-10 border border-[#e5e7ff] shadow-card text-center space-y-4 animate-fade-in">
-            <RefreshCw size={36} className="animate-spin text-[#001b85] mx-auto" />
-            <h2 className="font-headline text-lg font-bold text-[#141a34]">{step === "uploading" ? "Mengirim rekaman dengan aman..." : step === "processing" ? "Membaca isi catatan..." : step === "saving" ? "Menyimpan catatan..." : "Catatan berhasil disimpan"}</h2>
-            <p className="text-xs text-[#444655]">{step === "uploading" ? "Jangan tutup halaman sampai rekaman selesai dikirim." : step === "processing" ? "Nominal dan jenis transaksi sedang disiapkan untuk Anda periksa." : step === "saving" ? "Data yang sudah Anda periksa sedang dimasukkan ke buku kas." : "Anda akan diarahkan ke laporan."}</p>
+          <div role="status" aria-live="polite" className="bg-white rounded-3xl p-10 border border-[#e3e9f0] shadow-card text-center space-y-4 animate-fade-in">
+            <RefreshCw size={36} className="animate-spin text-[#0b5f86] mx-auto" />
+            <h2 className="font-headline text-lg font-bold text-[#1b2a3a]">{step === "uploading" ? "Mengirim rekaman dengan aman..." : step === "processing" ? "Membaca isi catatan..." : step === "saving" ? "Menyimpan catatan..." : "Catatan berhasil disimpan"}</h2>
+            <p className="text-xs text-[#4a6280]">{step === "uploading" ? "Jangan tutup halaman sampai rekaman selesai dikirim." : step === "processing" ? "Nominal dan jenis transaksi sedang disiapkan untuk Anda periksa." : step === "saving" ? "Data yang sudah Anda periksa sedang dimasukkan ke buku kas." : "Anda akan diarahkan ke laporan."}</p>
           </div>
         )}
 
@@ -657,7 +709,7 @@ export default function CatatPage() {
             <AlertCircle size={36} className="mx-auto text-red-500" />
             <h2 className="mt-3 text-lg font-bold text-slate-800">Catatan belum berhasil dibaca</h2>
             <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-500">{errorMessage || "Rekaman atau tulisan tetap tersimpan. Anda dapat mencoba lagi tanpa kehilangan isi yang sudah dibuat."}</p>
-            <button type="button" onClick={() => { setTypedText(editableCaption || transcription || typedText); setInputMode("text"); setErrorMessage(""); setStep("ready"); }} className="mt-5 min-h-11 rounded-xl bg-[#001b85] px-5 text-xs font-bold text-white">Periksa sebagai tulisan</button>
+            <button type="button" onClick={() => { setTypedText(editableCaption || transcription || typedText); setInputMode("text"); setErrorMessage(""); setStep("ready"); }} className="mt-5 min-h-11 rounded-xl bg-[#0b5f86] px-5 text-xs font-bold text-white">Periksa sebagai tulisan</button>
           </div>
         )}
 
@@ -665,16 +717,16 @@ export default function CatatPage() {
         {step === "needs_review" && (
           <div className="space-y-5 animate-fade-in">
             {/* Editable Caption Box */}
-            <div className="bg-[#ececff] rounded-2xl p-4 border border-[#bac3ff] space-y-2">
+            <div className="bg-[#eef8fd] rounded-2xl p-4 border border-[#bac3ff] space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-[#001b85] uppercase tracking-wider flex items-center gap-1.5">
+                <p className="text-[10px] font-bold text-[#0b5f86] uppercase tracking-wider flex items-center gap-1.5">
                   <Volume2 size={13} /> Yang kamu ucapkan:
                 </p>
                 {!isEditingCaption && (
                   <button
                     type="button"
                     onClick={() => { setIsEditingCaption(true); setTimeout(() => captionTextareaRef.current?.focus(), 50); }}
-                    className="flex items-center gap-1 text-[10px] font-bold text-[#001b85] bg-white border border-[#bac3ff] px-2 py-1 rounded-lg hover:bg-[#ececff] transition-colors cursor-pointer"
+                    className="flex items-center gap-1 text-[10px] font-bold text-[#0b5f86] bg-white border border-[#bac3ff] px-2 py-1 rounded-lg hover:bg-[#eef8fd] transition-colors cursor-pointer"
                   >
                     <PenLine size={11} /> Edit Caption
                   </button>
@@ -688,7 +740,7 @@ export default function CatatPage() {
                     value={editableCaption}
                     onChange={(e) => setEditableCaption(e.target.value)}
                     rows={3}
-                    className="w-full text-xs text-[#141a34] font-medium bg-white border border-[#001b85] rounded-xl px-3 py-2.5 focus:outline-none resize-none leading-relaxed"
+                    className="w-full text-xs text-[#1b2a3a] font-medium bg-white border border-[#0b5f86] rounded-xl px-3 py-2.5 focus:outline-none resize-none leading-relaxed"
                     placeholder="Koreksi caption di sini..."
                   />
                   <div className="flex items-center gap-2">
@@ -696,7 +748,7 @@ export default function CatatPage() {
                       type="button"
                       onClick={reprocessFromCaption}
                       disabled={reprocessing || !editableCaption.trim()}
-                      className="flex items-center gap-1.5 bg-[#001b85] text-white text-[10px] font-bold px-3 py-1.5 rounded-lg hover:bg-[#0e32c2] transition-colors cursor-pointer disabled:opacity-50"
+                      className="flex items-center gap-1.5 bg-[#0b5f86] text-white text-[10px] font-bold px-3 py-1.5 rounded-lg hover:bg-[#0f73a3] transition-colors cursor-pointer disabled:opacity-50"
                     >
                       {reprocessing ? <RefreshCw size={11} className="animate-spin" /> : <RotateCcw size={11} />}
                       {reprocessing ? "Memproses..." : "Proses Ulang AI"}
@@ -708,18 +760,18 @@ export default function CatatPage() {
                     >
                       <X size={11} /> Batal
                     </button>
-                    <span className="text-[10px] text-[#757686] ml-auto">Edit caption → proses ulang item AI</span>
+                    <span className="text-[10px] text-[#6e859e] ml-auto">Edit caption → proses ulang item AI</span>
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-[#141a34] font-medium leading-relaxed">&quot;{editableCaption || transcription}&quot;</p>
+                <p className="text-xs text-[#1b2a3a] font-medium leading-relaxed">&quot;{editableCaption || transcription}&quot;</p>
               )}
             </div>
 
             {/* Extracted items */}
-            <div className="bg-white rounded-2xl p-5 border border-[#e5e7ff] shadow-card space-y-4">
+            <div className="bg-white rounded-2xl p-5 border border-[#e3e9f0] shadow-card space-y-4">
               <div className="flex items-start justify-between gap-2 flex-wrap">
-                <h3 className="font-bold text-sm text-[#141a34] flex-shrink-0">Item Teridentifikasi ({items.length})</h3>
+                <h3 className="font-bold text-sm text-[#1b2a3a] flex-shrink-0">Item Teridentifikasi ({items.length})</h3>
                 <div className="flex flex-wrap gap-1.5 text-xs font-bold">
                   <span className="text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-200 whitespace-nowrap">
                     +Rp{totalMasuk.toLocaleString("id-ID")}
@@ -732,13 +784,13 @@ export default function CatatPage() {
 
               <div className="space-y-3">
                 {items.map((it) => (
-                  <div key={it.id} className="p-3.5 rounded-xl border border-[#e5e7ff] bg-[#fbf8ff] flex items-center justify-between gap-3">
+                  <div key={it.id} className="p-3.5 rounded-xl border border-[#e3e9f0] bg-[#f5fbf8] flex items-start justify-between gap-3">
                     {editingId === it.id ? (
                       <div className="flex-1 space-y-2">
                         <input
                           value={editFields.item}
                           onChange={(e) => setEditFields((p) => ({ ...p, item: e.target.value }))}
-                          className="w-full text-xs p-2 rounded border border-[#001b85]"
+                          className="w-full text-xs p-2 rounded border border-[#0b5f86]"
                         />
                         <div className="flex gap-2">
                           <input
@@ -746,12 +798,13 @@ export default function CatatPage() {
                             onChange={(e) => setEditFields((p) => ({ ...p, qty: e.target.value }))}
                             className="w-1/2 text-xs p-2 rounded border"
                           />
-                          <input
-                            type="number"
-                            value={editFields.nominal}
-                            onChange={(e) => setEditFields((p) => ({ ...p, nominal: Number(e.target.value) }))}
-                            className="w-1/2 text-xs p-2 rounded border"
-                          />
+                          <div className="w-1/2">
+                            <InlineMoneyInput
+                              value={editFields.nominal || null}
+                              onChange={(value) => setEditFields((p) => ({ ...p, nominal: value ?? 0 }))}
+                              ariaLabel="Nominal baris ini"
+                            />
+                          </div>
                         </div>
                         <div className="flex justify-end gap-1">
                           <button onClick={() => saveEditing(it.id)} className="p-1 text-emerald-600 cursor-pointer"><Check size={16} /></button>
@@ -759,19 +812,30 @@ export default function CatatPage() {
                         </div>
                       </div>
                     ) : (
-                      <>
-                        <div>
-                          <p className="font-bold text-xs text-[#141a34]">{it.item}</p>
-                          <p className="text-[11px] text-[#444655]">{it.qty} · <span className="font-semibold">{it.kategori}</span></p>
+                      <div className="w-full space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-bold text-xs text-[#1b2a3a]">{it.item}</p>
+                            <p className="text-[11px] text-[#4a6280]">
+                              {it.qty} · <span className="font-semibold">{categoryLabel(it.category.emkmCategoryCode, it.category.emkmCategorySubtype)}</span>
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-3">
+                            <span className={`text-xs font-bold ${it.type === "masuk" ? "text-emerald-700" : "text-rose-600"}`}>
+                              {it.type === "masuk" ? "+" : "-"}Rp{it.nominal.toLocaleString("id-ID")}
+                            </span>
+                            <button onClick={() => startEditing(it)} aria-label="Ubah item" className="text-slate-400 hover:text-slate-600 cursor-pointer"><Edit2 size={14} /></button>
+                            <button onClick={() => handleDeleteItem(it.id)} aria-label="Hapus item" className="text-red-400 hover:text-red-600 cursor-pointer"><Trash2 size={14} /></button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className={`text-xs font-bold ${it.type === "masuk" ? "text-emerald-700" : "text-rose-600"}`}>
-                            {it.type === "masuk" ? "+" : "-"}Rp{it.nominal.toLocaleString("id-ID")}
-                          </span>
-                          <button onClick={() => startEditing(it)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><Edit2 size={14} /></button>
-                          <button onClick={() => handleDeleteItem(it.id)} className="text-red-400 hover:text-red-600 cursor-pointer"><Trash2 size={14} /></button>
-                        </div>
-                      </>
+                        <CategoryChips
+                          idPrefix={`item-${it.id}`}
+                          selection={it.category}
+                          amountIdr={it.nominal}
+                          sector={sector}
+                          onChange={(category) => updateItemCategory(it.id, category)}
+                        />
+                      </div>
                     )}
                   </div>
                 ))}
@@ -783,21 +847,21 @@ export default function CatatPage() {
                   onClick={handleStartOver}
                   className="px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer"
                 >
-                  Ulangi Merekam / Ketik
+                  Mulai ulang
                 </button>
                 <button
                   type="button"
                   onClick={handleConfirmSave}
                   disabled={saving || items.length === 0}
-                  className="flex-1 bg-[#001b85] text-white font-bold py-3 rounded-xl text-xs hover:bg-[#0e32c2] transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  className="flex-1 bg-[#0b5f86] text-white font-bold py-3 rounded-xl text-xs hover:bg-[#0f73a3] transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
-                  {saving ? "Menyimpan catatan..." : "Simpan Catatan 🚀"}
+                  {saving ? "Menyimpan catatan..." : "Simpan catatan"}
                 </button>
               </div>
             </div>
           </div>
         )}
-      </main>
+      </DashboardPage>
     </>
   );
 }
