@@ -156,6 +156,36 @@ Status khusus setelah pull:
 - push pertama `0028` gagal karena penutup `)` hilang sebelum `returning * into v_job`;
 - penutup tersebut sudah ditambahkan dan integration test khusus sekarang memastikan blok `VALUES` ditutup sebelum `RETURNING`.
 
+### 4.3.1 Parser nominal deterministik dan router dua jalur — Tahap V-A (2 September 2026)
+
+Migrasi `0039_capture_text_only_path.sql`, paket `modules/nominal-parser`, modul `modules/ledger/capture-routing.ts`.
+
+**Kalimat yang menjelaskan seluruhnya.** Suara bukan fitur transkripsi. Suara adalah cara tercepat menghasilkan satu baris jurnal yang benar, dan metrik utamanya bukan word error rate melainkan persen ucapan yang dikonfirmasi tanpa diedit.
+
+**Angka hanya lahir dari parser.** Ini keputusan yang menahan seluruh fitur. Model bahasa tidak pernah menghasilkan, memperbaiki, atau membulatkan nominal — tugasnya paling jauh menebak kategori 1–10. `parseLlmCategory` menolak keras payload model yang memuat medan berbau nominal dan menghitung pelanggarannya; targetnya nol, selamanya. Dan karena jalur yang justru melewati model adalah jalur Whisper, `capture-amount-guard.ts` membaca ulang transkrip dengan parser dan **menimpa** setiap nominal yang dikembalikan model. Tanpa itu, aturannya hanya berlaku di tempat yang paling tidak membutuhkannya.
+
+**Yang sekarang berjalan:**
+
+- **`modules/nominal-parser`** — TypeScript murni, tanpa dependensi runtime, tanpa jaringan, tanpa basis data. Kesebelas aturan spek Bagian 3.1: kata bilangan penuh, campuran digit, prefiks se-, desimal lokal, slang, ambiguitas dua kandidat, fuzzy Levenshtein, multi-transaksi, tanggal relatif Asia/Jakarta, satuan kuantitas, dan larangan nol/negatif. Seluruh kosakata ditulis sebagai konstanta terekspor, bukan regex yang tersebar, sehingga slang daerah dapat ditambah tanpa menyentuh logika. **168 uji**, termasuk property test untuk kapitalisasi, spasi ganda, tanda baca, dan determinisme.
+- **Router dua jalur** di `POST /api/v1/captures`. Transkrip peramban berkeyakinan ≥ ambang **dan** memuat nominal → diproses sebagai teks: tanpa unggah audio, tanpa Whisper. Selain itu → audio ke Whisper lewat jalur yang sudah ada. Ambangnya `VOICE_CLIENT_TRANSCRIPT_MIN_CONF` (bawaan 0,85), konfigurasi bukan konstanta.
+- **Gating tiga tingkat** dan **maksimal satu pertanyaan** per respons. Tidak pernah ada tingkat yang menyimpan otomatis.
+- **Jalur ketik memakai router yang sama** (`engine: "typed"`, keyakinan penuh), sehingga pemilik tanpa mikrofon mendapat perilaku yang persis sama — dan itulah jalur yang dipakai demo.
+- **Kartu draf menyorot buktinya**: kata yang menghasilkan nominal dan kata yang memicu kategori ditandai di transkripnya. Pemilik melihat *kenapa* sistem menebak, bukan hanya bahwa ia menebak.
+- **`client_hints` tidak pernah dipercaya** — hanya dibandingkan untuk telemetry divergensi. Klien bisa dimodifikasi; angka yang masuk pembukuan tidak boleh berasal dari sana.
+- **Anggaran bundel** dijaga `npm run check:voice-bundle`: batas atas 5.875 B gzip, 38% dari 15 KB.
+
+**Tiga kerusakan yang ditemukan rangkaian uji, bukan dugaan:**
+
+1. **`"barang lama"` menghasilkan nominal Rp5.000** — "lama" berjarak satu huruf dari "lima". **`"hari rabu"` kehilangan tanggalnya** — "rabu" berjarak satu huruf dari "satu". Keduanya lolos penjagaan panjang kata dan daftar kata terlindungi. Perbaikannya bukan menambah kata ke daftar, melainkan mempersempit kapan fuzzy boleh bekerja: hanya di dalam ungkapan angka yang sudah berjalan. Yang membedakan angka dari kata biasa bukan ejaannya, melainkan tetangganya.
+2. **`"dua juta tiga ratus"` menghasilkan 2.000.300**, bukan 2.300.000. Kelompok yang menggantung setelah skala besar mewarisi skala satu tingkat di bawahnya. Salahnya seribu kali lipat, pada ucapan yang justru paling lazim di warung.
+3. **Worker menolak setiap capture bermetode `voice` tanpa audio** — benar sampai jalur TEXT_ONLY ada, dan salah sesudahnya, karena itu justru bentuk capture yang dihasilkan jalur baru.
+
+**Migrasi `0039` melonggarkan satu asumsi yang sudah tidak benar.** Basis data memegang keyakinan bahwa capture bermetode `voice` pasti punya audio. Sekarang `voice` sah dengan audio **atau** transkrip, `source_text` disimpan untuk keduanya, `storage_path` hanya dibuat bila audionya memang akan diunggah, dan kolom `capture_path` membuat rasio TEXT_ONLY — metrik Bagian 7 spek — benar-benar dapat dihitung, bukan ditaksir dari log.
+
+**Yang BELUM diverifikasi.** Uji Playwright lima skenario ketik sudah ditulis (`tests/e2e/voice-typed-capture.spec.ts`) tetapi **belum pernah dijalankan**: ia menuntut aplikasi berjalan beserta `PLAYWRIGHT_BASE_URL`/`E2E_EMAIL`/`E2E_PASSWORD`, dan basis data yang sudah dimigrasi sampai `0039` — sementara remote masih di `0031`. Yang sudah terverifikasi penuh: parser (168 uji), router dan gating (44 uji), sorotan bukti (7 uji), dan seluruh migrasi terhadap PostgreSQL sungguhan.
+
+**Yang ditunda ke Tahap V-B:** `SpeechRecognition`, caption interim, chip nominal langsung, `MediaRecorder` paralel, deteksi kemampuan perangkat, antrean luring IndexedDB, dan toggle caption beserta penjelasan privasinya. **Tahap V-C:** golden set 300 ucapan di CI, penyetelan ambang, slang daerah, dan prior "lima ratus" berbasis data pilot — bukan tebakan.
+
 ### 4.4 Buku Kas dan Laporan
 
 Halaman `/umkm/laporan` menyediakan:

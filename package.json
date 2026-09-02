@@ -17,6 +17,7 @@
     "db:types": "node scripts/generate-database-types.mjs",
     "db:push:pooler": "node scripts/db-push-pooler.mjs",
     "seed:demo": "node scripts/seed-demo-account.mjs",
+    "check:voice-bundle": "node scripts/check-voice-bundle-size.mjs",
     "db:types:check": "node scripts/generate-database-types.mjs --check",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke"

@@ -1,8 +1,8 @@
 # Serah Terima: Mesin Akuntansi SAK EMKM
 
 Tanggal: 2 September 2026 (Asia/Jakarta)
-Branch: `feat/akuntansi-sak-emkm` — dua commit di atas `main` (`f2548ab`)
-Cakupan: migrasi `0029`–`0038`, `modules/accounting`, `components/warung`, Mode Akuntan, seeder demo
+Branch: `feat/akuntansi-sak-emkm` — enam commit di atas `main` (`f2548ab`)
+Cakupan: migrasi `0029`–`0039`, `modules/accounting`, `modules/nominal-parser`, `components/warung`, Mode Akuntan, seeder demo, Voice Capture Tahap V-A
 
 Dokumen ini untuk **developer berikutnya**. Ia menjelaskan bentuk sistemnya, keputusan yang menahannya, dan yang belum selesai. Status produk per fitur ada di `STATUS_PRODUK_TERKINI_2026-08-31.md` Bagian 4.4.1–4.4.9; spesifikasinya di `specs/SPEC_Laporan_Keuangan_Satu_Engine_Dua_Wajah.md`. Dokumen ini tidak mengulang keduanya.
 
@@ -200,6 +200,23 @@ Empat nasihat dari kesalahan yang sudah terjadi.
 **Menambah komponen di layar pemilik?** Jangan memakai warna bawaan Tailwind (`slate-500`, `blue-600`). Uji kontrak memeriksa seluruh `components/warung/` dan dua halaman UMKM, dan akan merah. Palet dan komponennya ada di `components/dashboard`.
 
 ---
+
+## 8.1 Voice Capture Tahap V-A
+
+Ditambahkan setelah dokumen ini pertama ditulis. Empat berkas yang perlu Anda kenal:
+
+| Berkas | Isinya |
+|---|---|
+| `modules/nominal-parser/` | Satu-satunya tempat angka lahir dari ucapan. Murni, deterministik, 168 uji |
+| `modules/ledger/capture-routing.ts` | Pemilihan jalur, gating tiga tingkat, pertanyaan maksimal satu, telemetry |
+| `modules/ledger/capture-amount-guard.ts` | Menimpa nominal keluaran model dengan hasil parser di jalur Whisper |
+| `components/warung/VoiceDraftCard.tsx` | Kartu draf yang menyorot bukti di transkrip |
+
+**Aturan kedelapan, setara dengan tujuh di atas: angka tidak pernah berasal dari model bahasa.** Kalau Anda menambah jalur baru yang menghasilkan draf, ia wajib melewati `enforceParserAmounts`. Skema keluaran model sengaja tidak punya medan nominal, dan `parseLlmCategory` menghitung setiap percobaan melanggarnya.
+
+**Kalau Anda mengerjakan Tahap V-B**, jalankan `npm run check:voice-bundle` sejak baris pertama: anggarannya 15 KB gzip dan parser sudah memakai 5,9 KB sebagai batas atas.
+
+**Yang belum diverifikasi:** `tests/e2e/voice-typed-capture.spec.ts` belum pernah dijalankan. Ia butuh aplikasi berjalan dan remote yang sudah dimigrasi sampai `0039`.
 
 ## 9. Riwayat commit
 
