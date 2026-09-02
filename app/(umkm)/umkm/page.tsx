@@ -2,12 +2,9 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import {
-  AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CheckCircle2,
-  ChevronRight, CircleEllipsis, FileText, Mic, Plus, ShieldCheck,
-  Sparkles, WalletCards,
-} from "lucide-react";
+import { AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CalendarCheck, CheckCircle2, ChevronRight, CircleEllipsis, FileText, Mic, Plus, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { ReminderStrip } from "@/components/warung/ReminderStrip";
 import { ReclassCard } from "@/components/warung/ReclassCard";
 import type { ReadinessView } from "@/modules/readiness/readiness-schema";
 import styles from "../umkm-dashboard.module.css";
@@ -117,10 +114,17 @@ export default function BerandaPage() {
             </div>
             <div className={styles.quickActions}>
               <Link href="/umkm/catat" className={styles.quickAction}><Plus size={16} /> Catat uang</Link>
-              <Link href="/umkm/laporan" className={styles.quickAction}><WalletCards size={15} /> Laporan</Link>
+              <Link href="/umkm/laporan?tutup-kas=1" className={styles.quickAction}><CalendarCheck size={15} /> Tutup kas</Link>
               <Link href="/umkm/catat" aria-label="Pilihan catat lainnya" className={`${styles.quickAction} ${styles.quickActionRound}`}><CircleEllipsis size={18} /></Link>
             </div>
           </section>
+
+          {/*
+            Pengingat berada di sini, bukan di halaman Laporan. Tutup kas dan
+            hitung stok adalah pekerjaan HARI INI, dan Beranda satu-satunya
+            halaman yang pemilik buka setiap hari.
+          */}
+          <ReminderStrip />
 
           <ReclassCard />
 
@@ -162,6 +166,10 @@ export default function BerandaPage() {
           </header>
 
           {error && <div role="alert" className="mt-5 flex gap-2 rounded-xl border border-[#f4b0a8] bg-[#feecea] p-4 text-xs text-[#8a1c12]"><AlertCircle size={17} />{error}</div>}
+
+          <div className="mt-5">
+            <ReminderStrip />
+          </div>
 
           <section aria-label="Ringkasan hari ini" className={styles.kpiGrid}>
             <KpiCard label="Arus kas hari ini" value={formatIdr(cashFlow)} meta="Pemasukan dikurangi pengeluaran" Icon={WalletCards} tone="neutral" />

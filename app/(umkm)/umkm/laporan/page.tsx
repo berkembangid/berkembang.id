@@ -8,7 +8,6 @@ import type { LedgerReportView, LedgerTransactionView } from "@/modules/ledger/l
 import { MonthlyTab } from "@/components/warung/MonthlyTab";
 import { ConditionTab } from "@/components/warung/ConditionTab";
 import { BankReportCard } from "@/components/warung/BankReportCard";
-import { ReminderStrip } from "@/components/warung/ReminderStrip";
 import { InlineMoneyInput } from "@/components/warung/MoneyInput";
 import { ComparisonBarChart, DashboardPage, DashboardPanel, FeedbackBanner, MetricCard, PageHeader, PanelHeader, StatusBadge, type ComparisonDatum } from "@/components/dashboard";
 
@@ -45,6 +44,17 @@ export default function LaporanPage() {
   const [message, setMessage] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm()); const [editing, setEditing] = useState<LedgerTransactionView | null>(null);
   const [showTransactionForm, setShowTransactionForm] = useState(false); const [showClosing, setShowClosing] = useState(false);
+  // Pengingat "Tutup kas" di Beranda menautkan ke sini dengan penanda, supaya
+  // satu ketukan langsung membuka dialognya alih-alih menurunkan pemilik di
+  // halaman laporan dan membiarkannya mencari sendiri.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("tutup-kas") !== "1") return;
+    // Ditunda satu tick, pola yang sama dengan pemuatan lain di halaman ini:
+    // memanggil setState langsung di dalam effect memicu render berantai.
+    const timer = window.setTimeout(() => setShowClosing(true), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
   const [openingCash, setOpeningCash] = useState(""); const [physicalCash, setPhysicalCash] = useState(""); const [closingNote, setClosingNote] = useState("");
   const loadReport = useCallback(async () => { setLoading(true); try { setReport(await getLedgerReportClient(range)); setMessage((value) => value?.tone === "error" ? null : value); } catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "Laporan belum dapat dimuat." }); } finally { setLoading(false); } }, [range]);
   useEffect(() => { const timer = window.setTimeout(() => void loadReport(), 0); return () => window.clearTimeout(timer); }, [loadReport]);
@@ -71,7 +81,6 @@ export default function LaporanPage() {
   return <DashboardPage>
     <PageHeader title="Buku kas & laporan" description="Pahami uang masuk, biaya, dan selisih usaha dari catatan yang sudah Anda konfirmasi." icon={BarChart3} actions={<><a href={`/api/v1/ledger/export?startDate=${range.startDate}&endDate=${range.endDate}`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#a9ebd0] bg-[#edfbf5] px-3 text-xs font-bold text-[#0b7a55]"><Download size={14} /> Unduh data</a><button onClick={() => setShowClosing(true)} disabled={Boolean(todayClosing)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#addcf4] bg-[#eef8fd] px-3 text-xs font-bold text-[#0b5f86] disabled:cursor-not-allowed disabled:opacity-50"><CalendarCheck size={14} /> {todayClosing ? "Kas sudah ditutup" : "Tutup kas"}</button><button onClick={openCreate} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#0b5f86] px-3 text-xs font-bold text-white"><Plus size={14} /> Catat transaksi</button></>} />
     {message && <FeedbackBanner tone={message.tone === "error" ? "error" : message.tone} live>{message.text}</FeedbackBanner>}
-    <ReminderStrip />
     <nav aria-label="Tampilan laporan" className="flex gap-1 rounded-xl border border-[#e3e9f0] bg-white p-1 shadow-[0_5px_18px_rgba(27,42,58,.04)]">
       {([{ id: "month", label: "Bulan Ini" }, { id: "condition", label: "Kondisi Usaha" }, { id: "bank", label: "Untuk Bank" }, { id: "cash", label: "Buku Kas" }] as const).map((item) =>
         <button key={item.id} onClick={() => setTab(item.id)} aria-current={tab === item.id ? "page" : undefined} className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-bold transition-colors ${tab === item.id ? "bg-[#eef8fd] text-[#0b5f86] shadow-sm" : "text-[#6e859e] hover:bg-[#f3f6f9]"}`}>{item.label}</button>)}

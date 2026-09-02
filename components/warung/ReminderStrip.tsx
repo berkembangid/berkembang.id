@@ -25,7 +25,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarCheck, Package } from "lucide-react";
+import { CalendarCheck, ChevronRight, Package } from "lucide-react";
+import Link from "next/link";
 import { AccountingClientError, getRemindersClient } from "@/modules/accounting/accounting-client";
 import type { ReminderKind, ReminderView } from "@/modules/accounting/period";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
@@ -78,6 +79,18 @@ export function reminderGroupText(group: ReminderGroup): { title: string; becaus
   };
 }
 
+/**
+ * Ke mana pengingat ini membawa pemilik.
+ *
+ * Bukan tombol "tandai selesai" -- justru kebalikannya. Pengingat yang hanya
+ * memberi tahu tanpa menunjukkan jalannya memaksa pemilik mencari sendiri
+ * layar tempat pekerjaan itu dilakukan, dan pencarian sekecil apa pun cukup
+ * untuk membuatnya ditunda ke besok.
+ */
+export function reminderHref(kind: ReminderKind): string {
+  return kind === "TUTUP_KAS" ? "/umkm/laporan?tutup-kas=1" : "/umkm/laporan";
+}
+
 export function groupReminders(reminders: ReminderView[]): ReminderGroup[] {
   const order: ReminderKind[] = ["TUTUP_KAS", "HITUNG_STOK"];
   return order
@@ -119,10 +132,13 @@ export function ReminderStrip({ asOf = jakartaDate() }: { asOf?: string }) {
         const shown = group.items.slice(0, maxDatesShown);
         const hidden = group.items.length - shown.length;
         return (
-          <div
+          <Link
             key={group.kind}
-            className={`flex items-start gap-3 rounded-2xl border px-3.5 py-3 ${
-              group.urgent ? "border-[#f0d9a8] bg-[#fdf8ee]" : "border-[#addcf4] bg-[#eef8fd]"
+            href={reminderHref(group.kind)}
+            className={`flex items-start gap-3 rounded-2xl border px-3.5 py-3 transition-colors ${
+              group.urgent
+                ? "border-[#f0d9a8] bg-[#fdf8ee] hover:bg-[#fbf2e2]"
+                : "border-[#addcf4] bg-[#eef8fd] hover:bg-[#e3f3fb]"
             }`}
           >
             <Icon
@@ -148,7 +164,11 @@ export function ReminderStrip({ asOf = jakartaDate() }: { asOf?: string }) {
                 </ul>
               )}
             </div>
-          </div>
+            <ChevronRight
+              size={16}
+              className={`mt-0.5 shrink-0 ${group.urgent ? "text-[#8a6412]" : "text-[#0b5f86]"}`}
+            />
+          </Link>
         );
       })}
     </section>

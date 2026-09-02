@@ -781,7 +781,19 @@ describe("pending reminders contract (0037)", () => {
     // komentar yang menjelaskan kenapa tombol itu tidak ada.
     expect(strip).not.toContain("<button");
     expect(strip).not.toContain("onClick");
-    expect(page).toContain("<ReminderStrip />");
+
+    // Tetapi ia HARUS menuntun ke tempat pekerjaannya. Pengingat yang hanya
+    // memberi tahu tanpa menunjukkan jalannya membuat pemilik mencari sendiri,
+    // dan pencarian sekecil apa pun cukup untuk menundanya ke besok.
+    expect(strip).toContain("reminderHref");
+    expect(strip).toContain("/umkm/laporan?tutup-kas=1");
+
+    // Tempatnya di Beranda, bukan di halaman Laporan. Tutup kas dan hitung
+    // stok adalah pekerjaan HARI INI, dan Beranda satu-satunya halaman yang
+    // pemilik buka setiap hari.
+    const beranda = readFileSync(join(process.cwd(), "app", "(umkm)", "umkm", "page.tsx"), "utf8");
+    expect(beranda).toContain("<ReminderStrip />");
+    expect(page).not.toContain("<ReminderStrip />");
   });
 });
 
