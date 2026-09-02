@@ -169,6 +169,18 @@ describe("financial statement PDF", () => {
     expect(pdf.byteLength).toBeGreaterThan(5_000);
   }, 60_000);
 
+  it("prints the issue number on the page, not just in the database", async () => {
+    // Nomor inilah yang dikutip petugas koperasi tiga bulan kemudian untuk
+    // menentukan berkas mana yang sedang mereka pegang. Kalau ia hanya ada di
+    // baris arsip dan tidak di kertasnya, ia tidak berguna sama sekali.
+    const pdf = await renderFinancialStatementsPdf(
+      documentData({ documentUid: "BRK-20260903-QRSTVWXY" }),
+    );
+    const text = extractText(pdf);
+    expect(text).toContain("BRK-20260903-QRSTVWXY");
+    expect(text).toContain("No. dokumen");
+  }, 60_000);
+
   it("produces one page per statement plus both appendices", async () => {
     const pdf = await renderFinancialStatementsPdf(documentData());
     // Sampul, Posisi Keuangan, Laba Rugi, Arus Kas, CALK, indikator, metodologi.
