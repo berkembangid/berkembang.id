@@ -42,6 +42,7 @@ const expectedMigrations = [
   "0036_indicator_monthly.sql",
   "0037_pending_reminders.sql",
   "0038_sector_aware_templates.sql",
+  "0039_capture_text_only_path.sql",
 ];
 
 describe("WP-03 migration contract", () => {

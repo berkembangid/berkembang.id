@@ -22,6 +22,7 @@ const createdCaptureSchema = z.object({
   inputMethod: captureInputMethodSchema,
   status: captureStatusSchema,
   storagePath: z.string().nullable(),
+  capturePath: z.enum(["TEXT_ONLY", "WHISPER"]).nullable().optional(),
   createdAt: z.string(),
   idempotent: z.boolean(),
 });
@@ -93,6 +94,7 @@ function parseRpcResult<T>(schema: z.ZodType<T>, value: Json | null): T {
 export async function createCaptureRecord(
   input: CreateCaptureRequest,
   idempotencyKey: string,
+  capturePath?: "TEXT_ONLY" | "WHISPER",
 ): Promise<CreatedCapture> {
   const client = await createServerSupabaseClient();
   const args: Database["public"]["Functions"]["create_transaction_capture"]["Args"] = {
@@ -100,8 +102,12 @@ export async function createCaptureRecord(
     p_input_method: input.inputMethod,
   };
   if (input.businessId) args.p_business_id = input.businessId;
-  if (input.sourceText) args.p_source_text = input.sourceText;
-  if (input.file) {
+  // Transkrip peramban disimpan sebagai teks sumber. Ia yang menjadi bahan
+  // jalur TEXT_ONLY, dan tetap berguna sebagai pembanding pada jalur Whisper.
+  const sourceText = input.sourceText ?? input.clientTranscript?.text;
+  if (sourceText) args.p_source_text = sourceText;
+  if (capturePath) args.p_capture_path = capturePath;
+  if (input.file && capturePath !== "TEXT_ONLY") {
     args.p_mime_type = input.file.mimeType;
     args.p_file_size = input.file.size;
     if (input.file.checksumSha256) args.p_checksum_sha256 = input.file.checksumSha256;

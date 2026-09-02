@@ -2987,6 +2987,7 @@ export type Database = {
           confirmed_by: string | null
           confirmed_at: string | null
           cancelled_at: string | null
+          capture_path: string | null
         }
         Insert: {
           id?: string
@@ -3012,6 +3013,7 @@ export type Database = {
           confirmed_by?: string | null
           confirmed_at?: string | null
           cancelled_at?: string | null
+          capture_path?: string | null
         }
         Update: {
           id?: string
@@ -3037,6 +3039,7 @@ export type Database = {
           confirmed_by?: string | null
           confirmed_at?: string | null
           cancelled_at?: string | null
+          capture_path?: string | null
         }
         Relationships: [
           {
@@ -3577,6 +3580,7 @@ export type Database = {
           p_mime_type?: string
           p_file_size?: number
           p_checksum_sha256?: string
+          p_capture_path?: string
         }
         Returns: Json
       }

@@ -9,6 +9,7 @@ import {
   type CaptureProviderAdapter,
 } from "@/modules/ai/capture-providers";
 import type { Json } from "@/types/database.generated";
+import { enforceParserAmounts } from "@/modules/ledger/capture-amount-guard";
 
 const claimedJobSchema = z.object({
   jobId: z.uuid(),
@@ -226,11 +227,24 @@ export async function processQueuedCaptureJob(
           ...(audio ? { audio } : {}),
         }),
       );
+      // Nominal yang dikembalikan model tidak pernah menjadi kebenaran.
+      // Parser deterministik membacanya ulang dari transkrip yang sama, dan
+      // hasilnyalah yang masuk draf. Lihat `capture-amount-guard.ts`.
+      const guarded = enforceParserAmounts(result.items, result.transcription);
+      if (guarded.overridden > 0 || guarded.dropped > 0) {
+        console.warn("Capture draft amounts corrected by parser", {
+          jobId,
+          captureId: claim.captureId,
+          overridden: guarded.overridden,
+          dropped: guarded.dropped,
+        });
+      }
+
       await repository.complete({
         jobId,
         attemptNumber: claim.attemptNumber,
         transcription: result.transcription,
-        draft: JSON.parse(JSON.stringify(result.items)) as Json,
+        draft: JSON.parse(JSON.stringify(guarded.items)) as Json,
         latencyMs: Date.now() - startedAt,
         ...(result.promptTokens === undefined ? {} : { promptTokens: result.promptTokens }),
         ...(result.completionTokens === undefined
@@ -243,7 +257,7 @@ export async function processQueuedCaptureJob(
         captureId: claim.captureId,
         provider: provider.provider,
         attemptNumber: claim.attemptNumber,
-        itemCount: result.items.length,
+        itemCount: guarded.items.length,
         latencyMs: Date.now() - startedAt,
       });
       return;
