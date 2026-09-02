@@ -3229,6 +3229,37 @@ async function verifyAccountingPeriodReports() {
     "thresholds are configuration, never hardcoded in the evaluator",
   );
 
+  // Bentuk konfigurasi harus persis yang dibaca evaluator. Ini sambungan yang
+  // paling mudah bergeser: konfigurasi hidup di SQL, pembacanya di TypeScript,
+  // dan tidak ada kompilator yang menjembatani keduanya.
+  for (const [id, rule] of Object.entries(configRow.rules.components)) {
+    assert.ok(["A", "B", "C", "D"].includes(rule.pillar), `${id} must sit on a known pillar`);
+    for (const key of ["partial", "silver", "gold"]) {
+      assert.ok(key in rule, `${id} must declare ${key}, even when it is null`);
+      assert.ok(
+        rule[key] === null || typeof rule[key] === "number",
+        `${id}.${key} must be a number or null`,
+      );
+    }
+    assert.ok(
+      rule.silver !== null || rule.gold !== null,
+      `${id} needs at least one threshold, or it can never be fulfilled`,
+    );
+  }
+  for (const id of Object.keys(configRow.rules.bronze)) {
+    assert.ok(configRow.rules.components[id], `bronze refers to ${id}, which must exist`);
+  }
+  for (const entry of configRow.rules.effortOrder) {
+    const base = entry.split("_")[0];
+    assert.ok(configRow.rules.components[base], `effort order refers to ${base}, which must exist`);
+  }
+  for (const key of ["habitDays", "qualityDays", "evidenceDays", "fullMonthLookback", "fullMonthMinDays"]) {
+    assert.ok(
+      typeof configRow.rules.windows[key] === "number",
+      `window ${key} must be configured, not assumed`,
+    );
+  }
+
   // Fakta dihitung dalam satu perjalanan ke basis data.
   const factsResult = await asAuthenticatedCommitted(
     userB,

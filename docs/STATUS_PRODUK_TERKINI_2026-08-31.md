@@ -624,6 +624,47 @@ SEKETIKA; datanya menunggu 30 hari dan pemilik bisa membatalkan sendiri.
 adalah kerangka yang mengembalikan `implemented: false`, dan tidak ada penjadwal
 yang memanggilnya.
 
+### 4.5.4 Tingkat Kesiapan — satu model, empat pilar (3 September 2026)
+
+Migrasi `0047`, konfigurasi `wp08-pilot-v2`. Angka tunggal 0–100 berhenti
+dipakai di seluruh layar pemilik.
+
+Sebelumnya satu layar memuat tiga angka berbeda untuk konsep yang sama:
+"17 dari 100" di kartu Beranda, cincin "6/7" di kartu langkah, dan nilai per
+komponen di halaman Perjalanan. Tidak satu pun bisa dijawab ketika pemilik
+bertanya kenapa angkanya segitu, dan satu angka yang menilai sebuah usaha
+terlalu mudah disalahartikan sebagai penilaian kelayakan.
+
+**Yang menggantikannya:** tangga **Mulai → Tembaga → Perak → Emas** di atas dua
+belas komponen dalam empat pilar (kebiasaan mencatat, kualitas catatan,
+legalitas & profil, kesiapan laporan). Setiap komponen punya nilai sekarang,
+target berikutnya, dan satu aksi — semuanya dihitung dari data, tidak ada yang
+diklaim.
+
+**Satu sumber kebenaran.** Beranda dan halaman `/umkm/kesiapan` membaca
+`GET /api/v1/readiness`; tidak ada layar yang menghitung sendiri.
+`readiness-page.tsx` dan `readiness-tier.ts` dihapus, dan `/umkm/roadmap`,
+`/umkm/score`, `/umkm/gaps` diarahkan ke halaman yang sama.
+
+**Aturan = konfigurasi ber-versi.** Seluruh ambang dan jendela waktu ada di
+`readiness_rule_sets`; tidak ada satu angka pun di dalam kode. Trigger menolak
+perubahan isi pada versi yang sudah terbit, sehingga penilaian lama tetap bisa
+dijelaskan. Halaman `/umkm/kesiapan/metodologi` menampilkan tabel aturannya apa
+adanya — ini yang membedakannya dari skor kotak hitam.
+
+**Data yang belum ada bukan kegagalan.** Warung yang tidak pernah belanja di
+atas Rp500 ribu akan membagi nol dengan nol pada komponen bukti belanja besar;
+kalau itu dihitung 0%, ia terkunci selamanya dari Perak justru karena ia hemat.
+Komponen berstatus `BELUM_ADA_DATA` dikecualikan dari syarat tingkat dan dari
+pembagi bar pilar.
+
+**Tidak ada job harian**, karena repo ini tidak punya penjadwal. Potret ditulis
+saat halaman dibaca, idempoten per tanggal — yang sekaligus menyelesaikan
+evaluasi retroaktif akun lama pada pembacaan pertama mereka.
+
+Masa tenggang penurunan tingkat, aktivitas perayaan, dossier institusi, dan
+penguncian PDF multi-bulan di tingkat Perak **belum dikerjakan** (R-B).
+
 ### 4.6 Kesiapan Data Usaha dan Misi
 
 Endpoint `/api/v1/readiness` menghitung snapshot kesiapan di server menggunakan bukti yang tersedia. Halaman terkait:
