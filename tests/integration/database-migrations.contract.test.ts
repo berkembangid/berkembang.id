@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { documentTypes } from "@/modules/documents/document-schema";
+import { sectorTemplateMap } from "@/modules/accounting/sector-mapping";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -830,12 +831,17 @@ describe("sector-aware template contract (0038)", () => {
   });
 
   it("maps the answer the same way in the database and on the screen", () => {
+    // Basis data dan layar harus memetakan jawaban yang sama ke sektor yang
+    // sama. Uji ini dulu mencocokkan satu baris kondisi di TypeScript; sejak
+    // pemetaannya menjadi tabel, yang dibandingkan adalah tabelnya.
     const sqlBlock = migration.slice(migration.indexOf("function private.emkm_sector_from_answer"));
-    for (const answer of ["jasa", "teknologi"]) {
-      expect(sqlBlock).toContain(`when '${answer}' then 'JASA'`);
+    for (const [option, sector] of Object.entries(sectorTemplateMap)) {
+      const resolved = sector ?? "PERDAGANGAN_KULINER";
+      const answer = option.toLowerCase();
+      const sqlSaysJasa = sqlBlock.includes(`when '${answer}' then 'JASA'`);
+      expect(sqlSaysJasa, `${option} harus sama di SQL dan TypeScript`).toBe(resolved === "JASA");
     }
-    const tsBlock = templates.slice(templates.indexOf("export function sectorFromAnswer"));
-    expect(tsBlock).toContain('normalized === "jasa" || normalized === "teknologi"');
+    expect(templates).toContain("resolveAccountingSector");
   });
 
   it("seeds a second sector that never asks about stock or packaging", () => {

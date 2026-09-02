@@ -55,3 +55,38 @@ describe("forbidden credit-assessment language", () => {
     await expect(scanProject(process.cwd())).resolves.toEqual([]);
   });
 });
+
+describe("owner copy dictionary", () => {
+  function terms(path: string, line: string) {
+    return scanContent(path, line).map((finding) => finding.term);
+  }
+
+  it("catches report-card language in text the owner actually reads", () => {
+    // "17/100" adalah nilai ulangan: memberi tahu pemilik bahwa ia gagal tanpa
+    // memberi tahu apa yang kurang.
+    expect(terms("app/(umkm)/umkm/page.tsx", '<p>Readiness Score usaha Anda</p>')).toContain("score");
+    expect(terms("app/(umkm)/umkm/profil/page.tsx", 'const t = "skor kesiapan meningkat";')).toContain("skor");
+  });
+
+  it("leaves identifiers, CSS names, and URLs alone", () => {
+    // Melarang kata ini di seluruh berkas hanya akan membuat orang menaburkan
+    // penanda pengecualian sampai lint ini berhenti berarti.
+    const lines = [
+      "const score = Math.round(readiness?.score ?? 0);",
+      'const scoreStyle = { "--score": `${score}%` } as CSSProperties;',
+      "<div className={styles.scoreRing} />",
+      'return <ReadinessPage mode="score" />;',
+      '<Link href="/umkm/score">Kesiapan</Link>',
+    ];
+    for (const line of lines) {
+      expect(terms("app/(umkm)/umkm/page.tsx", line), line).toEqual([]);
+    }
+  });
+
+  it("does not police the institution portal or Mode Akuntan", () => {
+    // Angkanya tetap dikirim ke institusi; yang berubah hanya cara ia
+    // diperlihatkan kepada pemiliknya.
+    expect(terms("app/(institution)/portal/page.tsx", '<p>Readiness score 62</p>')).toEqual([]);
+    expect(terms("app/(umkm)/umkm/akuntan/page.tsx", '<p>Readiness score 62</p>')).toEqual([]);
+  });
+});

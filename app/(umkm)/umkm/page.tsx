@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
+import { readinessTier, readinessTierText } from "@/modules/readiness/readiness-tier";
 import Link from "next/link";
 import { AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CalendarCheck, CheckCircle2, ChevronRight, CircleEllipsis, FileText, Mic, Plus, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -99,6 +100,19 @@ export default function BerandaPage() {
   const cashFlow = income - expense;
   const score = Math.max(0, Math.min(100, Math.round(readiness?.score ?? 0)));
   const scoreStyle = { "--score": `${score}%` } as CSSProperties;
+  // Fondasi = komponen kesiapan yang sudah punya cukup bukti untuk dinilai.
+  // Yang "not_applicable" tidak ikut dihitung: meminta pemilik melengkapi
+  // sesuatu yang tidak berlaku untuk usahanya adalah tangga yang tidak
+  // pernah bisa dinaiki sampai atas.
+  // Cincin memperlihatkan jumlah fondasi yang lengkap, bukan angka dari
+  // seratus. "3 dari 7" adalah pekerjaan yang bisa diselesaikan; "17" hanya
+  // sebuah nilai.
+  const foundations = readiness
+    ? {
+        complete: readiness.components.filter((item) => item.status === "scored").length,
+        total: readiness.components.filter((item) => item.status !== "not_applicable").length,
+      }
+    : undefined;
 
   return (
     <main className={styles.page}>
@@ -160,7 +174,7 @@ export default function BerandaPage() {
               <Link href="/umkm/roadmap" className={styles.sectionLink}>Detail</Link>
             </div>
             <div className={styles.scoreRow}>
-              <div className={styles.scoreRing} style={scoreStyle}><strong>{readiness ? score : "—"}</strong></div>
+              <div className={styles.scoreRing} style={scoreStyle} title={readiness ? readinessTierText(score, foundations) : undefined}><strong>{foundations && foundations.total > 0 ? `${foundations.complete}/${foundations.total}` : "—"}</strong></div>
               <div className={styles.mission}>
                 <strong>{readiness?.primaryMission?.title ?? "Semua langkah utama sudah didukung data"}</strong>
                 <p>{readiness?.primaryMission?.description ?? readiness?.changeReason ?? "Lanjutkan kebiasaan mencatat agar ringkasan usaha tetap lengkap."}</p>
@@ -193,7 +207,10 @@ export default function BerandaPage() {
             <KpiCard label="Sisa uang hari ini" value={formatIdr(cashFlow)} meta="Pemasukan dikurangi pengeluaran" Icon={WalletCards} tone="neutral" />
             <KpiCard label="Uang masuk" value={formatIdr(income)} meta="Dari catatan hari ini" Icon={ArrowDownLeft} tone="positive" />
             <KpiCard label="Uang keluar" value={formatIdr(expense)} meta="Belanja dan biaya hari ini" Icon={ArrowUpRight} tone="neutral" />
-            <KpiCard label="Kesiapan data" value={readiness ? `${score}/100` : "—"} meta={readiness?.scoreChange ? `${readiness.scoreChange > 0 ? "+" : ""}${Math.round(readiness.scoreChange)} poin dari sebelumnya` : "Berdasarkan bukti tersedia"} Icon={ShieldCheck} tone="positive" />
+            {/* Tangga, bukan rapor. "17/100" memberi tahu pemilik bahwa ia
+                gagal tanpa memberi tahu apa yang kurang, dan angka yang
+                mustahil naik cepat hanya membuat orang berhenti membukanya. */}
+            <KpiCard label="Tingkat kesiapan" value={readiness ? readinessTier(score) : "—"} meta={readiness ? readinessTierText(score, foundations) : "Berdasarkan bukti tersedia"} Icon={ShieldCheck} tone="positive" />
           </section>
 
           <div className={styles.desktopGrid}>
@@ -210,7 +227,7 @@ export default function BerandaPage() {
             <section aria-labelledby="mission-desktop-title" className={`${styles.panel} ${styles.fullWidth}`}>
               <div className={styles.panelHeader}><div><h2 id="mission-desktop-title" className={styles.panelTitle}>Langkah usaha berikutnya</h2><p className="mt-1 text-[10px] text-[#6e859e]">Rekomendasi berdasarkan data yang sudah tersedia</p></div><Link href="/umkm/roadmap" className="text-[10px] font-bold text-[#0b5f86]">Lihat perjalanan</Link></div>
               <div className="grid gap-5 p-5 lg:grid-cols-[120px_1fr_auto] lg:items-center">
-                <div className={styles.scoreRing} style={scoreStyle}><strong>{readiness ? score : "—"}</strong></div>
+                <div className={styles.scoreRing} style={scoreStyle} title={readiness ? readinessTierText(score, foundations) : undefined}><strong>{foundations && foundations.total > 0 ? `${foundations.complete}/${foundations.total}` : "—"}</strong></div>
                 <div><p className="text-sm font-bold text-[#1b2a3a]">{readiness?.primaryMission?.title ?? "Data utama usaha sudah lengkap"}</p><p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#6e859e]">{readiness?.primaryMission?.description ?? readiness?.changeReason ?? "Terus catat transaksi yang benar-benar terjadi agar ringkasan tetap terbaru."}</p></div>
                 <Link href={readiness?.primaryMission?.href ?? "/umkm/roadmap"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white">Lanjutkan <ArrowRight size={14} /></Link>
               </div>

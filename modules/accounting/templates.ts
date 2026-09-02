@@ -10,6 +10,7 @@
  */
 
 import { formatIdr } from "@/modules/accounting/warung";
+import { resolveAccountingSector } from "@/modules/accounting/sector-mapping";
 import {
   resolveAccountRule,
   templateVersion,
@@ -324,9 +325,16 @@ export const jasaCategoryTemplates: readonly CategoryTemplate[] = [
  * barang alih-alih gagal: sektor adalah isian yang daftarnya pernah berubah,
  * dan menghukum pemilik atas keputusan lama kita sendiri tidak masuk akal.
  */
+/**
+ * Sektor akuntansi dari jawaban profil.
+ *
+ * Pemetaannya sekarang tinggal di `sector-mapping.ts` sebagai tabel eksplisit.
+ * Fungsi ini tetap ada karena sudah dipanggil di banyak tempat, tapi ia tidak
+ * lagi menyimpan keputusannya sendiri -- dua salinan aturan yang sama pada
+ * akhirnya selalu berbeda.
+ */
 export function sectorFromAnswer(answer: string | null | undefined): AccountingSector {
-  const normalized = (answer ?? "").trim().toLowerCase();
-  return normalized === "jasa" || normalized === "teknologi" ? "JASA" : "PERDAGANGAN_KULINER";
+  return resolveAccountingSector(answer);
 }
 
 export function templatesForSector(sector: AccountingSector): readonly CategoryTemplate[] {

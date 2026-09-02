@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { profileSectorOptions } from "@/modules/accounting/sector-mapping";
+import { LegalitySummary } from "@/components/warung/LegalitySummary";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { User, Mail, Building2, Phone, Save, FileText, Camera, LogOut, ShieldCheck } from "lucide-react";
@@ -9,7 +11,28 @@ import CitySelect from "@/components/CitySelect";
 import OwnerConsentPanel from "@/modules/consent/owner-consent-panel";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 
-const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
+/**
+ * Pilihan sektor datang dari tabel pemetaan, bukan daftar tersendiri.
+ * Daftar yang berdiri sendiri di layar akan bergeser dari tabel yang
+ * menentukan template kategorinya, dan pergeseran itu tidak akan terlihat
+ * sampai ada pemilik yang kategorinya terasa asing.
+ */
+const SECTORS = profileSectorOptions;
+
+/** Pilihan jumlah karyawan; nilainya sama dengan CHECK di `0045`. */
+const HEADCOUNTS = [
+  { value: "sendiri", label: "Saya sendiri" },
+  { value: "1-4", label: "1–4 orang" },
+  { value: "5-19", label: "5–19 orang" },
+] as const;
+
+/** Kanal penjualan memberi makan kesiapan "asal pesanan". */
+const CHANNELS = [
+  { value: "warung", label: "Warung / kios" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "marketplace", label: "Marketplace" },
+  { value: "media_sosial", label: "Media sosial" },
+] as const;
 
 interface ProfileRecord {
   name?: string | null;
@@ -21,6 +44,10 @@ interface ProfileRecord {
   nib?: string | null;
   alamat?: string | null;
   avatar_url?: string | null;
+  bentuk_usaha?: string | null;
+  tahun_mulai_usaha?: number | null;
+  jumlah_karyawan?: string | null;
+  kanal_penjualan?: string[] | null;
 }
 
 export default function ProfilPage() {
@@ -40,6 +67,10 @@ export default function ProfilPage() {
     phone: "",
     nib: "",
     avatarUrl: "",
+    bentukUsaha: "perorangan" as "perorangan" | "badan_usaha",
+    tahunMulai: "",
+    jumlahKaryawan: "",
+    kanalPenjualan: [] as string[],
   });
 
   useEffect(() => {
@@ -78,6 +109,10 @@ export default function ProfilPage() {
             phone: phone,
             nib: nib,
             avatarUrl: avatar,
+            bentukUsaha: dbProfile?.bentuk_usaha === "badan_usaha" ? "badan_usaha" : "perorangan",
+            tahunMulai: dbProfile?.tahun_mulai_usaha ? String(dbProfile.tahun_mulai_usaha) : "",
+            jumlahKaryawan: dbProfile?.jumlah_karyawan || "",
+            kanalPenjualan: dbProfile?.kanal_penjualan || [],
           });
 
           if (avatar) setPreviewAvatar(avatar);
@@ -166,6 +201,12 @@ export default function ProfilPage() {
           phone: form.phone,
           email: form.email,
           avatar_url: finalAvatarUrl,
+          bentuk_usaha: form.bentukUsaha,
+          // Tahun kosong disimpan sebagai null, bukan 0: nol tahun akan
+          // terbaca dossier sebagai usaha yang berdiri sebelum masehi.
+          tahun_mulai_usaha: form.tahunMulai ? Number(form.tahunMulai) : null,
+          jumlah_karyawan: form.jumlahKaryawan || null,
+          kanal_penjualan: form.kanalPenjualan,
           updated_at: new Date().toISOString(),
         });
 
@@ -227,7 +268,7 @@ export default function ProfilPage() {
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                 <h2 className="font-headline text-xl font-bold text-[#1b2a3a]">{form.namaUsaha || "Nama Usaha Belum Diisi"}</h2>
                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                  <ShieldCheck size={12} /> Akun Terverifikasi
+                  <ShieldCheck size={12} /> Email terverifikasi
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium">Pemilik: <span className="font-bold text-slate-700">{form.namaPemilik || "Belum Diisi"}</span> · {form.email}</p>
@@ -273,6 +314,95 @@ export default function ProfilPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Bentuk Usaha</label>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { value: "perorangan", label: "Usaha perorangan" },
+                    { value: "badan_usaha", label: "Badan usaha (PT/CV/Koperasi)" },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setForm({ ...form, bentukUsaha: option.value })}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
+                        form.bentukUsaha === option.value ? "bg-[#0b5f86] text-white border-[#0b5f86]" : "bg-white text-[#4a6280] border-[#c8d3de]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                {/* Menentukan apakah Akta Pendirian ikut diminta di halaman
+                    Dokumen. Meminta akta kepada usaha perorangan membuat
+                    daftarnya selamanya kurang satu dokumen yang tidak pernah
+                    bisa ia buat. */}
+                <p className="mt-1 text-[10px] text-[#6e859e]">
+                  Menentukan dokumen mana yang diminta di halaman Dokumen.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Tahun Mulai Usaha *</label>
+                <input
+                  value={form.tahunMulai}
+                  onChange={(e) => setForm({ ...form, tahunMulai: e.target.value.replace(/[^0-9]/g, "").slice(0, 4) })}
+                  inputMode="numeric"
+                  placeholder="Contoh: 2019"
+                  className="w-full px-4 py-3 rounded-xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none"
+                />
+                <p className="mt-1 text-[10px] text-[#6e859e]">
+                  Dipakai untuk menyebut lama usaha Anda saat berkas dikirim ke pihak lain.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Jumlah Orang yang Bekerja</label>
+                <div className="flex flex-wrap gap-2">
+                  {HEADCOUNTS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setForm({ ...form, jumlahKaryawan: form.jumlahKaryawan === option.value ? "" : option.value })}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
+                        form.jumlahKaryawan === option.value ? "bg-[#0b5f86] text-white border-[#0b5f86]" : "bg-white text-[#4a6280] border-[#c8d3de]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Pembeli Datang dari Mana</label>
+                <div className="flex flex-wrap gap-2">
+                  {CHANNELS.map((option) => {
+                    const active = form.kanalPenjualan.includes(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setForm({
+                          ...form,
+                          kanalPenjualan: active
+                            ? form.kanalPenjualan.filter((value) => value !== option.value)
+                            : [...form.kanalPenjualan, option.value],
+                        })}
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
+                          active ? "bg-[#0b5f86] text-white border-[#0b5f86]" : "bg-white text-[#4a6280] border-[#c8d3de]"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-[10px] text-[#6e859e]">
+                  Boleh lebih dari satu. Ini yang menjelaskan asal pesanan usaha Anda.
+                </p>
               </div>
 
               <div>
@@ -345,34 +475,12 @@ export default function ProfilPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">NIB (Nomor Induk Berusaha)</label>
-                <div className="relative">
-                  <input
-                    value={form.nib}
-                    onChange={(e) => setForm({ ...form, nib: e.target.value })}
-                    placeholder="13 Digit NIB (Opsional, dari OSS.go.id)"
-                    className={`w-full px-4 py-3 pl-10 pr-4 rounded-xl border text-sm focus:border-[#0b5f86] focus:outline-none font-mono ${
-                      form.nib ? "border-emerald-300 bg-emerald-50/40" : "border-[#c8d3de]"
-                    }`}
-                  />
-                  <FileText size={17} className={`absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none ${form.nib ? "text-emerald-500" : "text-slate-400"}`} />
-                </div>
-                {form.nib ? (
-                  <div className="flex items-center justify-between mt-1.5">
-                    <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                      <ShieldCheck size={12} /> NIB terisi — skor kesiapan usaha Anda meningkat signifikan.
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    💡 Pengisian NIB akan menaikkan Readiness Score usaha Anda secara signifikan.{" "}
-                    <Link href="/umkm/upload" className="text-[#0b5f86] underline font-semibold">
-                      Unggah dokumen NIB agar datanya dapat dibaca otomatis →
-                    </Link>
-                  </p>
-                )}
-              </div>
+              {/* NIB tidak lagi diketik di sini.
+                  Nomor yang diketik di profil dan berkas yang diunggah di
+                  halaman Dokumen adalah dua tempat menyimpan hal yang sama,
+                  dan keduanya bisa berbeda. Yang berlaku sekarang satu:
+                  dokumennya. Ringkasan di bawah membacanya, tidak menulisnya. */}
+              <LegalitySummary />
             </div>
           </div>
 

@@ -55,6 +55,21 @@ export const accountantTerms = [
   "beban pokok",
 ];
 
+/**
+ * Kata yang dilarang HANYA di teks yang benar-benar dibaca pemilik.
+ *
+ * "Skor" dan "score" adalah bahasa rapor: angka yang menilai seseorang dan
+ * mustahil naik cepat hanya membuat orang berhenti membukanya. Di layar
+ * pemilik yang dipakai adalah "tingkat kesiapan" -- sebuah tangga dengan anak
+ * tangga berikutnya yang jelas. Institusi tetap menerima angkanya.
+ *
+ * Dipisahkan dari `accountantTerms` karena kata-kata ini juga nama variabel,
+ * kelas CSS, dan potongan URL yang sah (`readiness.score`, `styles.scoreRing`,
+ * `/umkm/score`). Melarangnya di seluruh berkas hanya akan membuat orang
+ * menaburkan penanda pengecualian sampai lint ini berhenti berarti.
+ */
+export const ownerCopyTerms = ["score", "skor"];
+
 /** Layar yang dibaca pemilik usaha, tempat kamus di atas berlaku. */
 export const ownerLanguageSurfaces = ["app/(umkm)", "components/warung"];
 
@@ -99,6 +114,28 @@ export function termPattern(term) {
 }
 
 /**
+ * Potongan teks pada sebuah baris yang benar-benar sampai ke mata pembaca.
+ *
+ * Yang diambil: isi string berkutip dan teks JSX di antara tag. Yang dibuang
+ * lebih dulu: setiap `${...}` dan `{...}`, karena isinya ekspresi program, bukan
+ * kalimat. Potongan tanpa spasi diabaikan (`"--score"`, `mode="score"` bukan
+ * kalimat), begitu pula yang mengandung garis miring (jalur dan URL).
+ */
+export function visibleCopySegments(line) {
+  const withoutExpressions = line
+    .replace(/\$\{[^}]*\}/g, " ")
+    .replace(/\{[^}]*\}/g, " ");
+  const segments = [];
+  for (const match of withoutExpressions.matchAll(/"([^"]*)"|'([^']*)'|`([^`]*)`/g)) {
+    segments.push(match[1] ?? match[2] ?? match[3] ?? "");
+  }
+  for (const match of withoutExpressions.matchAll(/>([^<>]+)</g)) {
+    segments.push(match[1]);
+  }
+  return segments.filter((segment) => /\s/.test(segment.trim()) && !segment.includes("/"));
+}
+
+/**
  * Mengembalikan setiap kemunculan kata terlarang pada satu berkas.
  * Baris yang ditandai `forbidden-terms-allow` dilewati; dipakai oleh berkas
  * yang memang harus menyebut kata itu, misalnya linter ini sendiri.
@@ -123,6 +160,15 @@ export function scanContent(relativePath, content) {
       const pattern = termPattern(term);
       while (pattern.exec(line) !== null) {
         findings.push({ file: posixPath, line: index + 1, term, text: line.trim().slice(0, 160) });
+      }
+    }
+    if (!isOwnerLanguageSurface) return;
+    for (const segment of visibleCopySegments(line)) {
+      for (const term of ownerCopyTerms) {
+        const pattern = termPattern(term);
+        if (pattern.exec(segment) !== null) {
+          findings.push({ file: posixPath, line: index + 1, term, text: segment.trim().slice(0, 160) });
+        }
       }
     }
   });
