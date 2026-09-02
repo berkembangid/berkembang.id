@@ -463,6 +463,41 @@ export type Database = {
           }
         ]
       }
+      business_readiness_state: {
+        Row: {
+          business_id: string
+          level: string
+          level_since: string | null
+          grace_until: string | null
+          formula_version: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          level?: string
+          level_since?: string | null
+          grace_until?: string | null
+          formula_version: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          level?: string
+          level_since?: string | null
+          grace_until?: string | null
+          formula_version?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_readiness_state_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       businesses: {
         Row: {
           id: string
@@ -2872,6 +2907,50 @@ export type Database = {
           }
         ]
       }
+      readiness_daily: {
+        Row: {
+          id: string
+          business_id: string
+          snapshot_date: string
+          level: string
+          level_since: string | null
+          grace_until: string | null
+          components: Json
+          formula_version: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          snapshot_date: string
+          level: string
+          level_since?: string | null
+          grace_until?: string | null
+          components?: Json
+          formula_version: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          snapshot_date?: string
+          level?: string
+          level_since?: string | null
+          grace_until?: string | null
+          components?: Json
+          formula_version?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "readiness_daily_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       readiness_rule_sets: {
         Row: {
           id: string
@@ -4012,6 +4091,18 @@ export type Database = {
         }
         Returns: string
       }
+      fn_readiness_facts: {
+        Args: {
+          p_as_of?: string
+          p_habit_days?: number
+          p_quality_days?: number
+          p_evidence_days?: number
+          p_big_spend_idr?: number
+          p_full_month_lookback?: number
+          p_full_month_min_days?: number
+        }
+        Returns: Json
+      }
       fn_reverse_journal_entry: {
         Args: {
           p_entry_id: string
@@ -4180,6 +4271,15 @@ export type Database = {
           p_inventory_idr?: number
           p_assets?: Json
           p_notes?: string
+        }
+        Returns: Json
+      }
+      save_readiness_snapshot: {
+        Args: {
+          p_level: string
+          p_components: Json
+          p_formula_version: string
+          p_snapshot_date?: string
         }
         Returns: Json
       }

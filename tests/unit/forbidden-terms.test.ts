@@ -83,6 +83,31 @@ describe("owner copy dictionary", () => {
     }
   });
 
+  it("catches a mark out of a hundred even though it is not a word", () => {
+    // "17/100" adalah bentuk nilai ulangan yang paling khas dan akan lolos
+    // pencarian kata biasa.
+    expect(terms("app/(umkm)/umkm/page.tsx", "<strong>{score}/100</strong>")).toContain("x/100");
+    expect(terms("app/(umkm)/umkm/page.tsx", "<span>17 dari 100</span>")).toContain("dari 100");
+  });
+
+  it("leaves a ring like 14/20 alone", () => {
+    // Tangga memakai "N dari target" yang bisa dikerjakan; yang dilarang
+    // adalah nilai dari seratus.
+    expect(terms("app/(umkm)/umkm/kesiapan/page.tsx", "<span>{value}/{target}</span>")).toEqual([]);
+    expect(terms("app/(umkm)/umkm/kesiapan/page.tsx", "<span>14/20 hari</span>")).toEqual([]);
+  });
+
+  it("ignores comments, which no reader ever sees", () => {
+    const lines = [
+      '  // Menggantikan kartu "17/100" dan cincin "6/7".',
+      '   * Dulu tertulis 17 dari 100 di kartu ini.',
+      '      {/* Tangga, bukan rapor: "17/100" adalah nilai ulangan. */}',
+    ];
+    for (const line of lines) {
+      expect(terms("app/(umkm)/umkm/page.tsx", line), line).toEqual([]);
+    }
+  });
+
   it("does not police the institution portal or Mode Akuntan", () => {
     // Angkanya tetap dikirim ke institusi; yang berubah hanya cara ia
     // diperlihatkan kepada pemiliknya.

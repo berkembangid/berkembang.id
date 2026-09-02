@@ -52,6 +52,7 @@ const expectedMigrations = [
   "0044_report_archive.sql",
   "0045_profile_and_document_cleanup.sql",
   "0046_account_deletion.sql",
+  "0047_readiness_level_model.sql",
 ];
 
 const coreTables = [
@@ -3193,6 +3194,116 @@ async function verifyAccountingPeriodReports() {
   const purge = (await client.query("select private.purge_deleted_accounts() as value")).rows[0].value;
   assert.equal(purge.implemented, false, "the purge job is a stub and says so");
   assert.equal(purge.purged, 0, "nothing is deleted yet");
+
+  // ---------------------------------------------------------------------
+  // Tingkat Kesiapan wp08-pilot-v2 (0047)
+  // ---------------------------------------------------------------------
+  // Konfigurasi terbit tidak boleh berubah diam-diam. Tanpa penjagaan ini,
+  // seseorang bisa menggeser ambang dan seluruh riwayat tingkat berubah makna
+  // tanpa ada yang bisa menunjukkan kapan.
+  await expectRejected(
+    `update public.readiness_rule_sets
+     set rules = jsonb_set(rules, '{bigSpendIdr}', '1'::jsonb)
+     where version = 'wp08-pilot-v2'`,
+    "P0001",
+  );
+  // Menerbitkan ulang isi yang sama tetap boleh: migrasi harus bisa diputar
+  // dua kali.
+  await client.query(
+    `update public.readiness_rule_sets set updated_at = now() where version = 'wp08-pilot-v2'`,
+  );
+
+  const configRow = (await client.query(
+    `select rules from public.readiness_rule_sets where version = 'wp08-pilot-v2' and status = 'published'`,
+  )).rows[0];
+  assert.ok(configRow, "the v2 configuration must be published");
+  assert.equal(
+    Object.keys(configRow.rules.components).length,
+    12,
+    "every component the model claims must exist in the configuration",
+  );
+  assert.equal(configRow.rules.bigSpendIdr, 500000, "big spend threshold lives in configuration");
+  assert.equal(
+    configRow.rules.components.B3.silver,
+    0.4,
+    "thresholds are configuration, never hardcoded in the evaluator",
+  );
+
+  // Fakta dihitung dalam satu perjalanan ke basis data.
+  const factsResult = await asAuthenticatedCommitted(
+    userB,
+    "select public.fn_readiness_facts() as value",
+  );
+  const facts = factsResult.rows[0].value;
+  assert.ok(facts.asOf, "facts must be dated");
+  for (const key of [
+    "a1RecordingDays", "a2Closings", "a3AgeDays",
+    "b1Total", "b1Unchecked", "b2PriveMonths",
+    "b3TotalIdr", "b3CoveredIdr", "b4StockMonths",
+    "c1Required", "c1Confirmed", "c2Filled",
+    "d1OpeningBalance", "d2FullMonths", "d3Reports",
+  ]) {
+    assert.ok(key in facts, `facts must include ${key}`);
+  }
+  assert.equal(
+    typeof facts.d1OpeningBalance,
+    "boolean",
+    "an opening balance either exists or does not",
+  );
+
+  // Deterministik: dua panggilan atas data yang sama memberi fakta yang sama.
+  const factsAgain = await asAuthenticatedCommitted(
+    userB,
+    "select public.fn_readiness_facts() as value",
+  );
+  assert.deepEqual(
+    factsAgain.rows[0].value,
+    facts,
+    "the same data must produce the same facts, or daily snapshots would flicker",
+  );
+
+  // Potret harian idempoten per tanggal.
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.save_readiness_snapshot('TEMBAGA', '[]'::jsonb, 'wp08-pilot-v2')",
+  );
+  const second = await asAuthenticatedCommitted(
+    userB,
+    "select public.save_readiness_snapshot('TEMBAGA', '[]'::jsonb, 'wp08-pilot-v2') as value",
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.readiness_daily where business_id = '${businessB}'`),
+    1,
+    "two evaluations on one day leave one row, not two",
+  );
+
+  // Tanggal naik tingkat tidak bergeser selama tingkatnya sama.
+  const levelSince = second.rows[0].value.levelSince;
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.save_readiness_snapshot('TEMBAGA', '[]'::jsonb, 'wp08-pilot-v2')",
+  );
+  assert.equal(
+    (await client.query(
+      `select level_since::text as value from public.business_readiness_state where business_id = '${businessB}'`,
+    )).rows[0].value,
+    levelSince,
+    "\"Tembaga sejak\" must not move every time the page is opened",
+  );
+
+  // Tingkat di luar empat yang dikenal ditolak.
+  await expectAuthenticatedRejected(
+    userB,
+    "select public.save_readiness_snapshot('PLATINUM', '[]'::jsonb, 'wp08-pilot-v2')",
+    "22023",
+  );
+
+  // Kesiapan usaha lain tidak pernah terbaca.
+  const foreignReadiness = await asAuthenticated(
+    userA,
+    `select count(*)::int as value from public.readiness_daily where business_id = '${businessB}'`,
+  );
+  assert.equal(Number(foreignReadiness.rows[0].value), 0, "readiness must not leak across businesses");
 
   // Jurnal tetap tidak bisa disentuh setelah semua ini.
   await expectRejected(

@@ -52,6 +52,7 @@ const expectedMigrations = [
   "0044_report_archive.sql",
   "0045_profile_and_document_cleanup.sql",
   "0046_account_deletion.sql",
+  "0047_readiness_level_model.sql",
 ];
 
 describe("WP-03 migration contract", () => {
@@ -1175,5 +1176,60 @@ describe("report archive contract (0044)", () => {
     expect(migration).toContain("security definer");
     expect(migration).toContain("grant execute on function public.record_report_issue");
     expect(migration).not.toMatch(/grant insert on public\.report_issues/);
+  });
+});
+
+describe("readiness level model contract (0047)", () => {
+  const migration = readFileSync(join(migrationDirectory, "0047_readiness_level_model.sql"), "utf8");
+  const evaluator = readFileSync(
+    join(process.cwd(), "modules", "readiness", "evaluator.ts"),
+    "utf8",
+  );
+
+  it("keeps every threshold in configuration, never in code", () => {
+    // Ambang yang ditanam di kode membuat riwayat penilaian lama ikut berubah
+    // arti tanpa jejak ketika ambangnya digeser.
+    expect(migration).toContain("'bigSpendIdr', 500000");
+    for (const id of ["A1", "A2", "A3", "B1", "B2", "B3", "B4", "C1", "C2", "D1", "D2", "D3"]) {
+      expect(migration, id).toContain(`'${id}', jsonb_build_object`);
+    }
+    // Evaluator tidak boleh menyebut satu pun angka ambang.
+    expect(evaluator).not.toMatch(/500000|0\.9|20\s*;/);
+  });
+
+  it("refuses to let a published formula change without a new version", () => {
+    expect(migration).toContain("READINESS_RULE_SET_FROZEN");
+    expect(migration).toContain("before update on public.readiness_rule_sets");
+  });
+
+  it("re-publishes the version so replaying migrations cannot retire it", () => {
+    // `0022` mempensiunkan setiap versi selain v1; tanpa penerbitan ulang,
+    // memutar ulang migrasi membuat aplikasi kehilangan konfigurasinya.
+    expect(migration).toContain("on conflict (version) do update set");
+    expect(migration).toContain("status = 'published'");
+  });
+
+  it("aggregates in SQL so one screen is not a dozen queries", () => {
+    expect(migration).toContain("function public.fn_readiness_facts");
+    expect(migration).toContain("returns jsonb");
+  });
+
+  it("keeps the readiness tables select-only for owners", () => {
+    for (const table of ["readiness_daily", "business_readiness_state"]) {
+      expect(migration, table).toContain(`grant select on public.${table} to authenticated`);
+      expect(migration, table).not.toMatch(new RegExp(`grant insert on public\.${table}`));
+    }
+  });
+
+  it("prepares the grace column before the phase that needs it", () => {
+    // Menambah kolom ke tabel yang sudah berisi riwayat jauh lebih mahal
+    // daripada menyiapkannya kosong hari ini.
+    expect(migration).toContain("grace_until date");
+  });
+
+  it("treats missing data as excused, not as failure", () => {
+    // Keputusan yang menentukan keadilan seluruh model.
+    expect(evaluator).toContain("BELUM_ADA_DATA");
+    expect(evaluator).toContain('if (component.status === "BELUM_ADA_DATA") return true;');
   });
 });

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
-import { readinessTier, readinessTierText } from "@/modules/readiness/readiness-tier";
+import { useEffect, useState } from "react";
+import { ReadinessMiniCard } from "@/components/warung/ReadinessMiniCard";
 import Link from "next/link";
 import { AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CalendarCheck, CheckCircle2, ChevronRight, CircleEllipsis, FileText, Mic, Plus, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -83,7 +83,7 @@ export default function BerandaPage() {
           href: "/umkm/laporan",
         }));
         for (const document of documents) realActivities.push({ id: `document-${document.id}`, title: "Dokumen diperbarui", detail: document.name, at: document.updated_at, href: "/umkm/upload" });
-        if (readinessData) realActivities.push({ id: `readiness-${readinessData.snapshotId}`, title: "Kesiapan data dihitung", detail: `${Math.round(readinessData.score)} dari 100 · ${readinessData.changeReason}`, at: readinessData.calculatedAt, href: "/umkm/roadmap" });
+        if (readinessData) realActivities.push({ id: `readiness-${readinessData.snapshotId}`, title: "Tingkat kesiapan diperbarui", detail: readinessData.changeReason, at: readinessData.calculatedAt, href: "/umkm/kesiapan" });
         setActivities(realActivities.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 6));
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : "Beranda belum dapat dimuat.");
@@ -98,21 +98,12 @@ export default function BerandaPage() {
   const income = todayTransactions.filter((row) => transactionDirection(row) === "income").reduce((sum, row) => sum + transactionAmount(row), 0);
   const expense = todayTransactions.filter((row) => transactionDirection(row) === "expense").reduce((sum, row) => sum + transactionAmount(row), 0);
   const cashFlow = income - expense;
-  const score = Math.max(0, Math.min(100, Math.round(readiness?.score ?? 0)));
-  const scoreStyle = { "--score": `${score}%` } as CSSProperties;
+
   // Fondasi = komponen kesiapan yang sudah punya cukup bukti untuk dinilai.
   // Yang "not_applicable" tidak ikut dihitung: meminta pemilik melengkapi
   // sesuatu yang tidak berlaku untuk usahanya adalah tangga yang tidak
   // pernah bisa dinaiki sampai atas.
-  // Cincin memperlihatkan jumlah fondasi yang lengkap, bukan angka dari
-  // seratus. "3 dari 7" adalah pekerjaan yang bisa diselesaikan; "17" hanya
-  // sebuah nilai.
-  const foundations = readiness
-    ? {
-        complete: readiness.components.filter((item) => item.status === "scored").length,
-        total: readiness.components.filter((item) => item.status !== "not_applicable").length,
-      }
-    : undefined;
+
 
   return (
     <main className={styles.page}>
@@ -174,7 +165,7 @@ export default function BerandaPage() {
               <Link href="/umkm/roadmap" className={styles.sectionLink}>Detail</Link>
             </div>
             <div className={styles.scoreRow}>
-              <div className={styles.scoreRing} style={scoreStyle} title={readiness ? readinessTierText(score, foundations) : undefined}><strong>{foundations && foundations.total > 0 ? `${foundations.complete}/${foundations.total}` : "—"}</strong></div>
+              
               <div className={styles.mission}>
                 <strong>{readiness?.primaryMission?.title ?? "Semua langkah utama sudah didukung data"}</strong>
                 <p>{readiness?.primaryMission?.description ?? readiness?.changeReason ?? "Lanjutkan kebiasaan mencatat agar ringkasan usaha tetap lengkap."}</p>
@@ -210,7 +201,7 @@ export default function BerandaPage() {
             {/* Tangga, bukan rapor. "17/100" memberi tahu pemilik bahwa ia
                 gagal tanpa memberi tahu apa yang kurang, dan angka yang
                 mustahil naik cepat hanya membuat orang berhenti membukanya. */}
-            <KpiCard label="Tingkat kesiapan" value={readiness ? readinessTier(score) : "—"} meta={readiness ? readinessTierText(score, foundations) : "Berdasarkan bukti tersedia"} Icon={ShieldCheck} tone="positive" />
+            <ReadinessMiniCard />
           </section>
 
           <div className={styles.desktopGrid}>
@@ -227,7 +218,7 @@ export default function BerandaPage() {
             <section aria-labelledby="mission-desktop-title" className={`${styles.panel} ${styles.fullWidth}`}>
               <div className={styles.panelHeader}><div><h2 id="mission-desktop-title" className={styles.panelTitle}>Langkah usaha berikutnya</h2><p className="mt-1 text-[10px] text-[#6e859e]">Rekomendasi berdasarkan data yang sudah tersedia</p></div><Link href="/umkm/roadmap" className="text-[10px] font-bold text-[#0b5f86]">Lihat perjalanan</Link></div>
               <div className="grid gap-5 p-5 lg:grid-cols-[120px_1fr_auto] lg:items-center">
-                <div className={styles.scoreRing} style={scoreStyle} title={readiness ? readinessTierText(score, foundations) : undefined}><strong>{foundations && foundations.total > 0 ? `${foundations.complete}/${foundations.total}` : "—"}</strong></div>
+                
                 <div><p className="text-sm font-bold text-[#1b2a3a]">{readiness?.primaryMission?.title ?? "Data utama usaha sudah lengkap"}</p><p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#6e859e]">{readiness?.primaryMission?.description ?? readiness?.changeReason ?? "Terus catat transaksi yang benar-benar terjadi agar ringkasan tetap terbaru."}</p></div>
                 <Link href={readiness?.primaryMission?.href ?? "/umkm/roadmap"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white">Lanjutkan <ArrowRight size={14} /></Link>
               </div>

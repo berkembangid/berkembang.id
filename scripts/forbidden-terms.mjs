@@ -68,7 +68,29 @@ export const accountantTerms = [
  * `/umkm/score`). Melarangnya di seluruh berkas hanya akan membuat orang
  * menaburkan penanda pengecualian sampai lint ini berhenti berarti.
  */
-export const ownerCopyTerms = ["score", "skor"];
+export const ownerCopyTerms = ["score", "skor", "poin"];
+
+/**
+ * Bentuk yang bukan kata, jadi tidak bisa dicari sebagai kata.
+ *
+ * "17/100" adalah nilai ulangan yang paling khas, tetapi tidak berbentuk frasa
+ * dan akan lolos pencarian kata biasa. Polanya diperiksa langsung pada baris
+ * yang sudah dibersihkan dari ekspresi program, sehingga `{score}/100` tetap
+ * tertangkap sementara jalur seperti `/umkm/kesiapan` tidak.
+ */
+export const ownerCopyPatterns = [
+  { term: "x/100", pattern: /\/\s*100(?![0-9])/ },
+  { term: "dari 100", pattern: /\bdari\s+100\b/i },
+];
+
+/** Baris komentar tidak pernah sampai ke mata pembaca. */
+function isCommentLine(line) {
+  const trimmed = line.trim();
+  return trimmed.startsWith("//")
+    || trimmed.startsWith("*")
+    || trimmed.startsWith("/*")
+    || trimmed.startsWith("{/*");
+}
 
 /** Layar yang dibaca pemilik usaha, tempat kamus di atas berlaku. */
 export const ownerLanguageSurfaces = ["app/(umkm)", "components/warung"];
@@ -121,10 +143,12 @@ export function termPattern(term) {
  * kalimat. Potongan tanpa spasi diabaikan (`"--score"`, `mode="score"` bukan
  * kalimat), begitu pula yang mengandung garis miring (jalur dan URL).
  */
+export function strippedExpressions(line) {
+  return line.replace(/\$\{[^}]*\}/g, " ").replace(/\{[^}]*\}/g, " ");
+}
+
 export function visibleCopySegments(line) {
-  const withoutExpressions = line
-    .replace(/\$\{[^}]*\}/g, " ")
-    .replace(/\{[^}]*\}/g, " ");
+  const withoutExpressions = strippedExpressions(line);
   const segments = [];
   for (const match of withoutExpressions.matchAll(/"([^"]*)"|'([^']*)'|`([^`]*)`/g)) {
     segments.push(match[1] ?? match[2] ?? match[3] ?? "");
@@ -162,7 +186,12 @@ export function scanContent(relativePath, content) {
         findings.push({ file: posixPath, line: index + 1, term, text: line.trim().slice(0, 160) });
       }
     }
-    if (!isOwnerLanguageSurface) return;
+    if (!isOwnerLanguageSurface || isCommentLine(line)) return;
+    for (const { term, pattern } of ownerCopyPatterns) {
+      if (pattern.test(strippedExpressions(line))) {
+        findings.push({ file: posixPath, line: index + 1, term, text: line.trim().slice(0, 160) });
+      }
+    }
     for (const segment of visibleCopySegments(line)) {
       for (const term of ownerCopyTerms) {
         const pattern = termPattern(term);
