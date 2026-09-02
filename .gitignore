@@ -36,8 +36,14 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
+.env
+.env.*
 !.env.example
+!.env.local.example
+
+# local tool / secret config
+.mcp.json
+.commandcode/
 
 # vercel
 .vercel
