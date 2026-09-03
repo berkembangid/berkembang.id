@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createConsentRequestSchema, decideConsentRequestSchema } from "@/modules/consent/consent-schema";
 
-const businessId = "10000000-0000-4000-8000-000000000001";
+const candidateCode = "UMKM-AB12CD34";
 
 describe("WP-10 consent request contract", () => {
   it("accepts a clear, time-limited request", () => {
     const result = createConsentRequestSchema.parse({
-      businessId,
+      candidateCode,
       purposeCode: "program_review",
       purposeDescription: "Menilai kecocokan untuk program pendampingan.",
       requestedScopes: ["readiness", "financial_summary"],
@@ -19,7 +19,7 @@ describe("WP-10 consent request contract", () => {
 
   it("rejects an unknown data section and access longer than 30 days", () => {
     const result = createConsentRequestSchema.safeParse({
-      businessId,
+      candidateCode,
       purposeCode: "review",
       purposeDescription: "Menilai kecocokan untuk sebuah program.",
       requestedScopes: ["raw_transactions"],
@@ -30,7 +30,7 @@ describe("WP-10 consent request contract", () => {
 
   it("requires every required section to also be requested", () => {
     const result = createConsentRequestSchema.safeParse({
-      businessId,
+      candidateCode,
       purposeCode: "review",
       purposeDescription: "Menilai kecocokan untuk sebuah program.",
       requestedScopes: ["readiness"],

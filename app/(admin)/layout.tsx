@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart2, Building2, Handshake, History, LayoutDashboard, LogOut, Menu, ShieldCheck, Sliders, Sparkles, Users, X } from "lucide-react";
+import { BarChart2, Building2, FileCheck, Handshake, History, LayoutDashboard, LogOut, Menu, ShieldCheck, Sliders, Sparkles, Users, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import styles from "../dashboard-shell.module.css";
@@ -13,7 +13,7 @@ type NavGroup = { category: string; items: { href: string; label: string; Icon: 
 const NAV_GROUPS: NavGroup[] = [
   { category: "Utama", items: [{ href: "/admin", label: "Ringkasan", Icon: LayoutDashboard }, { href: "/admin/analytics", label: "Analitik", Icon: BarChart2 }] },
   { category: "Data utama", items: [{ href: "/admin/umkm", label: "UMKM", Icon: Users }, { href: "/admin/institutions", label: "Institusi", Icon: Building2 }, { href: "/admin/mitra", label: "Mitra komunitas", Icon: Handshake }] },
-  { category: "Sistem & akses", items: [{ href: "/admin/rules", label: "Aturan sistem", Icon: Sliders }, { href: "/admin/admins", label: "Kelola admin", Icon: ShieldCheck }, { href: "/admin/audit", label: "Riwayat audit", Icon: History }] },
+  { category: "Sistem & akses", items: [{ href: "/admin/profile-access", label: "Permintaan akses", Icon: FileCheck }, { href: "/admin/rules", label: "Aturan sistem", Icon: Sliders }, { href: "/admin/admins", label: "Kelola admin", Icon: ShieldCheck }, { href: "/admin/audit", label: "Riwayat audit", Icon: History }] },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

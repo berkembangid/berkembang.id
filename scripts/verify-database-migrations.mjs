@@ -53,6 +53,18 @@ const expectedMigrations = [
   "0045_profile_and_document_cleanup.sql",
   "0046_account_deletion.sql",
   "0047_readiness_level_model.sql",
+  "0048_admin_consent_decisions.sql",
+  "0049_institution_live_financial_metrics.sql",
+  "0050_institution_verification_shortlist_notifications.sql",
+  "0051_discovery_privacy_boundary.sql",
+  "0052_discovery_optin_controls.sql",
+  "0053_shortlist_rpc.sql",
+  "0054_institution_consent_notifications.sql",
+  "0055_institution_view_logs.sql",
+  "0056_institution_entitlements.sql",
+  "0057_enforce_dossier_credits.sql",
+  "0058_institution_portal_gaps.sql",
+  "0059_dossier_api_keys.sql",
 ];
 
 const coreTables = [
@@ -318,6 +330,11 @@ async function verifyRlsIsolation() {
     ) values (
       '${requestA}', '${institutionA}', '${businessA}', '${userA}', array['summary'], 'active'
     );
+
+    -- Sejak 0051 kandidat hanya muncul bila UMKM opt-in "bersedia ditemukan".
+    insert into public.discovery_optins (business_id, opted_in, opted_at, copy_version) values
+      ('${businessB}', true, now(), 'v1')
+    on conflict (business_id) do update set opted_in = true, opted_at = now();
   `);
 
   assert.equal(
@@ -3353,8 +3370,11 @@ async function verifyConsentVerifiedProfileLifecycle() {
     institutionUser,
     "select public.list_anonymous_business_candidates(null) as value",
   );
-  const candidates = candidatesResult.rows[0].value;
-  const candidate = candidates.find((item) => item.businessId === business);
+  const candidatesPayload = candidatesResult.rows[0].value;
+  const candidates = Array.isArray(candidatesPayload) ? candidatesPayload : (candidatesPayload.candidates ?? []);
+  // Sejak 0051 respons kandidat anonim tanpa businessId (privacy boundary) —
+  // yang dicari adalah tidak adanya nama, bukan id-nya.
+  const candidate = candidates.find((item) => typeof item.candidateCode === "string" && item.candidateCode.startsWith("UMKM-"));
   assert(candidate, "active institution must see anonymous candidate");
   assert.equal(candidate.candidateCode.startsWith("UMKM-"), true);
   assert.equal(JSON.stringify(candidate).includes("Business B"), false, "candidate response must not expose a business name");

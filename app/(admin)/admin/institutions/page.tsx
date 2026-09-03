@@ -13,6 +13,7 @@ interface Institution {
   type: string;
   programs: number;
   active: boolean;
+  verificationStatus: "pending" | "verified" | "rejected";
   contact?: string;
 }
 
@@ -68,6 +69,7 @@ export default function AdminInstitutionsPage() {
             type: String(item.type ?? "Bank / Koperasi"),
             programs: Number(item.programs_count) || 1,
             active: Boolean(item.active ?? true),
+            verificationStatus: (item.verification_status === "rejected" ? "rejected" : item.verification_status === "verified" || Boolean(item.active) ? "verified" : "pending"),
           });
         });
       }
@@ -84,6 +86,7 @@ export default function AdminInstitutionsPage() {
               type: String(p.jenis_institusi ?? "Bank / Koperasi"),
               programs: 1,
               active: true,
+              verificationStatus: "verified",
               contact: String(p.nama_contact ?? p.email ?? ""),
             });
           }
@@ -112,6 +115,15 @@ export default function AdminInstitutionsPage() {
       setInstitutions(institutions.map(i => i.id === inst.id ? { ...i, active: updatedStatus } : i));
     } catch (err) {
       console.error("Error updating status:", err);
+    }
+  };
+
+  const handleVerification = async (inst: Institution, status: Institution["verificationStatus"]) => {
+    try {
+      await runAdminOperation({ action: "set_institution_verification", id: parseInstitutionListId(inst.id).id, status });
+      setInstitutions(institutions.map((item) => item.id === inst.id ? { ...item, verificationStatus: status, active: status === "verified" } : item));
+    } catch (err) {
+      console.error("Error updating verification:", err);
     }
   };
 
@@ -163,6 +175,7 @@ export default function AdminInstitutionsPage() {
           type: instType,
           programs: progs,
           active: true
+          , verificationStatus: "verified"
         };
         setInstitutions([...institutions, newObj]);
       }
@@ -267,12 +280,14 @@ export default function AdminInstitutionsPage() {
                     {inst.contact && (
                       <span className="text-slate-500 text-[11px] bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Kontak: {inst.contact}</span>
                     )}
+                    <span className={`text-[11px] font-bold ${inst.verificationStatus === "verified" ? "text-emerald-700" : inst.verificationStatus === "rejected" ? "text-red-700" : "text-amber-700"}`}>{inst.verificationStatus === "verified" ? "Terverifikasi" : inst.verificationStatus === "rejected" ? "Ditolak" : "Menunggu verifikasi"}</span>
                   </div>
                 </div>
               </div>
 
               {/* Action buttons */}
               <div className="flex gap-2 pt-2 border-t border-slate-100 justify-end">
+                {inst.verificationStatus === "pending" && <><button onClick={() => void handleVerification(inst, "rejected")} className="text-xs font-bold text-red-600 border border-red-200 px-3 py-2 rounded-xl hover:bg-red-50">Tolak</button><button onClick={() => void handleVerification(inst, "verified")} className="text-xs font-bold text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl hover:bg-emerald-50">Verifikasi</button></>}
                 <Link
                   href={`/admin/institutions/${inst.id}`}
                   className="text-xs font-bold text-[#0b5f86] border border-[#bac3ff] px-4 py-2 rounded-xl hover:bg-[#eef8fd] transition-colors flex items-center gap-1.5 cursor-pointer"

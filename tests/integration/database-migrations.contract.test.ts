@@ -53,6 +53,18 @@ const expectedMigrations = [
   "0045_profile_and_document_cleanup.sql",
   "0046_account_deletion.sql",
   "0047_readiness_level_model.sql",
+  "0048_admin_consent_decisions.sql",
+  "0049_institution_live_financial_metrics.sql",
+  "0050_institution_verification_shortlist_notifications.sql",
+  "0051_discovery_privacy_boundary.sql",
+  "0052_discovery_optin_controls.sql",
+  "0053_shortlist_rpc.sql",
+  "0054_institution_consent_notifications.sql",
+  "0055_institution_view_logs.sql",
+  "0056_institution_entitlements.sql",
+  "0057_enforce_dossier_credits.sql",
+  "0058_institution_portal_gaps.sql",
+  "0059_dossier_api_keys.sql",
 ];
 
 describe("WP-03 migration contract", () => {
@@ -1231,5 +1243,82 @@ describe("readiness level model contract (0047)", () => {
     // Keputusan yang menentukan keadilan seluruh model.
     expect(evaluator).toContain("BELUM_ADA_DATA");
     expect(evaluator).toContain('if (component.status === "BELUM_ADA_DATA") return true;');
+  });
+});
+
+describe("institution portal gaps contract (0058)", () => {
+  const migration = readFileSync(join(migrationDirectory, "0058_institution_portal_gaps.sql"), "utf8");
+
+  it("extends request duration to 90 days with 30/90 templates", () => {
+    expect(migration).toContain("between 1 and 90");
+    const schema = readFileSync(join(process.cwd(), "modules", "consent", "consent-schema.ts"), "utf8");
+    expect(schema).toContain("max(90)");
+    expect(schema).toContain("30 hari (standar)");
+    expect(schema).toContain("90 hari (pendampingan)");
+  });
+
+  it("rate-limits access requests to 20 per organization per day", () => {
+    expect(migration).toContain("REQUEST_RATE_LIMITED");
+    expect(migration).toContain("date_trunc('day', now())");
+  });
+
+  it("resolves institution explicitly instead of always the first", () => {
+    expect(migration).toContain("function public.resolve_my_institution_id");
+    expect(migration).toContain("function public.list_my_institutions");
+    expect(migration).toContain("p_institution_id uuid default null");
+  });
+
+  it("filters discovery server-side with a whitelisted sort", () => {
+    expect(migration).toContain("p_min_level");
+    expect(migration).toContain("p_legal_complete");
+    expect(migration).toContain("INVALID_SORT");
+    expect(migration).not.toMatch(/order by.*readinessScore.*desc/i);
+  });
+
+  it("audits non-dossier artifacts through one append-only RPC", () => {
+    expect(migration).toContain("function public.log_institution_view");
+    expect(migration).toContain("'CANDIDATE_LIST', 'SHORTLIST', 'ORGANIZATION', 'PROGRAM_DASH', 'PDF', 'DOSSIER'");
+  });
+
+  it("archives institution dossiers with a dossier link for byte-identical re-download", () => {
+    expect(migration).toContain("function public.record_institution_report_issue");
+    expect(migration).toContain("dossier_id uuid");
+    expect(migration).toContain("audience");
+    expect(migration).toContain("'institution'");
+  });
+
+  it("notifies both sides on revoke, expiry, and PDF download", () => {
+    expect(migration).toContain("notify_consent_grant_change");
+    expect(migration).toContain("notify_dossier_download");
+    expect(migration).toContain("consent_revoked");
+    expect(migration).toContain("consent_expired");
+    expect(migration).toContain("dossier_pdf_download");
+  });
+
+  it("joins programs by code and aggregates without rupiah", () => {
+    expect(migration).toContain("function public.join_program_by_code");
+    expect(migration).toContain("function public.program_dashboard");
+    expect(migration).toContain("levelDistribution");
+    expect(migration).toContain("legalFunnel");
+    const body = migration.slice(
+      migration.indexOf("function public.program_dashboard"),
+      migration.indexOf("Hak akses RPC baru"),
+    );
+    expect(body).not.toMatch(/amount_idr|incomeTotal|transaction\.amount/i);
+  });
+});
+
+describe("dossier API keys contract (0059)", () => {
+  const migration = readFileSync(join(migrationDirectory, "0059_dossier_api_keys.sql"), "utf8");
+
+  it("scopes each key to one dossier with revocable status", () => {
+    expect(migration).toContain("create table if not exists public.dossier_api_keys");
+    expect(migration).toContain("key_hash text not null unique");
+    expect(migration).toContain("'active', 'revoked', 'expired'");
+  });
+
+  it("exchanges a key without a user session and logs the access", () => {
+    expect(migration).toContain("function public.exchange_dossier_api_key");
+    expect(migration).toContain("dossier_access_events");
   });
 });

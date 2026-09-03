@@ -6,17 +6,17 @@ Status implementasi: selesai secara lokal, migrasi remote menunggu login Supabas
 
 1. Institusi membuka **Cari Usaha** dan hanya melihat kode kandidat, bidang usaha, wilayah umum, umur usaha, tingkat kesiapan, kebiasaan mencatat, dan jenis bukti yang tersedia.
 2. Institusi menjelaskan tujuan, memilih bagian data, masa akses 1–30 hari, dan apakah perlu menyimpan ringkasan.
-3. Pemilik UMKM menerima satu permintaan yang menjelaskan institusi, program, tujuan, bagian data, masa berlaku, dan permintaan penyimpanan.
-4. Pemilik dapat menolak seluruh permintaan atau mengizinkan bagian data yang dipilih.
-5. Persetujuan membuat salinan ringkas yang dibekukan pada saat persetujuan. Catatan transaksi satu per satu, alamat rinci, foto identitas, serta NIK/NPWP lengkap tidak masuk ke salinan ini.
-6. Setiap pembukaan, pemeriksaan, penyimpanan, dan percobaan akses yang ditolak dicatat.
-7. Pemilik dapat mencabut izin kapan saja. Akses juga berhenti otomatis saat masa berlaku selesai.
+3. Admin platform menerima permintaan yang menjelaskan institusi, program, tujuan, bagian data, masa berlaku, dan permintaan penyimpanan.
+4. Admin meninjau data lengkap UMKM dan memutuskan apakah identitas serta kontak boleh dibuka. UMKM hanya menerima pemberitahuan status.
+5. Persetujuan admin membuat salinan ringkas yang dibekukan pada saat persetujuan. Catatan transaksi satu per satu, alamat rinci, foto identitas, serta NIK/NPWP lengkap tidak masuk ke salinan ini.
+6. Setiap keputusan admin, pembukaan, pemeriksaan, penyimpanan, dan percobaan akses yang ditolak dicatat.
+7. Admin dapat mencabut izin kapan saja. Akses juga berhenti otomatis saat masa berlaku selesai.
 
 ## Pengamanan utama
 
 - Institusi harus berstatus aktif dan pengguna harus menjadi anggota aktif.
 - Permintaan ganda yang masih menunggu dan izin ganda yang masih aktif dicegah di basis data.
-- Persetujuan, penolakan, pembuatan profil, dan pencabutan hanya dapat dilakukan melalui fungsi basis data yang memeriksa pemilik.
+- Persetujuan, penolakan, pembuatan profil, dan pencabutan hanya dapat dilakukan melalui fungsi basis data yang memeriksa admin platform.
 - Institusi tidak dapat membaca isi profil langsung dari tabel; setiap bagian harus dibuka melalui pemeriksaan izin dan masa berlaku.
 - Bagian data di luar persetujuan dan penyimpanan tanpa izin ditolak serta dicatat tanpa membocorkan isi data.
 - Profil merupakan salinan beku, bukan tampilan langsung yang berubah tanpa sepengetahuan pemilik.
