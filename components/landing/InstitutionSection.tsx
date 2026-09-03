@@ -46,7 +46,7 @@ function InstitutionPreview() {
         <div className="flex items-start justify-between"><div><p className="text-[9px] font-medium text-[#8a91a3]">Ringkasan kelompok</p><p className="mt-1 text-sm font-bold text-[#141a34]">Perkembangan UMKM</p></div><span className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[#e0e3eb] px-2 text-[9px] font-semibold text-[#5c6475]">Semua wilayah <ChevronDown aria-hidden="true" size={10} /></span></div>
         <div className="mt-4 grid grid-cols-3 gap-2">
           <MiniMetric icon={<UsersRound size={12} />} label="Aktif mencatat" value="Terpantau" />
-          <MiniMetric icon={<TrendingUp size={12} />} label="Skor membaik" value="Bertumbuh" />
+          <MiniMetric icon={<TrendingUp size={12} />} label="Kesiapan naik" value="Bertumbuh" />
           <MiniMetric icon={<MapPin size={12} />} label="Wilayah" value="Terfilter" />
         </div>
         <div className="mt-4 rounded-xl border border-[#e4e7ee] p-3.5">

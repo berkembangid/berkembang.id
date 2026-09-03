@@ -108,6 +108,27 @@ describe("owner copy dictionary", () => {
     }
   });
 
+  it("holds the public pages to the same promise as the app", () => {
+    // Landing yang menjanjikan "Readiness Score" lalu pemilik masuk dan
+    // menemukan "tingkat kesiapan" adalah dua produk berbeda di satu merek.
+    expect(terms("components/landing/FAQ.tsx", '<p>Apakah Readiness Score menjamin?</p>')).toContain("score");
+    expect(terms("app/terms/page.tsx", "<li>Menghitung skor kesiapan usaha</li>")).toContain("skor");
+  });
+
+  it("never mistakes a class list for a sentence", () => {
+    // `bento-score` dan `score-ring` bukan bahasa rapor; menandainya akan
+    // membuat orang menaburkan penanda pengecualian sampai lint berhenti
+    // berarti.
+    const lines = [
+      '<div className="bento-card bento-score wide">',
+      '<span className="score-ring large" />',
+      "<div class=\"kpi score total\">",
+    ];
+    for (const line of lines) {
+      expect(terms("components/landing/ProductSections.tsx", line), line).toEqual([]);
+    }
+  });
+
   it("does not police the institution portal or Mode Akuntan", () => {
     // Angkanya tetap dikirim ke institusi; yang berubah hanya cara ia
     // diperlihatkan kepada pemiliknya.

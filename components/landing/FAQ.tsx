@@ -18,8 +18,8 @@ const questions = [
     answer: "Anda tetap memegang kendali. Informasi untuk pendamping atau institusi hanya dibagikan melalui alur persetujuan yang jelas.",
   },
   {
-    question: "Apakah Readiness Score menjamin pembiayaan?",
-    answer: "Tidak. Readiness Score membantu Anda memahami kesiapan usaha. Keputusan pembiayaan tetap mengikuti penilaian dan kebijakan masing-masing institusi.",
+    question: "Apakah tingkat kesiapan menjamin pembiayaan?",
+    answer: "Tidak. Tingkat kesiapan menggambarkan kelengkapan catatan dan dokumen usaha Anda, dan aturannya terbuka untuk Anda baca. Keputusan pembiayaan tetap mengikuti penilaian dan kebijakan masing-masing institusi.",
   },
 ];
 

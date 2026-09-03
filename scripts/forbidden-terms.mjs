@@ -95,6 +95,17 @@ function isCommentLine(line) {
 /** Layar yang dibaca pemilik usaha, tempat kamus di atas berlaku. */
 export const ownerLanguageSurfaces = ["app/(umkm)", "components/warung"];
 
+/**
+ * Halaman publik yang dibaca calon pengguna.
+ *
+ * Kamus akuntan TIDAK berlaku di sini -- halaman pemasaran boleh memakai
+ * kosakata yang lebih umum. Yang berlaku hanya larangan bahasa rapor, supaya
+ * landing tidak menjanjikan "Readiness Score" lalu pemilik masuk dan
+ * menemukan "tingkat kesiapan". Janji di halaman depan harus sama dengan
+ * yang benar-benar ia temui di dalam.
+ */
+export const publicCopySurfaces = ["components/landing", "app/terms"];
+
 /** Satu-satunya pengecualian: layar yang memang ditujukan ke pendamping. */
 export const accountantSurfaces = ["app/(umkm)/umkm/akuntan"];
 
@@ -151,6 +162,10 @@ export function visibleCopySegments(line) {
   const withoutExpressions = strippedExpressions(line);
   const segments = [];
   for (const match of withoutExpressions.matchAll(/"([^"]*)"|'([^']*)'|`([^`]*)`/g)) {
+    // Nilai `className` adalah daftar nama kelas, bukan kalimat yang dibaca
+    // siapa pun. `bento-score` dan `score-ring` bukan bahasa rapor.
+    const before = withoutExpressions.slice(0, match.index).trimEnd();
+    if (/(className|class)=\{?$/.test(before)) continue;
     segments.push(match[1] ?? match[2] ?? match[3] ?? "");
   }
   for (const match of withoutExpressions.matchAll(/>([^<>]+)</g)) {
@@ -186,7 +201,8 @@ export function scanContent(relativePath, content) {
         findings.push({ file: posixPath, line: index + 1, term, text: line.trim().slice(0, 160) });
       }
     }
-    if (!isOwnerLanguageSurface || isCommentLine(line)) return;
+    const isPublicCopySurface = publicCopySurfaces.some((surface) => posixPath.startsWith(surface));
+    if ((!isOwnerLanguageSurface && !isPublicCopySurface) || isCommentLine(line)) return;
     for (const { term, pattern } of ownerCopyPatterns) {
       if (pattern.test(strippedExpressions(line))) {
         findings.push({ file: posixPath, line: index + 1, term, text: line.trim().slice(0, 160) });

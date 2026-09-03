@@ -90,7 +90,7 @@ export function ProductPreview() {
               <article>
                 <span className="phone-metric-icon is-teal"><Target size={13} /></span>
                 <small>Readiness</small>
-                <strong>Lihat skor</strong>
+                <strong>Lihat kesiapan</strong>
               </article>
             </div>
 

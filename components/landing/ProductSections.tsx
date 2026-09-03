@@ -44,7 +44,7 @@ function FeatureBento() {
           </article>
 
           <article className="bento-card bento-score">
-            <div className="bento-copy compact"><span className="bento-icon dark" aria-hidden="true"><Target size={19} /></span><h3>Kesiapan punya arah.</h3><p>Readiness Score menunjukkan bagian yang sudah kuat dan yang perlu dilengkapi.</p></div>
+            <div className="bento-copy compact"><span className="bento-icon dark" aria-hidden="true"><Target size={19} /></span><h3>Kesiapan punya arah.</h3><p>Tingkat kesiapan menunjukkan bagian yang sudah kuat dan yang perlu dilengkapi.</p></div>
             <div className="score-panel"><div className="score-ring large"><span>72</span></div><div className="flex-1"><p className="text-xs font-bold text-white">Bertumbuh</p><p className="mt-1 text-[10px] leading-4 text-white/55">Konsistensi pencatatan Anda membaik.</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><span className="block h-full w-[72%] rounded-full bg-[#2efed0]" /></div></div></div>
           </article>
 
@@ -108,7 +108,7 @@ function ReadinessJourney() {
         <div>
           <p className="eyebrow">Journey naik kelas</p>
           <h2 className="section-title mt-4">Dari rajin mencatat menuju usaha yang lebih siap.</h2>
-          <p className="section-copy mt-6">Readiness Score bukan janji pembiayaan. Ia adalah penunjuk arah agar Anda tahu langkah mana yang dapat diperkuat berikutnya.</p>
+          <p className="section-copy mt-6">Tingkat kesiapan bukan janji pembiayaan. Ia penunjuk arah agar Anda tahu langkah mana yang dapat diperkuat berikutnya.</p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             <div className="soft-info-card"><FileCheck2 aria-hidden="true" size={20} /><h3>Langkah yang jelas</h3><p>Profil, legalitas, dan kebiasaan usaha dirangkum dalam journey.</p></div>
             <div className="soft-info-card"><ShieldCheck aria-hidden="true" size={20} /><h3>Tetap dalam kendali</h3><p>Anda memilih kapan dan kepada siapa informasi usaha dibagikan.</p></div>
