@@ -2,7 +2,7 @@
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  padding: 92px 14px 112px;
+  padding: 92px 14px 132px;
   background:
     radial-gradient(circle at 88% 7%, rgba(169, 235, 208, .7), transparent 22rem),
     linear-gradient(155deg, #0f73a3 0, #29abe2 25rem, #eef8fd 25rem, #f5fbf8 100%);
@@ -11,6 +11,10 @@
 .mobileOnly { display: block; }
 .desktopOnly { display: none; }
 .mobileStack { display: grid; gap: 18px; max-width: 520px; margin-inline: auto; }
+/* Anak grid default `min-width: auto`: satu kartu dengan teks panjang akan
+   melebarkan kolomnya melewati lebar layar, dan `overflow: hidden` di atas
+   memotongnya tanpa satu pun scrollbar yang menjelaskan kenapa. */
+.mobileStack > * { min-width: 0; }
 
 .greeting { color: rgba(255,255,255,.82); font-size: 12px; font-weight: 600; }
 .mobileTitle { margin-top: 3px; color: white; font-size: 24px; font-weight: 800; letter-spacing: -.035em; }
@@ -42,7 +46,7 @@
 .balance { margin-top: 8px; font-size: clamp(30px, 9vw, 42px); font-weight: 800; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
 .balanceMeta { display: flex; align-items: center; gap: 7px; margin-top: 5px; color: rgba(255,255,255,.78); font-size: 11px; }
 .balancePill { padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,.16); color: white; font-weight: 700; }
-.quickActions { position: absolute; inset: auto 18px 18px; z-index: 1; display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
+.quickActions { position: absolute; inset: auto 14px 14px; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; }
 .quickAction {
   display: flex;
   min-height: 43px;
@@ -81,7 +85,7 @@
 
 .journeyCard { background: linear-gradient(145deg, #eef8fd, rgba(255,255,255,.98)); }
 .missionRow { display: flex; align-items: center; gap: 16px; }
-.mission { flex: 1; }
+.mission { flex: 1; min-width: 0; }
 .mission strong { display: block; color: #1b2a3a; font-size: 12px; }
 .mission p { margin-top: 4px; color: #4a6280; font-size: 10px; line-height: 1.5; }
 

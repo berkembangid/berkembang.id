@@ -29,7 +29,18 @@ const NAVIGATION: NavItem[] = [
   { label: "Panduan", href: "/umkm/ai-copilot", Icon: Sparkles },
 ];
 
-const MOBILE_NAVIGATION = NAVIGATION.filter((item) => !["Dokumen", "Panduan"].includes(item.label));
+/**
+ * Mencatat dengan suara adalah alasan aplikasi ini dibuka.
+ *
+ * Sebagai satu ikon di antara lima yang seragam, ia harus dicari; sebagai
+ * tombol bundar yang menonjol di tengah — pola yang sudah dikenal pemilik
+ * warung dari tombol QRIS di aplikasi bank — ia yang pertama terlihat dan bisa
+ * ditekan dengan ibu jari tanpa melihat. Ini juga menjadikan mencatat satu-
+ * satunya aksi utama di layar, yang memang benar.
+ */
+const MOBILE_VOICE = NAVIGATION.find((item) => item.label === "Catat")!;
+const MOBILE_LEFT = NAVIGATION.filter((item) => ["Beranda", "Laporan"].includes(item.label));
+const MOBILE_RIGHT = NAVIGATION.filter((item) => ["Perjalanan", "Profil"].includes(item.label));
 
 function isActivePath(pathname: string, item: NavItem) {
   if (item.href === "/umkm") return pathname === "/umkm";
@@ -169,7 +180,24 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       </div>
 
       <nav aria-label="Menu utama UMKM" className={styles.bottomNav}>
-        {MOBILE_NAVIGATION.map((item) => {
+        {MOBILE_LEFT.map((item) => {
+          const active = isActivePath(pathname, item);
+          return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`${styles.bottomLink} ${active ? styles.bottomLinkActive : ""}`}><item.Icon size={19} strokeWidth={active ? 2.5 : 2} /><span>{item.label}</span></Link>;
+        })}
+
+        <Link
+          href={MOBILE_VOICE.href}
+          aria-current={isActivePath(pathname, MOBILE_VOICE) ? "page" : undefined}
+          aria-label="Catat dengan suara"
+          className={styles.voiceSlot}
+        >
+          <span className={`${styles.voiceButton} ${isActivePath(pathname, MOBILE_VOICE) ? styles.voiceButtonActive : ""}`}>
+            <MOBILE_VOICE.Icon size={24} strokeWidth={2.4} />
+          </span>
+          <span className={styles.voiceLabel}>{MOBILE_VOICE.label}</span>
+        </Link>
+
+        {MOBILE_RIGHT.map((item) => {
           const active = isActivePath(pathname, item);
           return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`${styles.bottomLink} ${active ? styles.bottomLinkActive : ""}`}><item.Icon size={19} strokeWidth={active ? 2.5 : 2} /><span>{item.label}</span></Link>;
         })}

@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 export function DashboardPage({ children, width = "wide", className }: { children: React.ReactNode; width?: "compact" | "wide"; className?: string }) {
-  return <main className={cn("mx-auto w-full space-y-6 px-4 py-5 pb-28 md:px-7 md:py-7 md:pb-10", width === "compact" ? "max-w-4xl" : "max-w-[1440px]", className)}>{children}</main>;
+  return <main className={cn("mx-auto w-full space-y-6 px-4 py-5 pb-[132px] md:px-7 md:py-7 md:pb-10", width === "compact" ? "max-w-4xl" : "max-w-[1440px]", className)}>{children}</main>;
 }
 
 export function DashboardPanel({ children, className }: { children: React.ReactNode; className?: string }) {
