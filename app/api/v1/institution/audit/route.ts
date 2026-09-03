@@ -34,8 +34,11 @@ export async function POST(request: Request) {
   const { data, error } = await client.rpc("log_institution_view", {
     p_institution_id: selected,
     p_artifact: body.artifact,
-    p_business_id: typeof body.businessId === "string" ? body.businessId : null,
-    p_artifact_id: typeof body.artifactId === "string" ? body.artifactId : null,
+    // Parameternya punya nilai bawaan `null` di SQL, jadi menghilangkan kunci
+    // memberi hasil yang sama dengan mengirim null -- dan itu yang cocok
+    // dengan tipe yang dihasilkan dari skema.
+    p_business_id: typeof body.businessId === "string" ? body.businessId : undefined,
+    p_artifact_id: typeof body.artifactId === "string" ? body.artifactId : undefined,
     p_action: body.action === "download" ? "download" : "view",
   });
   if (error) return NextResponse.json({ error: "AUDIT_WRITE_FAILED" }, { status: 400 });

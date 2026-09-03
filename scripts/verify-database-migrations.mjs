@@ -65,6 +65,7 @@ const expectedMigrations = [
   "0057_enforce_dossier_credits.sql",
   "0058_institution_portal_gaps.sql",
   "0059_dossier_api_keys.sql",
+  "0060_owner_consent_authority.sql",
 ];
 
 const coreTables = [
@@ -3406,6 +3407,16 @@ async function verifyConsentVerifiedProfileLifecycle() {
   );
   assert.equal(replayResult.rows[0].value.requestId, requestId);
   assert.equal(replayResult.rows[0].value.idempotent, true);
+
+  // Persetujuan yang hanya bisa diberikan pihak lain bukan persetujuan.
+  // Orang yang datanya dibicarakan harus bisa memutuskan sendiri, dan orang
+  // asing tidak boleh -- dijawab "tidak ditemukan", bukan "ditolak", supaya
+  // keberadaan permintaannya sendiri tidak bocor.
+  await expectAuthenticatedRejected(
+    institutionUser,
+    `select public.respond_to_dossier_request('${requestId}', 'approve', array['business_identity'], false)`,
+    "P0001",
+  );
 
   const approval = await asAuthenticatedCommitted(
     owner,

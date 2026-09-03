@@ -11,6 +11,23 @@ function textValue(value: unknown, fallback = "", maxLength = 200) {
   return normalized ? normalized.slice(0, maxLength) : fallback;
 }
 
+function enumValue(value: unknown, allowed: readonly string[]) {
+  return typeof value === "string" && allowed.includes(value) ? value : null;
+}
+
+function yearValue(value: unknown) {
+  const year = typeof value === "number" ? value : Number(value);
+  const thisYear = new Date().getFullYear();
+  return Number.isInteger(year) && year >= 1900 && year <= thisYear ? year : null;
+}
+
+/** Kanal penjualan; nilai asing dibuang, bukan menggagalkan pendaftaran. */
+function channelValues(value: unknown) {
+  const allowed = ["warung", "whatsapp", "marketplace", "media_sosial"];
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((item): item is string => typeof item === "string" && allowed.includes(item)))];
+}
+
 function requireNoError(error: { message: string } | null, code: string) {
   if (error) throw new Error(code);
 }
@@ -37,6 +54,14 @@ export async function bootstrapAccountFromSignupMetadata(
   const institutionName = textValue(metadata.nama_institusi ?? metadata.name, "Institusi Baru");
   const contactName = textValue(metadata.nama_contact ?? metadata.name, institutionName);
   const location = textValue(metadata.lokasi);
+  // Jawaban langkah tiga pendaftaran. Tanpa ini, pertanyaan yang sudah dijawab
+  // pemilik hilang begitu saja dan ia harus mengisinya lagi di halaman Profil.
+  const address = textValue(metadata.alamat, "", 240);
+  const phone = textValue(metadata.phone, "", 40);
+  const businessForm = enumValue(metadata.bentuk_usaha, ["perorangan", "badan_usaha"]) ?? "perorangan";
+  const startYear = yearValue(metadata.tahun_mulai_usaha);
+  const headcount = enumValue(metadata.jumlah_karyawan, ["sendiri", "1-4", "5-19"]);
+  const channels = channelValues(metadata.kanal_penjualan);
 
   const { error: profileError } = await admin.from("profiles").upsert(
     {
@@ -53,6 +78,12 @@ export async function bootstrapAccountFromSignupMetadata(
         accountType === "institution" ? textValue(metadata.jenis_institusi, "other") : null,
       nama_contact: accountType === "institution" ? contactName : null,
       lokasi: location || null,
+      alamat: accountType === "umkm" ? address || null : null,
+      phone: accountType === "umkm" ? phone || null : null,
+      bentuk_usaha: accountType === "umkm" ? businessForm : "perorangan",
+      tahun_mulai_usaha: accountType === "umkm" ? startYear : null,
+      jumlah_karyawan: accountType === "umkm" ? headcount : null,
+      kanal_penjualan: accountType === "umkm" ? channels : [],
       status: "active",
       updated_at: new Date().toISOString(),
     },
@@ -78,6 +109,8 @@ export async function bootstrapAccountFromSignupMetadata(
           legal_name: businessName,
           sector: textValue(metadata.sektor_usaha, "Lainnya"),
           location: location || null,
+          address: address || null,
+          phone: phone || null,
           status: "active",
         })
         .select("id")

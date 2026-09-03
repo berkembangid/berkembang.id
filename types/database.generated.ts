@@ -926,6 +926,44 @@ export type Database = {
           }
         ]
       }
+      discovery_optins: {
+        Row: {
+          business_id: string
+          opted_in: boolean
+          candidate_code: string
+          opted_at: string | null
+          copy_version: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          opted_in?: boolean
+          candidate_code?: string
+          opted_at?: string | null
+          copy_version?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          opted_in?: boolean
+          candidate_code?: string
+          opted_at?: string | null
+          copy_version?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discovery_optins_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       document_attachments: {
         Row: {
           id: string
@@ -1519,6 +1557,70 @@ export type Database = {
           }
         ]
       }
+      dossier_api_keys: {
+        Row: {
+          id: string
+          dossier_id: string
+          institution_id: string
+          key_hash: string
+          key_prefix: string
+          scopes: string[]
+          status: string
+          expires_at: string | null
+          last_used_at: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          dossier_id: string
+          institution_id: string
+          key_hash: string
+          key_prefix: string
+          scopes?: string[]
+          status?: string
+          expires_at?: string | null
+          last_used_at?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          dossier_id?: string
+          institution_id?: string
+          key_hash?: string
+          key_prefix?: string
+          scopes?: string[]
+          status?: string
+          expires_at?: string | null
+          last_used_at?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dossier_api_keys_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dossier_api_keys_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "dossiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dossier_api_keys_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       dossier_items: {
         Row: {
           id: string
@@ -1559,105 +1661,6 @@ export type Database = {
             referencedColumns: ["id"]
           }
         ]
-      }
-      discovery_optins: {
-        Row: {
-          business_id: string
-          opted_in: boolean
-          candidate_code: string
-          opted_at: string | null
-          copy_version: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          business_id: string
-          opted_in?: boolean
-          candidate_code?: string
-          opted_at?: string | null
-          copy_version?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          business_id?: string
-          opted_in?: boolean
-          candidate_code?: string
-          opted_at?: string | null
-          copy_version?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      institution_view_logs: {
-        Row: {
-          id: string
-          institution_id: string
-          member_id: string | null
-          business_id: string | null
-          artifact: string
-          artifact_id: string | null
-          action: string
-          occurred_at: string
-        }
-        Insert: {
-          id?: string
-          institution_id: string
-          member_id?: string | null
-          business_id?: string | null
-          artifact: string
-          artifact_id?: string | null
-          action: string
-          occurred_at?: string
-        }
-        Update: {
-          id?: string
-          institution_id?: string
-          member_id?: string | null
-          business_id?: string | null
-          artifact?: string
-          artifact_id?: string | null
-          action?: string
-          occurred_at?: string
-        }
-        Relationships: []
-      }
-      institution_entitlements: {
-        Row: {
-          institution_id: string
-          seats: number
-          dossier_credits: number
-          credits_used: number
-          license_from: string | null
-          license_to: string | null
-          plan_note: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          institution_id: string
-          seats?: number
-          dossier_credits?: number
-          credits_used?: number
-          license_from?: string | null
-          license_to?: string | null
-          plan_note?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          institution_id?: string
-          seats?: number
-          dossier_credits?: number
-          credits_used?: number
-          license_from?: string | null
-          license_to?: string | null
-          plan_note?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       dossier_requests: {
         Row: {
@@ -2004,6 +2007,50 @@ export type Database = {
           }
         ]
       }
+      institution_entitlements: {
+        Row: {
+          institution_id: string
+          seats: number
+          dossier_credits: number
+          credits_used: number
+          license_from: string | null
+          license_to: string | null
+          plan_note: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          institution_id: string
+          seats?: number
+          dossier_credits?: number
+          credits_used?: number
+          license_from?: string | null
+          license_to?: string | null
+          plan_note?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          institution_id?: string
+          seats?: number
+          dossier_credits?: number
+          credits_used?: number
+          license_from?: string | null
+          license_to?: string | null
+          plan_note?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "institution_entitlements_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       institution_members: {
         Row: {
           id: string
@@ -2072,6 +2119,116 @@ export type Database = {
           }
         ]
       }
+      institution_shortlists: {
+        Row: {
+          id: string
+          institution_id: string
+          business_id: string
+          created_by: string
+          status: string
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          institution_id: string
+          business_id: string
+          created_by: string
+          status?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          institution_id?: string
+          business_id?: string
+          created_by?: string
+          status?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "institution_shortlists_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "institution_shortlists_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "institution_shortlists_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      institution_view_logs: {
+        Row: {
+          id: string
+          institution_id: string
+          member_id: string | null
+          business_id: string | null
+          artifact: string
+          artifact_id: string | null
+          action: string
+          occurred_at: string
+        }
+        Insert: {
+          id?: string
+          institution_id: string
+          member_id?: string | null
+          business_id?: string | null
+          artifact: string
+          artifact_id?: string | null
+          action: string
+          occurred_at?: string
+        }
+        Update: {
+          id?: string
+          institution_id?: string
+          member_id?: string | null
+          business_id?: string | null
+          artifact?: string
+          artifact_id?: string | null
+          action?: string
+          occurred_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "institution_view_logs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "institution_view_logs_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "institution_view_logs_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "institution_members"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       institutions: {
         Row: {
           id: string
@@ -2136,6 +2293,13 @@ export type Database = {
             columns: ["legacy_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "institutions_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           }
         ]
@@ -2926,6 +3090,9 @@ export type Database = {
           created_by: string | null
           created_at: string
           updated_at: string
+          join_code: string
+          region: string | null
+          mission_pack: Json
         }
         Insert: {
           id?: string
@@ -2939,6 +3106,9 @@ export type Database = {
           created_by?: string | null
           created_at?: string
           updated_at?: string
+          join_code?: string
+          region?: string | null
+          mission_pack?: Json
         }
         Update: {
           id?: string
@@ -2952,6 +3122,9 @@ export type Database = {
           created_by?: string | null
           created_at?: string
           updated_at?: string
+          join_code?: string
+          region?: string | null
+          mission_pack?: Json
         }
         Relationships: [
           {
@@ -3262,6 +3435,7 @@ export type Database = {
           formula_version: string | null
           created_by: string | null
           created_at: string
+          dossier_id: string | null
         }
         Insert: {
           id?: string
@@ -3276,6 +3450,7 @@ export type Database = {
           formula_version?: string | null
           created_by?: string | null
           created_at?: string
+          dossier_id?: string | null
         }
         Update: {
           id?: string
@@ -3290,6 +3465,7 @@ export type Database = {
           formula_version?: string | null
           created_by?: string | null
           created_at?: string
+          dossier_id?: string | null
         }
         Relationships: [
           {
@@ -3311,6 +3487,13 @@ export type Database = {
             columns: ["document_id"]
             isOneToOne: false
             referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_issues_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "dossiers"
             referencedColumns: ["id"]
           },
           {
@@ -3829,6 +4012,18 @@ export type Database = {
         }
         Relationships: []
       }
+      program_members: {
+        Row: {
+          id: string | null
+          program_id: string | null
+          business_id: string | null
+          joined_at: string | null
+          left_at: string | null
+          consent_version: string | null
+          status: string | null
+        }
+        Relationships: []
+      }
       v_general_ledger: {
         Row: {
           business_id: string | null
@@ -4022,6 +4217,7 @@ export type Database = {
           p_requested_duration_days?: number
           p_download_requested?: boolean
           p_idempotency_key?: string
+          p_institution_id?: string
         }
         Returns: Json
       }
@@ -4092,6 +4288,13 @@ export type Database = {
           p_as_of?: string
         }
         Returns: number
+      }
+      exchange_dossier_api_key: {
+        Args: {
+          p_key_hash: string
+          p_scope: string
+        }
+        Returns: Json
       }
       fail_capture_ai_job: {
         Args: {
@@ -4272,35 +4475,54 @@ export type Database = {
           days_recorded: number
         }[]
       }
-      list_anonymous_business_candidates: {
-        Args: {
-          p_program_id?: string
-        }
-        Returns: Json
-      }
-      resolve_anonymous_candidate_code: {
-        Args: {
-          p_candidate_code: string
-        }
-        Returns: string | null
-      }
       get_my_discovery_optin: {
         Args: Record<string, never>
         Returns: Json
       }
-      set_my_discovery_optin: {
+      get_my_institution_shortlist: {
         Args: {
-          p_opted_in: boolean
+          p_institution_id?: string
         }
         Returns: Json
       }
-      get_my_institution_shortlist: {
+      join_program_by_code: {
+        Args: {
+          p_join_code: string
+        }
+        Returns: Json
+      }
+      list_anonymous_business_candidates: {
+        Args: {
+          p_program_id?: string
+          p_institution_id?: string
+          p_sector?: string
+          p_region?: string
+          p_min_level?: string
+          p_age_band?: string
+          p_legal_complete?: boolean
+          p_sort?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: Json
+      }
+      list_my_institutions: {
         Args: Record<string, never>
         Returns: Json
       }
-      toggle_my_institution_shortlist: {
+      log_institution_view: {
         Args: {
-          p_candidate_code: string
+          p_institution_id: string
+          p_artifact: string
+          p_business_id?: string
+          p_artifact_id?: string
+          p_action?: string
+        }
+        Returns: Json
+      }
+      program_dashboard: {
+        Args: {
+          p_program_id: string
         }
         Returns: Json
       }
@@ -4311,6 +4533,24 @@ export type Database = {
       record_document_ocr_consent: {
         Args: {
           p_session_id: string
+        }
+        Returns: Json
+      }
+      record_institution_report_issue: {
+        Args: {
+          p_business_id: string
+          p_institution_id: string
+          p_dossier_id: string
+          p_document_id: string
+          p_document_uid: string
+          p_report_kind: string
+          p_storage_path: string
+          p_file_size: number
+          p_checksum_sha256: string
+          p_name: string
+          p_period_from?: string
+          p_period_to?: string
+          p_formula_version?: string
         }
         Returns: Json
       }
@@ -4367,6 +4607,18 @@ export type Database = {
           p_reason?: string
         }
         Returns: Json
+      }
+      resolve_anonymous_candidate_code: {
+        Args: {
+          p_candidate_code: string
+        }
+        Returns: string
+      }
+      resolve_my_institution_id: {
+        Args: {
+          p_institution_id?: string
+        }
+        Returns: string
       }
       respond_to_dossier_request: {
         Args: {
@@ -4426,6 +4678,12 @@ export type Database = {
         }
         Returns: Json
       }
+      set_my_discovery_optin: {
+        Args: {
+          p_opted_in: boolean
+        }
+        Returns: Json
+      }
       set_transaction_category: {
         Args: {
           p_transaction_id: string
@@ -4433,6 +4691,13 @@ export type Database = {
           p_emkm_category_subtype?: string
           p_counterparty_id?: string
           p_interest_amount_idr?: number
+        }
+        Returns: Json
+      }
+      toggle_my_institution_shortlist: {
+        Args: {
+          p_candidate_code: string
+          p_institution_id?: string
         }
         Returns: Json
       }
