@@ -25,6 +25,37 @@ describe("kolom isian", () => {
   });
 });
 
+describe("setiap kolom menunjukkan ikonnya", () => {
+  it("keeps one positioning context per field", () => {
+    // Kolom kata sandi pernah membungkus isinya dengan `relative` kedua.
+    // Elemen berposisi yang muncul belakangan menang atas ikon yang juga
+    // berposisi, jadi kotak isian menutupi gemboknya -- dua kolom lain yang
+    // tanpa pembungkus itu tetap menampilkan ikonnya.
+    const field = register.slice(register.indexOf('label="Kata sandi"'));
+    const end = field.indexOf("</Field>");
+    expect(field.slice(0, end)).not.toContain('<div className="relative">');
+  });
+
+  it("lifts the icon above anything positioned that comes later", () => {
+    expect(register).toContain("absolute left-3 top-1/2 z-10 -translate-y-1/2");
+  });
+});
+
+describe("kotak centang berukuran kotak centang", () => {
+  it("excludes checkboxes from the input height rule", () => {
+    // `.auth-form-card input { min-height:48px }` ditulis untuk kolom isian.
+    // Memaksakannya pada kotak 20 px membuatnya melayang di tengah blok,
+    // jauh dari baris teks yang seharusnya didampinginya.
+    const css = readFileSync(join(root, "app", "globals.css"), "utf8");
+    const authCss = css.slice(
+      css.indexOf("/* ===== Authentication ===== */"),
+      css.indexOf("/* ===== Landing page v5 ===== */"),
+    );
+    expect(authCss).toContain('input:not([type="checkbox"]):not([type="radio"])');
+    expect(authCss).not.toMatch(/\.auth-form-card input,\.auth-form-card select \{ min-height/);
+  });
+});
+
 describe("membaca syarat bukan menyetujuinya", () => {
   it("keeps the terms button outside the agreement label", () => {
     // Tombolnya pernah bersarang di dalam `<label>`, jadi mengekliknya ikut
