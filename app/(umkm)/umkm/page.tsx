@@ -223,11 +223,29 @@ export default function BerandaPage() {
             </section>
 
             <section aria-labelledby="mission-desktop-title" className={`${styles.panel} ${styles.fullWidth}`}>
-              <div className={styles.panelHeader}><div><h2 id="mission-desktop-title" className={styles.panelTitle}>Langkah usaha berikutnya</h2><p className="mt-1 text-[10px] text-[#6e859e]">Rekomendasi berdasarkan data yang sudah tersedia</p></div><Link href="/umkm/kesiapan" className="text-[10px] font-bold text-[#0b5f86]">Lihat perjalanan</Link></div>
-              <div className="grid gap-5 p-5 lg:grid-cols-[120px_1fr_auto] lg:items-center">
-                
-                <div><p className="text-sm font-bold text-[#1b2a3a]">{readiness?.step?.title ?? "Data utama usaha sudah lengkap"}</p><p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#6e859e]">{readiness?.step?.headline ?? "Terus catat transaksi yang benar-benar terjadi agar ringkasan tetap terbaru."}</p></div>
-                <Link href={readiness?.step?.action?.href ?? "/umkm/kesiapan"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white">Lanjutkan <ArrowRight size={14} /></Link>
+              <div className={styles.panelHeader}>
+                <div>
+                  <h2 id="mission-desktop-title" className={styles.panelTitle}>Langkah usaha berikutnya</h2>
+                  <p className="mt-1 text-[10px] text-[#6e859e]">Rekomendasi berdasarkan data yang sudah tersedia</p>
+                </div>
+                <Link href="/umkm/kesiapan" className="text-[10px] font-bold text-[#0b5f86] hover:underline">Lihat perjalanan</Link>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5">
+                <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eef8fd] text-[#0b5f86]">
+                    <Sparkles size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-[#1b2a3a]">{readiness?.step?.title ?? "Data utama usaha sudah lengkap"}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[#6e859e]">{readiness?.step?.headline ?? "Terus catat transaksi yang benar-benar terjadi agar ringkasan tetap terbaru."}</p>
+                  </div>
+                </div>
+                <Link
+                  href={readiness?.step?.action?.href ?? "/umkm/kesiapan"}
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-5 text-xs font-bold text-white hover:bg-[#0f73a3] transition-colors shadow-sm self-stretch sm:self-auto"
+                >
+                  {readiness?.step?.action?.label ?? "Lanjutkan"} <ArrowRight size={14} />
+                </Link>
               </div>
             </section>
 

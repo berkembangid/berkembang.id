@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -100,9 +101,15 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className={styles.shell}>
       <aside className={styles.sidebar}>
-        <Link href="/umkm" className={styles.sidebarBrand}>
-          <span className={styles.brandMark}><Sparkles size={17} /></span>
-          <span>berkembang.id</span>
+        <Link href="/umkm" className={styles.sidebarBrand} aria-label="Berkembang.id">
+          <Image
+            src="/logo/logo berkembang.webp"
+            alt="Berkembang.id"
+            width={150}
+            height={38}
+            priority
+            className="h-8 w-auto object-contain"
+          />
         </Link>
         <p className={styles.navLabel}>Ruang usaha</p>
         <nav aria-label="Menu utama UMKM">
@@ -142,7 +149,16 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         </header>
 
         <header className={`${styles.mobileHeader} ${pathname === "/umkm" ? "" : styles.mobileHeaderLight}`}>
-          <Link href="/umkm" className={styles.mobileBrand}><span className={`${styles.brandMark} !h-9 !w-9 bg-white/20 shadow-none`}><Sparkles size={17} /></span><span>berkembang.id</span></Link>
+          <Link href="/umkm" className={styles.mobileBrand} aria-label="Berkembang.id">
+            <Image
+              src="/logo/logo berkembang.webp"
+              alt="Berkembang.id"
+              width={130}
+              height={32}
+              priority
+              className={`h-7 w-auto object-contain ${pathname === "/umkm" ? "brightness-0 invert" : ""}`}
+            />
+          </Link>
           <div className={styles.mobileActions}>
             <Link href="/umkm/ai-copilot" aria-label="Buka panduan usaha" className={styles.iconButton}><Sparkles size={17} /></Link>
             <Link href="/umkm/upload" aria-label="Buka dokumen usaha" className={styles.iconButton}><Upload size={17} /></Link>

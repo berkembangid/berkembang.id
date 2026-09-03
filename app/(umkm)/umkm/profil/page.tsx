@@ -6,7 +6,7 @@ import { profileSectorOptions } from "@/modules/accounting/sector-mapping";
 import { LegalitySummary } from "@/components/warung/LegalitySummary";
 import Image from "next/image";
 import { useState, useEffect } from "react";
-import { User, Mail, Building2, Phone, Save, FileText, Camera, LogOut, ShieldCheck } from "lucide-react";
+import { User, Mail, Building2, Phone, Save, FileText, Camera, LogOut, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 import OwnerConsentPanel from "@/modules/consent/owner-consent-panel";
@@ -52,6 +52,55 @@ interface ProfileRecord {
   kanal_penjualan?: string[] | null;
 }
 
+function FormField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-xs font-bold text-[#1b2a3a]">{label}</label>
+      {children}
+      {hint && <p className="text-[10px] leading-relaxed text-[#6e859e]">{hint}</p>}
+    </div>
+  );
+}
+
+function ChipGroup<T extends string>({
+  options,
+  value,
+  multi = false,
+  onChange,
+}: {
+  options: readonly { value: T; label: string }[];
+  value: T | T[];
+  multi?: boolean;
+  onChange: (next: T | T[]) => void;
+}) {
+  function isActive(v: T) {
+    return Array.isArray(value) ? value.includes(v) : value === v;
+  }
+  function toggle(v: T) {
+    if (!multi) { onChange(v); return; }
+    const arr = Array.isArray(value) ? value : [];
+    onChange(isActive(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => toggle(opt.value)}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+            isActive(opt.value)
+              ? "bg-[#0b5f86] text-white border-[#0b5f86]"
+              : "bg-white text-[#4a6280] border-[#c8d3de] hover:border-[#0b5f86] hover:text-[#0b5f86]"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function ProfilPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -59,7 +108,6 @@ export default function ProfilPage() {
   const [previewAvatar, setPreviewAvatar] = useState<string | null>(null);
   const [deletionScheduledFor, setDeletionScheduledFor] = useState<string | null>(null);
 
-  // Form Fields for Business Profile
   const [form, setForm] = useState({
     email: "",
     namaPemilik: "",
@@ -152,7 +200,6 @@ export default function ProfilPage() {
 
       let finalAvatarUrl = form.avatarUrl;
 
-      // Upload image directly to Supabase Storage 'avatars' bucket if a new file was selected
       if (selectedFile) {
         const fileExt = selectedFile.name.split(".").pop();
         const filePath = `${user.id}/${Date.now()}.${fileExt}`;
@@ -173,7 +220,6 @@ export default function ProfilPage() {
         }
       }
 
-      // 1. Update Supabase auth user metadata
       const { error: updateAuthError } = await supabase.auth.updateUser({
         data: {
           name: form.namaPemilik,
@@ -192,7 +238,6 @@ export default function ProfilPage() {
         throw new Error("Profil belum berhasil diperbarui. Silakan coba lagi.");
       }
 
-      // 2. Upsert profile table row in Supabase
       const { error: upsertError } = await supabase
         .from("profiles")
         .upsert({
@@ -206,8 +251,6 @@ export default function ProfilPage() {
           email: form.email,
           avatar_url: finalAvatarUrl,
           bentuk_usaha: form.bentukUsaha,
-          // Tahun kosong disimpan sebagai null, bukan 0: nol tahun akan
-          // terbaca dossier sebagai usaha yang berdiri sebelum masehi.
           tahun_mulai_usaha: form.tahunMulai ? Number(form.tahunMulai) : null,
           jumlah_karyawan: form.jumlahKaryawan || null,
           kanal_penjualan: form.kanalPenjualan,
@@ -219,7 +262,7 @@ export default function ProfilPage() {
       }
 
       setForm((prev) => ({ ...prev, avatarUrl: finalAvatarUrl }));
-      setMessage({ type: "success", text: "✓ Profil & Foto Usaha berhasil disimpan!" });
+      setMessage({ type: "success", text: "Profil berhasil disimpan." });
       setTimeout(() => setMessage(null), 3000);
     } catch (err: unknown) {
       console.error("Save profile error");
@@ -241,277 +284,231 @@ export default function ProfilPage() {
     window.location.href = "/auth/login";
   };
 
+  const initials = (form.namaUsaha || form.namaPemilik || "U").charAt(0).toUpperCase();
+
   return (
     <>
       <DashboardPage width="compact">
-        <PageHeader title="Profil & identitas usaha" description="Pastikan informasi usaha tetap lengkap dan terbaru agar dokumen serta laporan mudah dikenali." icon={Building2} actions={<button onClick={handleSignOut} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-[#c8d3de] bg-white px-4 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"><LogOut size={14} /> Keluar akun</button>} />
-        {/* Blok Privasi & akun: izin akses yang sudah ada, ditambah dua hak
-            yang selama ini tidak punya tombol -- membawa pergi datanya, dan
-            berhenti. */}
-        <OwnerConsentPanel />
-        <section aria-labelledby="privasi-akun" className="space-y-3">
-          <div>
-            <h2 id="privasi-akun" className="text-sm font-bold text-[#1b2a3a]">Data & akun Anda</h2>
-            <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
-              Catatan usaha ini milik Anda. Anda boleh membawanya pergi kapan saja.
-            </p>
-          </div>
-          <AccountDataPanel scheduledFor={deletionScheduledFor} />
-        </section>
+        <PageHeader
+          title="Profil usaha"
+          description="Informasi usaha Anda — lengkapi agar dokumen dan laporan mudah dikenali."
+          icon={Building2}
+          actions={
+            <button
+              onClick={handleSignOut}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-[#c8d3de] bg-white px-4 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9] transition-colors"
+            >
+              <LogOut size={14} /> Keluar
+            </button>
+          }
+        />
 
         {message && (
-          <FeedbackBanner tone={message.type === "success" ? "success" : "error"} live>{message.text}</FeedbackBanner>
+          <FeedbackBanner tone={message.type === "success" ? "success" : "error"} live>
+            {message.text}
+          </FeedbackBanner>
         )}
 
-        <form onSubmit={handleSave} className="space-y-6">
-          {/* Avatar & Basic Info Header Card */}
-          <div className="bg-white rounded-2xl p-6 border border-[#e3e9f0] shadow-card flex flex-col sm:flex-row items-center gap-6">
-            <div className="relative group flex-shrink-0">
-              <div className="w-24 h-24 rounded-2xl bg-[#0b5f86] text-white flex items-center justify-center font-bold text-3xl shadow-md overflow-hidden border-2 border-[#0b5f86]/20">
+        <form onSubmit={handleSave} className="space-y-4">
+          {/* Identity card */}
+          <div className="flex items-center gap-4 rounded-2xl border border-[#e3e9f0] bg-white p-4 shadow-[0_4px_16px_rgba(27,42,58,.04)]">
+            <div className="relative shrink-0">
+              <div className="grid h-16 w-16 place-items-center rounded-2xl bg-[#d6eefa] text-xl font-extrabold text-[#0b5f86] overflow-hidden">
                 {previewAvatar ? (
-                  <Image src={previewAvatar} alt="Foto profil usaha" width={96} height={96} unoptimized className="h-full w-full object-cover" />
-                ) : (
-                  form.namaUsaha ? form.namaUsaha.charAt(0).toUpperCase() : "U"
-                )}
+                  <Image src={previewAvatar} alt="Foto profil" width={64} height={64} unoptimized className="h-full w-full object-cover" />
+                ) : initials}
               </div>
-              <label htmlFor="avatar-upload" className="absolute -bottom-2 -right-2 bg-[#0b5f86] text-white p-2 rounded-xl shadow-lg cursor-pointer hover:bg-[#0f73a3] transition-colors" title="Unggah foto profil">
-                <Camera size={14} />
+              <label htmlFor="avatar-upload" className="absolute -bottom-1 -right-1 grid h-7 w-7 cursor-pointer place-items-center rounded-full bg-[#0b5f86] text-white shadow-md hover:bg-[#0f73a3] transition-colors" title="Ganti foto">
+                <Camera size={12} />
                 <input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
               </label>
             </div>
-
-            <div className="flex-1 text-center sm:text-left space-y-1">
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                <h2 className="font-headline text-xl font-bold text-[#1b2a3a]">{form.namaUsaha || "Nama Usaha Belum Diisi"}</h2>
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                  <ShieldCheck size={12} /> Email terverifikasi
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 font-medium">Pemilik: <span className="font-bold text-slate-700">{form.namaPemilik || "Belum Diisi"}</span> · {form.email}</p>
-              <p className="text-xs text-[#0b5f86] font-semibold">{form.sektor} · {form.lokasi || "Lokasi belum diisi"}</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold text-[#1b2a3a]">{form.namaUsaha || "Nama usaha belum diisi"}</p>
+              <p className="truncate text-xs text-[#6e859e]">{form.namaPemilik || "Nama pemilik"} · {form.sektor}</p>
+              <p className="truncate text-[10px] text-[#9fb0c2]">{form.email}</p>
             </div>
           </div>
 
-          {/* Form Sections Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Section 1: Informasi Usaha */}
-            <div className="bg-white rounded-2xl p-6 border border-[#e3e9f0] shadow-card space-y-4">
-              <h3 className="font-headline text-sm font-bold text-[#1b2a3a] flex items-center gap-2 border-b border-slate-100 pb-3">
-                <Building2 size={16} className="text-[#0b5f86]" /> Detail Informasi Usaha
-              </h3>
+          {/* Sections */}
+          <div className="grid gap-4 md:grid-cols-2">
 
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Nama Usaha</label>
-                <div className="relative">
+            {/* Usaha */}
+            <section className="rounded-2xl border border-[#e3e9f0] bg-white shadow-[0_4px_16px_rgba(27,42,58,.04)]">
+              <div className="flex items-center gap-2 border-b border-[#f0f4f8] px-5 py-4">
+                <Building2 size={15} className="text-[#0b5f86]" />
+                <h2 className="text-xs font-bold text-[#1b2a3a]">Informasi usaha</h2>
+              </div>
+              <div className="space-y-4 p-5">
+                <FormField label="Nama usaha">
                   <input
+                    required
                     value={form.namaUsaha}
                     onChange={(e) => setForm({ ...form, namaUsaha: e.target.value })}
                     placeholder="Contoh: Warung Ayam Geprek Ibu Sari"
-                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none"
+                    className="w-full rounded-xl border border-[#c8d3de] px-3 py-2.5 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                  />
+                </FormField>
+
+                <FormField label="Sektor usaha">
+                  <ChipGroup
+                    options={SECTORS.map((s) => ({ value: s, label: s }))}
+                    value={form.sektor}
+                    onChange={(v) => setForm({ ...form, sektor: v as string })}
+                  />
+                </FormField>
+
+                <FormField label="Bentuk usaha" hint="Menentukan dokumen mana yang diminta di halaman Dokumen.">
+                  <ChipGroup
+                    options={[
+                      { value: "perorangan", label: "Usaha perorangan" },
+                      { value: "badan_usaha", label: "Badan usaha (PT/CV)" },
+                    ] as const}
+                    value={form.bentukUsaha}
+                    onChange={(v) => setForm({ ...form, bentukUsaha: v as "perorangan" | "badan_usaha" })}
+                  />
+                </FormField>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField label="Tahun mulai usaha">
+                    <input
+                      value={form.tahunMulai}
+                      onChange={(e) => setForm({ ...form, tahunMulai: e.target.value.replace(/[^0-9]/g, "").slice(0, 4) })}
+                      inputMode="numeric"
+                      placeholder="2019"
+                      className="w-full rounded-xl border border-[#c8d3de] px-3 py-2.5 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                    />
+                  </FormField>
+
+                  <FormField label="Jumlah orang bekerja">
+                    <ChipGroup
+                      options={HEADCOUNTS}
+                      value={form.jumlahKaryawan}
+                      onChange={(v) => setForm({ ...form, jumlahKaryawan: form.jumlahKaryawan === v ? "" : v as string })}
+                    />
+                  </FormField>
+                </div>
+
+                <FormField label="Pembeli datang dari mana" hint="Boleh lebih dari satu.">
+                  <ChipGroup
+                    options={CHANNELS}
+                    value={form.kanalPenjualan}
+                    multi
+                    onChange={(v) => setForm({ ...form, kanalPenjualan: v as string[] })}
+                  />
+                </FormField>
+
+                <FormField label="Kota / kabupaten usaha">
+                  <CitySelect
+                    value={form.lokasi}
+                    onChange={(val) => setForm({ ...form, lokasi: val })}
+                    placeholder="Pilih kota..."
                     required
                   />
-                  <Building2 size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
+                </FormField>
 
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Sektor Usaha</label>
-                <div className="flex flex-wrap gap-2">
-                  {SECTORS.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setForm({ ...form, sektor: s })}
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
-                        form.sektor === s ? "bg-[#0b5f86] text-white border-[#0b5f86]" : "bg-white text-[#4a6280] border-[#c8d3de]"
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Bentuk Usaha</label>
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    { value: "perorangan", label: "Usaha perorangan" },
-                    { value: "badan_usaha", label: "Badan usaha (PT/CV/Koperasi)" },
-                  ] as const).map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setForm({ ...form, bentukUsaha: option.value })}
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
-                        form.bentukUsaha === option.value ? "bg-[#0b5f86] text-white border-[#0b5f86]" : "bg-white text-[#4a6280] border-[#c8d3de]"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                {/* Menentukan apakah Akta Pendirian ikut diminta di halaman
-                    Dokumen. Meminta akta kepada usaha perorangan membuat
-                    daftarnya selamanya kurang satu dokumen yang tidak pernah
-                    bisa ia buat. */}
-                <p className="mt-1 text-[10px] text-[#6e859e]">
-                  Menentukan dokumen mana yang diminta di halaman Dokumen.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Tahun Mulai Usaha *</label>
-                <input
-                  value={form.tahunMulai}
-                  onChange={(e) => setForm({ ...form, tahunMulai: e.target.value.replace(/[^0-9]/g, "").slice(0, 4) })}
-                  inputMode="numeric"
-                  placeholder="Contoh: 2019"
-                  className="w-full px-4 py-3 rounded-xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none"
-                />
-                <p className="mt-1 text-[10px] text-[#6e859e]">
-                  Dipakai untuk menyebut lama usaha Anda saat berkas dikirim ke pihak lain.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Jumlah Orang yang Bekerja</label>
-                <div className="flex flex-wrap gap-2">
-                  {HEADCOUNTS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setForm({ ...form, jumlahKaryawan: form.jumlahKaryawan === option.value ? "" : option.value })}
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
-                        form.jumlahKaryawan === option.value ? "bg-[#0b5f86] text-white border-[#0b5f86]" : "bg-white text-[#4a6280] border-[#c8d3de]"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Pembeli Datang dari Mana</label>
-                <div className="flex flex-wrap gap-2">
-                  {CHANNELS.map((option) => {
-                    const active = form.kanalPenjualan.includes(option.value);
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setForm({
-                          ...form,
-                          kanalPenjualan: active
-                            ? form.kanalPenjualan.filter((value) => value !== option.value)
-                            : [...form.kanalPenjualan, option.value],
-                        })}
-                        className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
-                          active ? "bg-[#0b5f86] text-white border-[#0b5f86]" : "bg-white text-[#4a6280] border-[#c8d3de]"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="mt-1 text-[10px] text-[#6e859e]">
-                  Boleh lebih dari satu. Ini yang menjelaskan asal pesanan usaha Anda.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Kota / Kabupaten Usaha *</label>
-                <CitySelect
-                  value={form.lokasi}
-                  onChange={(val) => setForm({ ...form, lokasi: val })}
-                  placeholder="Pilih Kota / Kabupaten Usaha..."
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Alamat Lengkap Kios / Toko</label>
-                <textarea
-                  rows={3}
-                  value={form.alamat}
-                  onChange={(e) => setForm({ ...form, alamat: e.target.value })}
-                  placeholder="Jl. Merdeka No. 12, Kelurahan X, Kecamatan Y"
-                  className="w-full px-4 py-3 rounded-xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Section 2: Kontak & Legalitas NIB */}
-            <div className="bg-white rounded-2xl p-6 border border-[#e3e9f0] shadow-card space-y-4">
-              <h3 className="font-headline text-sm font-bold text-[#1b2a3a] flex items-center gap-2 border-b border-slate-100 pb-3">
-                <FileText size={16} className="text-[#0b5f86]" /> Kontak & Legalitas Usaha
-              </h3>
-
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Nama Pemilik Usaha (Owner)</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={form.namaPemilik}
-                    onChange={(e) => setForm({ ...form, namaPemilik: e.target.value })}
-                    placeholder="Contoh: Ibu Sari / Pak Pur"
-                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none font-medium"
-                    required
+                <FormField label="Alamat lengkap">
+                  <textarea
+                    rows={2}
+                    value={form.alamat}
+                    onChange={(e) => setForm({ ...form, alamat: e.target.value })}
+                    placeholder="Jl. Merdeka No. 12, Kelurahan X"
+                    className="w-full rounded-xl border border-[#c8d3de] px-3 py-2.5 text-sm outline-none transition-colors focus:border-[#0b5f86] resize-none"
                   />
-                  <User size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
+                </FormField>
               </div>
+            </section>
 
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Email Terdaftar</label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    value={form.email}
-                    disabled
-                    className="w-full px-4 py-3 pl-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-sm cursor-not-allowed"
-                  />
-                  <Mail size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            {/* Kontak & Legalitas */}
+            <div className="space-y-4">
+              <section className="rounded-2xl border border-[#e3e9f0] bg-white shadow-[0_4px_16px_rgba(27,42,58,.04)]">
+                <div className="flex items-center gap-2 border-b border-[#f0f4f8] px-5 py-4">
+                  <User size={15} className="text-[#0b5f86]" />
+                  <h2 className="text-xs font-bold text-[#1b2a3a]">Kontak</h2>
                 </div>
-              </div>
+                <div className="space-y-4 p-5">
+                  <FormField label="Nama pemilik usaha">
+                    <div className="relative">
+                      <input
+                        required
+                        value={form.namaPemilik}
+                        onChange={(e) => setForm({ ...form, namaPemilik: e.target.value })}
+                        placeholder="Contoh: Ibu Sari"
+                        className="w-full rounded-xl border border-[#c8d3de] py-2.5 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                      />
+                      <User size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9fb0c2]" />
+                    </div>
+                  </FormField>
 
-              <div>
-                <label className="block text-xs font-bold text-[#4a6280] mb-1.5">Nomor Telepon / WhatsApp</label>
-                <div className="relative">
-                  <input
-                    type="tel"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    placeholder="Contoh: 081234567890"
-                    className="w-full px-4 py-3 pl-10 rounded-xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none"
-                  />
-                  <Phone size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <FormField label="Email terdaftar">
+                    <div className="relative">
+                      <input
+                        disabled
+                        value={form.email}
+                        className="w-full rounded-xl border border-[#e3e9f0] bg-[#f8fafc] py-2.5 pl-9 pr-3 text-sm text-[#6e859e] cursor-not-allowed"
+                      />
+                      <Mail size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9fb0c2]" />
+                    </div>
+                  </FormField>
+
+                  <FormField label="Nomor WhatsApp / telepon">
+                    <div className="relative">
+                      <input
+                        type="tel"
+                        value={form.phone}
+                        onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                        placeholder="081234567890"
+                        className="w-full rounded-xl border border-[#c8d3de] py-2.5 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                      />
+                      <Phone size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9fb0c2]" />
+                    </div>
+                  </FormField>
                 </div>
-              </div>
+              </section>
 
-              {/* NIB tidak lagi diketik di sini.
-                  Nomor yang diketik di profil dan berkas yang diunggah di
-                  halaman Dokumen adalah dua tempat menyimpan hal yang sama,
-                  dan keduanya bisa berbeda. Yang berlaku sekarang satu:
-                  dokumennya. Ringkasan di bawah membacanya, tidak menulisnya. */}
-              <LegalitySummary />
+              {/* Legalitas */}
+              <section className="rounded-2xl border border-[#e3e9f0] bg-white shadow-[0_4px_16px_rgba(27,42,58,.04)]">
+                <div className="flex items-center justify-between border-b border-[#f0f4f8] px-5 py-4">
+                  <div className="flex items-center gap-2">
+                    <FileText size={15} className="text-[#0b5f86]" />
+                    <h2 className="text-xs font-bold text-[#1b2a3a]">Legalitas usaha</h2>
+                  </div>
+                  <Link href="/umkm/upload" className="flex items-center gap-1 text-[10px] font-bold text-[#0b5f86] hover:underline">
+                    Kelola dokumen <ChevronRight size={11} />
+                  </Link>
+                </div>
+                <div className="p-5">
+                  {/* NIB tidak lagi diketik di sini — sumber kebenaran tunggal: berkas di halaman Dokumen. */}
+                  <LegalitySummary />
+                </div>
+              </section>
             </div>
           </div>
 
-          {/* Submit Button */}
-          <div className="flex justify-end pt-2">
+          {/* Save button */}
+          <div className="flex justify-end pb-2 pt-1">
             <button
               type="submit"
               disabled={saving}
-              className="w-full sm:w-auto bg-[#0b5f86] text-white font-bold px-8 py-3.5 rounded-xl text-sm hover:bg-[#0f73a3] transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-8 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#0f73a3] disabled:opacity-50 sm:w-auto"
             >
-              <Save size={16} />
-              {saving ? "Menyimpan perubahan..." : "Simpan perubahan"}
+              <Save size={15} />
+              {saving ? "Menyimpan..." : "Simpan perubahan"}
             </button>
           </div>
         </form>
+
+        {/* Data & Privasi — di bawah form agar tidak mengganggu alur utama */}
+        <section aria-labelledby="privasi-akun" className="space-y-3 border-t border-[#f0f4f8] pt-4">
+          <div>
+            <h2 id="privasi-akun" className="text-xs font-bold text-[#1b2a3a]">Data & akun Anda</h2>
+            <p className="mt-0.5 text-[10px] leading-relaxed text-[#6e859e]">
+              Catatan usaha ini milik Anda. Anda boleh membawanya pergi kapan saja.
+            </p>
+          </div>
+          <OwnerConsentPanel />
+          <AccountDataPanel scheduledFor={deletionScheduledFor} />
+        </section>
       </DashboardPage>
     </>
   );
