@@ -41,7 +41,7 @@ export default function TermsPage() {
             Syarat &amp; Ketentuan Layanan
           </h1>
           <p className="text-xs md:text-sm text-slate-500 mt-1">
-            Terakhir diperbarui: Februari 2025 · Berlaku untuk seluruh pengguna platform Berkembang.id
+            Terakhir diperbarui: September 2026 · Berlaku untuk seluruh pengguna platform Berkembang.id
           </p>
         </div>
 
@@ -65,7 +65,7 @@ export default function TermsPage() {
               Platform Berkembang.id mengumpulkan informasi profil usaha, pencatatan transaksi keuangan, dan dokumen pendukung yang Anda berikan secara sukarela. Informasi ini semata-mata diolah untuk:
             </p>
             <ul className="list-disc list-inside space-y-1 text-slate-600 pl-2">
-              <li>Menyediakan kalkulasi skor kesiapan dan rekomendasi perkembangan usaha (AI Copilot &amp; Analisis Kesiapan).</li>
+              <li>Menghitung tingkat kesiapan usaha dan menyarankan satu langkah berikutnya, seluruhnya dari catatan dan dokumen yang Anda masukkan sendiri.</li>
               <li>Memfasilitasi pembuatan laporan arus kas, pembukuan, serta visualisasi data keuangan.</li>
               <li>Mendukung operasional, evaluasi teknis, dan peningkatan kualitas fitur layanan website.</li>
             </ul>
@@ -94,7 +94,30 @@ export default function TermsPage() {
               <CheckCircle2 size={16} className="text-[#001b85]" /> 4. Hak dan Kendali Pengguna
             </h2>
             <p>
-              Pengguna berhak untuk memperbarui, mengubah, maupun menghapus data usaha dan dokumen yang tersimpan di dalam akun masing-masing melalui menu pengelolaan profil yang tersedia.
+              Pengguna berhak memperbarui, mengubah, maupun menghapus data usaha dan dokumen yang tersimpan di dalam akunnya melalui halaman Profil. Selain itu:
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-slate-600 pl-2">
+              <li><strong>Membawa pergi seluruh data.</strong> Tombol &ldquo;Unduh semua data saya&rdquo; di halaman Profil menghasilkan satu berkas berisi profil, seluruh catatan uang dalam bentuk tabel, serta daftar dan berkas dokumen Anda.</li>
+              <li><strong>Menghentikan akun.</strong> Permintaan penghapusan mencabut setiap izin akses institusi seketika itu juga. Data Anda dihapus setelah masa tenggang 30 hari, dan selama tenggang itu Anda dapat membatalkannya sendiri tanpa menghubungi siapa pun.</li>
+              <li><strong>Memutuskan siapa yang boleh melihat.</strong> Institusi hanya dapat membuka data usaha Anda setelah Anda menyetujuinya, untuk bagian yang Anda setujui saja, dan Anda dapat mencabut izin itu kapan saja.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-[#001b85]" /> 5. Batas Tingkat Kesiapan
+            </h2>
+            <p>
+              Tingkat kesiapan menggambarkan kelengkapan dan kebiasaan pencatatan usaha Anda, dihitung otomatis dengan aturan terbuka yang dapat Anda baca sendiri di halaman &ldquo;Cara kami menghitung&rdquo;. Ia <strong>bukan penilaian resmi</strong>, bukan penilaian kelayakan pembiayaan, dan bukan jaminan memperoleh pendanaan. Keputusan pembiayaan sepenuhnya mengikuti penilaian dan kebijakan masing-masing institusi.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-[#001b85]" /> 6. Peran Kecerdasan Buatan
+            </h2>
+            <p>
+              Ketika Anda mencatat dengan berbicara atau mengetik, nominal dibaca oleh pengurai tetap di dalam aplikasi &mdash; <strong>bukan oleh AI</strong>. AI hanya membantu menebak jenis transaksinya, dan hasil tebakannya selalu Anda periksa sebelum tersimpan. Pembacaan otomatis atas dokumen juga wajib Anda konfirmasi, dan bukan merupakan verifikasi keaslian dokumen.
             </p>
           </section>
         </div>

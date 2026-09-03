@@ -36,8 +36,11 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // `data-scroll-behavior` diminta Next 16 karena `html { scroll-behavior:
+  // smooth }` ada di globals.css. Tanpa penanda ini, perpindahan rute ikut
+  // dianimasikan dan halaman baru terlihat menggulir dari posisi halaman lama.
   return (
-    <html lang="id" className={`${inter.variable} h-full`} suppressHydrationWarning>
+    <html lang="id" data-scroll-behavior="smooth" className={`${inter.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full bg-[#fbf8ff] text-[#141a34] antialiased" suppressHydrationWarning>
         {children}
       </body>
