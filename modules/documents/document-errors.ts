@@ -20,6 +20,11 @@ export type DocumentErrorCode =
   | "DOCUMENT_EXTRACTION_NOT_READY"
   | "DOCUMENT_EXTRACTION_NOT_RETRYABLE"
   | "DOCUMENT_EXTRACTION_CONFIRMATION_INVALID"
+  | "ATTACHMENT_TARGET_NOT_FOUND"
+  | "ATTACHMENT_TARGET_DENIED"
+  | "ATTACHMENT_TARGET_UNKNOWN"
+  | "ATTACHMENT_ACCESS_DENIED"
+  | "DETACH_REASON_REQUIRED"
   | "IDEMPOTENCY_CONFLICT"
   | "UNSUPPORTED_DOCUMENT_TYPE"
   | "UNSUPPORTED_MEDIA_TYPE"
@@ -52,6 +57,11 @@ const definitions: Record<
   DOCUMENT_EXTRACTION_NOT_READY: { status: 409, message: "Data dokumen belum siap diperiksa.", retryable: true },
   DOCUMENT_EXTRACTION_NOT_RETRYABLE: { status: 409, message: "Dokumen ini belum dapat dibaca ulang. Muat ulang halaman lalu coba kembali.", retryable: true },
   DOCUMENT_EXTRACTION_CONFIRMATION_INVALID: { status: 400, message: "Periksa kembali data wajib sebelum menyimpan.", retryable: false },
+  ATTACHMENT_TARGET_NOT_FOUND: { status: 404, message: "Catatan yang mau ditempeli bukti sudah tidak ada.", retryable: false },
+  ATTACHMENT_TARGET_DENIED: { status: 403, message: "Catatan itu bukan milik usaha Anda.", retryable: false },
+  ATTACHMENT_TARGET_UNKNOWN: { status: 400, message: "Bukti belum bisa ditempel ke jenis catatan ini.", retryable: false },
+  ATTACHMENT_ACCESS_DENIED: { status: 403, message: "Bukti ini bukan milik usaha Anda.", retryable: false },
+  DETACH_REASON_REQUIRED: { status: 400, message: "Tulis dulu alasan singkat kenapa bukti ini dilepas.", retryable: false },
   IDEMPOTENCY_CONFLICT: { status: 409, message: "Kunci permintaan sudah digunakan untuk file berbeda.", retryable: false },
   UNSUPPORTED_DOCUMENT_TYPE: { status: 400, message: "Jenis dokumen belum didukung.", retryable: false },
   UNSUPPORTED_MEDIA_TYPE: { status: 415, message: "Gunakan PDF, JPG, atau PNG.", retryable: false },

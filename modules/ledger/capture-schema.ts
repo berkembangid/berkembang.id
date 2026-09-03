@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+/**
+ * Kategori bahasa warung dinyatakan langsung di sini (bukan diimpor dari
+ * `modules/accounting`) supaya modul capture tidak bergantung pada modul
+ * akuntansi; keduanya dijaga sinkron oleh test unit.
+ */
+const emkmCategoryCodeSchema = z.number().int().min(1).max(10);
+const emkmCategorySubtypeSchema = z.enum([
+  "4a", "4b",
+  "5210", "5220", "5230", "5240", "5250", "5260", "5270", "5280", "5290",
+]);
+
 export const captureStatusSchema = z.enum([
   "draft",
   "queued",
@@ -24,7 +35,11 @@ export const paymentMethodSchema = z.enum([
   "qris",
   "bank_transfer",
   "ewallet",
+  "edc",
   "credit",
+  // "unpaid" adalah "belum dibayar" pada spek SAK EMKM: barang sudah
+  // diserahkan atau diterima tetapi uangnya belum berpindah.
+  "unpaid",
   "other",
 ]);
 
@@ -48,6 +63,12 @@ export const transactionDraftItemSchema = z.object({
   paymentMethod: paymentMethodSchema.nullable().optional(),
   salesChannel: z.string().trim().min(1).max(80).nullable().optional(),
   confidence: z.number().min(0).max(1).nullable().optional(),
+  // Kategori bahasa warung 1..10. Yang menentukan akun adalah
+  // `category_templates`, bukan tebakan AI di sini.
+  emkmCategoryCode: emkmCategoryCodeSchema.nullable().optional(),
+  emkmCategorySubtype: emkmCategorySubtypeSchema.nullable().optional(),
+  counterpartyName: z.string().trim().min(1).max(120).nullable().optional(),
+  interestAmountIdr: z.number().int().nonnegative().max(9_000_000_000_000).nullable().optional(),
 });
 
 export const transactionDraftItemsSchema = z
@@ -75,11 +96,36 @@ const audioMimeTypeSchema = z.enum([
   "audio/mpeg",
 ]);
 
+/**
+ * Transkrip yang dihasilkan peramban. Sepenuhnya opsional, dan tidak pernah
+ * dipercaya apa adanya: server tetap menjalankan parser-nya sendiri atas teks
+ * ini, dan `confidence` hanya menentukan apakah audio masih perlu dikirim.
+ */
+export const clientTranscriptSchema = z.object({
+  text: z.string().trim().min(1).max(2_000),
+  confidence: z.number().min(0).max(1),
+  engine: z.string().trim().min(1).max(40).optional(),
+  lang: z.string().trim().min(2).max(12).optional(),
+});
+
+/**
+ * Petunjuk dari parser klien. HANYA dibandingkan untuk telemetry divergensi,
+ * tidak pernah dipakai sebagai kebenaran — klien bisa dimodifikasi, dan angka
+ * yang masuk pembukuan tidak boleh berasal dari sana.
+ */
+export const clientHintsSchema = z.object({
+  amounts: z.array(z.number().int().positive()).max(10).optional(),
+  categoryCode: z.number().int().min(1).max(10).optional(),
+  payment: z.enum(["TUNAI", "QRIS", "TRANSFER", "BELUM_DIBAYAR"]).optional(),
+});
+
 export const createCaptureRequestSchema = z
   .object({
     inputMethod: captureInputMethodSchema,
     businessId: z.uuid().optional(),
     sourceText: z.string().trim().min(1).max(2_000).optional(),
+    clientTranscript: clientTranscriptSchema.optional(),
+    clientHints: clientHintsSchema.optional(),
     file: z
       .object({
         mimeType: audioMimeTypeSchema,
@@ -89,10 +135,12 @@ export const createCaptureRequestSchema = z
       .optional(),
   })
   .superRefine((value, context) => {
-    if (value.inputMethod === "voice" && !value.file) {
+    // Suara kini sah dengan audio ATAU transkrip peramban. Yang tidak pernah
+    // sah adalah tanpa keduanya: tidak ada bahan apa pun untuk diproses.
+    if (value.inputMethod === "voice" && !value.file && !value.clientTranscript) {
       context.addIssue({
         code: "custom",
-        message: "Metadata audio wajib diisi.",
+        message: "Butuh audio atau transkrip.",
         path: ["file"],
       });
     }
@@ -116,6 +164,8 @@ export type CaptureStatus = z.infer<typeof captureStatusSchema>;
 export type CaptureInputMethod = z.infer<typeof captureInputMethodSchema>;
 export type TransactionDraftItem = z.infer<typeof transactionDraftItemSchema>;
 export type CreateCaptureRequest = z.infer<typeof createCaptureRequestSchema>;
+export type ClientTranscript = z.infer<typeof clientTranscriptSchema>;
+export type ClientHints = z.infer<typeof clientHintsSchema>;
 export type ConfirmCaptureRequest = z.infer<typeof confirmCaptureRequestSchema>;
 
 export const categoryLabels: Record<z.infer<typeof categoryCodeSchema>, string> = {

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "powershell",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__list_tables"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

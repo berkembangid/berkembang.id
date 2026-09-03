@@ -45,6 +45,9 @@ yarn-error.log*
 .mcp.json
 .commandcode/
 
+# command code MCP (contains personal access tokens — see .env.local for the values)
+.mcp.json
+
 # vercel
 .vercel
 

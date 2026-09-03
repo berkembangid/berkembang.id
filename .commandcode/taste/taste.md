@@ -1,0 +1,7 @@
+- Communicates in casual Indonesian with terse, imperative style ("buatin X", "cek mcp", "fix coba", "continue", no capitalization, no punctuation). Confidence: 0.9
+- Prefers the assistant to make sensible defaults rather than ask multi-question clarification prompts — when given structured questions, tends to skip them or reply with minimal input (e.g. replying "2" to pick option 2 without elaboration). Confidence: 0.9
+- Uses Command Code's `mod-builder` skill to extend the CLI with custom tools/commands rather than building standalone MCP servers. Confidence: 0.7
+- Prefers Supabase as backend (RLS-gated anon key over service role key for client-facing tools). Confidence: 0.7
+- Works on Windows with PowerShell (uses `Test-Path`, `Get-ChildItem`, `Select-String`, `$env:TEMP`, `Tee-Object`). Confidence: 0.95
+- Project root convention: `D:\Projects\nextjs\<project>\` for Next.js projects. Confidence: 0.7
+- Trusts the assistant to proactively check node_modules docs, project structure, and reference APIs before asking — don't jump straight to writing code. Confidence: 0.8

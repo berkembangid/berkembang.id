@@ -122,7 +122,7 @@ export default function UMKMDetailPage() {
       <div className="flex items-center justify-between">
         <button
           onClick={() => router.push("/admin/umkm")}
-          className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-[#001b85] transition-colors bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm cursor-pointer"
+          className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-[#0b5f86] transition-colors bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm cursor-pointer"
         >
           <ArrowLeft size={16} />
           Kembali ke Daftar UMKM
@@ -137,7 +137,7 @@ export default function UMKMDetailPage() {
               <Store size={28} />
             </div>
             <div>
-              <h1 className="font-headline text-xl md:text-2xl font-extrabold text-[#141a34]">
+              <h1 className="font-headline text-xl md:text-2xl font-extrabold text-[#1b2a3a]">
                 Detail & Edit Profil UMKM
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -186,7 +186,7 @@ export default function UMKMDetailPage() {
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   placeholder="Contoh: Kopi Wijaya"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 />
               </div>
 
@@ -199,7 +199,7 @@ export default function UMKMDetailPage() {
                   value={ownerName}
                   onChange={(e) => setOwnerName(e.target.value)}
                   placeholder="Nama Pemilik"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 />
               </div>
 
@@ -210,7 +210,7 @@ export default function UMKMDetailPage() {
                 <select
                   value={sektor}
                   onChange={(e) => setSektor(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 >
                   {UMKM_SECTORS.map((s) => (
                     <option key={s} value={s}>{s}</option>
@@ -238,7 +238,7 @@ export default function UMKMDetailPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="email@umkm.id"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 />
               </div>
 
@@ -251,7 +251,7 @@ export default function UMKMDetailPage() {
                   min="1"
                   value={konsistensiDays}
                   onChange={(e) => setKonsistensiDays(Number(e.target.value) || 1)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                 />
               </div>
             </div>
@@ -259,8 +259,8 @@ export default function UMKMDetailPage() {
             {/* Score Override Section */}
             <div className="bg-[#f8faff] rounded-2xl p-5 border border-[#dbe4ff] space-y-4">
               <div className="flex items-center gap-2">
-                <Award size={18} className="text-[#001b85]" />
-                <h3 className="font-bold text-[#141a34] text-sm font-headline">
+                <Award size={18} className="text-[#0b5f86]" />
+                <h3 className="font-bold text-[#1b2a3a] text-sm font-headline">
                   Penyesuaian Score Kesiapan (Readiness Score)
                 </h3>
               </div>
@@ -279,20 +279,20 @@ export default function UMKMDetailPage() {
                       const val = Math.min(100, Math.max(0, Number(e.target.value) || 0));
                       setScore(val);
                     }}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#bac3ff] text-sm font-bold text-[#001b85] focus:outline-none bg-white"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#bac3ff] text-sm font-bold text-[#0b5f86] focus:outline-none bg-white"
                   />
                 </div>
 
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-slate-600 mb-1">
-                    Alasan Override Skor (Tercatat di Audit Log)
+                    Alasan Override Skor (Tercatat di Riwayat audit)
                   </label>
                   <input
                     type="text"
                     value={overrideReason}
                     onChange={(e) => setOverrideReason(e.target.value)}
                     placeholder="Contoh: Dokumen agunan & bukti omset lengkap"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                   />
                 </div>
               </div>
@@ -309,7 +309,7 @@ export default function UMKMDetailPage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="px-6 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2 cursor-pointer"
+                className="px-6 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2 cursor-pointer"
               >
                 <Save size={14} />
                 {saving ? "Menyimpan..." : "Simpan Perubahan"}

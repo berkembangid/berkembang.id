@@ -88,7 +88,23 @@ try {
           as argument_record(type_oid, position)
       ), '[]'::jsonb) as arguments,
       format_type(procedure_record.prorettype, null) as return_type,
-      procedure_record.proretset as returns_set
+      procedure_record.proretset as returns_set,
+      -- Fungsi RETURNS TABLE(...) mengumumkan kolomnya lewat proargmodes 't'.
+      -- Tanpa ini hasilnya hanya terbaca sebagai 'record'.
+      coalesce((
+        select jsonb_agg(
+          jsonb_build_object(
+            'name', procedure_record.proargnames[output_record.position],
+            'type', format_type(output_record.type_oid, null)
+          )
+          order by output_record.position
+        )
+        from unnest(
+          procedure_record.proallargtypes::oid[],
+          procedure_record.proargmodes::text[]
+        ) with ordinality as output_record(type_oid, mode, position)
+        where output_record.mode = 't'
+      ), '[]'::jsonb) as return_columns
     from pg_proc as procedure_record
     join pg_namespace as namespace_record on namespace_record.oid = procedure_record.pronamespace
     where namespace_record.nspname = 'public'
@@ -220,6 +236,18 @@ ${renderFields(view, "Row")}
         }
         Relationships: ${renderRelationships(view)}
       }`;
+  const renderRoutineReturn = (routine) => {
+    // Fungsi RETURNS TABLE(...) memiliki kolom hasil; render sebagai objek
+    // supaya pemanggil mendapat tipe barisnya, bukan sekadar string.
+    if (routine.return_columns.length > 0) {
+      const fields = routine.return_columns
+        .map((column) => `          ${column.name}: ${renderPostgresType(column.type)}`)
+        .join("\n");
+      return ["{", fields, `        }${routine.returns_set ? "[]" : ""}`].join("\n");
+    }
+    return `${renderPostgresType(routine.return_type)}${routine.returns_set ? "[]" : ""}`;
+  };
+
   const renderRoutine = (routine) => `      ${routine.function_name}: {
         Args: ${routine.arguments.length === 0 ? "Record<string, never>" : `{\n${routine.arguments
           .map(
@@ -227,7 +255,7 @@ ${renderFields(view, "Row")}
               `          ${argument.name}${argument.optional ? "?" : ""}: ${renderPostgresType(argument.type)}`,
           )
           .join("\n")}\n        }`}
-        Returns: ${renderPostgresType(routine.return_type)}${routine.returns_set ? "[]" : ""}
+        Returns: ${renderRoutineReturn(routine)}
       }`;
 
   const output = `// Generated from the repository migrations. Do not edit by hand.

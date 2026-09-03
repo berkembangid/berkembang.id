@@ -186,7 +186,7 @@ export default function AdminUMKMPage() {
     <div className="space-y-8 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <div>
-          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Manajemen UMKM</h1>
+          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#1b2a3a]">Data UMKM</h1>
           <p className="text-sm text-slate-500 mt-1">Data lengkap dan override skor kesiapan bagi seluruh ekosistem UMKM</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -199,7 +199,7 @@ export default function AdminUMKMPage() {
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-[#001b85] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+            className="bg-[#0b5f86] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0f73a3] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
           >
             <Plus size={16} />
             Tambah UMKM
@@ -216,23 +216,23 @@ export default function AdminUMKMPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari nama usaha, pemilik, atau sektor..."
-              className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200/80 text-sm focus:border-[#001b85] focus:outline-none"
+              className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200/80 text-sm focus:border-[#0b5f86] focus:outline-none"
             />
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[#f3f2ff] border-b border-[#e5e7ff]">
+            <thead className="bg-[#f3f2ff] border-b border-[#e3e9f0]">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Nama Usaha</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Pemilik (Owner)</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Sektor</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Lokasi</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Score</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Konsistensi</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Aksi</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Nama Usaha</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Pemilik (Owner)</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Sektor</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Lokasi</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Score</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Konsistensi</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -252,17 +252,17 @@ export default function AdminUMKMPage() {
                 filtered.map((u) => {
                   const sc = scoreColor(u.score);
                   return (
-                    <tr key={u.id} className="border-t border-[#f3f2ff] hover:bg-[#fbf8ff] transition-colors">
-                      <td className="px-4 py-3 font-bold text-[#141a34]">{u.usaha}</td>
-                      <td className="px-4 py-3 text-[#444655] font-medium">{u.name}</td>
+                    <tr key={u.id} className="border-t border-[#f3f2ff] hover:bg-[#f5fbf8] transition-colors">
+                      <td className="px-4 py-3 font-bold text-[#1b2a3a]">{u.usaha}</td>
+                      <td className="px-4 py-3 text-[#4a6280] font-medium">{u.name}</td>
                       <td className="px-4 py-3">
-                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#ececff] text-[#001b85]">{u.sektor}</span>
+                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#eef8fd] text-[#0b5f86]">{u.sektor}</span>
                       </td>
-                      <td className="px-4 py-3 text-[#444655] text-xs">{u.lokasi}</td>
+                      <td className="px-4 py-3 text-[#4a6280] text-xs">{u.lokasi}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${sc}`}>{u.score}</span>
                       </td>
-                      <td className="px-4 py-3 text-[#444655]">{u.konsistensi} hari</td>
+                      <td className="px-4 py-3 text-[#4a6280]">{u.konsistensi} hari</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
                           u.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
@@ -274,7 +274,7 @@ export default function AdminUMKMPage() {
                         <div className="flex gap-1.5">
                           <Link
                             href={`/admin/umkm/${u.id}`}
-                            className="text-[11px] font-bold text-[#001b85] border border-[#bac3ff] px-3 py-1 rounded-lg hover:bg-[#ececff] transition-colors cursor-pointer"
+                            className="text-[11px] font-bold text-[#0b5f86] border border-[#bac3ff] px-3 py-1 rounded-lg hover:bg-[#eef8fd] transition-colors cursor-pointer"
                           >
                             Detail / Edit
                           </Link>
@@ -293,8 +293,8 @@ export default function AdminUMKMPage() {
       {editScore && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-200 animate-fade-in-up">
-            <h3 className="font-bold text-[#141a34] text-base font-headline">Override Readiness Score</h3>
-            <p className="text-xs text-[#444655] mt-1 mb-4">Perubahan akan langsung disimpan dan dicatat di Audit Log.</p>
+            <h3 className="font-bold text-[#1b2a3a] text-base font-headline">Override Readiness Score</h3>
+            <p className="text-xs text-[#4a6280] mt-1 mb-4">Perubahan akan langsung disimpan dan dicatat di Riwayat audit.</p>
             <label className="block text-xs font-bold text-slate-500 mb-1">Skor Kesiapan Baru (0-100)</label>
             <input
               type="number"
@@ -302,7 +302,7 @@ export default function AdminUMKMPage() {
               max={100}
               value={editScore.score}
               onChange={(e) => setEditScore({ ...editScore, score: Number(e.target.value) })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-sm font-bold text-[#001b85] focus:border-[#001b85] focus:outline-none mb-3"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#c8d3de] text-sm font-bold text-[#0b5f86] focus:border-[#0b5f86] focus:outline-none mb-3"
             />
             <label className="block text-xs font-bold text-slate-500 mb-1">Alasan Override (Wajib)</label>
             <textarea
@@ -310,19 +310,19 @@ export default function AdminUMKMPage() {
               value={overrideReason}
               onChange={(e) => setOverrideReason(e.target.value)}
               placeholder="Contoh: Hasil verifikasi berkas legalitas NIB fisik lulus."
-              className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs focus:border-[#001b85] focus:outline-none mb-4 resize-none"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#c8d3de] text-xs focus:border-[#0b5f86] focus:outline-none mb-4 resize-none"
             />
             <div className="flex gap-3">
               <button
                 onClick={() => setEditScore(null)}
-                className="flex-1 py-2.5 rounded-xl border border-[#c5c5d7] text-[#444655] font-semibold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl border border-[#c8d3de] text-[#4a6280] font-semibold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 Batal
               </button>
               <button
                 onClick={handleSaveOverrideScore}
                 disabled={saving}
-                className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
+                className="flex-1 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
               >
                 {saving ? "Menyimpan..." : "Simpan Override"}
               </button>
@@ -349,7 +349,7 @@ export default function AdminUMKMPage() {
               value={newUsaha}
               onChange={(e) => setNewUsaha(e.target.value)}
               placeholder="Contoh: Warung Nasi Goreng Pak Pur"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
             />
           </div>
           <div>
@@ -360,7 +360,7 @@ export default function AdminUMKMPage() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Contoh: Pak Pur"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -369,7 +369,7 @@ export default function AdminUMKMPage() {
               <select
                 value={newSektor}
                 onChange={(e) => setNewSektor(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
               >
                 <option value="Kuliner">Kuliner</option>
                 <option value="Fashion">Fashion</option>
@@ -395,7 +395,7 @@ export default function AdminUMKMPage() {
               max={100}
               value={newScore}
               onChange={(e) => setNewScore(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-[#001b85] focus:border-[#001b85] focus:outline-none bg-white"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-[#0b5f86] focus:border-[#0b5f86] focus:outline-none bg-white"
             />
           </div>
           <div className="pt-3 flex gap-3">
@@ -409,7 +409,7 @@ export default function AdminUMKMPage() {
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
+              className="flex-1 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
             >
               {saving ? "Menyimpan..." : "Simpan Data UMKM"}
             </button>

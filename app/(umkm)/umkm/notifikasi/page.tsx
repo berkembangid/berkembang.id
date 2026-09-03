@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useEffect } from "react";
-import { ArrowDownLeft, ArrowUpRight, CheckCircle2, ArrowLeft } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Bell, Receipt } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { DashboardPage, EmptyState, FeedbackBanner, PageHeader } from "@/components/dashboard";
 
 interface TransactionNotification {
   id: string | number;
@@ -57,33 +57,19 @@ export default function NotifikasiPage() {
   }, []);
 
   return (
-    <>
-      <header className="sticky top-0 z-30 bg-[#fbf8ff]/90 backdrop-blur-md px-6 h-14 flex items-center justify-between border-b border-[#c5c5d7]/30">
-        <Link href="/umkm" className="flex items-center gap-1 text-xs font-bold text-[#001b85]">
-          <ArrowLeft size={16} /> Beranda
-        </Link>
-        <h1 className="font-headline text-base font-bold text-[#141a34]">Notifikasi Transaksi Live</h1>
-        <span />
-      </header>
-
-      <main className="px-6 py-4 space-y-3 pb-28 max-w-2xl mx-auto">
+      <DashboardPage width="compact">
+        <PageHeader title="Pemberitahuan transaksi" description="Perubahan terbaru muncul otomatis selama halaman ini terbuka." icon={Bell} />
         {errorMessage ? (
-          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-semibold text-red-700">
-            {errorMessage}
-          </div>
+          <FeedbackBanner tone="error">{errorMessage}</FeedbackBanner>
         ) : loading ? (
-          <p className="text-xs text-slate-500 text-center py-8">Memuat pemberitahuan...</p>
+          <p role="status" aria-live="polite" className="py-8 text-center text-xs text-[#6e859e]">Menyiapkan pemberitahuan...</p>
         ) : notifications.length === 0 ? (
-          <div className="bg-white rounded-2xl p-8 text-center border border-[#e5e7ff] shadow-card space-y-2">
-            <CheckCircle2 size={36} className="text-emerald-500 mx-auto" />
-            <h3 className="font-bold text-sm text-[#141a34]">Belum Ada Notifikasi Transaksi</h3>
-            <p className="text-xs text-slate-500">Mulai catat pemasukan & pengeluaran usahamu untuk melihat riwayat aktivitas live!</p>
-          </div>
+          <EmptyState icon={Receipt} title="Belum ada pemberitahuan" description="Pemberitahuan akan muncul setelah Anda mencatat pemasukan atau pengeluaran." action={{ label: "Catat transaksi", href: "/umkm/catat" }} />
         ) : (
           notifications.map((n) => (
             <div
               key={n.id}
-              className="flex items-center justify-between bg-white rounded-xl p-4 shadow-card border border-[#e5e7ff] hover:border-[#001b85] transition-colors"
+              className="flex items-center justify-between bg-white rounded-xl p-4 shadow-card border border-[#e3e9f0] hover:border-[#0b5f86] transition-colors"
             >
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
@@ -92,8 +78,8 @@ export default function NotifikasiPage() {
                   {n.type === "masuk" ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                 </div>
                 <div>
-                  <p className="font-bold text-sm text-[#141a34]">
-                    {n.type === "masuk" ? "Pemasukan Baru" : "Pengeluaran Baru"}: Rp{Number(n.nominal).toLocaleString("id-ID")}
+                  <p className="font-bold text-sm text-[#1b2a3a]">
+                    {n.type === "masuk" ? "Pemasukan baru" : "Pengeluaran baru"}: Rp{Number(n.nominal).toLocaleString("id-ID")}
                   </p>
                   <p className="text-xs text-slate-500">{n.item} · Kategori {n.kategori || "Umum"}</p>
                 </div>
@@ -102,7 +88,6 @@ export default function NotifikasiPage() {
             </div>
           ))
         )}
-      </main>
-    </>
+      </DashboardPage>
   );
 }

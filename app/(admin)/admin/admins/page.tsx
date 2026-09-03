@@ -134,7 +134,7 @@ export default function AdminUsersPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div>
-          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">
+          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#1b2a3a]">
             Kelola Akun Administrator
           </h1>
           <p className="text-sm text-slate-500 mt-1">
@@ -154,7 +154,7 @@ export default function AdminUsersPage() {
               setErrorMsg("");
               setShowAddModal(true);
             }}
-            className="bg-[#001b85] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+            className="bg-[#0b5f86] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0f73a3] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
           >
             <UserPlus size={16} />
             Buat Akun Admin Baru
@@ -186,14 +186,14 @@ export default function AdminUsersPage() {
               className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-4"
             >
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#001b85] to-[#0ea5e9] flex items-center justify-center font-bold text-white shadow-sm flex-shrink-0 text-base">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#0b5f86] to-[#0ea5e9] flex items-center justify-center font-bold text-white shadow-sm flex-shrink-0 text-base">
                   {admin.name.charAt(0).toUpperCase()}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-[#141a34] text-base truncate">{admin.name}</h3>
-                    <span className="text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider bg-blue-50 text-[#001b85] border border-blue-200 flex items-center gap-1">
+                    <h3 className="font-bold text-[#1b2a3a] text-base truncate">{admin.name}</h3>
+                    <span className="text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider bg-blue-50 text-[#0b5f86] border border-blue-200 flex items-center gap-1">
                       <ShieldCheck size={10} /> {admin.role}
                     </span>
                   </div>
@@ -248,7 +248,7 @@ export default function AdminUsersPage() {
                 value={adminName}
                 onChange={(e) => setAdminName(e.target.value)}
                 placeholder="Contoh: Budi Pratama"
-                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
               />
             </div>
           </div>
@@ -265,7 +265,7 @@ export default function AdminUsersPage() {
                 value={adminEmail}
                 onChange={(e) => setAdminEmail(e.target.value)}
                 placeholder="admin2@berkembang.id"
-                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
               />
             </div>
           </div>
@@ -283,7 +283,7 @@ export default function AdminUsersPage() {
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
                 placeholder="Minimal 6 karakter"
-                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
               />
             </div>
           </div>
@@ -299,7 +299,7 @@ export default function AdminUsersPage() {
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
+              className="flex-1 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
             >
               {saving ? "Membuat..." : "Buat Akun Admin"}
             </button>

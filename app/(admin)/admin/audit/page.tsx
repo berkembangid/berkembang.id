@@ -102,7 +102,7 @@ export default function AuditPage() {
     <div className="space-y-8 animate-fade-in-up">
       <div className="flex items-center justify-between mb-2">
         <div>
-          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Audit Log</h1>
+          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#1b2a3a]">Riwayat audit</h1>
           <p className="text-sm text-slate-500 mt-1">Lacak jejak audit dan riwayat aksi administrator sistem</p>
         </div>
         <div className="flex items-center gap-2">
@@ -116,7 +116,7 @@ export default function AuditPage() {
           <button
             onClick={exportCSV}
             disabled={filteredLogs.length === 0}
-            className="border border-slate-300 text-[#001b85] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#ececff] transition-colors flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-40"
+            className="border border-slate-300 text-[#0b5f86] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#eef8fd] transition-colors flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-40"
           >
             <Download size={14} />
             Ekspor CSV
@@ -132,13 +132,13 @@ export default function AuditPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cari action, user, detail..."
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200/80 text-xs font-medium focus:border-[#001b85] focus:outline-none bg-white"
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200/80 text-xs font-medium focus:border-[#0b5f86] focus:outline-none bg-white"
           />
         </div>
         <select
           value={actionFilter}
           onChange={(e) => setActionFilter(e.target.value)}
-          className="px-4 py-2.5 rounded-xl border border-slate-200/80 text-xs font-bold text-[#141a34] focus:border-[#001b85] focus:outline-none bg-white cursor-pointer"
+          className="px-4 py-2.5 rounded-xl border border-slate-200/80 text-xs font-bold text-[#1b2a3a] focus:border-[#0b5f86] focus:outline-none bg-white cursor-pointer"
         >
           <option value="Semua Action">Semua Action</option>
           <option value="UPDATE_RULES_CONFIG">UPDATE_RULES_CONFIG</option>
@@ -152,13 +152,13 @@ export default function AuditPage() {
       <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[#f3f2ff] border-b border-[#e5e7ff]">
+            <thead className="bg-[#f3f2ff] border-b border-[#e3e9f0]">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Waktu</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">User</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Action</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Detail</th>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#444655] uppercase tracking-wide">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Waktu</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">User</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Action</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Detail</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase tracking-wide">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -176,15 +176,15 @@ export default function AuditPage() {
                 </tr>
               ) : (
                 filteredLogs.map((log) => (
-                  <tr key={log.id} className="border-t border-[#f3f2ff] hover:bg-[#fbf8ff] transition-colors">
-                    <td className="px-4 py-3 text-[#444655] text-xs font-mono">{log.timestamp}</td>
-                    <td className="px-4 py-3 text-[#141a34] text-xs font-semibold">{log.user}</td>
+                  <tr key={log.id} className="border-t border-[#f3f2ff] hover:bg-[#f5fbf8] transition-colors">
+                    <td className="px-4 py-3 text-[#4a6280] text-xs font-mono">{log.timestamp}</td>
+                    <td className="px-4 py-3 text-[#1b2a3a] text-xs font-semibold">{log.user}</td>
                     <td className="px-4 py-3">
                       <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${ACTION_COLORS[log.action] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
                         {log.action}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-[#444655] text-xs max-w-xs leading-snug">{log.details}</td>
+                    <td className="px-4 py-3 text-[#4a6280] text-xs max-w-xs leading-snug">{log.details}</td>
                     <td className="px-4 py-3">
                       <span className="text-[10px] font-bold text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full">
                         ✓ {log.status}

@@ -198,7 +198,7 @@ export default function AdminInstitutionsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <div>
-          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Manajemen Institusi</h1>
+          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#1b2a3a]">Data institusi</h1>
           <p className="text-sm text-slate-500 mt-1">Kelola data bank, fintech, dan lembaga pemerintah penyedia program KUR</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -211,7 +211,7 @@ export default function AdminInstitutionsPage() {
           </button>
           <button
             onClick={openAddModal}
-            className="bg-[#001b85] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0e32c2] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+            className="bg-[#0b5f86] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0f73a3] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
           >
             <Plus size={16} />
             Tambah Institusi
@@ -235,14 +235,14 @@ export default function AdminInstitutionsPage() {
               <div className="flex items-start gap-4">
                 {/* Icon */}
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  inst.active ? "bg-[#001b85]/10 text-[#001b85]" : "bg-slate-100 text-slate-400"
+                  inst.active ? "bg-[#0b5f86]/10 text-[#0b5f86]" : "bg-slate-100 text-slate-400"
                 }`}>
                   <Building2 size={24} />
                 </div>
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-[#141a34] text-base truncate">{inst.name}</h3>
+                    <h3 className="font-bold text-[#1b2a3a] text-base truncate">{inst.name}</h3>
                     <button
                       onClick={() => handleToggleActive(inst)}
                       className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors ${
@@ -263,7 +263,7 @@ export default function AdminInstitutionsPage() {
                   </div>
                   <div className="flex gap-3 text-xs text-slate-500 mt-2 font-medium flex-wrap items-center">
                     <span className="bg-slate-100 px-2 py-0.5 rounded">{inst.type}</span>
-                    <span className="text-[#001b85] font-semibold">{inst.programs} program aktif</span>
+                    <span className="text-[#0b5f86] font-semibold">{inst.programs} program aktif</span>
                     {inst.contact && (
                       <span className="text-slate-500 text-[11px] bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Kontak: {inst.contact}</span>
                     )}
@@ -275,7 +275,7 @@ export default function AdminInstitutionsPage() {
               <div className="flex gap-2 pt-2 border-t border-slate-100 justify-end">
                 <Link
                   href={`/admin/institutions/${inst.id}`}
-                  className="text-xs font-bold text-[#001b85] border border-[#bac3ff] px-4 py-2 rounded-xl hover:bg-[#ececff] transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="text-xs font-bold text-[#0b5f86] border border-[#bac3ff] px-4 py-2 rounded-xl hover:bg-[#eef8fd] transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Edit size={12} />
                   Detail / Edit
@@ -311,7 +311,7 @@ export default function AdminInstitutionsPage() {
               value={instName}
               onChange={(e) => setInstName(e.target.value)}
               placeholder="Contoh: Bank BNI KUR"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -320,7 +320,7 @@ export default function AdminInstitutionsPage() {
               <select
                 value={instType}
                 onChange={(e) => setInstType(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
               >
                 <option value="Bank BUMN">Bank BUMN</option>
                 <option value="Bank Swasta">Bank Swasta</option>
@@ -335,7 +335,7 @@ export default function AdminInstitutionsPage() {
                 min="1"
                 value={instPrograms}
                 onChange={(e) => setInstPrograms(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#001b85] focus:outline-none bg-white font-medium"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
               />
             </div>
           </div>
@@ -351,7 +351,7 @@ export default function AdminInstitutionsPage() {
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-2.5 rounded-xl bg-[#001b85] text-white font-bold text-xs hover:bg-[#0e32c2] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
+              className="flex-1 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
             >
               {saving ? "Menyimpan..." : "Simpan Institusi"}
             </button>

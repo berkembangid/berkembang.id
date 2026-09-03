@@ -1,19 +1,31 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Archive,
+  Camera,
   CheckCircle2,
   Clock3,
   Eye,
   FileText,
   LoaderCircle,
   RefreshCcw,
-  ShieldCheck,
   Upload,
 } from "lucide-react";
 import { DocumentOcrReviewDialog } from "@/components/documents/DocumentOcrReviewDialog";
+import { ReportArchivePanel } from "@/components/warung/ReportArchivePanel";
+import {
+  assuranceText,
+  cabinetShelves,
+  expiringDocumentTypes,
+  requirementLabel,
+  uploadCardsFor,
+} from "@/modules/documents/cabinet-shelves";
+import { compressImageFile } from "@/modules/documents/image-compression";
+import type { CabinetPayload } from "@/modules/documents/cabinet-repository";
 import { DocumentUploadConsentDialog } from "@/components/documents/DocumentUploadConsentDialog";
+import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { supabase } from "@/lib/supabase";
 import {
   archiveDocument,
@@ -39,38 +51,6 @@ import {
 } from "@/modules/documents/document-schema";
 import type { DocumentView } from "@/modules/documents/document-repository";
 
-type DocumentCategory = "identity" | "product" | "finance" | "supporting";
-
-const DOCUMENT_CATEGORIES: Array<{
-  id: DocumentCategory;
-  title: string;
-  description: string;
-}> = [
-  { id: "identity", title: "Identitas & Legalitas", description: "Dokumen utama pemilik dan badan usaha" },
-  { id: "product", title: "Izin & Sertifikasi Produk", description: "Perizinan yang berkaitan dengan produk usaha" },
-  { id: "finance", title: "Keuangan & Transaksi", description: "Catatan yang menunjukkan aktivitas keuangan usaha" },
-  { id: "supporting", title: "Bukti Pendukung Usaha", description: "Dokumen tambahan untuk memperkuat profil usaha" },
-];
-
-const DOCUMENT_REQUIREMENTS: Array<{
-  type: DocumentType;
-  description: string;
-  required: boolean;
-  category: DocumentCategory;
-}> = [
-  { type: "ktp", description: "Identitas pemilik usaha", required: true, category: "identity" },
-  { type: "nib", description: "Legalitas usaha dari OSS", required: true, category: "identity" },
-  { type: "npwp", description: "Dokumen perpajakan usaha atau pemilik", required: true, category: "identity" },
-  { type: "akta_pendirian", description: "Akta atau SK untuk badan usaha", required: false, category: "identity" },
-  { type: "pirt", description: "Izin produksi pangan rumah tangga jika relevan", required: false, category: "product" },
-  { type: "halal", description: "Sertifikat halal jika sudah dimiliki", required: false, category: "product" },
-  { type: "izin_edar", description: "Izin edar produk jika diwajibkan", required: false, category: "product" },
-  { type: "rekening_koran", description: "Mutasi rekening usaha", required: false, category: "finance" },
-  { type: "qris", description: "Riwayat transaksi QRIS", required: false, category: "finance" },
-  { type: "laporan_keuangan", description: "Laporan atau arus kas usaha", required: false, category: "finance" },
-  { type: "foto_tempat_usaha", description: "Foto tempat atau aktivitas usaha", required: false, category: "supporting" },
-  { type: "utilitas", description: "Tagihan listrik, air, atau internet tempat usaha", required: false, category: "supporting" },
-];
 
 function inspectImageQuality(file: File) {
   if (!file.type.startsWith("image/")) return Promise.resolve<string | null>(null);
@@ -153,6 +133,18 @@ export default function UploadPage() {
   } | null>(null);
   const [message, setMessage] = useState<{ tone: "info" | "error" | "success"; text: string } | null>(null);
 
+  const [cabinet, setCabinet] = useState<CabinetPayload | null>(null);
+
+  // Kelengkapan per sektor dibaca dari `document_requirements`, bukan ditulis
+  // tangan. Sebelum ini NPWP tampil "Wajib" untuk semua orang, padahal bagi
+  // usaha pangan olahan ia baru relevan saat penjualan setahun mendekati
+  // Rp500 juta -- menyebut sesuatu wajib padahal tidak adalah cara tercepat
+  // membuat pemilik berhenti percaya pada seluruh daftarnya.
+  const requirementByType = useMemo(
+    () => new Map((cabinet?.requirements ?? []).map((item) => [item.docType, item])),
+    [cabinet],
+  );
+
   const documentsByType = useMemo(
     () => new Map(documents.map((document) => [document.docType, document])),
     [documents],
@@ -160,7 +152,14 @@ export default function UploadPage() {
 
   const loadDocuments = useCallback(async () => {
     try {
-      setDocuments(await listDocuments());
+      const [records, cabinetResponse] = await Promise.all([
+        listDocuments(),
+        fetch("/api/v1/documents/cabinet").then((response) => response.json()).catch(() => null),
+      ]);
+      setDocuments(records);
+      // Lemarinya tetap berguna kalau kelengkapan sektor gagal dimuat; yang
+      // hilang hanya lencana, bukan dokumennya.
+      setCabinet((cabinetResponse as { data?: CabinetPayload } | null)?.data ?? null);
       setMessage((current) => current?.tone === "error" ? null : current);
     } catch (error) {
       setMessage({
@@ -192,6 +191,12 @@ export default function UploadPage() {
     setBusyType(docType);
     setMessage({ tone: "info", text: "Memeriksa file sebelum disimpan..." });
     try {
+      // Foto dokumen dari ponsel datang pada 3-5 MB. Di sinyal 3G itu berarti
+      // unggahan puluhan detik yang sering putus di tengah, dan pemilik
+      // menyerah sebelum berkasnya sampai. PDF dan berkas yang tidak bisa
+      // digambar kanvas dikembalikan apa adanya oleh fungsi ini.
+      const compressed = await compressImageFile(file);
+      file = compressed.file;
       const checksumSha256 = await sha256Hex(file);
       const parsed = createDocumentUploadSessionSchema.safeParse({
         ...(existingDocument ? { documentId: existingDocument.id } : {}),
@@ -359,43 +364,19 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 pb-28 md:p-6 md:pb-8">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 className="text-xl font-black text-slate-800 md:text-2xl">Dokumen Usaha</h1>
-          <p className="mt-1 max-w-3xl text-xs text-slate-500 md:text-sm">
-            Lengkapi dokumen usaha Anda. Dokumen disimpan secara privat dan tidak menjamin penerimaan pembiayaan.
-          </p>
-        </div>
-        <button
+    <DashboardPage>
+      <PageHeader title="Dokumen usaha" description="Simpan dan perbarui dokumen usaha di satu tempat. Anda tetap mengendalikan siapa yang dapat mengaksesnya." icon={FileText} actions={<button
           type="button"
           onClick={() => void loadDocuments()}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"
         >
           <RefreshCcw size={14} /> Muat ulang
-        </button>
-      </div>
+        </button>} />
 
-      <div className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-800">
-        <ShieldCheck className="mt-0.5 shrink-0" size={18} />
-        <div>
-          <p className="font-bold">Dokumen Anda disimpan dengan aman</p>
-          <p className="mt-1 leading-relaxed text-blue-700">
-            Format dan ukuran file diperiksa. Tautan untuk melihat dokumen hanya berlaku sebentar dan setiap akses dicatat.
-          </p>
-        </div>
-      </div>
+      <FeedbackBanner title="Dokumen Anda disimpan secara privat">Format dan ukuran file diperiksa. Tautan untuk melihat dokumen hanya berlaku sebentar dan setiap akses dicatat.</FeedbackBanner>
 
       {message && (
-        <div className={`rounded-xl border p-3.5 text-xs font-semibold ${
-          message.tone === "error"
-            ? "border-red-200 bg-red-50 text-red-700"
-            : message.tone === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-blue-200 bg-blue-50 text-blue-700"
-        }`}>
-          {message.text}
-        </div>
+        <FeedbackBanner tone={message.tone === "error" ? "error" : message.tone} live>{message.text}</FeedbackBanner>
       )}
 
       {loading ? (
@@ -404,20 +385,57 @@ export default function UploadPage() {
         </div>
       ) : (
         <div className="space-y-8">
-          {DOCUMENT_CATEGORIES.map((category) => {
-            const requirements = DOCUMENT_REQUIREMENTS.filter((item) => item.category === category.id);
+          {cabinetShelves.map((shelf) => {
+            // Kartu Akta Pendirian hanya untuk badan usaha; kalau tidak,
+            // pemilik perorangan selamanya kurang satu dokumen yang tidak
+            // pernah bisa ia buat.
+            const requirements = uploadCardsFor(cabinet?.bentukUsaha ?? "perorangan")
+              .filter((item) => item.shelf === shelf.id);
             const completed = requirements.filter((item) => documentsByType.has(item.type)).length;
             return (
-              <section key={category.id} aria-labelledby={`category-${category.id}`}>
+              <section key={shelf.id} aria-labelledby={`shelf-${shelf.id}`}>
                 <div className="mb-3 flex items-end justify-between gap-4">
                   <div>
-                    <h2 id={`category-${category.id}`} className="text-base font-black text-slate-800">{category.title}</h2>
-                    <p className="mt-0.5 text-xs text-slate-500">{category.description}</p>
+                    <h2 id={`shelf-${shelf.id}`} className="text-base font-black text-slate-800">{shelf.title}</h2>
+                    <p className="mt-0.5 text-xs text-slate-500">{shelf.description}</p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
-                    {completed} dari {requirements.length} tersedia
-                  </span>
+                  {requirements.length > 0 && (
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
+                      {completed} dari {requirements.length} tersedia
+                    </span>
+                  )}
                 </div>
+
+                {shelf.id === "arsip_keluaran" && <ReportArchivePanel />}
+
+                {shelf.id === "bukti_transaksi" && (
+                  (cabinet?.evidence.length ?? 0) === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-[#c8d3de] bg-white px-5 py-8 text-center text-xs leading-relaxed text-[#6e859e]">
+                      Nota akan muncul di sini saat kamu memfotonya dari catatan.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {(cabinet?.evidence ?? []).map((item) => (
+                        <li key={item.id} className="flex items-center gap-3 rounded-2xl border border-[#e3e9f0] bg-white px-3.5 py-3">
+                          <FileText size={16} className="shrink-0 text-[#0b5f86]" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-bold text-[#1b2a3a]">{item.name}</p>
+                            <p className="mt-0.5 text-[10px] text-[#6e859e]">
+                              {new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" }).format(new Date(item.createdAt))}
+                              {item.transactionId ? " · menempel pada satu catatan" : " · belum tertaut"}
+                            </p>
+                          </div>
+                          {item.transactionId && (
+                            <Link href="/umkm/laporan" className="shrink-0 text-[10px] font-bold text-[#0b5f86]">
+                              Lihat catatan
+                            </Link>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                )}
+
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {requirements.map((requirement) => {
             const document = documentsByType.get(requirement.type);
@@ -434,9 +452,23 @@ export default function UploadPage() {
                     <div className="min-w-0">
                       <h2 className="text-sm font-bold text-slate-800">
                         {documentTypeLabels[requirement.type]}
-                        {requirement.required && <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-600">Wajib</span>}
+                        {(() => {
+                          const level = requirementLabel(requirementByType.get(requirement.type)?.requirement ?? null);
+                          if (!level) return null;
+                          return (
+                            <span className={`ml-2 rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                              level.tone === "attention"
+                                ? "bg-[#fdf8ee] text-[#8a6412]"
+                                : "bg-slate-100 text-slate-600"
+                            }`}>
+                              {level.text}
+                            </span>
+                          );
+                        })()}
                       </h2>
-                      <p className="mt-0.5 text-xs text-slate-400">{requirement.description}</p>
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        {requirementByType.get(requirement.type)?.note ?? requirement.description}
+                      </p>
                     </div>
                   </div>
                   {presentation && (
@@ -448,6 +480,30 @@ export default function UploadPage() {
 
                 {document ? (
                   <div className="mt-4 space-y-3 border-t border-slate-100 pt-3">
+                    {(document.docNumber || document.validUntil || !document.hasFile) && (
+                      <div className="rounded-xl bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-600">
+                        {document.docNumber && <p>No. {document.docNumber}</p>}
+                        {document.validUntil && (
+                          <p>
+                            Berlaku sampai{" "}
+                            {new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(new Date(`${document.validUntil}T12:00:00+07:00`))}
+                          </p>
+                        )}
+                        <p className="mt-0.5 font-bold text-slate-500">
+                          {assuranceText(document.assuranceLevel, document.hasFile)}
+                        </p>
+                      </div>
+                    )}
+                    {/* Masa berlaku yang kosong pada izin yang memang punya masa
+                        berlaku bukan kesalahan -- ia hanya belum diisi, dan
+                        pengingatnya tidak bisa bekerja tanpa itu. */}
+                    {document.hasFile
+                      && expiringDocumentTypes.includes(requirement.type)
+                      && !document.validUntil && (
+                      <p className="rounded-xl border border-[#f0d9a8] bg-[#fdf8ee] px-3 py-2 text-[11px] leading-relaxed text-[#8a6412]">
+                        Isi masa berlakunya biar bisa kami ingatkan sebelum habis.
+                      </p>
+                    )}
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-xs font-semibold text-slate-700">{document.name}</p>
@@ -506,10 +562,22 @@ export default function UploadPage() {
                     </label>
                   </div>
                 ) : (
-                  <div className="mt-4 border-t border-slate-100 pt-3">
-                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 px-4 py-3 text-xs font-bold text-blue-600 hover:border-blue-400 hover:bg-blue-50/50">
-                      {isBusy ? <LoaderCircle className="animate-spin" size={14} /> : <Upload size={14} />}
-                      {isBusy ? "Memproses..." : `Pilih file (maks. ${limit} MB)`}
+                  <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-4 py-3 text-xs font-bold text-white hover:bg-[#0a5273]">
+                      {isBusy ? <LoaderCircle className="animate-spin" size={14} /> : <Camera size={14} />}
+                      {isBusy ? "Memproses..." : "Foto dokumennya"}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        capture="environment"
+                        className="hidden"
+                        disabled={isBusy}
+                        onChange={(event) => void handleFileSelection(event, requirement.type)}
+                      />
+                    </label>
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 px-4 py-2.5 text-[11px] font-bold text-slate-500 hover:border-blue-400 hover:text-blue-600">
+                      <Upload size={13} />
+                      {`Pilih dari galeri atau file (maks. ${limit} MB)`}
                       <input
                         type="file"
                         accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
@@ -529,6 +597,8 @@ export default function UploadPage() {
           })}
         </div>
       )}
+
+
       {ocrReview && (
         <DocumentOcrReviewDialog
           docType={ocrReview.docType}
@@ -551,6 +621,6 @@ export default function UploadPage() {
           }}
         />
       )}
-    </div>
+    </DashboardPage>
   );
 }

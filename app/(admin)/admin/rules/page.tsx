@@ -5,6 +5,7 @@ import { Sliders, Save, History, Check, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import DemoBanner from "@/components/DemoBanner";
 import { runAdminOperation } from "@/modules/admin/operations";
+import { InlineMoneyInput } from "@/components/warung/MoneyInput";
 
 type Weights = {
   konsistensi: number;
@@ -191,15 +192,15 @@ export default function RulesPage() {
     <div className="space-y-8 animate-fade-in-up">
       <DemoBanner>Preview UMKM dan histori awal pada halaman ini dapat memakai data simulasi.</DemoBanner>
       <div>
-        <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#141a34]">Rules Engine</h1>
+        <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#1b2a3a]">Aturan sistem</h1>
         <p className="text-sm text-slate-500 mt-1">Sesuaikan formula kalkulasi Readiness Score bagi ekosistem UMKM</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left — Weights editor */}
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-[#e5e7ff] shadow-card p-5">
-            <h2 className="font-bold text-[#141a34] mb-1">Bobot Komponen</h2>
+          <div className="bg-white rounded-2xl border border-[#e3e9f0] shadow-card p-5">
+            <h2 className="font-bold text-[#1b2a3a] mb-1">Bobot Komponen</h2>
             <p className={`text-xs mb-4 font-semibold ${isValid ? "text-green-700" : "text-red-600"}`}>
               Total: {total}% {isValid ? "✅ Sudah 100%" : "⚠️ Harus tepat 100%"}
             </p>
@@ -208,14 +209,14 @@ export default function RulesPage() {
               {(Object.keys(weights) as (keyof Weights)[]).map((key) => {
                 const COLORS: Record<keyof Weights, string> = {
                   konsistensi: "#0ea5e9",
-                  kas: "#001b85",
+                  kas: "#0b5f86",
                   legalitas: "#10b981",
                   stabilitas: "#8b5cf6",
                 };
                 return (
                   <div key={key}>
                     <div className="flex justify-between items-center mb-1.5">
-                      <label className="text-sm font-semibold text-[#141a34] capitalize">{key}</label>
+                      <label className="text-sm font-semibold text-[#1b2a3a] capitalize">{key}</label>
                       <span className="text-sm font-bold" style={{ color: COLORS[key] }}>{weights[key]}%</span>
                     </div>
                     <input
@@ -234,26 +235,28 @@ export default function RulesPage() {
           </div>
 
           {/* Thresholds */}
-          <div className="bg-white rounded-2xl border border-[#e5e7ff] shadow-card p-5">
-            <h2 className="font-bold text-[#141a34] mb-3">Threshold Transaksi</h2>
+          <div className="bg-white rounded-2xl border border-[#e3e9f0] shadow-card p-5">
+            <h2 className="font-bold text-[#1b2a3a] mb-3">Threshold Transaksi</h2>
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-[#444655]">Max Pengeluaran Harian (Rp)</label>
-                <input
-                  type="number"
-                  value={thresholds.maxDailyExpense}
-                  onChange={(e) => setThresholds((t) => ({ ...t, maxDailyExpense: Number(e.target.value) }))}
-                  className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs font-semibold focus:border-[#001b85] focus:outline-none"
-                />
+                <label className="text-xs font-semibold text-[#4a6280]">Max Pengeluaran Harian (Rp)</label>
+                <div className="mt-1">
+                  <InlineMoneyInput
+                    value={thresholds.maxDailyExpense}
+                    onChange={(value) => setThresholds((t) => ({ ...t, maxDailyExpense: value ?? 0 }))}
+                    ariaLabel="Batas pengeluaran harian"
+                  />
+                </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-[#444655]">Max Pemasukan Harian (Rp)</label>
-                <input
-                  type="number"
-                  value={thresholds.maxDailyIncome}
-                  onChange={(e) => setThresholds((t) => ({ ...t, maxDailyIncome: Number(e.target.value) }))}
-                  className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs font-semibold focus:border-[#001b85] focus:outline-none"
-                />
+                <label className="text-xs font-semibold text-[#4a6280]">Max Pemasukan Harian (Rp)</label>
+                <div className="mt-1">
+                  <InlineMoneyInput
+                    value={thresholds.maxDailyIncome}
+                    onChange={(value) => setThresholds((t) => ({ ...t, maxDailyIncome: value ?? 0 }))}
+                    ariaLabel="Batas pemasukan harian"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -265,7 +268,7 @@ export default function RulesPage() {
               disabled={!isValid || publishing}
               className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all shadow-sm cursor-pointer ${
                 isValid
-                  ? "bg-[#001b85] text-white hover:bg-[#0e32c2]"
+                  ? "bg-[#0b5f86] text-white hover:bg-[#0f73a3]"
                   : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >
@@ -273,7 +276,7 @@ export default function RulesPage() {
             </button>
             <button
               onClick={() => setWeights({ konsistensi: 35, kas: 35, legalitas: 25, stabilitas: 5 })}
-              className="flex-1 py-3 rounded-xl font-semibold text-xs border border-[#c5c5d7] text-[#444655] hover:bg-[#f3f2ff] cursor-pointer"
+              className="flex-1 py-3 rounded-xl font-semibold text-xs border border-[#c8d3de] text-[#4a6280] hover:bg-[#f3f2ff] cursor-pointer"
             >
               Reset ke Default
             </button>
@@ -283,10 +286,10 @@ export default function RulesPage() {
         {/* Right — Preview + History */}
         <div className="space-y-4">
           {/* Preview panel */}
-          <div className="bg-white rounded-2xl border border-[#e5e7ff] shadow-card p-5">
-            <h2 className="font-bold text-[#141a34] mb-3">Preview Dampak pada UMKM</h2>
+          <div className="bg-white rounded-2xl border border-[#e3e9f0] shadow-card p-5">
+            <h2 className="font-bold text-[#1b2a3a] mb-3">Preview Dampak pada UMKM</h2>
             <select
-              className="w-full px-3.5 py-2.5 rounded-xl border border-[#c5c5d7] text-xs font-semibold mb-4 focus:border-[#001b85] focus:outline-none bg-white cursor-pointer"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#c8d3de] text-xs font-semibold mb-4 focus:border-[#0b5f86] focus:outline-none bg-white cursor-pointer"
               onChange={(e) => setSelectedUMKM(sampleUMKM.find((u) => u.id === e.target.value) || sampleUMKM[0])}
             >
               {sampleUMKM.map((u) => (
@@ -295,15 +298,15 @@ export default function RulesPage() {
             </select>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-4 bg-[#f3f2ff] rounded-xl border border-[#e5e7ff]">
-                <p className="text-xs text-[#444655] font-semibold mb-1">Skor Lama</p>
-                <p className="text-3xl font-bold text-[#444655] font-headline">{oldScore}</p>
-                <p className="text-[10px] text-[#757686] mt-1">Formula standar</p>
+              <div className="text-center p-4 bg-[#f3f2ff] rounded-xl border border-[#e3e9f0]">
+                <p className="text-xs text-[#4a6280] font-semibold mb-1">Skor Lama</p>
+                <p className="text-3xl font-bold text-[#4a6280] font-headline">{oldScore}</p>
+                <p className="text-[10px] text-[#6e859e] mt-1">Formula standar</p>
               </div>
-              <div className="text-center p-4 rounded-xl border-2 border-[#001b85] bg-[#ececff]">
-                <p className="text-xs text-[#001b85] font-semibold mb-1">Skor Baru</p>
-                <p className="text-3xl font-bold text-[#001b85] font-headline">{newScore}</p>
-                <p className={`text-xs font-bold mt-1 ${newScore > oldScore ? "text-green-600" : newScore < oldScore ? "text-red-600" : "text-[#444655]"}`}>
+              <div className="text-center p-4 rounded-xl border-2 border-[#0b5f86] bg-[#eef8fd]">
+                <p className="text-xs text-[#0b5f86] font-semibold mb-1">Skor Baru</p>
+                <p className="text-3xl font-bold text-[#0b5f86] font-headline">{newScore}</p>
+                <p className={`text-xs font-bold mt-1 ${newScore > oldScore ? "text-green-600" : newScore < oldScore ? "text-red-600" : "text-[#4a6280]"}`}>
                   {newScore > oldScore ? `▲ +${newScore - oldScore}` : newScore < oldScore ? `▼ ${newScore - oldScore}` : "Tidak berubah"}
                 </p>
               </div>
@@ -316,8 +319,8 @@ export default function RulesPage() {
                 const contribution = Math.round((score * weights[key]) / 100);
                 return (
                   <div key={key} className="flex items-center justify-between text-xs">
-                    <span className="text-[#444655] capitalize">{key} ({score} × {weights[key]}%)</span>
-                    <span className="font-bold text-[#141a34]">{contribution}</span>
+                    <span className="text-[#4a6280] capitalize">{key} ({score} × {weights[key]}%)</span>
+                    <span className="font-bold text-[#1b2a3a]">{contribution}</span>
                   </div>
                 );
               })}
@@ -325,13 +328,13 @@ export default function RulesPage() {
           </div>
 
           {/* Version history */}
-          <div className="bg-white rounded-2xl border border-[#e5e7ff] shadow-card p-5">
-            <h2 className="font-bold text-[#141a34] mb-3">Riwayat Versi Aturan</h2>
+          <div className="bg-white rounded-2xl border border-[#e3e9f0] shadow-card p-5">
+            <h2 className="font-bold text-[#1b2a3a] mb-3">Riwayat Versi Aturan</h2>
             <div className="space-y-3 max-h-60 overflow-y-auto hide-scrollbar">
               {versionHistory.map((v, idx) => (
-                <div key={idx} className="p-3 bg-[#fbf8ff] rounded-xl border border-[#e5e7ff] space-y-1">
+                <div key={idx} className="p-3 bg-[#f5fbf8] rounded-xl border border-[#e3e9f0] space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-xs text-[#001b85] bg-[#ececff] px-2 py-0.5 rounded-full">{v.version}</span>
+                    <span className="font-bold text-xs text-[#0b5f86] bg-[#eef8fd] px-2 py-0.5 rounded-full">{v.version}</span>
                     <span className="text-[10px] text-slate-400 font-semibold">{v.date}</span>
                   </div>
                   <p className="text-xs text-slate-700 font-medium leading-snug">{v.changes}</p>

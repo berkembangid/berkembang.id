@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -28,6 +29,30 @@ const expectedMigrations = [
   "0021_ledger_report_daily_closing.sql",
   "0022_readiness_mission_engine.sql",
   "0023_consent_verified_business_profile.sql",
+  "0024_umkm_owner_without_membership.sql",
+  "0025_umkm_roleless_internal_plumbing.sql",
+  "0026_auto_provision_umkm_business.sql",
+  "0027_umkm_complete_roleless_access.sql",
+  "0028_fix_capture_roleless_functions.sql",
+  "0029_accounting_journal_foundation.sql",
+  "0030_restore_business_isolation.sql",
+  "0031_accounting_period_reports.sql",
+  "0032_opening_balance_correction.sql",
+  "0033_fixed_asset_threshold.sql",
+  "0034_general_ledger_ordering.sql",
+  "0035_tax_estimate.sql",
+  "0036_indicator_monthly.sql",
+  "0037_pending_reminders.sql",
+  "0038_sector_aware_templates.sql",
+  "0039_capture_text_only_path.sql",
+  "0040_asset_keywords.sql",
+  "0041_document_cabinet.sql",
+  "0042_document_attach_rpc.sql",
+  "0043_document_types.sql",
+  "0044_report_archive.sql",
+  "0045_profile_and_document_cleanup.sql",
+  "0046_account_deletion.sql",
+  "0047_readiness_level_model.sql",
 ];
 
 const coreTables = [
@@ -89,6 +114,11 @@ async function resetManagedTestSchemas() {
     create table auth.users (
       id uuid primary key,
       email text,
+      -- Supabase menyimpan metadata pendaftaran di sini. Tiruan ini sempat
+      -- tidak punya kolomnya, dan migrasi yang membacanya gagal di uji padahal
+      -- benar di produksi -- tiruan yang lebih miskin dari aslinya menghasilkan
+      -- kegagalan palsu.
+      raw_user_meta_data jsonb not null default '{}'::jsonb,
       created_at timestamptz not null default now()
     );
     create function auth.uid()
@@ -246,10 +276,21 @@ async function verifyRlsIsolation() {
     insert into public.businesses (id, name) values
       ('${businessA}', 'Business A'),
       ('${businessB}', 'Business B');
+    -- Sejak 0026 setiap profil UMKM diberi usaha otomatis saat profilnya
+    -- dibuat. Fixture ini memakai usaha eksplisit, jadi usaha otomatis untuk
+    -- kedua pemilik dibuang dan kepemilikannya dipindahkan ke usaha fixture,
+    -- persis seperti produksi tempat satu pemilik punya satu usaha.
+    delete from public.businesses
+    where legacy_profile_id in ('${userA}', '${userB}')
+      and id not in ('${businessA}', '${businessB}');
+    update public.businesses set legacy_profile_id = '${userA}' where id = '${businessA}';
+    update public.businesses set legacy_profile_id = '${userB}' where id = '${businessB}';
+
     insert into public.business_members (business_id, profile_id, user_id, role, status) values
       ('${businessA}', '${userA}', '${userA}', 'owner', 'active'),
       ('${businessA}', '${staffA}', '${staffA}', 'staff', 'active'),
-      ('${businessB}', '${userB}', '${userB}', 'owner', 'active');
+      ('${businessB}', '${userB}', '${userB}', 'owner', 'active')
+    on conflict do nothing;
 
     insert into public.institutions (id, name) values
       ('${institutionA}', 'Institution A'),
@@ -984,6 +1025,2324 @@ async function verifyRlsIsolation() {
   );
 }
 
+async function verifyAccountingJournal() {
+  // Reuses the isolation fixtures: owner A on business A, owner B on business B.
+  const userA = "a0000000-0000-4000-8000-000000000001";
+  const userB = "b0000000-0000-4000-8000-000000000001";
+  const businessA = "a1000000-0000-4000-8000-000000000001";
+  const entryDate = "2026-08-27";
+
+  assert.equal(
+    await scalar("select count(*)::int as value from public.coa_accounts where is_active"),
+    28,
+    "the SAK EMKM chart of accounts must be seeded in full",
+  );
+  assert.equal(
+    await scalar(`
+      select count(distinct category_code)::int as value from public.category_templates
+      where sector = 'PERDAGANGAN_KULINER' and version = 'coa-emkm-v1' and is_active
+    `),
+    10,
+    "all ten warung categories must have a deterministic template",
+  );
+
+  const supplier = await asAuthenticatedCommitted(
+    userA,
+    "select public.upsert_counterparty('Pemasok Uji', 'SUPPLIER') as value",
+  );
+  const supplierId = supplier.rows[0].value.counterpartyId;
+  const koperasi = await asAuthenticatedCommitted(
+    userA,
+    "select public.upsert_counterparty('Koperasi Uji', 'KOPERASI') as value",
+  );
+  const koperasiId = koperasi.rows[0].value.counterpartyId;
+
+  // Satu transaksi untuk setiap kategori bahasa warung, termasuk subtype.
+  const cases = [
+    { key: "kat1", type: "income", group: "sales", code: "sales_direct", amount: 47000, emkm: 1, subtype: null, payment: "cash", debit: "1100", credit: "4100" },
+    { key: "kat2", type: "income", group: "other", code: "other", amount: 200000, emkm: 2, subtype: null, payment: "qris", debit: "1200", credit: "4200" },
+    { key: "kat3", type: "income", group: "other", code: "other", amount: 50000, emkm: 3, subtype: null, payment: "cash", debit: "1100", credit: "1300" },
+    { key: "kat4a", type: "income", group: "other", code: "other", amount: 500000, emkm: 4, subtype: "4a", payment: "cash", debit: "1100", credit: "3100" },
+    { key: "kat4b", type: "income", group: "other", code: "other", amount: 2000000, emkm: 4, subtype: "4b", payment: "bank_transfer", debit: "1200", credit: "2300", counterparty: "koperasi" },
+    { key: "kat5", type: "expense", group: "cost_of_goods", code: "raw_material", amount: 300000, emkm: 5, subtype: null, payment: "cash", debit: "5100", credit: "1100" },
+    { key: "kat5u", type: "expense", group: "cost_of_goods", code: "raw_material", amount: 120000, emkm: 5, subtype: null, payment: "unpaid", debit: "5100", credit: "2100", counterparty: "supplier" },
+    { key: "kat6", type: "expense", group: "operating_expense", code: "utilities", amount: 22000, emkm: 6, subtype: "5210", payment: "cash", debit: "5210", credit: "1100" },
+    { key: "kat6b", type: "expense", group: "operating_expense", code: "wage", amount: 800000, emkm: 6, subtype: "5230", payment: "cash", debit: "5230", credit: "1100" },
+    { key: "kat7", type: "expense", group: "other", code: "other", amount: 250000, emkm: 7, subtype: null, payment: "cash", debit: "2300", credit: "1100", counterparty: "koperasi", interest: 30000 },
+    { key: "kat8", type: "expense", group: "asset", code: "equipment", amount: 3000000, emkm: 8, subtype: null, payment: "cash", debit: "1600", credit: "1100" },
+    { key: "kat9", type: "expense", group: "other", code: "other", amount: 300000, emkm: 9, subtype: null, payment: "cash", debit: "3200", credit: "1100" },
+    { key: "kat10", type: "income", group: "sales", code: "sales_direct", amount: 35000, emkm: 10, subtype: null, payment: "unpaid", debit: "1300", credit: "4100" },
+  ];
+
+  const created = new Map();
+  for (const item of cases) {
+    const counterpartyId = item.counterparty === "supplier" ? supplierId
+      : item.counterparty === "koperasi" ? koperasiId : null;
+    const result = await asAuthenticatedCommitted(
+      userA,
+      `select public.create_ledger_transaction(
+        p_idempotency_key => $1, p_transaction_type => $2, p_amount_idr => $3,
+        p_transaction_date => $4, p_category_group => $5, p_category_code => $6,
+        p_description => $7, p_payment_method => $8,
+        p_emkm_category_code => $9::smallint, p_emkm_category_subtype => $10,
+        p_counterparty_id => $11, p_interest_amount_idr => $12
+      ) as value`,
+      [
+        `emkm-${item.key}`, item.type, item.amount, entryDate, item.group, item.code,
+        `Uji kategori ${item.emkm}${item.subtype ? ` ${item.subtype}` : ""}`, item.payment,
+        item.emkm, item.subtype, counterpartyId, item.interest ?? 0,
+      ],
+    );
+    const value = result.rows[0].value;
+    assert.ok(value.journalEntryId, `category ${item.key} must post a journal entry`);
+    created.set(item.key, value);
+
+    const lines = await client.query(
+      "select account_code, debit, credit from public.journal_lines where entry_id = $1 order by line_order",
+      [value.journalEntryId],
+    );
+    const debitLines = lines.rows.filter((row) => Number(row.debit) > 0);
+    const creditLines = lines.rows.filter((row) => Number(row.credit) > 0);
+    assert.ok(
+      debitLines.some((row) => row.account_code === item.debit),
+      `category ${item.key} must debit ${item.debit}`,
+    );
+    assert.ok(
+      creditLines.some((row) => row.account_code === item.credit),
+      `category ${item.key} must credit ${item.credit}`,
+    );
+    const totalDebit = lines.rows.reduce((sum, row) => sum + Number(row.debit), 0);
+    const totalCredit = lines.rows.reduce((sum, row) => sum + Number(row.credit), 0);
+    assert.equal(totalDebit, totalCredit, `category ${item.key} must be balanced`);
+    assert.equal(totalDebit, item.amount, `category ${item.key} must post the full amount`);
+  }
+
+  // Kategori 7 memecah bunga ke akun 5310 tanpa merusak keseimbangan.
+  const installment = await client.query(
+    "select account_code, debit from public.journal_lines where entry_id = $1 and debit > 0 order by line_order",
+    [created.get("kat7").journalEntryId],
+  );
+  assert.deepEqual(
+    installment.rows.map((row) => [row.account_code, Number(row.debit)]),
+    [["2300", 220000], ["5310", 30000]],
+    "loan repayments must split principal from interest",
+  );
+
+  // Determinisme: kategori + metode bayar yang sama selalu menghasilkan akun yang sama.
+  const repeat = await asAuthenticatedCommitted(
+    userA,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'emkm-kat1-ulang', p_transaction_type => 'income', p_amount_idr => 47000,
+      p_transaction_date => $1, p_category_group => 'sales', p_category_code => 'sales_direct',
+      p_description => 'Uji determinisme', p_payment_method => 'cash',
+      p_emkm_category_code => 1::smallint
+    ) as value`,
+    [entryDate],
+  );
+  const repeatAccounts = await client.query(
+    "select account_code from public.journal_lines where entry_id = $1 order by line_order",
+    [repeat.rows[0].value.journalEntryId],
+  );
+  const firstAccounts = await client.query(
+    "select account_code from public.journal_lines where entry_id = $1 order by line_order",
+    [created.get("kat1").journalEntryId],
+  );
+  assert.deepEqual(
+    repeatAccounts.rows.map((row) => row.account_code),
+    firstAccounts.rows.map((row) => row.account_code),
+    "identical category and payment method must resolve to identical accounts",
+  );
+
+  // Jualan yang belum dibayar tidak boleh dicatat sebagai uang masuk.
+  const unpaidSale = await asAuthenticatedCommitted(
+    userA,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'emkm-kat1-bon', p_transaction_type => 'income', p_amount_idr => 15000,
+      p_transaction_date => $1, p_category_group => 'sales', p_category_code => 'sales_direct',
+      p_description => 'Jualan bon', p_payment_method => 'unpaid',
+      p_emkm_category_code => 1::smallint
+    ) as value`,
+    [entryDate],
+  );
+  assert.equal(
+    await scalar(`select emkm_category_code::int as value from public.transactions where id = '${unpaidSale.rows[0].value.transactionId}'`),
+    10,
+    "an unpaid sale must become a receivable, not cash income",
+  );
+
+  // Prive tidak pernah masuk laba rugi; modal dan pinjaman tidak pernah pendapatan.
+  const incomeStatement = await client.query(
+    "select account_code, amount from public.fn_income_statement($1, $2::date, $3::date)",
+    [businessA, entryDate, entryDate],
+  );
+  const statementAccounts = incomeStatement.rows.map((row) => row.account_code);
+  for (const forbidden of ["3200", "3100", "2300", "1300", "1600"]) {
+    assert.ok(!statementAccounts.includes(forbidden), `${forbidden} must never reach the income statement`);
+  }
+  const revenue = incomeStatement.rows
+    .filter((row) => row.account_code.startsWith("4"))
+    .reduce((sum, row) => sum + Number(row.amount), 0);
+  assert.equal(revenue, 47000 + 47000 + 200000 + 35000 + 15000, "revenue must exclude capital, loans, and receivable settlements");
+
+  // Neraca saldo seimbang.
+  const trialBalance = await client.query(
+    "select total_debit, total_credit from public.fn_trial_balance($1, $2::date)",
+    [businessA, entryDate],
+  );
+  const trialDebit = trialBalance.rows.reduce((sum, row) => sum + Number(row.total_debit), 0);
+  const trialCredit = trialBalance.rows.reduce((sum, row) => sum + Number(row.total_credit), 0);
+  assert.equal(trialDebit, trialCredit, "the trial balance must balance");
+
+  // Pembalikan: koreksi dan pembatalan tidak pernah menyentuh jurnal lama.
+  const priveTransaction = created.get("kat9").transactionId;
+  const priveEntry = created.get("kat9").journalEntryId;
+  await asAuthenticatedCommitted(
+    userA,
+    "select public.cancel_ledger_transaction($1, 'Salah catat, uang dikembalikan')",
+    [priveTransaction],
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.journal_entries where reverses_entry_id = '${priveEntry}' and source = 'REVERSAL'`),
+    1,
+    "cancelling a transaction must post a reversing entry",
+  );
+  assert.equal(
+    await scalar(`
+      select coalesce(sum(debit) - sum(credit), 0)::bigint as value
+      from public.journal_lines where business_id = '${businessA}' and account_code = '3200'
+    `),
+    0,
+    "a reversed owner draw must net to zero",
+  );
+
+  const afterReversal = await client.query(
+    "select total_debit, total_credit from public.fn_trial_balance($1, current_date)",
+    [businessA],
+  );
+  assert.equal(
+    afterReversal.rows.reduce((sum, row) => sum + Number(row.total_debit), 0),
+    afterReversal.rows.reduce((sum, row) => sum + Number(row.total_credit), 0),
+    "the trial balance must stay balanced after a reversal",
+  );
+
+  // Jurnal immutable.
+  await expectRejected(
+    `update public.journal_entries set memo = 'diubah' where id = '${priveEntry}'`,
+    "P0001",
+  );
+  await expectRejected(
+    `delete from public.journal_lines where entry_id = '${priveEntry}'`,
+    "P0001",
+  );
+  await expectRejected(
+    `insert into public.journal_entries (business_id, entry_date, source) values ('${businessA}', current_date, 'TRANSACTION')`,
+    "P0001",
+  );
+
+  // Template tidak ditemukan harus gagal keras, bukan menebak akun.
+  await client.query("update public.category_templates set is_active = false where category_code = 2");
+  await assert.rejects(
+    () => asAuthenticatedCommitted(
+      userA,
+      `select public.create_ledger_transaction(
+        p_idempotency_key => 'emkm-template-hilang', p_transaction_type => 'income', p_amount_idr => 1000,
+        p_transaction_date => $1, p_category_group => 'other', p_category_code => 'other',
+        p_description => 'Template hilang', p_payment_method => 'cash',
+        p_emkm_category_code => 2::smallint
+      )`,
+      [entryDate],
+    ),
+    (error) => error.code === "P0001" && error.message === "CATEGORY_TEMPLATE_NOT_FOUND",
+  );
+  await client.query("update public.category_templates set is_active = true where category_code = 2");
+
+  // Isolasi: usaha lain tidak boleh membaca jurnal atau laporan usaha ini.
+  const foreignJournal = await asAuthenticated(
+    userB,
+    `select count(*)::int as value from public.journal_entries where business_id = '${businessA}'`,
+  );
+  assert.equal(Number(foreignJournal.rows[0].value), 0, "journals must not leak across businesses");
+  const foreignLines = await asAuthenticated(
+    userB,
+    `select count(*)::int as value from public.journal_lines where business_id = '${businessA}'`,
+  );
+  assert.equal(Number(foreignLines.rows[0].value), 0, "journal lines must not leak across businesses");
+  const foreignLedger = await asAuthenticated(
+    userB,
+    `select count(*)::int as value from public.v_general_ledger where business_id = '${businessA}'`,
+  );
+  assert.equal(Number(foreignLedger.rows[0].value), 0, "the general ledger view must respect row level security");
+  const foreignStatement = await asAuthenticated(
+    userB,
+    `select count(*)::int as value from public.fn_income_statement('${businessA}', date '2000-01-01', current_date)`,
+  );
+  assert.equal(Number(foreignStatement.rows[0].value), 0, "report functions must run as invoker and honour RLS");
+
+  // Reklasifikasi catatan lama memposting jurnal dan mematikan penanda.
+  await asServiceRoleCommitted(
+    `insert into public.transactions (
+       business_id, user_id, item, qty, direction, type, amount_idr, nominal, category, kategori,
+       category_group, category_code, transaction_date, tanggal, ledger_status, payment_method, needs_reclass
+     ) values (
+       '${businessA}', '${userA}', 'Catatan lama tanpa kategori', '1', 'expense', 'keluar', 90000, 90000,
+       'Lainnya', 'Lainnya', 'other', 'other', date '${entryDate}', date '${entryDate}', 'confirmed', 'cash', true
+     )`,
+  );
+  const legacyId = (await client.query(
+    `select id from public.transactions where item = 'Catatan lama tanpa kategori' limit 1`,
+  )).rows[0].id;
+  const reclassified = await asAuthenticatedCommitted(
+    userA,
+    "select public.set_transaction_category($1, 9::smallint) as value",
+    [legacyId],
+  );
+  assert.ok(reclassified.rows[0].value.journalEntryId, "reclassifying must post the journal");
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.transactions where id = '${legacyId}' and needs_reclass = false and emkm_category_code = 9`),
+    1,
+    "reclassifying must clear the review flag",
+  );
+
+  // Uang yang belum diterima bukan uang di laci.
+  const closing = await asAuthenticatedCommitted(
+    userA,
+    "select public.close_ledger_day($1, 0, null, null) as value",
+    ["2026-08-27"],
+  );
+  assert.equal(closing.rows[0].value.status, "closed");
+  assert.equal(
+    await scalar(`select system_cash_in_idr::bigint as value from public.daily_closings where business_id = '${businessA}' and closing_date = date '${entryDate}'`),
+    47000 + 47000 + 200000 + 50000 + 500000 + 2000000,
+    "receivables and unpaid sales must stay out of the daily cash count",
+  );
+}
+
+async function verifyAccountingPeriodReports() {
+  // Usaha B dipakai supaya skenario Tahap B tidak mengganggu angka Tahap A.
+  const userB = "b0000000-0000-4000-8000-000000000001";
+  const userA = "a0000000-0000-4000-8000-000000000001";
+  const businessB = "b1000000-0000-4000-8000-000000000001";
+  const startDate = "2026-08-01";
+  const monthEnd = "2026-08-31";
+
+  const balanceSheetTotals = async (asOf) => {
+    const { rows } = await client.query(
+      "select section, sum(amount)::bigint as amount from public.fn_balance_sheet($1, $2::date) group by section",
+      [businessB, asOf],
+    );
+    const bySection = Object.fromEntries(rows.map((row) => [row.section, Number(row.amount)]));
+    return {
+      assets: bySection.ASET ?? 0,
+      liabilities: bySection.LIABILITAS ?? 0,
+      equity: bySection.EKUITAS ?? 0,
+    };
+  };
+  const assertBalanced = async (asOf, label) => {
+    const totals = await balanceSheetTotals(asOf);
+    assert.equal(
+      totals.assets,
+      totals.liabilities + totals.equity,
+      `balance sheet must balance ${label} (${JSON.stringify(totals)})`,
+    );
+    return totals;
+  };
+
+  // Wizard saldo awal: enam pertanyaan menjadi satu entry pembuka.
+  const opening = await asAuthenticatedCommitted(
+    userB,
+    `select public.save_opening_balances(
+      p_start_date => $1::date,
+      p_cash_idr => 500000,
+      p_bank_idr => 200000,
+      p_receivables => $2::jsonb,
+      p_payables => $3::jsonb,
+      p_inventory_idr => 300000,
+      p_assets => $4::jsonb,
+      p_notes => 'Saldo awal uji'
+    ) as value`,
+    [
+      startDate,
+      JSON.stringify([{ name: "Bu Sari", amountIdr: 50000 }]),
+      JSON.stringify([{ name: "Koperasi Maju", amountIdr: 1000000, lenderType: "KOPERASI", monthlyInstallmentIdr: 100000 }]),
+      JSON.stringify([{ name: "Kulkas", costIdr: 3000000, acquiredOn: "2026-06-10", category: "mesin" }]),
+    ],
+  );
+  assert.equal(opening.rows[0].value.idempotent, false);
+  // Kulkas dibeli 10 Juni, pemilik mulai mencatat 1 Agustus: satu bulan sudah
+  // terpakai, jadi yang masuk buku nilai pakainya (95/96 x 3.000.000), bukan
+  // harga barunya.
+  assert.equal(Number(opening.rows[0].value.equityIdr), 3018750, "opening equity must be assets minus debts");
+  assert.equal(opening.rows[0].value.negativeEquity, false);
+
+  const repeatedOpening = await asAuthenticatedCommitted(
+    userB,
+    "select public.save_opening_balances(p_start_date => $1::date, p_cash_idr => 999) as value",
+    [startDate],
+  );
+  assert.equal(repeatedOpening.rows[0].value.idempotent, true, "opening balances may only be recorded once");
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.opening_balances where business_id = '${businessB}'`),
+    1,
+  );
+
+  const afterOpening = await assertBalanced(startDate, "after the opening entry");
+  assert.equal(afterOpening.assets, 4018750, "opening assets must add up");
+  assert.equal(afterOpening.liabilities, 1000000, "the cooperative loan must land in liabilities");
+  assert.equal(afterOpening.equity, 3018750);
+
+  // Rincian saldo awal harus bisa dibaca lagi oleh CALK.
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.loans where business_id = '${businessB}' and lender_name = 'Koperasi Maju' and monthly_installment_idr = 100000`),
+    1,
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.fixed_assets
+      where business_id = '${businessB}' and name = 'Kulkas'
+        and original_useful_life_months = 96 and useful_life_months = 95
+        and original_cost_idr = 3000000 and cost_idr = 2968750
+    `),
+    1,
+    "a machine defaults to 96 months, minus the month already used before recording began",
+  );
+
+  // Catatan bertanggal sebelum saldo awal ditolak.
+  await assert.rejects(
+    () => asAuthenticatedCommitted(
+      userB,
+      `select public.create_ledger_transaction(
+        p_idempotency_key => 'periode-sebelum-saldo-awal', p_transaction_type => 'income',
+        p_amount_idr => 10000, p_transaction_date => date '2026-07-15',
+        p_category_group => 'sales', p_category_code => 'sales_direct',
+        p_description => 'Sebelum saldo awal', p_payment_method => 'cash',
+        p_emkm_category_code => 1::smallint
+      )`,
+    ),
+    (error) => error.code === "P0001" && error.message === "TRANSACTION_BEFORE_OPENING_BALANCE",
+  );
+
+  // Penyusutan otomatis, idempoten.
+  const depreciation = await asAuthenticatedCommitted(
+    userB,
+    "select public.ensure_depreciation_posted($1::date) as value",
+    [monthEnd],
+  );
+  // Kulkas dibeli 10 Juni, tetapi pemilik baru mulai mencatat 1 Agustus.
+  // Penyusutan Juli tidak diposting: harga alatnya belum ada di pembukuan,
+  // dan menyusutkannya lebih dulu membuat harta bernilai minus per 31 Juli.
+  assert.equal(Number(depreciation.rows[0].value), 1, "depreciation must not start before the owner did");
+  const repeatedDepreciation = await asAuthenticatedCommitted(
+    userB,
+    "select public.ensure_depreciation_posted($1::date) as value",
+    [monthEnd],
+  );
+  assert.equal(Number(repeatedDepreciation.rows[0].value), 0, "depreciation must never post twice for a month");
+  assert.equal(
+    await scalar(`select coalesce(sum(amount_idr), 0)::bigint as value from public.depreciation_postings where business_id = '${businessB}'`),
+    31250,
+    "straight line depreciation must be cost divided by useful life",
+  );
+  assert.equal(
+    await scalar(`
+      select coalesce(sum(line.credit) - sum(line.debit), 0)::bigint as value
+      from public.journal_lines line
+      join public.journal_entries entry on entry.id = line.entry_id
+      where line.business_id = '${businessB}' and line.account_code = '1690'
+    `),
+    31250,
+    "depreciation must accumulate in the contra asset account",
+  );
+  await assertBalanced(monthEnd, "after depreciation");
+  assert.equal(
+    (await balanceSheetTotals("2026-07-31")).assets,
+    0,
+    "nothing is on the books before the day recording started",
+  );
+
+  // Hitung stok akhir bulan.
+  const firstCount = await asAuthenticatedCommitted(
+    userB,
+    "select public.save_inventory_count($1::date, 250000, 'Hitung pertama') as value",
+    [`2026-08-01`],
+  );
+  assert.equal(Number(firstCount.rows[0].value.previousValueIdr), 300000);
+  assert.equal(Number(firstCount.rows[0].value.adjustmentIdr), -50000);
+  assert.equal(
+    await scalar(`
+      select coalesce(sum(line.debit) - sum(line.credit), 0)::bigint as value
+      from public.journal_lines line
+      join public.journal_entries entry on entry.id = line.entry_id
+      where line.business_id = '${businessB}' and line.account_code = '1400'
+    `),
+    250000,
+    "the counted value becomes the new inventory balance",
+  );
+
+  // Hitungan ulang membalik koreksi lama, bukan menimpanya.
+  const secondCount = await asAuthenticatedCommitted(
+    userB,
+    "select public.save_inventory_count($1::date, 280000, 'Hitung ulang') as value",
+    [`2026-08-01`],
+  );
+  assert.equal(Number(secondCount.rows[0].value.previousValueIdr), 300000, "recounting must start from the reversed balance");
+  assert.equal(Number(secondCount.rows[0].value.adjustmentIdr), -20000);
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.inventory_counts where business_id = '${businessB}'`),
+    1,
+    "one count per month",
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.journal_entries where business_id = '${businessB}' and source = 'REVERSAL'`),
+    1,
+    "the superseded inventory adjustment must be reversed, not edited",
+  );
+  await assertBalanced(monthEnd, "after the inventory recount");
+
+  // Transaksi biasa, termasuk yang diambil untuk rumah.
+  const cases = [
+    { key: "jual", type: "income", group: "sales", code: "sales_direct", amount: 1200000, emkm: 1, payment: "cash" },
+    { key: "belanja", type: "expense", group: "cost_of_goods", code: "raw_material", amount: 150000, emkm: 5, payment: "cash" },
+    // Di atas ambang Rp500.000, jadi ini memang alat usaha yang disusutkan.
+    { key: "alat", type: "expense", group: "asset", code: "equipment", amount: 600000, emkm: 8, payment: "cash" },
+    { key: "rumah", type: "expense", group: "other", code: "other", amount: 300000, emkm: 9, payment: "cash" },
+  ];
+  for (const item of cases) {
+    await asAuthenticatedCommitted(
+      userB,
+      `select public.create_ledger_transaction(
+        p_idempotency_key => $1, p_transaction_type => $2, p_amount_idr => $3,
+        p_transaction_date => $4::date, p_category_group => $5, p_category_code => $6,
+        p_description => $7, p_payment_method => $8, p_emkm_category_code => $9::smallint
+      )`,
+      [`periode-${item.key}`, item.type, item.amount, "2026-08-15", item.group, item.code, `Uji ${item.key}`, item.payment, item.emkm],
+    );
+  }
+
+  // Membeli alat mendaftarkannya sendiri supaya bisa disusutkan bulan depan.
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.fixed_assets where business_id = '${businessB}' and source_transaction_id is not null`),
+    1,
+    "buying equipment must register the asset",
+  );
+
+  const afterActivity = await assertBalanced(monthEnd, "after a month of trading");
+  assert.ok(afterActivity.assets > 0);
+
+  // Uang yang diambil untuk rumah mengurangi ekuitas, bukan laba usaha.
+  const statement = await client.query(
+    "select account_code from public.fn_income_statement($1, $2::date, $3::date)",
+    [businessB, startDate, monthEnd],
+  );
+  assert.ok(
+    !statement.rows.some((row) => row.account_code === "3200"),
+    "money taken home must never appear in the income statement",
+  );
+  assert.equal(
+    await scalar(`
+      select coalesce(sum(amount), 0)::bigint as value
+      from public.fn_balance_sheet('${businessB}', date '${monthEnd}')
+      where account_code = '3200'
+    `),
+    -300000,
+    "money taken home must reduce equity",
+  );
+
+  // Arus kas: kenaikan kas harus sama dengan jumlah ketiga bagiannya.
+  const cashFlow = await client.query(
+    "select section, amount from public.fn_cash_flow($1, $2::date, $3::date)",
+    [businessB, startDate, monthEnd],
+  );
+  const flow = Object.fromEntries(cashFlow.rows.map((row) => [row.section, Number(row.amount)]));
+  assert.equal(
+    flow.OPERASI + flow.INVESTASI + flow.PENDANAAN,
+    flow.KENAIKAN,
+    `cash flow sections must add up to the change in cash (${JSON.stringify(flow)})`,
+  );
+  assert.equal(flow.KAS_AKHIR - flow.KAS_AWAL, flow.KENAIKAN);
+  assert.equal(flow.KAS_AWAL, 700000, "the opening entry is the starting cash, not a movement");
+  assert.equal(flow.INVESTASI, -600000, "buying equipment is an investing outflow");
+  assert.equal(flow.PENDANAAN, -300000, "money taken home is a financing outflow");
+  assert.equal(flow.OPERASI, 1050000, "trading is an operating inflow");
+
+  // Catatan atas Laporan Keuangan punya isi untuk setiap rincian bernomor.
+  const notes = await client.query(
+    "select public.fn_notes_data($1, $2::date, $3::date) as value",
+    [businessB, startDate, monthEnd],
+  );
+  const payload = notes.rows[0].value;
+  assert.equal(payload.business.name, "Business B");
+  assert.equal(payload.openingBalance.startDate, startDate);
+  // Kas (1100) saja; giro 200.000 dari saldo awal ada di akun 1200.
+  assert.equal(Number(payload.cash), 500000 + 1200000 - 150000 - 600000 - 300000);
+  assert.equal(payload.receivables.length, 1);
+  assert.equal(payload.receivables[0].name, "Bu Sari");
+  assert.equal(Number(payload.inventory.balanceIdr), 280000);
+  assert.equal(payload.fixedAssets.length, 2, "the opening machine and the purchased tool must both be listed");
+  assert.equal(Number(payload.fixedAssets[0].accumulatedIdr), 31250);
+  assert.equal(payload.loans.length, 1);
+  assert.equal(Number(payload.equity.ownerDrawIdr), 300000);
+  assert.ok(payload.expenseByAccount.some((row) => row.accountCode === "5280"), "depreciation must show in the expense note");
+
+  // Tutup kas membandingkan uang fisik dengan saldo buku, tanpa menjurnalnya.
+  const closing = await asAuthenticatedCommitted(
+    userB,
+    "select public.close_ledger_day($1::date, 0, 40000, null, 200000) as value",
+    ["2026-08-15"],
+  );
+  const closingValue = closing.rows[0].value;
+  assert.equal(Number(closingValue.ledgerBankIdr), 200000);
+  assert.equal(
+    Number(closingValue.cashVarianceIdr),
+    40000 - Number(closingValue.ledgerCashIdr),
+    "the cash difference is shown, never journalled",
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.journal_entries where business_id = '${businessB}' and memo ilike '%selisih%'`),
+    0,
+    "a cash difference must never post a journal entry on its own",
+  );
+
+  // Isolasi tetap berlaku untuk tabel Tahap B.
+  for (const table of ["opening_balances", "fixed_assets", "depreciation_postings", "loans", "inventory_counts"]) {
+    const foreign = await asAuthenticated(
+      userA,
+      `select count(*)::int as value from public.${table} where business_id = '${businessB}'`,
+    );
+    assert.equal(Number(foreign.rows[0].value), 0, `${table} must not leak across businesses`);
+  }
+  const foreignBalanceSheet = await asAuthenticated(
+    userA,
+    `select count(*)::int as value from public.fn_balance_sheet('${businessB}', date '${monthEnd}')`,
+  );
+  assert.equal(Number(foreignBalanceSheet.rows[0].value), 0, "the balance sheet must honour row level security");
+
+  // Membalik jurnal sebuah transaksi harus ikut membatalkan efek sampingnya.
+  // Tanpa ini, mengedit satu pembayaran cicilan mengurangi sisa pinjaman dua
+  // kali, dan membatalkan pembelian alat meninggalkan aset yang terus disusut.
+  const loanId = (await client.query(
+    `select id, outstanding_idr from public.loans where business_id = '${businessB}' and lender_name = 'Koperasi Maju'`,
+  )).rows[0];
+  assert.equal(Number(loanId.outstanding_idr), 1000000, "the cooperative loan starts unpaid");
+
+  const koperasiId = (await client.query(
+    `select id from public.counterparties where business_id = '${businessB}' and name = 'Koperasi Maju'`,
+  )).rows[0].id;
+
+  const installment = await asAuthenticatedCommitted(
+    userB,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'periode-cicilan', p_transaction_type => 'expense', p_amount_idr => 250000,
+      p_transaction_date => date '2026-08-20', p_category_group => 'other', p_category_code => 'other',
+      p_description => 'Cicilan koperasi', p_payment_method => 'cash',
+      p_emkm_category_code => 7::smallint, p_counterparty_id => $1, p_interest_amount_idr => 30000
+    ) as value`,
+    [koperasiId],
+  );
+  const installmentId = installment.rows[0].value.transactionId;
+  assert.equal(
+    await scalar(`select outstanding_idr::bigint as value from public.loans where id = '${loanId.id}'`),
+    780000,
+    "an installment must reduce the loan by its principal portion only",
+  );
+
+  await asAuthenticatedCommitted(
+    userB,
+    `select public.update_ledger_transaction(
+      p_transaction_id => $1, p_transaction_type => 'expense', p_amount_idr => 250000,
+      p_transaction_date => date '2026-08-20', p_category_group => 'other', p_category_code => 'other',
+      p_description => 'Cicilan koperasi diperbaiki', p_reason => 'Keterangan diperbaiki',
+      p_payment_method => 'cash', p_emkm_category_code => 7::smallint,
+      p_counterparty_id => $2, p_interest_amount_idr => 30000
+    )`,
+    [installmentId, koperasiId],
+  );
+  assert.equal(
+    await scalar(`select outstanding_idr::bigint as value from public.loans where id = '${loanId.id}'`),
+    780000,
+    "editing an installment must not subtract the same payment twice",
+  );
+
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.cancel_ledger_transaction($1, 'Cicilan salah catat')",
+    [installmentId],
+  );
+  assert.equal(
+    await scalar(`select outstanding_idr::bigint as value from public.loans where id = '${loanId.id}'`),
+    1000000,
+    "cancelling an installment must give the loan its balance back",
+  );
+
+  // Membatalkan pembelian alat mencabut asetnya beserta penyusutan yang sudah
+  // terlanjur diposting -- kalau tidak, akumulasi penyusutan menyimpan beban
+  // milik aset yang sudah tidak ada.
+  const toolPurchase = await asAuthenticatedCommitted(
+    userB,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'periode-alat-batal', p_transaction_type => 'expense', p_amount_idr => 900000,
+      p_transaction_date => date '2026-08-20', p_category_group => 'asset', p_category_code => 'equipment',
+      p_description => 'Etalase kaca', p_payment_method => 'cash', p_emkm_category_code => 8::smallint
+    ) as value`,
+  );
+  const toolId = toolPurchase.rows[0].value.transactionId;
+  await asAuthenticatedCommitted(userB, "select public.ensure_depreciation_posted(date '2026-10-31')");
+  assert.ok(
+    (await scalar(`
+      select count(*)::int as value from public.depreciation_postings posting
+      join public.fixed_assets asset on asset.id = posting.asset_id
+      where asset.source_transaction_id = '${toolId}'
+    `)) > 0,
+    "a purchased tool must start depreciating",
+  );
+
+  const accumulatedBefore = await scalar(`
+    select coalesce(sum(line.credit) - sum(line.debit), 0)::bigint as value
+    from public.journal_lines line
+    join public.journal_entries entry on entry.id = line.entry_id
+    where line.business_id = '${businessB}' and line.account_code = '1690'
+  `);
+
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.cancel_ledger_transaction($1, 'Alat dikembalikan ke penjual')",
+    [toolId],
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.fixed_assets where source_transaction_id = '${toolId}'`),
+    0,
+    "cancelling the purchase must remove the asset it created",
+  );
+  assert.ok(
+    (await scalar(`
+      select coalesce(sum(line.credit) - sum(line.debit), 0)::bigint as value
+      from public.journal_lines line
+      join public.journal_entries entry on entry.id = line.entry_id
+      where line.business_id = '${businessB}' and line.account_code = '1690'
+    `)) < accumulatedBefore,
+    "the depreciation of a removed asset must be reversed, not left behind",
+  );
+  await assertBalanced("2026-10-31", "after cancelling a tool purchase");
+
+  // Barang murah yang dicatat sebagai alat tidak boleh menjadi alat.
+  //
+  // Sebuah pisau Rp120.000 yang lolos ke daftar alat akan disusutkan Rp2.500
+  // sebulan selama empat tahun -- 48 baris jurnal untuk uang yang sudah habis
+  // bulan itu juga. Sistem memindahkannya ke biaya usaha dan memberi tahu
+  // pemiliknya; yang diuji di sini adalah pemindahannya, bukan kalimatnya.
+  const cheapTool = await asAuthenticatedCommitted(
+    userB,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'periode-alat-murah', p_transaction_type => 'expense', p_amount_idr => 120000,
+      p_transaction_date => date '2026-08-21', p_category_group => 'asset', p_category_code => 'equipment',
+      p_description => 'Pisau dapur', p_payment_method => 'cash', p_emkm_category_code => 8::smallint
+    ) as value`,
+  );
+  const cheapToolId = cheapTool.rows[0].value.transactionId;
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.fixed_assets where source_transaction_id = '${cheapToolId}'`),
+    0,
+    "a purchase below the minimum must never enter the asset register",
+  );
+
+  // Baris transaksinya ikut pindah, bukan hanya jurnalnya -- kalau tidak,
+  // daftar catatan dan layar koreksi menampilkan kategori yang tidak dipakai.
+  const movedTool = (await client.query(
+    `select emkm_category_code, emkm_category_subtype, category_group, category_code
+     from public.transactions where id = '${cheapToolId}'`,
+  )).rows[0];
+  assert.equal(Number(movedTool.emkm_category_code), 6, "a cheap tool is recorded as a running cost");
+  assert.equal(movedTool.emkm_category_subtype, "5290");
+  assert.equal(movedTool.category_group, "operating_expense");
+  assert.equal(movedTool.category_code, "other");
+
+  assert.equal(
+    await scalar(`
+      select coalesce(sum(line.debit), 0)::bigint as value
+      from public.journal_lines line
+      join public.transactions tx on tx.journal_entry_id = line.entry_id
+      where tx.id = '${cheapToolId}' and line.account_code = '5290'
+    `),
+    120000,
+    "the whole amount must land in this month's expenses",
+  );
+  assert.equal(
+    await scalar(`
+      select coalesce(sum(line.debit), 0)::bigint as value
+      from public.journal_lines line
+      join public.transactions tx on tx.journal_entry_id = line.entry_id
+      where tx.id = '${cheapToolId}' and line.account_code = '1600'
+    `),
+    0,
+    "nothing about a cheap tool may touch the equipment account",
+  );
+
+  // Batasnya adalah "kurang dari", bukan "sampai dengan": tepat di ambang
+  // masih alat usaha.
+  const atThreshold = await asAuthenticatedCommitted(
+    userB,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'periode-alat-pas-ambang', p_transaction_type => 'expense', p_amount_idr => 500000,
+      p_transaction_date => date '2026-08-21', p_category_group => 'asset', p_category_code => 'equipment',
+      p_description => 'Kompor dua tungku', p_payment_method => 'cash', p_emkm_category_code => 8::smallint
+    ) as value`,
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.fixed_assets
+      where source_transaction_id = '${atThreshold.rows[0].value.transactionId}'
+    `),
+    1,
+    "a purchase exactly at the minimum is still a tool",
+  );
+
+  await assertBalanced("2026-10-31", "after a cheap tool became a running cost");
+
+  // ---------------------------------------------------------------------
+  // Memperbaiki kondisi awal setelah berbulan-bulan mencatat.
+  // ---------------------------------------------------------------------
+  const ladder = ["2026-07-31", "2026-08-01", "2026-08-15", "2026-08-31", "2026-09-30", "2026-10-31"];
+
+  // Satu cicilan dulu, supaya ada riwayat pembayaran yang harus selamat.
+  await asAuthenticatedCommitted(
+    userB,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'periode-cicilan-2', p_transaction_type => 'expense', p_amount_idr => 150000,
+      p_transaction_date => date '2026-08-25', p_category_group => 'other', p_category_code => 'other',
+      p_description => 'Cicilan koperasi kedua', p_payment_method => 'cash',
+      p_emkm_category_code => 7::smallint, p_counterparty_id => $1, p_interest_amount_idr => 20000
+    )`,
+    [koperasiId],
+  );
+  assert.equal(
+    await scalar(`select outstanding_idr::bigint as value from public.loans where id = '${loanId.id}'`),
+    870000,
+    "the loan must fall by the principal portion of the installment",
+  );
+
+  await asAuthenticatedCommitted(userB, "select public.ensure_depreciation_posted(date '2026-10-31')");
+  const accumulatedByAssetBefore = new Map(
+    (await client.query(`
+      select asset.name, coalesce(sum(posting.amount_idr), 0)::bigint as accumulated
+      from public.fixed_assets asset
+      left join public.depreciation_postings posting on posting.asset_id = asset.id
+      where asset.business_id = '${businessB}'
+      group by asset.name
+    `)).rows.map((row) => [row.name, Number(row.accumulated)]),
+  );
+
+  // Koreksi: uang di laci ternyata 700.000, kulkas ternyata 3.600.000,
+  // pinjaman koperasi ternyata 1.200.000.
+  const correctionPayload = [
+    JSON.stringify([{ name: "Bu Sari", amountIdr: 50000 }]),
+    JSON.stringify([{ name: "Koperasi Maju", amountIdr: 1200000, lenderType: "KOPERASI", monthlyInstallmentIdr: 100000 }]),
+    JSON.stringify([{ name: "Kulkas", costIdr: 3600000, acquiredOn: "2026-06-10", category: "mesin" }]),
+  ];
+  const corrected = await asAuthenticatedCommitted(
+    userB,
+    `select public.correct_opening_balances(
+      p_reason => 'Uang di laci waktu itu salah hitung',
+      p_start_date => $1::date, p_cash_idr => 700000, p_bank_idr => 200000,
+      p_receivables => $2::jsonb, p_payables => $3::jsonb,
+      p_inventory_idr => 300000, p_assets => $4::jsonb
+    ) as value`,
+    [startDate, ...correctionPayload],
+  );
+  assert.ok(Number(corrected.rows[0].value.depreciationMonthsRecomputed) > 0, "depreciation must be recomputed");
+
+  // Koreksi memasang kembali penyusutan sampai bulan berjalan saja -- bulan
+  // yang belum tiba memang tidak boleh diposting. Snapshot pembanding diambil
+  // sampai Oktober, jadi horizonnya disamakan dulu sebelum dibandingkan.
+  await asAuthenticatedCommitted(userB, "select public.ensure_depreciation_posted(date '2026-10-31')");
+
+  // Seimbang di SETIAP tanggal historis, bukan hanya hari ini.
+  for (const date of ladder) await assertBalanced(date, `after correcting the opening balance (${date})`);
+  assert.equal(
+    (await balanceSheetTotals("2026-07-31")).assets,
+    0,
+    "a correction must not leak backwards past the day recording started",
+  );
+
+  // Penyusutan dihitung ulang, tidak dobel dan tidak hilang: sisa akun 1690
+  // di jurnal -- termasuk seluruh pembalikannya -- harus sama persis dengan
+  // jumlah yang tercatat di depreciation_postings.
+  assert.equal(
+    await scalar(`
+      select coalesce(sum(line.credit) - sum(line.debit), 0)::bigint as value
+      from public.journal_lines line
+      join public.journal_entries entry on entry.id = line.entry_id
+      where line.business_id = '${businessB}' and line.account_code = '1690'
+    `),
+    await scalar(`select coalesce(sum(amount_idr), 0)::bigint as value from public.depreciation_postings where business_id = '${businessB}'`),
+    "accumulated depreciation in the journal must equal the postings that justify it",
+  );
+  // Jumlah bulannya bergantung tanggal berjalan, jadi yang diuji adalah
+  // besaran per bulannya: 3.600.000 dibagi 96 bulan.
+  const kulkasPostings = await client.query(`
+    select posting.amount_idr from public.depreciation_postings posting
+    join public.fixed_assets asset on asset.id = posting.asset_id
+    where asset.business_id = '${businessB}' and asset.name = 'Kulkas'
+  `);
+  assert.ok(kulkasPostings.rows.length > 0, "the corrected asset must be depreciated again");
+  for (const row of kulkasPostings.rows) {
+    assert.equal(Number(row.amount_idr), 37500, "the corrected cost must drive the recomputed depreciation");
+  }
+
+  // Riwayat pembayaran cicilan selamat, dan lawan transaksinya tetap sama
+  // supaya cicilan berikutnya masih mengurangi pinjaman yang benar.
+  const loanAfter = (await client.query(
+    `select principal_idr, outstanding_idr, counterparty_id from public.loans
+     where business_id = '${businessB}' and lender_name = 'Koperasi Maju'`,
+  )).rows[0];
+  assert.equal(Number(loanAfter.principal_idr), 1200000);
+  assert.equal(Number(loanAfter.outstanding_idr), 1200000 - 130000, "payments already made must survive a correction");
+  assert.equal(loanAfter.counterparty_id, koperasiId, "the loan must keep the counterparty future installments use");
+
+  // Aset yang berasal dari transaksi tidak ikut berubah.
+  for (const [name, accumulated] of accumulatedByAssetBefore) {
+    if (name === "Kulkas") continue;
+    assert.equal(
+      await scalar(`
+        select coalesce(sum(posting.amount_idr), 0)::bigint as value
+        from public.depreciation_postings posting
+        join public.fixed_assets asset on asset.id = posting.asset_id
+        where asset.business_id = '${businessB}' and asset.name = '${name}'
+      `),
+      accumulated,
+      `an untouched asset (${name}) must come out of a correction identical`,
+    );
+  }
+
+  // Menghilangkan pinjaman yang sudah dicicil ditolak, dan penolakannya
+  // membatalkan seluruh koreksi.
+  await assert.rejects(
+    () => asAuthenticatedCommitted(
+      userB,
+      `select public.correct_opening_balances(
+        p_reason => 'Pinjaman dihapus', p_start_date => $1::date, p_cash_idr => 700000,
+        p_payables => '[]'::jsonb
+      )`,
+      [startDate],
+    ),
+    (error) => error.code === "P0001" && error.message.startsWith("LOAN_HAS_PAYMENTS"),
+  );
+  // Koreksi menulis ulang baris pinjaman, jadi ia dicari lagi lewat namanya.
+  assert.equal(
+    await scalar(`
+      select outstanding_idr::bigint as value from public.loans
+      where business_id = '${businessB}' and lender_name = 'Koperasi Maju'
+    `),
+    1070000,
+    "a refused correction must roll back completely",
+  );
+
+  // Tanggal mulai tidak boleh dimajukan melewati catatan yang sudah ada.
+  await assert.rejects(
+    () => asAuthenticatedCommitted(
+      userB,
+      `select public.correct_opening_balances(
+        p_reason => 'Ganti tanggal mulai', p_start_date => date '2026-09-01',
+        p_cash_idr => 700000, p_payables => $1::jsonb
+      )`,
+      [correctionPayload[1]],
+    ),
+    (error) => error.code === "P0001" && error.message.startsWith("OPENING_START_DATE_CONFLICT"),
+  );
+
+  // Koreksi berulang: menguji jebakan idempotensi pembalikan.
+  for (const round of [2, 3]) {
+    await asAuthenticatedCommitted(
+      userB,
+      `select public.correct_opening_balances(
+        p_reason => $1, p_start_date => $2::date, p_cash_idr => $3, p_bank_idr => 200000,
+        p_receivables => $4::jsonb, p_payables => $5::jsonb, p_inventory_idr => 300000, p_assets => $6::jsonb
+      )`,
+      [`Perbaikan ke-${round}`, startDate, 700000 + round * 1000, ...correctionPayload],
+    );
+    for (const date of ladder) await assertBalanced(date, `after correction ${round} (${date})`);
+  }
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.journal_entries where business_id = '${businessB}' and source = 'OPENING'`),
+    4,
+    "every correction posts a fresh opening entry",
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.journal_entries
+      where business_id = '${businessB}'
+        and reverses_entry_id in (select id from public.journal_entries where business_id = '${businessB}' and source = 'OPENING')
+    `),
+    3,
+    "every superseded opening entry is reversed exactly once",
+  );
+  assert.equal(
+    await scalar(`select correction_count::int as value from public.opening_balances where business_id = '${businessB}'`),
+    3,
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.opening_balances where business_id = '${businessB}'`),
+    1,
+    "corrections never create a second opening balance row",
+  );
+  assert.equal(
+    await scalar(`select jsonb_array_length(payable_details)::int as value from public.opening_balances where business_id = '${businessB}'`),
+    1,
+    "the answers to question four must be readable back for the edit screen",
+  );
+
+  // ---------------------------------------------------------------------
+  // Register alat & pinjaman.
+  // ---------------------------------------------------------------------
+  const kulkasId = (await client.query(
+    `select id from public.fixed_assets where business_id = '${businessB}' and name = 'Kulkas'`,
+  )).rows[0].id;
+
+  // Memperpanjang umur alat menghitung ulang penyusutan yang sudah diposting.
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.update_fixed_asset($1, 'Kulkas besar', 'mesin', 120)",
+    [kulkasId],
+  );
+  const relifed = await client.query(`
+    select posting.amount_idr from public.depreciation_postings posting
+    where posting.asset_id = '${kulkasId}'
+  `);
+  assert.ok(relifed.rows.length > 0, "a re-lifed asset keeps depreciating");
+  for (const row of relifed.rows) {
+    assert.equal(
+      Number(row.amount_idr),
+      Math.floor(3562500 / 120),
+      "a longer life must spread the same value over more months",
+    );
+  }
+  await assertBalanced("2026-10-31", "after changing an asset life");
+
+  // Melepas alat: sisa nilainya jadi beban, hasil jualnya masuk kas, dan
+  // penyusutannya berhenti.
+  const bookBefore = await scalar(`
+    select (asset.cost_idr - coalesce(sum(posting.amount_idr), 0))::bigint as value
+    from public.fixed_assets asset
+    left join public.depreciation_postings posting on posting.asset_id = asset.id
+    where asset.id = '${kulkasId}' group by asset.cost_idr
+  `);
+  const disposal = await asAuthenticatedCommitted(
+    userB,
+    "select public.dispose_fixed_asset($1, current_date, 3000000) as value",
+    [kulkasId],
+  );
+  assert.equal(Number(disposal.rows[0].value.proceedsIdr), 3000000);
+  assert.equal(
+    Number(disposal.rows[0].value.bookValueIdr) + Number(disposal.rows[0].value.resultIdr),
+    3000000,
+    "proceeds must equal book value plus the gain or loss",
+  );
+  assert.ok(Number(disposal.rows[0].value.bookValueIdr) <= bookBefore);
+  await assertBalanced("2026-10-31", "after disposing of an asset");
+
+  // Bulan-bulan sesudah alat dilepas tidak boleh disusutkan lagi.
+  await asAuthenticatedCommitted(userB, "select public.ensure_depreciation_posted(current_date + 90)");
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.depreciation_postings
+      where asset_id = '${kulkasId}' and period_month > date_trunc('month', current_date)::date
+    `),
+    0,
+    "a disposed asset must stop depreciating",
+  );
+  await assert.rejects(
+    () => asAuthenticatedCommitted(
+      userB,
+      "select public.dispose_fixed_asset($1, current_date, 0)",
+      [kulkasId],
+    ),
+    (error) => error.code === "P0001" && error.message === "FIXED_ASSET_ALREADY_DISPOSED",
+  );
+
+  // Nama dan cicilan pinjaman boleh diperbarui; sisa pinjaman tidak diketik.
+  const loanRow = (await client.query(
+    `select id from public.loans where business_id = '${businessB}' and lender_name = 'Koperasi Maju'`,
+  )).rows[0];
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.update_loan($1, 'Koperasi Maju Bersama', 120000, 18)",
+    [loanRow.id],
+  );
+  assert.equal(
+    await scalar(`select outstanding_idr::bigint as value from public.loans where id = '${loanRow.id}'`),
+    1070000,
+    "updating loan terms must never move the amount still owed",
+  );
+
+  // Jalur pendaftaran alat/pinjaman tanpa jurnal ditutup untuk pemilik.
+  await expectAuthenticatedRejected(
+    userB,
+    "select public.register_fixed_asset('Rak', 100000, current_date)",
+    "42501",
+  );
+  await expectAuthenticatedRejected(
+    userB,
+    "select public.register_loan('Bank X', 100000, current_date)",
+    "42501",
+  );
+
+  // Alat & pinjaman usaha lain tetap tidak bisa disentuh.
+  await assert.rejects(
+    () => asAuthenticatedCommitted(userA, "select public.update_loan($1, 'Bajakan')", [loanRow.id]),
+    (error) => error.code === "42501",
+  );
+
+  // ---------------------------------------------------------------------
+  // Mode Akuntan: satu mesin, dua wajah -- angkanya wajib sama persis.
+  // ---------------------------------------------------------------------
+  const asOf = "2026-10-31";
+
+  // Invarian 9 spek: angka yang dibaca layar akuntan (view buku besar, yang
+  // juga menjadi isi CSV) harus sama dengan angka yang dibaca laporan (fungsi
+  // SQL). Kalau keduanya berbeda, berkas yang dikirim ke bank bercerita lain
+  // dari layar yang dilihat pemiliknya.
+  const trialTotals = (await client.query(
+    `select
+       coalesce(sum(total_debit), 0)::bigint as debit,
+       coalesce(sum(total_credit), 0)::bigint as credit
+     from public.fn_trial_balance('${businessB}', date '${asOf}')`,
+  )).rows[0];
+  const viewTotals = (await client.query(`
+    select coalesce(sum(debit), 0)::bigint as debit, coalesce(sum(credit), 0)::bigint as credit
+    from public.v_general_ledger
+    where business_id = '${businessB}' and entry_date <= date '${asOf}'
+  `)).rows[0];
+  assert.equal(
+    Number(viewTotals.debit),
+    Number(trialTotals.debit),
+    "the accountant view and the trial balance must total the same debits",
+  );
+  assert.equal(
+    Number(viewTotals.credit),
+    Number(trialTotals.credit),
+    "the accountant view and the trial balance must total the same credits",
+  );
+  assert.equal(Number(trialTotals.debit), Number(trialTotals.credit), "the trial balance must balance");
+
+  // Saldo berjalan baris terakhir sebuah akun adalah saldo akun itu. Ini yang
+  // membuat kolom "Saldo" di buku besar bisa dipercaya tanpa dihitung ulang
+  // di sisi layar.
+  for (const account of ["1100", "1600", "2300"]) {
+    const running = await scalar(`
+      select coalesce(running_balance, 0)::bigint as value
+      from public.v_general_ledger
+      where business_id = '${businessB}' and account_code = '${account}' and entry_date <= date '${asOf}'
+      order by entry_date desc, posted_at desc, line_order desc, line_id desc
+      limit 1
+    `);
+    const fromTrial = await scalar(`
+      select coalesce(sum(balance), 0)::bigint as value
+      from public.fn_trial_balance('${businessB}', date '${asOf}')
+      where account_code = '${account}'
+    `);
+    assert.equal(
+      running,
+      fromTrial,
+      `the running balance of ${account} must equal its trial balance figure`,
+    );
+  }
+
+  // Buku besar dan ekspor CSV memakai view yang sama, dan view itu ikut RLS.
+  const foreignLedger = await asAuthenticated(
+    userA,
+    `select count(*)::int as value from public.v_general_ledger where business_id = '${businessB}'`,
+  );
+  assert.equal(
+    Number(foreignLedger.rows[0].value),
+    0,
+    "the accountant view must never leak another business's ledger",
+  );
+
+  // Mode Akuntan hanya membaca. View buku besar bahkan tidak bisa ditulis:
+  // Postgres menolaknya sebagai view yang tidak dapat diperbarui (55000).
+  await expectRejected(
+    `insert into public.v_general_ledger (business_id, account_code) values ('${businessB}', '1100')`,
+    "55000",
+  );
+
+  // ---------------------------------------------------------------------
+  // Perkiraan pajak penghasilan (PPh final UMKM 0,5%, PP 55/2022).
+  // ---------------------------------------------------------------------
+  const taxAsOf = "2026-10-31";
+  const readTax = async (asOf) =>
+    (await client.query("select * from public.fn_tax_estimate($1, $2::date)", [businessB, asOf])).rows[0];
+
+  await asAuthenticatedCommitted(userB, `select public.ensure_tax_estimated(date '${taxAsOf}')`);
+
+  // Warung yang omzetnya masih jauh di bawah ambang tidak kena pajak, dan
+  // layarnya harus bisa mengatakan berapa lagi sisanya -- bukan diam.
+  const smallTax = await readTax(taxAsOf);
+  assert.equal(smallTax.is_taxable, false, "a warung far below the threshold owes no final income tax");
+  assert.equal(Number(smallTax.tax_ytd_idr), 0);
+  assert.equal(Number(smallTax.exempt_idr), 500_000_000);
+  assert.equal(
+    Number(smallTax.remaining_before_taxable_idr),
+    500_000_000 - Number(smallTax.gross_revenue_ytd_idr),
+    "the owner must be told how much turnover is still untaxed",
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.journal_entries where business_id = '${businessB}' and source = 'TAX_ESTIMATE'`),
+    0,
+    "no journal entry may be posted while no tax is owed",
+  );
+  // Bulannya tetap dicatat walau nihil -- baris inilah yang membuat
+  // perhitungan bisa tahu dirinya sudah basi.
+  assert.ok(
+    (await scalar(`select count(*)::int as value from public.tax_estimates where business_id = '${businessB}'`)) > 0,
+    "a month with no tax still records the figures it was computed from",
+  );
+
+  const revenueBeforeBigSale = Number(smallTax.gross_revenue_ytd_idr);
+
+  // Satu penjualan besar mendorong omzet tahun berjalan melewati ambang.
+  const bigSale = await asAuthenticatedCommitted(
+    userB,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'pajak-omzet-besar', p_transaction_type => 'income', p_amount_idr => 600000000,
+      p_transaction_date => date '2026-08-28', p_category_group => 'sales', p_category_code => 'sales_direct',
+      p_description => 'Pesanan katering besar', p_payment_method => 'cash', p_emkm_category_code => 1::smallint
+    ) as value`,
+  );
+  const bigSaleId = bigSale.rows[0].value.transactionId;
+  await asAuthenticatedCommitted(userB, `select public.ensure_tax_estimated(date '${taxAsOf}')`);
+
+  const taxed = await readTax(taxAsOf);
+  const expectedRevenue = revenueBeforeBigSale + 600_000_000;
+  assert.equal(Number(taxed.gross_revenue_ytd_idr), expectedRevenue);
+  assert.equal(taxed.is_taxable, true);
+  assert.equal(Number(taxed.remaining_before_taxable_idr), 0);
+
+  // Hanya bagian yang MELEWATI ambang yang kena pajak. Kalau seluruh omzet
+  // bulan itu yang dikenai, pemilik ditagih berkali lipat dari seharusnya.
+  assert.equal(
+    Number(taxed.taxable_ytd_idr),
+    expectedRevenue - 500_000_000,
+    "only the turnover above the threshold is taxed, never the whole month",
+  );
+  assert.equal(
+    Number(taxed.tax_ytd_idr),
+    Math.floor((expectedRevenue - 500_000_000) * 0.005),
+    "the rate is half a percent of the taxable portion",
+  );
+
+  // Jurnalnya: beban pajak di satu sisi, utang pajak di sisi lain, bertanggal
+  // akhir bulan yang dikenai -- bukan hari ini.
+  const taxEntry = (await client.query(`
+    select entry.id, to_char(entry.entry_date, 'YYYY-MM-DD') as entry_date, entry.cash_flow_section,
+      sum(case when line.account_code = '5400' then line.debit else 0 end)::bigint as expense,
+      sum(case when line.account_code = '2400' then line.credit else 0 end)::bigint as payable
+    from public.journal_entries entry
+    join public.journal_lines line on line.entry_id = entry.id
+    where entry.business_id = '${businessB}' and entry.source = 'TAX_ESTIMATE'
+    group by entry.id, entry.entry_date, entry.cash_flow_section
+  `)).rows;
+  assert.equal(taxEntry.length, 1, "one estimate per month, not one per sale");
+  const augustEstimateId = taxEntry[0].id;
+  assert.equal(taxEntry[0].entry_date, "2026-08-31");
+  assert.equal(Number(taxEntry[0].expense), Number(taxed.tax_ytd_idr));
+  assert.equal(Number(taxEntry[0].payable), Number(taxed.tax_ytd_idr));
+  assert.equal(
+    taxEntry[0].cash_flow_section,
+    "NON_KAS",
+    "an accrued estimate moves no cash and must not disturb the cash flow identity",
+  );
+
+  // Pajak masuk Laba Rugi sebagai beban pajak, dan Posisi Keuangan sebagai
+  // utang pajak. Keduanya tetap seimbang.
+  assert.equal(
+    await scalar(`
+      select coalesce(sum(amount), 0)::bigint as value
+      from public.fn_income_statement('${businessB}', date '2026-08-01', date '${taxAsOf}')
+      where report_line = 'IS_BEBAN_PAJAK'
+    `),
+    Number(taxed.tax_ytd_idr),
+    "the estimate must reach the income statement, so profit after tax stops equalling profit before tax",
+  );
+  assert.equal(
+    await scalar(`
+      select coalesce(sum(amount), 0)::bigint as value
+      from public.fn_balance_sheet('${businessB}', date '${taxAsOf}')
+      where account_code = '2400'
+    `),
+    Number(taxed.tax_ytd_idr),
+  );
+  await assertBalanced(taxAsOf, "after estimating income tax");
+
+  // Menjalankannya lagi tidak boleh menambah apa pun.
+  await asAuthenticatedCommitted(userB, `select public.ensure_tax_estimated(date '${taxAsOf}')`);
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.journal_entries where business_id = '${businessB}' and source = 'TAX_ESTIMATE'`),
+    1,
+    "re-running the estimate must not post it twice",
+  );
+
+  // Omzet berubah -> perkiraannya memperbaiki diri sendiri, tanpa satu pun
+  // jalur tulis buku kas yang perlu tahu soal pajak.
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.cancel_ledger_transaction($1, 'Pesanan katering batal')",
+    [bigSaleId],
+  );
+  await asAuthenticatedCommitted(userB, `select public.ensure_tax_estimated(date '${taxAsOf}')`);
+  const afterCancel = await readTax(taxAsOf);
+  assert.equal(
+    Number(afterCancel.gross_revenue_ytd_idr),
+    revenueBeforeBigSale,
+    "cancelling a sale must lower the turnover the tax was computed from",
+  );
+  assert.equal(
+    Number(afterCancel.taxable_ytd_idr),
+    0,
+    "with the sale gone, nothing is above the threshold any more",
+  );
+  assert.equal(Number(afterCancel.tax_ytd_idr), 0, "with the sale gone, no tax is owed");
+  assert.equal(
+    await scalar(`
+      select coalesce(sum(line.debit) - sum(line.credit), 0)::bigint as value
+      from public.journal_lines line
+      join public.journal_entries entry on entry.id = line.entry_id
+      where line.business_id = '${businessB}' and line.account_code = '2400'
+    `),
+    0,
+    "the superseded estimate must be reversed, leaving no phantom tax payable",
+  );
+  // Perkiraan Agustus TIDAK dihapus. Pada Agustus, penjualan itu memang ada di
+  // pembukuan; pembalikannya bertanggal hari pembatalan dicatat, aturan yang
+  // sama dengan seluruh sistem. Jadi bebannya dilepaskan di bulan itu, bukan
+  // dicabut dari bulan yang sudah lewat.
+  assert.equal(
+    await scalar(`select tax_idr::bigint as value from public.tax_estimates where id is not null and journal_entry_id = '${augustEstimateId}'`),
+    506000,
+    "the month that genuinely earned the turnover keeps its estimate",
+  );
+  const releases = (await client.query(`
+    select
+      sum(case when line.account_code = '2400' then line.debit else 0 end)::bigint as payable_cleared,
+      sum(case when line.account_code = '5400' then line.credit else 0 end)::bigint as expense_reduced
+    from public.journal_entries entry
+    join public.journal_lines line on line.entry_id = entry.id
+    where entry.business_id = '${businessB}' and entry.source = 'TAX_ESTIMATE' and entry.id <> '${augustEstimateId}'
+  `)).rows[0];
+  assert.equal(
+    Number(releases.payable_cleared),
+    506000,
+    "the release must clear exactly what was accrued",
+  );
+  assert.equal(Number(releases.expense_reduced), 506000);
+  await assertBalanced(taxAsOf, "after the tax estimate corrected itself");
+  await assertBalanced("2026-08-31", "the corrected estimate must be right inside its own month too");
+
+  // Isolasi: perkiraan pajak usaha lain tidak terbaca, dan tabelnya tidak
+  // dapat ditulis dari sesi pemilik.
+  const foreignTax = await asAuthenticated(
+    userA,
+    `select count(*)::int as value from public.tax_estimates where business_id = '${businessB}'`,
+  );
+  assert.equal(Number(foreignTax.rows[0].value), 0, "tax estimates must not leak across businesses");
+  await expectAuthenticatedRejected(
+    userB,
+    `insert into public.tax_estimates (business_id, period_month, tax_year, rate, exempt_idr)
+     values ('${businessB}', date '2026-08-01', 2026, 0, 0)`,
+    "42501",
+  );
+
+  // ---------------------------------------------------------------------
+  // Indikator bulanan tersimpan, dengan versi rumus.
+  // ---------------------------------------------------------------------
+  const indicatorAsOf = "2026-10-31";
+  await asAuthenticatedCommitted(userB, `select public.ensure_indicators_rebuilt(date '${indicatorAsOf}')`);
+
+  const indicatorRows = (await client.query(
+    "select * from public.fn_indicator_monthly($1, $2::date, $3::date)",
+    [businessB, "2026-08-01", indicatorAsOf],
+  )).rows;
+  assert.ok(indicatorRows.length > 0, "the stored indicators must cover the months that have journals");
+  for (const row of indicatorRows) {
+    assert.equal(
+      row.formula_version,
+      "indikator-v1",
+      "every stored figure must carry the version of the formula that produced it",
+    );
+  }
+
+  // Angka tersimpan harus sama persis dengan angka yang dihitung on the fly --
+  // kecuali modal masuk, yang memang sengaja berbeda (lihat di bawah).
+  const liveRows = (await client.query(
+    "select * from public.fn_warung_monthly($1, $2::date, $3::date)",
+    [businessB, "2026-08-01", indicatorAsOf],
+  )).rows;
+  const liveByMonth = new Map(liveRows.map((row) => [row.period_month.getTime(), row]));
+  for (const stored of indicatorRows) {
+    const live = liveByMonth.get(stored.period_month.getTime());
+    assert.ok(live, "a stored month must exist in the live computation too");
+    for (const field of ["revenue", "cogs", "opex", "interest", "net_income", "prive", "receivable_new"]) {
+      assert.equal(
+        Number(stored[field]),
+        Number(live[field]),
+        `stored and live ${field} must agree, or two screens will quote different numbers`,
+      );
+    }
+    assert.equal(Number(stored.days_recorded), Number(live.days_recorded));
+  }
+
+  // Penyeimbang saldo awal BUKAN setoran modal. Tanpa pengecualian ini, bulan
+  // pertama selalu tampak seolah pemilik menyuntik modal sebesar seluruh
+  // kekayaan usahanya.
+  const openingMonth = indicatorRows.find((row) => row.period_month.getMonth() === 7);
+  const openingLive = liveByMonth.get(openingMonth.period_month.getTime());
+  assert.ok(
+    Number(openingLive.capital_in) > Number(openingMonth.capital_in),
+    "the opening entry must not be counted as fresh capital in the stored indicators",
+  );
+
+  // Rasio non-tunai: penjualan yang masuk ke rekening dibagi seluruh penjualan.
+  await asAuthenticatedCommitted(
+    userB,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'indikator-transfer', p_transaction_type => 'income', p_amount_idr => 300000,
+      p_transaction_date => date '2026-08-26', p_category_group => 'sales', p_category_code => 'sales_direct',
+      p_description => 'Pesanan dibayar transfer', p_payment_method => 'bank_transfer',
+      p_emkm_category_code => 1::smallint
+    )`,
+  );
+  await asAuthenticatedCommitted(userB, `select public.ensure_indicators_rebuilt(date '${indicatorAsOf}')`);
+  const august = (await client.query(`
+    select * from public.indicator_monthly
+    where business_id = '${businessB}' and period_month = date '2026-08-01'
+  `)).rows[0];
+  assert.equal(
+    Number(august.noncash_sales_idr),
+    300000,
+    "a sale received in the bank account is the non-cash part",
+  );
+  assert.equal(
+    Number(august.noncash_sales_ratio),
+    Number((300000 / Number(august.revenue_idr)).toFixed(4)),
+    "the ratio is bank sales over all sales, and the report prints that formula",
+  );
+
+  // Bulan tanpa penjualan sama sekali menyimpan rasio kosong, bukan nol.
+  // "Tidak ada penjualan" dan "semua penjualan tunai" adalah dua keadaan
+  // berbeda, dan 0% untuk yang pertama menyesatkan pembacanya.
+  const quiet = (await client.query(`
+    select noncash_sales_ratio, revenue_idr from public.indicator_monthly
+    where business_id = '${businessB}' and revenue_idr = 0
+  `)).rows;
+  for (const row of quiet) {
+    assert.equal(row.noncash_sales_ratio, null, "a month with no sales has no ratio, not a zero ratio");
+  }
+
+  // Dibangun ulang hanya ketika sumbernya bergeser.
+  const untouched = await asAuthenticatedCommitted(
+    userB,
+    `select public.ensure_indicators_rebuilt(date '${indicatorAsOf}') as value`,
+  );
+  assert.equal(
+    Number(untouched.rows[0].value),
+    0,
+    "re-running with nothing changed must rebuild no month at all",
+  );
+
+  const stampBefore = (await client.query(`
+    select computed_at from public.indicator_monthly
+    where business_id = '${businessB}' and period_month = date '2026-08-01'
+  `)).rows[0].computed_at;
+  await asAuthenticatedCommitted(
+    userB,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'indikator-jual-lagi', p_transaction_type => 'income', p_amount_idr => 90000,
+      p_transaction_date => date '2026-08-27', p_category_group => 'sales', p_category_code => 'sales_direct',
+      p_description => 'Jualan sore', p_payment_method => 'cash', p_emkm_category_code => 1::smallint
+    )`,
+  );
+  const rebuilt = await asAuthenticatedCommitted(
+    userB,
+    `select public.ensure_indicators_rebuilt(date '${indicatorAsOf}') as value`,
+  );
+  assert.ok(Number(rebuilt.rows[0].value) > 0, "a new journal entry must make its month stale");
+  const stampAfter = (await client.query(`
+    select computed_at, revenue_idr from public.indicator_monthly
+    where business_id = '${businessB}' and period_month = date '2026-08-01'
+  `)).rows[0];
+  assert.ok(stampAfter.computed_at > stampBefore, "the stale month must actually be recomputed");
+  assert.equal(
+    Number(stampAfter.revenue_idr),
+    Number(august.revenue_idr) + 90000,
+    "the rebuilt month must include the new sale",
+  );
+
+  // Isolasi dan baca-saja, seperti setiap agregat lain.
+  const foreignIndicators = await asAuthenticated(
+    userA,
+    `select count(*)::int as value from public.indicator_monthly where business_id = '${businessB}'`,
+  );
+  assert.equal(Number(foreignIndicators.rows[0].value), 0, "indicators must not leak across businesses");
+  await expectAuthenticatedRejected(
+    userB,
+    `insert into public.indicator_monthly (business_id, period_month, formula_version)
+     values ('${businessB}', date '2026-08-01', 'palsu')`,
+    "42501",
+  );
+
+  // ---------------------------------------------------------------------
+  // Pengingat hitung stok dan tutup kas.
+  // ---------------------------------------------------------------------
+  const remindersOn = async (asOf) =>
+    (await client.query("select * from public.fn_pending_reminders($1, $2::date)", [businessB, asOf])).rows;
+
+  // Agustus punya belanja bahan dan sudah lewat, tetapi stoknya sudah dihitung
+  // di awal skenario ini -- jadi ia tidak boleh ditagih.
+  const octoberReminders = await remindersOn("2026-10-31");
+  assert.equal(
+    octoberReminders.filter((row) => row.kind === "HITUNG_STOK").length,
+    0,
+    "a month whose stock was already counted must never be nagged again",
+  );
+
+  // Bulan yang punya belanja bahan tetapi belum pernah dihitung stoknya harus
+  // ditagih, dan tagihan itu hilang sendiri begitu dikerjakan.
+  await asAuthenticatedCommitted(
+    userB,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'pengingat-belanja-sep', p_transaction_type => 'expense', p_amount_idr => 250000,
+      p_transaction_date => date '2026-09-02', p_category_group => 'cost_of_goods', p_category_code => 'raw_material',
+      p_description => 'Kulakan awal September', p_payment_method => 'cash', p_emkm_category_code => 5::smallint
+    )`,
+  );
+  // Bulan berjalan belum ditagih sebelum tiga hari terakhirnya: menghitung
+  // stok di tengah bulan tidak ada gunanya, dan pengingat yang tidak berguna
+  // mengajari pemiliknya mengabaikan semua pengingat.
+  const midMonth = (await remindersOn("2026-09-15")).filter(
+    (row) => row.kind === "HITUNG_STOK" && row.period_month.getMonth() === 8,
+  );
+  assert.equal(midMonth.length, 0, "the running month is not nagged in the middle of itself");
+
+  const nearEnd = (await remindersOn("2026-09-29")).filter(
+    (row) => row.kind === "HITUNG_STOK" && row.period_month.getMonth() === 8,
+  );
+  assert.equal(nearEnd.length, 1, "the running month is reminded in its final three days");
+  assert.equal(nearEnd[0].urgent, false, "a month still running is due, never overdue");
+
+  // Bulan yang sudah lewat tanpa hitungan stok adalah kelalaian, bukan sekadar
+  // belum waktunya.
+  const septemberStock = (await remindersOn("2026-10-31")).filter(
+    (row) => row.kind === "HITUNG_STOK" && row.period_month.getMonth() === 8,
+  );
+  assert.equal(septemberStock.length, 1, "a past month with purchases and no count must be reminded");
+  assert.equal(septemberStock[0].urgent, true, "a month that already ended is overdue, not merely due");
+  assert.ok(Number(septemberStock[0].days_overdue) > 0);
+
+  // Mengerjakannya menghapus tagihannya, tanpa ada yang perlu ditandai selesai.
+  await asAuthenticatedCommitted(userB, "select public.save_inventory_count(date '2026-09-01', 200000, null)");
+  assert.equal(
+    (await remindersOn("2026-10-31")).filter(
+      (row) => row.kind === "HITUNG_STOK" && row.period_month.getMonth() === 8,
+    ).length,
+    0,
+    "doing the work must clear the reminder, with nothing to mark as done",
+  );
+
+  // Tutup kas: setiap hari yang punya catatan terkonfirmasi dan belum ditutup.
+  const closingDue = (await remindersOn("2026-10-31")).filter((row) => row.kind === "TUTUP_KAS");
+  assert.ok(closingDue.length > 0, "days with records and no closing must be reminded");
+  const closedDate = "2026-08-15";
+  assert.equal(
+    closingDue.filter((row) => row.due_date.toISOString().slice(0, 10) === closedDate).length,
+    0,
+    "a day already closed must not appear",
+  );
+  const openDay = closingDue[0].due_date;
+  const openDayText = `${openDay.getFullYear()}-${String(openDay.getMonth() + 1).padStart(2, "0")}-${String(openDay.getDate()).padStart(2, "0")}`;
+  await asAuthenticatedCommitted(userB, "select public.close_ledger_day($1::date, 0, 0, null, 0)", [openDayText]);
+  assert.equal(
+    (await remindersOn("2026-10-31")).filter(
+      (row) => row.kind === "TUTUP_KAS" && row.due_date.getTime() === openDay.getTime(),
+    ).length,
+    0,
+    "closing the day must clear its reminder",
+  );
+
+  // Pengingat mengikuti RLS: usaha lain tidak pernah terbaca.
+  const foreignReminders = await asAuthenticated(
+    userA,
+    `select count(*)::int as value from public.fn_pending_reminders('${businessB}', date '2026-10-31')`,
+  );
+  assert.equal(Number(foreignReminders.rows[0].value), 0, "reminders must not leak across businesses");
+
+  // ---------------------------------------------------------------------
+  // Sektor dibaca dari jawaban pemilik, bukan dipaksa kuliner.
+  // ---------------------------------------------------------------------
+  const sectorOf = async () =>
+    (await client.query("select private.emkm_sector_for_business($1) as value", [businessB])).rows[0].value;
+  const labelOf = async (category, subtype) => {
+    const row = (await client.query(
+      `select label_umkm from public.category_templates
+       where sector = private.emkm_sector_for_business($1)
+         and category_code = $2 and coalesce(subtype, '') = coalesce($3, '')
+         and version = 'coa-emkm-v1' and is_active`,
+      [businessB, category, subtype],
+    )).rows[0];
+    return row?.label_umkm ?? null;
+  };
+
+  const originalSector = (await client.query(
+    `select sektor_usaha from public.profiles where id = (
+       select legacy_profile_id from public.businesses where id = '${businessB}')`,
+  )).rows[0]?.sektor_usaha ?? null;
+
+  assert.equal(await sectorOf(), "PERDAGANGAN_KULINER", "a goods business keeps the goods wording");
+  assert.equal(await labelOf(5, null), "Belanja bahan / barang");
+
+  // Pemilik membetulkan sektornya menjadi Jasa. Pertanyaannya harus ikut
+  // berubah -- aplikasi tidak boleh menanyakan sesuatu lalu mengabaikannya.
+  await client.query(
+    `update public.profiles set sektor_usaha = 'Jasa' where id = (
+       select legacy_profile_id from public.businesses where id = '${businessB}')`,
+  );
+  assert.equal(await sectorOf(), "JASA", "the owner's answer must decide the template set");
+  assert.equal(
+    await labelOf(5, null),
+    "Bahan & alat habis pakai",
+    "a service business must never be asked about stock it does not keep",
+  );
+  assert.equal(await labelOf(6, "5250"), "Perlengkapan kerja", "nor about packaging it never buys");
+
+  // Yang berubah hanya kata-katanya. Akun jurnalnya wajib sama persis, karena
+  // kalau tidak, dua usaha yang mencatat hal yang sama menghasilkan pembukuan
+  // yang berbeda.
+  const ruleDrift = (await client.query(`
+    select goods.category_code, coalesce(goods.subtype, '') as subtype
+    from public.category_templates as goods
+    join public.category_templates as services
+      on services.sector = 'JASA'
+     and services.category_code = goods.category_code
+     and coalesce(services.subtype, '') = coalesce(goods.subtype, '')
+     and services.version = goods.version
+    where goods.sector = 'PERDAGANGAN_KULINER'
+      and goods.version = 'coa-emkm-v1'
+      and (goods.debit_rule <> services.debit_rule
+        or goods.credit_rule <> services.credit_rule
+        or goods.direction <> services.direction
+        or goods.cash_flow_section <> services.cash_flow_section
+        or goods.affects_pnl <> services.affects_pnl)
+  `)).rows;
+  assert.equal(
+    ruleDrift.length,
+    0,
+    `sector wording may differ, posting rules may not (${JSON.stringify(ruleDrift)})`,
+  );
+
+  // Kedua set menutup sepuluh kategori yang sama; lubang akan menggagalkan
+  // pencatatan di tengah jalan dengan pesan yang tidak menyebut sektor.
+  for (const sector of ["PERDAGANGAN_KULINER", "JASA"]) {
+    assert.equal(
+      await scalar(`
+        select count(distinct category_code)::int as value from public.category_templates
+        where sector = '${sector}' and version = 'coa-emkm-v1' and is_active
+      `),
+      10,
+      `${sector} must cover all ten categories`,
+    );
+  }
+
+  // Sebuah catatan yang diposting sebagai usaha jasa memakai akun yang sama.
+  const serviceSale = await asAuthenticatedCommitted(
+    userB,
+    `select public.create_ledger_transaction(
+      p_idempotency_key => 'sektor-jasa-jual', p_transaction_type => 'income', p_amount_idr => 175000,
+      p_transaction_date => date '2026-08-29', p_category_group => 'sales', p_category_code => 'sales_direct',
+      p_description => 'Servis mesin jahit', p_payment_method => 'cash', p_emkm_category_code => 1::smallint
+    ) as value`,
+  );
+  assert.equal(
+    await scalar(`
+      select coalesce(sum(line.credit), 0)::bigint as value
+      from public.journal_lines line
+      where line.entry_id = '${serviceSale.rows[0].value.journalEntryId}' and line.account_code = '4100'
+    `),
+    175000,
+    "the service sector posts to the very same revenue account",
+  );
+
+  // Sektor yang tidak dikenal jatuh ke set barang, bukan menggagalkan
+  // pencatatan pemiliknya.
+  await client.query(
+    `update public.profiles set sektor_usaha = 'Sektor Yang Belum Ada' where id = (
+       select legacy_profile_id from public.businesses where id = '${businessB}')`,
+  );
+  assert.equal(
+    await sectorOf(),
+    "PERDAGANGAN_KULINER",
+    "an unknown sector must fall back, never fail the owner's recording",
+  );
+
+  await client.query(
+    `update public.profiles set sektor_usaha = $1 where id = (
+       select legacy_profile_id from public.businesses where id = '${businessB}')`,
+    [originalSector],
+  );
+
+  // ---------------------------------------------------------------------
+  // Lemari dokumen: bukti yang menempel ke jurnal.
+  // ---------------------------------------------------------------------
+  // Setiap dokumen punya rak. Menebak rak berarti menebak kebijakan
+  // berbaginya, dan salah tebak di sini berarti KTP ikut terkirim.
+  assert.equal(
+    await scalar("select count(*)::int as value from public.documents where doc_class is null"),
+    0,
+    "every document must land on a shelf; guessing a shelf guesses a sharing policy",
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.documents
+      where doc_type in ('ktp', 'npwp') and doc_class <> 'identitas'
+    `),
+    0,
+    "identity documents must never sit outside the identity shelf",
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.documents
+      where doc_type in ('ktp', 'npwp', 'nib', 'pirt', 'halal') and needs_class_review
+    `),
+    0,
+    "a document whose shelf is certain must not be sent back to the owner to sort",
+  );
+
+  // Rak terisi sendiri untuk dokumen yang baru masuk, bukan hanya baris lama.
+  const shelfProbe = (await client.query(
+    `insert into public.documents (business_id, user_id, name, doc_type, status)
+     values ('${businessB}', '${userB}', 'Struk baru', 'struk', 'uploaded')
+     returning doc_class, needs_class_review`,
+  )).rows[0];
+  assert.equal(shelfProbe.doc_class, "bukti_transaksi", "a new upload must land on a shelf without being told");
+  assert.equal(shelfProbe.needs_class_review, false, "a known type must not be sent back to the owner to sort");
+
+  // Jenis dokumen bukti mendarat di rak yang benar tanpa diberi tahu.
+  for (const [docType, shelf] of [
+    ["nota", "bukti_transaksi"],
+    ["kuitansi", "bukti_transaksi"],
+    ["bukti_transfer", "bukti_transaksi"],
+    ["sewa", "aset_kontrak"],
+    ["perjanjian_pinjaman", "aset_kontrak"],
+  ]) {
+    const row = (await client.query(
+      `insert into public.documents (business_id, user_id, name, doc_type, status)
+       values ('${businessB}', '${userB}', 'Uji ${docType}', '${docType}', 'uploaded')
+       returning doc_class, needs_class_review`,
+    )).rows[0];
+    assert.equal(row.doc_class, shelf, `${docType} must land on the ${shelf} shelf`);
+    assert.equal(row.needs_class_review, false, `${docType} shelf is certain`);
+  }
+
+  // Dua jenis yang selama ini lolos Zod lalu ditolak RPC. Layar unggah
+  // menawarkan keduanya sebagai ubin, jadi kegagalannya terlihat pemilik.
+  for (const docType of ["utilitas", "akta_pendirian", "nota"]) {
+    assert.equal(
+      await scalar(`select (private.document_type_is_known('${docType}'))::int as value`),
+      1,
+      `${docType} is offered to the owner, so the upload RPC must accept it`,
+    );
+  }
+
+  // Kelengkapan sektor terisi dan bertingkat.
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.document_requirements
+      where sector = 'PERDAGANGAN_KULINER' and requirement = 'wajib'
+    `),
+    4,
+    "pangan olahan has four mandatory documents",
+  );
+
+  // Bukti menempel ke transaksi DAN ke alat sekaligus: satu dokumen, dua
+  // sasaran. Inilah kenapa tautannya tabel tersendiri, bukan kolom di
+  // transaksi.
+  const anyAsset = (await client.query(
+    `select id, source_transaction_id from public.fixed_assets
+     where business_id = '${businessB}' and source_transaction_id is not null limit 1`,
+  )).rows[0];
+  assert.ok(anyAsset, "the ledger scenario must have produced an asset from a purchase");
+
+  const proofDocument = (await client.query(
+    `insert into public.documents (business_id, user_id, name, doc_type, doc_class, status)
+     values ('${businessB}', '${userB}', 'Nota etalase', 'nota', 'bukti_transaksi', 'uploaded')
+     returning id`,
+  )).rows[0].id;
+
+  await client.query(
+    `insert into public.document_attachments (business_id, document_id, target_type, target_id, created_by)
+     values ('${businessB}', '${proofDocument}', 'transaction', '${anyAsset.source_transaction_id}', '${userB}'),
+            ('${businessB}', '${proofDocument}', 'fixed_asset', '${anyAsset.id}', '${userB}')`,
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.document_attachments where document_id = '${proofDocument}'`),
+    2,
+    "one document may prove both the purchase and the asset it created",
+  );
+
+  // Sasaran yang sama tidak bisa ditempeli dokumen yang sama dua kali.
+  await expectRejected(
+    `insert into public.document_attachments (business_id, document_id, target_type, target_id)
+     values ('${businessB}', '${proofDocument}', 'transaction', '${anyAsset.source_transaction_id}')`,
+    "23505",
+  );
+
+  // Bukti tidak pernah disunting dan tidak pernah dihapus.
+  await expectRejected(
+    `update public.document_attachments set target_type = 'loan' where document_id = '${proofDocument}'`,
+    "P0001",
+  );
+  await expectRejected(
+    `delete from public.document_attachments where document_id = '${proofDocument}'`,
+    "P0001",
+  );
+
+  // Yang boleh: menandainya lepas, dengan alasan.
+  await client.query(
+    `update public.document_attachments
+     set removed_at = now(), removed_reason = 'Nota salah tempel'
+     where document_id = '${proofDocument}' and target_type = 'fixed_asset'`,
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.document_attachments
+      where document_id = '${proofDocument}' and removed_at is not null
+    `),
+    1,
+    "detaching is recorded, never erased",
+  );
+  await expectRejected(
+    `update public.document_attachments set removed_reason = 'x'
+     where document_id = '${proofDocument}' and target_type = 'fixed_asset'`,
+    "P0001",
+  );
+  // Alasan lepas wajib bermakna; satu huruf bukan alasan.
+  await expectRejected(
+    `update public.document_attachments set removed_at = now(), removed_reason = 'x'
+     where document_id = '${proofDocument}' and target_type = 'transaction'`,
+    "23514",
+  );
+
+  // Membalikkan transaksi TIDAK menghapus buktinya. Nota tetap bukti bahwa
+  // uangnya pernah keluar, apa pun yang terjadi pada jurnalnya kemudian.
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.cancel_ledger_transaction($1, 'Uji: bukti harus tetap ada')",
+    [anyAsset.source_transaction_id],
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.document_attachments where document_id = '${proofDocument}'`),
+    2,
+    "reversing a transaction must never destroy the evidence that it happened",
+  );
+
+  // Arsip keluaran: satu ID per penerbitan, tidak pernah bertabrakan.
+  await client.query(
+    `insert into public.report_issues (business_id, document_id, report_kind, document_uid, audience, formula_version)
+     values ('${businessB}', '${proofDocument}', 'pdf_sak_emkm', 'uji-arsip-1', 'self', 'indikator-v1')`,
+  );
+  await expectRejected(
+    `insert into public.report_issues (business_id, report_kind, document_uid, audience)
+     values ('${businessB}', 'pdf_sak_emkm', 'uji-arsip-1', 'self')`,
+    "23505",
+  );
+  await expectRejected(
+    `insert into public.report_issues (business_id, report_kind, document_uid, audience)
+     values ('${businessB}', 'snapshot_dossier', 'uji-arsip-2', 'institution')`,
+    "23514",
+  );
+
+  // Isolasi: lemari usaha lain tidak pernah terbaca, dan tabelnya tidak dapat
+  // ditulis dari sesi pemilik.
+  for (const table of ["document_attachments", "document_reminders", "report_issues"]) {
+    const foreign = await asAuthenticated(
+      userA,
+      `select count(*)::int as value from public.${table} where business_id = '${businessB}'`,
+    );
+    assert.equal(Number(foreign.rows[0].value), 0, `${table} must not leak across businesses`);
+  }
+  await expectAuthenticatedRejected(
+    userB,
+    `insert into public.document_attachments (business_id, document_id, target_type, target_id)
+     values ('${businessB}', '${proofDocument}', 'transaction', '${anyAsset.source_transaction_id}')`,
+    "42501",
+  );
+
+  // ---------------------------------------------------------------------
+  // Menempelkan bukti lewat RPC (0042)
+  // ---------------------------------------------------------------------
+  // Pemilik menempel lewat `attach_document`, bukan INSERT langsung. Yang
+  // diuji di sini bukan bahwa fungsinya ada, melainkan bahwa menempel ke
+  // pembelian ikut menempel ke alat yang lahir darinya tanpa layar mana pun
+  // perlu tahu soal itu.
+  const purchaseTx = (await client.query(
+    `select t.id from public.transactions t
+     join public.fixed_assets fa on fa.source_transaction_id = t.id
+     where t.business_id = '${businessB}' limit 1`,
+  )).rows[0];
+  assert.ok(purchaseTx, "the ledger scenario must still contain an asset purchase");
+
+  const rpcDocument = (await client.query(
+    `insert into public.documents (business_id, user_id, name, doc_type, status)
+     values ('${businessB}', '${userB}', 'Nota kulkas', 'nota', 'uploaded')
+     returning id`,
+  )).rows[0].id;
+
+  const attachResult = await asAuthenticatedCommitted(
+    userB,
+    "select public.attach_document($1, 'transaction', $2) as value",
+    [rpcDocument, purchaseTx.id],
+  );
+  const attached = attachResult.rows[0].value.attachments;
+  assert.equal(
+    attached.length,
+    2,
+    "attaching to an asset purchase must also prove the asset it created",
+  );
+  assert.ok(
+    attached.some((row) => row.target_type === "fixed_asset"),
+    "the database knows the purchase created an asset; no screen should have to",
+  );
+
+  // Ditekan dua kali karena jaringan warung putus: hasilnya sama, bukan galat.
+  const secondAttach = await asAuthenticatedCommitted(
+    userB,
+    "select public.attach_document($1, 'transaction', $2) as value",
+    [rpcDocument, purchaseTx.id],
+  );
+  assert.deepEqual(
+    secondAttach.rows[0].value.attachments.map((row) => row.id).sort(),
+    attached.map((row) => row.id).sort(),
+    "pressing attach twice must return the same links, not a duplicate error",
+  );
+
+  // Melepas menuntut alasan, lalu dokumen yang sama boleh ditempel lagi --
+  // batasan unik `0041` dulu mengunci pemilik yang keliru melepas.
+  const assetLink = attached.find((row) => row.target_type === "fixed_asset");
+  await expectAuthenticatedRejected(
+    userB,
+    `select public.detach_document('${assetLink.id}', 'x')`,
+    "22023",
+  );
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.detach_document($1, $2)",
+    [assetLink.id, "Nota tertukar dengan warung sebelah"],
+  );
+  const reattach = await asAuthenticatedCommitted(
+    userB,
+    "select public.attach_document($1, 'fixed_asset', $2) as value",
+    [rpcDocument, (await client.query(
+      `select id from public.fixed_assets where source_transaction_id = '${purchaseTx.id}'`,
+    )).rows[0].id],
+  );
+  assert.notEqual(
+    reattach.rows[0].value.attachments[0].id,
+    assetLink.id,
+    "a document detached by mistake must be attachable again",
+  );
+
+  // Bukti tidak pernah menempel ke usaha orang lain.
+  await expectAuthenticatedRejected(
+    userA,
+    `select public.attach_document('${rpcDocument}', 'transaction', '${purchaseTx.id}')`,
+    "42501",
+  );
+  await expectAuthenticatedRejected(
+    userB,
+    `select public.attach_document('${rpcDocument}', 'gudang', '${purchaseTx.id}')`,
+    "22023",
+  );
+
+  // ---------------------------------------------------------------------
+  // Rak E: arsip laporan yang pernah diterbitkan (0044)
+  // ---------------------------------------------------------------------
+  const issueDocumentId = randomUUID();
+  const issueBusiness = (await client.query(
+    `select private.get_or_create_user_business('${userB}') as value`,
+  )).rows[0].value;
+  const issuePathFor = (documentId) => `${userB}/${issueBusiness}/${documentId}/${documentId}.pdf`;
+  const issuePath = issuePathFor(issueDocumentId);
+  const issueChecksum = "a".repeat(64);
+
+  const issued = await asAuthenticatedCommitted(
+    userB,
+    `select public.record_report_issue($1, $2, 'pdf_sak_emkm', $3, 12345, $4,
+      'Laporan Keuangan Sep 2026', '2026-03-01', '2026-08-31', 'self', null, 'indikator-v1') as value`,
+    [issueDocumentId, "BRK-20260903-ABCD1234", issuePath, issueChecksum],
+  );
+  assert.equal(issued.rows[0].value.ok, true, "issuing a report must record it");
+
+  // Berkasnya mendarat di rak arsip tanpa diberi tahu, dan menjadi dokumen
+  // yang bisa diunduh ulang.
+  const issuedDocument = (await client.query(
+    `select doc_class, needs_class_review, storage_path, checksum_sha256, mime_type
+     from public.documents where id = '${issueDocumentId}'`,
+  )).rows[0];
+  assert.equal(issuedDocument.doc_class, "arsip_keluaran", "an issued report belongs on the archive shelf");
+  assert.equal(issuedDocument.needs_class_review, false, "the owner must not be asked to sort their own report");
+  assert.equal(issuedDocument.checksum_sha256, issueChecksum, "the bytes that went out are the bytes recorded");
+  assert.equal(issuedDocument.mime_type, "application/pdf");
+
+  // Nomor penerbitan tidak pernah bertabrakan: itu yang dikutip pembacanya.
+  const duplicateId = randomUUID();
+  await expectAuthenticatedRejected(
+    userB,
+    `select public.record_report_issue('${duplicateId}', 'BRK-20260903-ABCD1234', 'pdf_sak_emkm',
+      '${issuePathFor(duplicateId)}', 12345, '${issueChecksum}', 'Laporan kedua')`,
+    "23505",
+  );
+
+  // Jalur simpan di luar ruang pemilik ditolak. Tanpa ini satu baris arsip
+  // bisa dibuat menunjuk berkas usaha lain.
+  const strayId = randomUUID();
+  await expectAuthenticatedRejected(
+    userB,
+    `select public.record_report_issue('${strayId}', 'BRK-20260903-STRAY001', 'pdf_sak_emkm',
+      '${userA}/${issueBusiness}/${strayId}/${strayId}.pdf', 999, '${issueChecksum}', 'Laporan nyasar')`,
+    "22023",
+  );
+
+  // Jenis laporan di luar dua yang dikenal ditolak.
+  const strangeKindId = randomUUID();
+  await expectAuthenticatedRejected(
+    userB,
+    `select public.record_report_issue('${strangeKindId}', 'BRK-20260903-XX000001', 'ringkasan_bebas',
+      '${issuePathFor(strangeKindId)}', 100, '${issueChecksum}', 'Laporan asal')`,
+    "22023",
+  );
+
+  // Arsip usaha lain tidak pernah terbaca.
+  const foreignIssues = await asAuthenticated(
+    userA,
+    `select count(*)::int as value from public.report_issues where document_uid = 'BRK-20260903-ABCD1234'`,
+  );
+  assert.equal(Number(foreignIssues.rows[0].value), 0, "one business must never see another's issued reports");
+
+  // ---------------------------------------------------------------------
+  // Profil usaha dan ringkasan legalitas (0045)
+  // ---------------------------------------------------------------------
+  // Bentuk usaha menentukan apakah kartu Akta Pendirian tampil. Nilai di luar
+  // dua yang dikenal akan membuat layar menebak.
+  await expectRejected(
+    `update public.profiles set bentuk_usaha = 'koperasi' where auth_user_id = '${userB}'`,
+    "23514",
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.profiles
+      where bentuk_usaha <> 'perorangan'
+    `),
+    0,
+    "every existing owner defaults to perorangan; the form is asked, never guessed",
+  );
+
+  // Tahun mulai usaha dipakai dossier sebagai "lama usaha".
+  await expectRejected(
+    `update public.profiles set tahun_mulai_usaha = 1800 where auth_user_id = '${userB}'`,
+    "23514",
+  );
+  await expectRejected(
+    `update public.profiles set jumlah_karyawan = 'banyak' where auth_user_id = '${userB}'`,
+    "23514",
+  );
+  await expectRejected(
+    `update public.profiles set kanal_penjualan = array['tiktok'] where auth_user_id = '${userB}'`,
+    "23514",
+  );
+  await client.query(
+    `update public.profiles set kanal_penjualan = array['warung', 'whatsapp']
+     where auth_user_id = '${userB}'`,
+  );
+
+  // KLAIM BUKANLAH BUKTI.
+  //
+  // Nomor NIB yang diketik pemilik disimpan sebagai dokumen supaya ringkasan
+  // legalitas punya satu sumber. Dokumen itu TIDAK punya berkas, dan karena
+  // itu tidak boleh dihitung mesin kesiapan -- kalau dihitung, mengetik nomor
+  // menaikkan tingkat kesiapan tanpa satu berkas pun pernah diunggah.
+  const claimedDocument = (await client.query(
+    `insert into public.documents (business_id, user_id, name, doc_type, status, doc_number, assurance_level)
+     values ('${businessB}', '${userB}', 'NIB (nomor diketik pemilik)', 'nib', 'uploaded',
+       '1234567890123', 'self_declared')
+     returning id, storage_path, doc_class`,
+  )).rows[0];
+  assert.equal(claimedDocument.storage_path, null, "a typed number has no file behind it");
+  assert.equal(claimedDocument.doc_class, "legalitas", "a permit number still belongs on the permit shelf");
+
+  const readinessAfterClaim = await asAuthenticatedCommitted(
+    userB,
+    "select public.recalculate_my_readiness() as value",
+  );
+  const components = readinessAfterClaim.rows[0].value;
+  assert.ok(components, "readiness must still compute");
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.documents
+      where business_id = '${businessB}' and doc_type = 'nib' and storage_path is null
+    `),
+    1,
+    "the claim is stored, so the owner sees their own number",
+  );
+
+  // Kartu sumber data yang dibubarkan: berkasnya dipindah, tidak dihapus.
+  const movedDocument = (await client.query(
+    `insert into public.documents (business_id, user_id, name, doc_type, status)
+     values ('${businessB}', '${userB}', 'Riwayat QRIS lama', 'qris', 'uploaded')
+     returning doc_class, needs_class_review`,
+  )).rows[0];
+  assert.equal(
+    movedDocument.doc_class,
+    "legalitas",
+    "a newly uploaded qris file still lands somewhere; the migration only moves old ones",
+  );
+  assert.equal(movedDocument.needs_class_review, true, "the owner sorts what we cannot know");
+
+  // ---------------------------------------------------------------------
+  // Hapus akun dengan masa tenggang (0046)
+  // ---------------------------------------------------------------------
+  const activeBefore = Number((await client.query(
+    `select count(*)::int as value from public.consent_grants g
+     join public.businesses b on b.id = g.business_id
+     where g.status = 'active' and b.legacy_profile_id = '${userB}'`,
+  )).rows[0].value);
+
+  const requested = await asAuthenticatedCommitted(
+    userB,
+    "select public.request_account_deletion('Pindah aplikasi') as value",
+  );
+  const deletion = requested.rows[0].value;
+  assert.equal(deletion.ok, true, "an owner may always ask to leave");
+
+  // Tenggangnya 30 hari, dan tanggalnya dihitung di zona Jakarta.
+  const scheduled = (await client.query(
+    `select deletion_scheduled_for::text as value,
+            ((now() at time zone 'Asia/Jakarta')::date + 30)::text as expected
+     from public.profiles where auth_user_id = '${userB}'`,
+  )).rows[0];
+  assert.equal(scheduled.value, scheduled.expected, "the grace period is thirty days");
+
+  // YANG BERHENTI SEKETIKA ADALAH AKSESNYA. Selama izin masih hidup, ada pihak
+  // lain yang bisa membuka berkas usaha orang yang sudah pamit.
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.consent_grants g
+      join public.businesses b on b.id = g.business_id
+      where g.status = 'active' and b.legacy_profile_id = '${userB}'
+    `),
+    0,
+    "asking to leave revokes every live institution grant at once",
+  );
+  if (activeBefore > 0) {
+    assert.ok(
+      Number(deletion.revokedGrants) >= 1,
+      "the number of revoked grants is reported back to the owner",
+    );
+  }
+
+  // Datanya masih ada: itu inti dari masa tenggang.
+  assert.ok(
+    Number(await scalar(
+      `select count(*)::int as value from public.journal_entries where business_id = '${businessB}'`,
+    )) > 0,
+    "the ledger survives the grace period; deletion is not instant",
+  );
+
+  // Menekan tombolnya dua kali tidak memperpanjang tenggang -- kalau
+  // memperpanjang, mengulang justru menjauhkan tanggal penghapusan.
+  const again = await asAuthenticatedCommitted(
+    userB,
+    "select public.request_account_deletion('Berubah pikiran lagi') as value",
+  );
+  assert.equal(again.rows[0].value.idempotent, true, "a second request changes nothing");
+  assert.equal(
+    (await client.query(
+      `select deletion_scheduled_for::text as value from public.profiles where auth_user_id = '${userB}'`,
+    )).rows[0].value,
+    scheduled.value,
+    "pressing delete again must not push the date further away",
+  );
+
+  // Membatalkan tidak memerlukan siapa pun dari pihak kami.
+  await asAuthenticatedCommitted(userB, "select public.cancel_account_deletion()");
+  assert.equal(
+    await scalar(
+      `select count(*)::int as value from public.profiles
+       where auth_user_id = '${userB}' and deletion_requested_at is not null`,
+    ),
+    0,
+    "cancelling is one call and restores the account",
+  );
+
+  // Izin yang sudah dicabut TIDAK hidup kembali: mencabut adalah keputusan
+  // yang sudah sampai ke pihak lain.
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.consent_grants g
+      join public.businesses b on b.id = g.business_id
+      where g.status = 'active' and b.legacy_profile_id = '${userB}'
+    `),
+    0,
+    "cancelling deletion must not silently hand access back to institutions",
+  );
+
+  // Penghapusan permanen belum dibangun, dan mengatakannya apa adanya.
+  const purge = (await client.query("select private.purge_deleted_accounts() as value")).rows[0].value;
+  assert.equal(purge.implemented, false, "the purge job is a stub and says so");
+  assert.equal(purge.purged, 0, "nothing is deleted yet");
+
+  // ---------------------------------------------------------------------
+  // Tingkat Kesiapan wp08-pilot-v2 (0047)
+  // ---------------------------------------------------------------------
+  // Konfigurasi terbit tidak boleh berubah diam-diam. Tanpa penjagaan ini,
+  // seseorang bisa menggeser ambang dan seluruh riwayat tingkat berubah makna
+  // tanpa ada yang bisa menunjukkan kapan.
+  await expectRejected(
+    `update public.readiness_rule_sets
+     set rules = jsonb_set(rules, '{bigSpendIdr}', '1'::jsonb)
+     where version = 'wp08-pilot-v2'`,
+    "P0001",
+  );
+  // Menerbitkan ulang isi yang sama tetap boleh: migrasi harus bisa diputar
+  // dua kali.
+  await client.query(
+    `update public.readiness_rule_sets set updated_at = now() where version = 'wp08-pilot-v2'`,
+  );
+
+  const configRow = (await client.query(
+    `select rules from public.readiness_rule_sets where version = 'wp08-pilot-v2' and status = 'published'`,
+  )).rows[0];
+  assert.ok(configRow, "the v2 configuration must be published");
+  assert.equal(
+    Object.keys(configRow.rules.components).length,
+    12,
+    "every component the model claims must exist in the configuration",
+  );
+  assert.equal(configRow.rules.bigSpendIdr, 500000, "big spend threshold lives in configuration");
+  assert.equal(
+    configRow.rules.components.B3.silver,
+    0.4,
+    "thresholds are configuration, never hardcoded in the evaluator",
+  );
+
+  // Bentuk konfigurasi harus persis yang dibaca evaluator. Ini sambungan yang
+  // paling mudah bergeser: konfigurasi hidup di SQL, pembacanya di TypeScript,
+  // dan tidak ada kompilator yang menjembatani keduanya.
+  for (const [id, rule] of Object.entries(configRow.rules.components)) {
+    assert.ok(["A", "B", "C", "D"].includes(rule.pillar), `${id} must sit on a known pillar`);
+    for (const key of ["partial", "silver", "gold"]) {
+      assert.ok(key in rule, `${id} must declare ${key}, even when it is null`);
+      assert.ok(
+        rule[key] === null || typeof rule[key] === "number",
+        `${id}.${key} must be a number or null`,
+      );
+    }
+    assert.ok(
+      rule.silver !== null || rule.gold !== null,
+      `${id} needs at least one threshold, or it can never be fulfilled`,
+    );
+  }
+  for (const id of Object.keys(configRow.rules.bronze)) {
+    assert.ok(configRow.rules.components[id], `bronze refers to ${id}, which must exist`);
+  }
+  for (const entry of configRow.rules.effortOrder) {
+    const base = entry.split("_")[0];
+    assert.ok(configRow.rules.components[base], `effort order refers to ${base}, which must exist`);
+  }
+  for (const key of ["habitDays", "qualityDays", "evidenceDays", "fullMonthLookback", "fullMonthMinDays"]) {
+    assert.ok(
+      typeof configRow.rules.windows[key] === "number",
+      `window ${key} must be configured, not assumed`,
+    );
+  }
+
+  // Fakta dihitung dalam satu perjalanan ke basis data.
+  const factsResult = await asAuthenticatedCommitted(
+    userB,
+    "select public.fn_readiness_facts() as value",
+  );
+  const facts = factsResult.rows[0].value;
+  assert.ok(facts.asOf, "facts must be dated");
+  for (const key of [
+    "a1RecordingDays", "a2Closings", "a3AgeDays",
+    "b1Total", "b1Unchecked", "b2PriveMonths",
+    "b3TotalIdr", "b3CoveredIdr", "b4StockMonths",
+    "c1Required", "c1Confirmed", "c2Filled",
+    "d1OpeningBalance", "d2FullMonths", "d3Reports",
+  ]) {
+    assert.ok(key in facts, `facts must include ${key}`);
+  }
+  assert.equal(
+    typeof facts.d1OpeningBalance,
+    "boolean",
+    "an opening balance either exists or does not",
+  );
+
+  // Deterministik: dua panggilan atas data yang sama memberi fakta yang sama.
+  const factsAgain = await asAuthenticatedCommitted(
+    userB,
+    "select public.fn_readiness_facts() as value",
+  );
+  assert.deepEqual(
+    factsAgain.rows[0].value,
+    facts,
+    "the same data must produce the same facts, or daily snapshots would flicker",
+  );
+
+  // Potret harian idempoten per tanggal.
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.save_readiness_snapshot('TEMBAGA', '[]'::jsonb, 'wp08-pilot-v2')",
+  );
+  const second = await asAuthenticatedCommitted(
+    userB,
+    "select public.save_readiness_snapshot('TEMBAGA', '[]'::jsonb, 'wp08-pilot-v2') as value",
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.readiness_daily where business_id = '${businessB}'`),
+    1,
+    "two evaluations on one day leave one row, not two",
+  );
+
+  // Tanggal naik tingkat tidak bergeser selama tingkatnya sama.
+  const levelSince = second.rows[0].value.levelSince;
+  await asAuthenticatedCommitted(
+    userB,
+    "select public.save_readiness_snapshot('TEMBAGA', '[]'::jsonb, 'wp08-pilot-v2')",
+  );
+  assert.equal(
+    (await client.query(
+      `select level_since::text as value from public.business_readiness_state where business_id = '${businessB}'`,
+    )).rows[0].value,
+    levelSince,
+    "\"Tembaga sejak\" must not move every time the page is opened",
+  );
+
+  // Tingkat di luar empat yang dikenal ditolak.
+  await expectAuthenticatedRejected(
+    userB,
+    "select public.save_readiness_snapshot('PLATINUM', '[]'::jsonb, 'wp08-pilot-v2')",
+    "22023",
+  );
+
+  // Kesiapan usaha lain tidak pernah terbaca.
+  const foreignReadiness = await asAuthenticated(
+    userA,
+    `select count(*)::int as value from public.readiness_daily where business_id = '${businessB}'`,
+  );
+  assert.equal(Number(foreignReadiness.rows[0].value), 0, "readiness must not leak across businesses");
+
+  // Jurnal tetap tidak bisa disentuh setelah semua ini.
+  await expectRejected(
+    `update public.journal_entries set memo = 'diubah' where business_id = '${businessB}'`,
+    "P0001",
+  );
+}
+
 async function verifyConsentVerifiedProfileLifecycle() {
   const owner = "b0000000-0000-4000-8000-000000000001";
   const institutionUser = "c0000000-0000-4000-8000-000000000001";
@@ -1118,6 +3477,9 @@ async function verifyFreshDatabase() {
     0,
   );
 
+  // Sejak 0026 setiap profil UMKM langsung mendapat usahanya sendiri lewat
+  // trigger, jadi fixture ini membaca usaha yang terbentuk otomatis alih-alih
+  // menyisipkan miliknya sendiri.
   await client.query(`
     insert into auth.users (id, email)
     values ('90000000-0000-4000-8000-000000000001', 'constraints@example.test');
@@ -1128,13 +3490,27 @@ async function verifyFreshDatabase() {
       'umkm',
       'Constraint User'
     );
-    insert into public.businesses (id, legacy_profile_id, name)
-    values (
-      '90000000-0000-4000-8000-000000000002',
-      '90000000-0000-4000-8000-000000000001',
-      'Constraint Business'
-    );
   `);
+  const provisioned = await client.query(`
+    select id from public.businesses
+    where legacy_profile_id = '90000000-0000-4000-8000-000000000001'
+  `);
+  assert.equal(
+    provisioned.rows.length,
+    1,
+    "a new umkm profile must be provisioned with exactly one business",
+  );
+  const constraintBusiness = provisioned.rows[0].id;
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.business_members
+      where business_id = '${constraintBusiness}'
+        and user_id = '90000000-0000-4000-8000-000000000001'
+        and role = 'owner' and status = 'active'
+    `),
+    1,
+    "provisioning must also create the owner membership row",
+  );
   await client.query(`
     insert into public.transactions (
       user_id, item, qty, type, nominal, kategori, tanggal, idempotency_key
@@ -1163,7 +3539,7 @@ async function verifyFreshDatabase() {
 
   const snapshot = await client.query(`
     insert into public.readiness_score_snapshots (business_id, rule_set_id, total_score)
-    select '90000000-0000-4000-8000-000000000002', id, 50
+    select '${constraintBusiness}', id, 50
     from public.readiness_rule_sets where version = 'wp03-baseline-v1'
     returning id
   `);
@@ -1184,7 +3560,7 @@ async function verifyFreshDatabase() {
     ) values (
       '90000000-0000-4000-8000-000000000004',
       '90000000-0000-4000-8000-000000000003',
-      '90000000-0000-4000-8000-000000000002',
+      '${constraintBusiness}',
       'Test', array['summary'], 'pending'
     )
   `);
@@ -1194,13 +3570,17 @@ async function verifyFreshDatabase() {
     ) values (
       '90000000-0000-4000-8000-000000000004',
       '90000000-0000-4000-8000-000000000003',
-      '90000000-0000-4000-8000-000000000002',
+      '${constraintBusiness}',
       array['summary'], 'active'
     )
   `, "P0001");
 
   await verifyRlsIsolation();
+  await verifyAccountingJournal();
+  // Skenario Tahap B menambah transaksi pada usaha B, sedangkan pemeriksaan
+  // consent menghitung transaksi usaha yang sama. Ia dijalankan lebih dulu.
   await verifyConsentVerifiedProfileLifecycle();
+  await verifyAccountingPeriodReports();
 }
 
 async function verifyLegacyBackfill() {
@@ -1328,7 +3708,7 @@ try {
   await verifyLegacyBackfill();
   await resetManagedTestSchemas();
   await applyMigrations("final reproducible schema");
-  console.log("Database migrations passed: fresh apply/replay, constraints, cross-account RLS, private document versioning, private storage, capture lifecycle, ledger history, evidence-based readiness missions, consent-scoped verified profiles, legacy backfill, and verification queries.");
+  console.log("Database migrations passed: fresh apply/replay, constraints, cross-account RLS, private document versioning, private storage, capture lifecycle, ledger history, SAK EMKM double-entry posting and reversal, opening balances, depreciation, inventory counts, balance sheet and cash flow, evidence-based readiness missions, consent-scoped verified profiles, legacy backfill, and verification queries.");
 } finally {
   await client.end();
 }

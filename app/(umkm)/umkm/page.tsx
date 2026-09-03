@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ReadinessMiniCard } from "@/components/warung/ReadinessMiniCard";
 import Link from "next/link";
-import { AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CheckCircle2, Circle, FileText, Mic, ShieldCheck, Upload } from "lucide-react";
+import { AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CalendarCheck, CheckCircle2, ChevronRight, CircleEllipsis, FileText, Mic, Plus, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { ReadinessView } from "@/modules/readiness/readiness-schema";
+import { ReminderStrip } from "@/components/warung/ReminderStrip";
+import { closingPromptText, closingTargetDate } from "@/modules/ledger/closing-day";
+import { ReclassCard } from "@/components/warung/ReclassCard";
+import type { ReadinessLevelPayload } from "@/modules/readiness/level-repository";
+import styles from "../umkm-dashboard.module.css";
 
 type TransactionRow = { id: string; direction: string | null; type: string | null; amount_idr: number | null; nominal: number | null; item: string; transaction_date: string | null; created_at: string };
 type CaptureRow = { id: string; status: string; failure_message: string | null; updated_at: string };
@@ -15,13 +20,22 @@ type ActivityItem = { id: string; title: string; detail: string; at: string; hre
 
 function transactionDirection(row: TransactionRow) { return row.direction ?? (row.type === "masuk" ? "income" : "expense"); }
 function transactionAmount(row: TransactionRow) { return Number(row.amount_idr ?? row.nominal ?? 0); }
-function formatTime(value: string) { return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
+function formatTime(value: string) {
+  // Satu stempel waktu yang tidak sah pernah merobohkan seluruh Beranda:
+  // `Intl` melempar RangeError, dan React membatalkan render halamannya.
+  // Baris aktivitas yang tanggalnya rusak tidak sepadan dengan itu.
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Baru saja";
+  return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
+}
+function formatIdr(value: number) { return `Rp${value.toLocaleString("id-ID")}`; }
 
 export default function BerandaPage() {
   const [name, setName] = useState("Pengguna");
-  const [readiness, setReadiness] = useState<ReadinessView | null>(null);
+  const [readiness, setReadiness] = useState<ReadinessLevelPayload | null>(null);
   const [todayTransactions, setTodayTransactions] = useState<TransactionRow[]>([]);
   const [actions, setActions] = useState<ActionItem[]>([]);
+  const [unchecked, setUnchecked] = useState(0);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -45,7 +59,7 @@ export default function BerandaPage() {
         if (!active) return;
         setName(profile.data?.name ?? profile.data?.nama_pemilik ?? user.user_metadata?.nama_pemilik ?? user.email?.split("@")[0] ?? "Pengguna");
         setTodayTransactions((todayResult.data ?? []) as TransactionRow[]);
-        const readinessPayload = readinessResponse.ok ? await readinessResponse.json() as { data?: ReadinessView } : null;
+        const readinessPayload = readinessResponse.ok ? await readinessResponse.json() as { data?: ReadinessLevelPayload } : null;
         const readinessData = readinessPayload?.data ?? null;
         setReadiness(readinessData);
 
@@ -54,20 +68,35 @@ export default function BerandaPage() {
         const requests = (requestResult.data ?? []) as RequestRow[];
         const required: ActionItem[] = [];
         for (const capture of captures) {
-          if (capture.status === "needs_review") required.push({ id: `capture-${capture.id}`, title: "Periksa catatan sebelum disimpan", description: "Hasil suara sudah dibaca dan menunggu pemeriksaan Anda.", href: "/umkm/catat" });
-          else if (capture.status === "failed") required.push({ id: `capture-${capture.id}`, title: "Catatan belum berhasil dibaca", description: capture.failure_message ?? "Coba kembali atau tulis transaksi secara manual.", href: "/umkm/catat" });
+          if (capture.status === "needs_review") required.push({ id: `capture-${capture.id}`, title: "Periksa catatan sebelum disimpan", description: "Hasil suara menunggu pemeriksaan Anda.", href: "/umkm/catat" });
+          else if (capture.status === "failed") required.push({ id: `capture-${capture.id}`, title: "Catatan belum berhasil dibaca", description: capture.failure_message ?? "Coba kembali atau tulis secara manual.", href: "/umkm/catat" });
           else required.push({ id: `capture-${capture.id}`, title: "Catatan masih diproses", description: "Buka kembali untuk melihat perkembangan terbaru.", href: "/umkm/catat" });
         }
-        for (const document of documents.filter((item) => item.status === "processing" || item.status === "rejected")) required.push({ id: `document-${document.id}`, title: document.status === "rejected" ? "Dokumen perlu diganti" : "Dokumen sedang dibaca", description: document.name, href: "/umkm/upload" });
+        for (const document of documents.filter((item) => item.status === "processing" || item.status === "rejected")) {
+          required.push({ id: `document-${document.id}`, title: document.status === "rejected" ? "Dokumen perlu diganti" : "Dokumen sedang dibaca", description: document.name, href: "/umkm/upload" });
+        }
         for (const request of requests) required.push({ id: `request-${request.id}`, title: "Ada permintaan akses data", description: request.purpose, href: "/umkm/profil" });
         setActions(required.slice(0, 5));
+        // Kartu uang hari ini hanya menghitung catatan yang SUDAH dikonfirmasi.
+        // Tanpa menyebutkan berapa yang belum diperiksa, angkanya terbaca
+        // sebagai seluruh hari padahal belum tentu.
+        setUnchecked(captures.filter((capture) => capture.status === "needs_review").length);
 
-        const realActivities: ActivityItem[] = ((recentResult.data ?? []) as TransactionRow[]).map((row) => ({ id: `transaction-${row.id}`, title: transactionDirection(row) === "income" ? "Pemasukan tercatat" : "Pengeluaran tercatat", detail: `${row.item} · Rp${transactionAmount(row).toLocaleString("id-ID")}`, at: row.created_at, href: "/umkm/laporan" }));
+        const realActivities: ActivityItem[] = ((recentResult.data ?? []) as TransactionRow[]).map((row) => ({
+          id: `transaction-${row.id}`,
+          title: transactionDirection(row) === "income" ? "Pemasukan tercatat" : "Pengeluaran tercatat",
+          detail: `${row.item} · ${formatIdr(transactionAmount(row))}`,
+          at: row.created_at,
+          href: "/umkm/laporan",
+        }));
         for (const document of documents) realActivities.push({ id: `document-${document.id}`, title: "Dokumen diperbarui", detail: document.name, at: document.updated_at, href: "/umkm/upload" });
-        if (readinessData) realActivities.push({ id: `readiness-${readinessData.snapshotId}`, title: "Kesiapan data dihitung", detail: `${Math.round(readinessData.score)} dari 100 · ${readinessData.changeReason}`, at: readinessData.calculatedAt, href: "/umkm/roadmap" });
+        if (readinessData?.levelSince) realActivities.push({ id: `readiness-${readinessData.level}-${readinessData.levelSince}`, title: `Tingkat kesiapan: ${readinessData.levelName}`, detail: readinessData.levelMeaning, at: `${readinessData.levelSince}T00:00:00+07:00`, href: "/umkm/kesiapan" });
         setActivities(realActivities.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 6));
-      } catch (cause) { if (active) setError(cause instanceof Error ? cause.message : "Beranda belum dapat dimuat."); }
-      finally { if (active) setLoading(false); }
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : "Beranda belum dapat dimuat.");
+      } finally {
+        if (active) setLoading(false);
+      }
     }
     void load();
     return () => { active = false; };
@@ -75,27 +104,172 @@ export default function BerandaPage() {
 
   const income = todayTransactions.filter((row) => transactionDirection(row) === "income").reduce((sum, row) => sum + transactionAmount(row), 0);
   const expense = todayTransactions.filter((row) => transactionDirection(row) === "expense").reduce((sum, row) => sum + transactionAmount(row), 0);
+  const cashFlow = income - expense;
 
-  return <main className="mx-auto max-w-5xl space-y-6 p-4 pb-28 md:p-6 md:pb-10">
-    <header><p className="text-xs font-semibold text-slate-500">Selamat datang, {name}</p><h1 className="mt-1 text-2xl font-black text-slate-900">Apa yang terjadi di usaha hari ini?</h1></header>
-    {error && <div role="alert" className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle size={18} />{error}</div>}
+  // Fondasi = komponen kesiapan yang sudah punya cukup bukti untuk dinilai.
+  // Yang "not_applicable" tidak ikut dihitung: meminta pemilik melengkapi
+  // sesuatu yang tidak berlaku untuk usahanya adalah tangga yang tidak
+  // pernah bisa dinaiki sampai atas.
 
-    <Link href="/umkm/catat" className="flex min-h-16 items-center justify-between rounded-2xl bg-[#0f2d6b] px-5 py-4 text-white shadow-lg shadow-blue-900/15"><span className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15"><Mic size={22} /></span><span><strong className="block text-sm">Catat pemasukan atau pengeluaran</strong><small className="mt-0.5 block text-blue-100">Bisa dengan suara atau tulisan</small></span></span><ArrowRight size={20} /></Link>
 
-    <section aria-labelledby="today-title"><h2 id="today-title" className="mb-3 text-sm font-black text-slate-800">Ringkasan hari ini</h2><div className="grid grid-cols-3 gap-2 md:gap-4"><Summary label="Pemasukan" value={income} icon={<ArrowDownLeft size={16} />} color="text-emerald-700" /><Summary label="Pengeluaran" value={expense} icon={<ArrowUpRight size={16} />} color="text-red-600" /><Summary label="Catatan" text={`${todayTransactions.length}`} icon={<FileText size={16} />} color="text-blue-800" /></div></section>
+  return (
+    <main className={styles.page}>
+      <div className={styles.mobileOnly}>
+        <div className={styles.mobileStack}>
+          <header>
+            <p className={styles.greeting}>Selamat datang, {name}</p>
+            <h1 className={styles.mobileTitle}>Keuangan usaha hari ini</h1>
+          </header>
 
-    <section aria-labelledby="mission-title" className="rounded-2xl border border-blue-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-blue-700">Misi utama</p>{readiness?.primaryMission ? <div className="mt-2"><h2 id="mission-title" className="font-bold text-slate-900">{readiness.primaryMission.title}</h2><p className="mt-1 text-xs leading-relaxed text-slate-500">{readiness.primaryMission.description}</p><Link href={readiness.primaryMission.href} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-50 px-4 text-xs font-bold text-blue-900">Kerjakan misi <ArrowRight size={14} /></Link></div> : <div className="mt-2 flex items-center gap-2 text-sm text-slate-600"><CheckCircle2 className="text-emerald-500" /> Semua misi utama sudah didukung data.</div>}</section>
+          {error && <div role="alert" className="flex gap-2 rounded-2xl border border-[#f4b0a8] bg-[#feecea] p-4 text-xs text-[#8a1c12]"><AlertCircle size={17} />{error}</div>}
 
-    <section aria-labelledby="readiness-title" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Kesiapan Data Usaha</p><h2 id="readiness-title" className="mt-1 text-3xl font-black text-slate-900">{readiness ? Math.round(readiness.score) : "—"}<span className="text-xs font-normal text-slate-400"> / 100</span></h2></div><ShieldCheck className="text-blue-700" /></div><p className="mt-3 text-xs leading-relaxed text-slate-600">{readiness?.changeReason ?? "Menunggu data usaha untuk perhitungan pertama."}</p>{readiness?.scoreChange !== null && readiness?.scoreChange !== undefined && <p className={`mt-2 text-xs font-bold ${readiness.scoreChange >= 0 ? "text-emerald-700" : "text-amber-700"}`}>{readiness.scoreChange > 0 ? "+" : ""}{Math.round(readiness.scoreChange)} poin dari perhitungan sebelumnya</p>}<Link href="/umkm/roadmap" className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-blue-800">Lihat perjalanan <ArrowRight size={13} /></Link></section>
+          <section aria-labelledby="cash-flow-title" className={styles.balanceCard}>
+            <p className={styles.eyebrow}>Sisa uang hari ini</p>
+            <h2 id="cash-flow-title" className={styles.balance}>{cashFlow < 0 ? "−" : ""}{formatIdr(Math.abs(cashFlow))}</h2>
+            <p className="mt-1 text-[10px] text-white/75">Dari catatan yang sudah Anda cek</p>
+            <div className={styles.balanceMeta}>
+              <span className={styles.balancePill}>{todayTransactions.length} catatan</span>
+              <span>Masuk {formatIdr(income)}</span>
+              {unchecked > 0 && (
+                <Link href="/umkm/catat" className={styles.balancePill}>
+                  {unchecked} belum dicek
+                </Link>
+              )}
+            </div>
+            <div className={styles.quickActions}>
+              <Link href="/umkm/catat" className={styles.quickAction}><Plus size={16} /> Catat uang</Link>
+              <Link
+                href={`/umkm/laporan?tutup-kas=${closingTargetDate(new Date())}`}
+                className={styles.quickAction}
+                title={closingPromptText(new Date())}
+              >
+                <CalendarCheck size={15} /> Tutup kas
+              </Link>
+              <Link href="/umkm/catat" aria-label="Pilihan catat lainnya" className={`${styles.quickAction} ${styles.quickActionRound}`}><CircleEllipsis size={18} /></Link>
+            </div>
+          </section>
 
-    <section aria-labelledby="action-title"><div className="mb-3 flex items-center justify-between"><h2 id="action-title" className="text-sm font-black text-slate-800">Perlu tindakan Anda</h2><span className="text-xs text-slate-400">{actions.length} item</span></div>{loading ? <p role="status" aria-live="polite" className="rounded-xl bg-white p-4 text-xs text-slate-500">Memeriksa catatan dan dokumen...</p> : actions.length === 0 ? <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-800"><CheckCircle2 size={17} /> Tidak ada hal mendesak saat ini.</div> : <div className="space-y-2">{actions.map((item) => <Link key={item.id} href={item.href} className="flex min-h-14 items-center gap-3 rounded-xl border border-amber-200 bg-white p-3"><Circle className="shrink-0 text-amber-500" size={18} /><span className="min-w-0 flex-1"><strong className="block text-xs text-slate-800">{item.title}</strong><small className="mt-0.5 block truncate text-slate-500">{item.description}</small></span><ArrowRight size={15} className="text-slate-400" /></Link>)}</div>}</section>
+          {/*
+            Pengingat berada di sini, bukan di halaman Laporan. Tutup kas dan
+            hitung stok adalah pekerjaan HARI INI, dan Beranda satu-satunya
+            halaman yang pemilik buka setiap hari.
+          */}
+          <ReminderStrip />
 
-    <section aria-labelledby="activity-title"><h2 id="activity-title" className="mb-3 text-sm font-black text-slate-800">Aktivitas terbaru</h2>{activities.length === 0 ? <p className="rounded-xl border border-slate-200 bg-white p-5 text-xs text-slate-500">Belum ada aktivitas usaha.</p> : <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">{activities.map((item) => <Link key={item.id} href={item.href} className="flex min-h-16 items-center gap-3 py-3"><span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" /><span className="min-w-0 flex-1"><strong className="block text-xs text-slate-800">{item.title}</strong><small className="mt-0.5 block truncate text-slate-500">{item.detail}</small></span><time className="text-right text-[10px] text-slate-400">{formatTime(item.at)}</time></Link>)}</div>}</section>
+          <ReclassCard />
 
-    <div className="flex justify-center text-xs font-semibold text-slate-500"><Link href="/umkm/upload" className="inline-flex items-center gap-1"><Upload size={14} /> Kelola dokumen</Link></div>
-  </main>;
+          <section aria-labelledby="activity-mobile-title" className={styles.whiteCard}>
+            <div className={styles.sectionHeader}>
+              <h2 id="activity-mobile-title" className={styles.sectionTitle}>Aktivitas</h2>
+              <Link href="/umkm/laporan" className={styles.sectionLink}>Lihat semua</Link>
+            </div>
+            {loading ? <p role="status" className="py-8 text-center text-xs text-[#6e859e]">Menyiapkan aktivitas...</p> : activities.length === 0 ? <EmptyActivity /> : activities.slice(0, 4).map((item) => <ActivityRow key={item.id} item={item} />)}
+          </section>
+
+          <section aria-labelledby="journey-mobile-title" className={`${styles.whiteCard} ${styles.journeyCard}`}>
+            <div className={styles.sectionHeader}>
+              <div><p className={styles.eyebrow} style={{ color: "#0f73a3" }}>Perjalanan usaha</p><h2 id="journey-mobile-title" className={styles.sectionTitle}>Kesiapan data</h2></div>
+              <Link href="/umkm/kesiapan" className={styles.sectionLink}>Detail</Link>
+            </div>
+            <div className={styles.missionRow}>
+              
+              <div className={styles.mission}>
+                <strong>{readiness?.step?.title ?? "Semua langkah utama sudah didukung data"}</strong>
+                <p>{readiness?.step?.headline ?? "Lanjutkan kebiasaan mencatat agar ringkasan usaha tetap lengkap."}</p>
+                <Link href={readiness?.step?.action?.href ?? "/umkm/kesiapan"} className="mt-3 inline-flex items-center gap-1 text-[10px] font-extrabold text-[#0b5f86]">Lanjutkan <ChevronRight size={12} /></Link>
+              </div>
+            </div>
+          </section>
+
+          <section aria-labelledby="actions-mobile-title" className={styles.whiteCard}>
+            <div className={styles.sectionHeader}><h2 id="actions-mobile-title" className={styles.sectionTitle}>Perlu perhatian</h2><span className="text-[10px] text-[#9fb0c2]">{actions.length} item</span></div>
+            {loading ? <p className="py-5 text-center text-xs text-[#6e859e]">Memeriksa data...</p> : actions.length === 0 ? <div className="flex items-center gap-2 py-4 text-xs text-[#0b7a55]"><CheckCircle2 size={17} /> Semua beres untuk saat ini.</div> : actions.slice(0, 3).map((item) => <ActionRow key={item.id} item={item} />)}
+          </section>
+        </div>
+      </div>
+
+      <div className={styles.desktopOnly}>
+        <div className={styles.desktopPage}>
+          <header>
+            <h1 className={styles.desktopHeading}>Ringkasan usaha</h1>
+            <p className={styles.desktopSubheading}>Pantau uang masuk, biaya, dan kesiapan data usaha Anda dalam satu tempat.</p>
+          </header>
+
+          {error && <div role="alert" className="mt-5 flex gap-2 rounded-xl border border-[#f4b0a8] bg-[#feecea] p-4 text-xs text-[#8a1c12]"><AlertCircle size={17} />{error}</div>}
+
+          <div className="mt-5">
+            <ReminderStrip />
+          </div>
+
+          <section aria-label="Ringkasan hari ini" className={styles.kpiGrid}>
+            <KpiCard label="Sisa uang hari ini" value={formatIdr(cashFlow)} meta="Pemasukan dikurangi pengeluaran" Icon={WalletCards} tone="neutral" />
+            <KpiCard label="Uang masuk" value={formatIdr(income)} meta="Dari catatan hari ini" Icon={ArrowDownLeft} tone="positive" />
+            <KpiCard label="Uang keluar" value={formatIdr(expense)} meta="Belanja dan biaya hari ini" Icon={ArrowUpRight} tone="neutral" />
+            {/* Tangga, bukan rapor. "17/100" memberi tahu pemilik bahwa ia
+                gagal tanpa memberi tahu apa yang kurang, dan angka yang
+                mustahil naik cepat hanya membuat orang berhenti membukanya. */}
+            <ReadinessMiniCard />
+          </section>
+
+          <div className={styles.desktopGrid}>
+            <section aria-labelledby="activity-desktop-title" className={styles.panel}>
+              <div className={styles.panelHeader}><div><h2 id="activity-desktop-title" className={styles.panelTitle}>Aktivitas terbaru</h2><p className="mt-1 text-[10px] text-[#6e859e]">Catatan dan perubahan terbaru di usaha Anda</p></div><Link href="/umkm/laporan" className="rounded-lg border border-[#e3e9f0] px-3 py-2 text-[10px] font-bold text-[#34496a]">Buka laporan</Link></div>
+              <div className={styles.panelBody}>{loading ? <p className="py-10 text-center text-xs text-[#6e859e]">Menyiapkan aktivitas...</p> : activities.length === 0 ? <EmptyActivity /> : activities.map((item) => <ActivityRow key={item.id} item={item} />)}</div>
+            </section>
+
+            <section aria-labelledby="action-desktop-title" className={styles.panel}>
+              <div className={styles.panelHeader}><div><h2 id="action-desktop-title" className={styles.panelTitle}>Perlu perhatian</h2><p className="mt-1 text-[10px] text-[#6e859e]">{actions.length} hal untuk ditinjau</p></div><Sparkles size={16} className="text-[#1590c7]" /></div>
+              <div className={styles.panelBody}>{loading ? <p className="py-10 text-center text-xs text-[#6e859e]">Memeriksa data...</p> : actions.length === 0 ? <div className="flex items-center gap-2 py-8 text-xs text-[#0b7a55]"><CheckCircle2 size={17} /> Semua beres untuk saat ini.</div> : actions.map((item) => <ActionRow key={item.id} item={item} />)}</div>
+            </section>
+
+            <section aria-labelledby="mission-desktop-title" className={`${styles.panel} ${styles.fullWidth}`}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <h2 id="mission-desktop-title" className={styles.panelTitle}>Langkah usaha berikutnya</h2>
+                  <p className="mt-1 text-[10px] text-[#6e859e]">Rekomendasi berdasarkan data yang sudah tersedia</p>
+                </div>
+                <Link href="/umkm/kesiapan" className="text-[10px] font-bold text-[#0b5f86] hover:underline">Lihat perjalanan</Link>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5">
+                <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eef8fd] text-[#0b5f86]">
+                    <Sparkles size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-[#1b2a3a]">{readiness?.step?.title ?? "Data utama usaha sudah lengkap"}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[#6e859e]">{readiness?.step?.headline ?? "Terus catat transaksi yang benar-benar terjadi agar ringkasan tetap terbaru."}</p>
+                  </div>
+                </div>
+                <Link
+                  href={readiness?.step?.action?.href ?? "/umkm/kesiapan"}
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-5 text-xs font-bold text-white hover:bg-[#0f73a3] transition-colors shadow-sm self-stretch sm:self-auto"
+                >
+                  {readiness?.step?.action?.label ?? "Lanjutkan"} <ArrowRight size={14} />
+                </Link>
+              </div>
+            </section>
+
+            <div className={styles.fullWidth}><ReclassCard /></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
 }
 
-function Summary({ label, value, text, icon, color }: { label: string; value?: number; text?: string; icon: React.ReactNode; color: string }) {
-  return <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:p-4"><div className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide ${color}`}>{icon}<span>{label}</span></div><p className="mt-3 truncate text-sm font-black text-slate-900 md:text-lg">{text ?? `Rp${Number(value ?? 0).toLocaleString("id-ID")}`}</p></article>;
+function KpiCard({ label, value, meta, Icon, tone }: { label: string; value: string; meta: string; Icon: typeof WalletCards; tone: "positive" | "neutral" }) {
+  return <article className={styles.kpi}><div className={styles.kpiTop}><span>{label}</span><Icon size={15} /></div><p className={styles.kpiValue}>{value}</p><p className={`${styles.kpiMeta} ${tone === "positive" ? styles.positive : styles.neutral}`}>{meta}</p></article>;
+}
+
+function ActivityRow({ item }: { item: ActivityItem }) {
+  const isIncome = item.title.toLowerCase().includes("pemasukan");
+  return <Link href={item.href} className={styles.activityRow}><span className={styles.activityIcon}>{isIncome ? <ArrowDownLeft size={17} /> : item.title.toLowerCase().includes("pengeluaran") ? <ArrowUpRight size={17} /> : <FileText size={16} />}</span><span className={styles.activityCopy}><strong>{item.title}</strong><small>{item.detail}</small></span><time className={styles.activityTime}>{formatTime(item.at)}</time></Link>;
+}
+
+function ActionRow({ item }: { item: ActionItem }) {
+  return <Link href={item.href} className={styles.actionRow}><span className={styles.actionDot} /><span className="min-w-0 flex-1"><strong>{item.title}</strong><small className="truncate">{item.description}</small></span><ChevronRight size={14} className="text-[#9fb0c2]" /></Link>;
+}
+
+function EmptyActivity() {
+  return <div className="flex flex-col items-center py-8 text-center"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#eef8fd] text-[#0f73a3]"><Mic size={19} /></span><p className="mt-3 text-xs font-bold text-[#34496a]">Belum ada aktivitas usaha</p><Link href="/umkm/catat" className="mt-2 text-[10px] font-bold text-[#0b5f86]">Buat catatan pertama</Link></div>;
 }
