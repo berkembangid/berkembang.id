@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { ReminderStrip } from "@/components/warung/ReminderStrip";
 import { closingPromptText, closingTargetDate } from "@/modules/ledger/closing-day";
 import { ReclassCard } from "@/components/warung/ReclassCard";
-import type { ReadinessView } from "@/modules/readiness/readiness-schema";
+import type { ReadinessLevelPayload } from "@/modules/readiness/level-repository";
 import styles from "../umkm-dashboard.module.css";
 
 type TransactionRow = { id: string; direction: string | null; type: string | null; amount_idr: number | null; nominal: number | null; item: string; transaction_date: string | null; created_at: string };
@@ -20,12 +20,19 @@ type ActivityItem = { id: string; title: string; detail: string; at: string; hre
 
 function transactionDirection(row: TransactionRow) { return row.direction ?? (row.type === "masuk" ? "income" : "expense"); }
 function transactionAmount(row: TransactionRow) { return Number(row.amount_idr ?? row.nominal ?? 0); }
-function formatTime(value: string) { return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
+function formatTime(value: string) {
+  // Satu stempel waktu yang tidak sah pernah merobohkan seluruh Beranda:
+  // `Intl` melempar RangeError, dan React membatalkan render halamannya.
+  // Baris aktivitas yang tanggalnya rusak tidak sepadan dengan itu.
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Baru saja";
+  return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
+}
 function formatIdr(value: number) { return `Rp${value.toLocaleString("id-ID")}`; }
 
 export default function BerandaPage() {
   const [name, setName] = useState("Pengguna");
-  const [readiness, setReadiness] = useState<ReadinessView | null>(null);
+  const [readiness, setReadiness] = useState<ReadinessLevelPayload | null>(null);
   const [todayTransactions, setTodayTransactions] = useState<TransactionRow[]>([]);
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [unchecked, setUnchecked] = useState(0);
@@ -52,7 +59,7 @@ export default function BerandaPage() {
         if (!active) return;
         setName(profile.data?.name ?? profile.data?.nama_pemilik ?? user.user_metadata?.nama_pemilik ?? user.email?.split("@")[0] ?? "Pengguna");
         setTodayTransactions((todayResult.data ?? []) as TransactionRow[]);
-        const readinessPayload = readinessResponse.ok ? await readinessResponse.json() as { data?: ReadinessView } : null;
+        const readinessPayload = readinessResponse.ok ? await readinessResponse.json() as { data?: ReadinessLevelPayload } : null;
         const readinessData = readinessPayload?.data ?? null;
         setReadiness(readinessData);
 
@@ -83,7 +90,7 @@ export default function BerandaPage() {
           href: "/umkm/laporan",
         }));
         for (const document of documents) realActivities.push({ id: `document-${document.id}`, title: "Dokumen diperbarui", detail: document.name, at: document.updated_at, href: "/umkm/upload" });
-        if (readinessData) realActivities.push({ id: `readiness-${readinessData.snapshotId}`, title: "Tingkat kesiapan diperbarui", detail: readinessData.changeReason, at: readinessData.calculatedAt, href: "/umkm/kesiapan" });
+        if (readinessData?.levelSince) realActivities.push({ id: `readiness-${readinessData.level}-${readinessData.levelSince}`, title: `Tingkat kesiapan: ${readinessData.levelName}`, detail: readinessData.levelMeaning, at: `${readinessData.levelSince}T00:00:00+07:00`, href: "/umkm/kesiapan" });
         setActivities(realActivities.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 6));
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : "Beranda belum dapat dimuat.");
@@ -162,14 +169,14 @@ export default function BerandaPage() {
           <section aria-labelledby="journey-mobile-title" className={`${styles.whiteCard} ${styles.journeyCard}`}>
             <div className={styles.sectionHeader}>
               <div><p className={styles.eyebrow} style={{ color: "#0f73a3" }}>Perjalanan usaha</p><h2 id="journey-mobile-title" className={styles.sectionTitle}>Kesiapan data</h2></div>
-              <Link href="/umkm/roadmap" className={styles.sectionLink}>Detail</Link>
+              <Link href="/umkm/kesiapan" className={styles.sectionLink}>Detail</Link>
             </div>
-            <div className={styles.scoreRow}>
+            <div className={styles.missionRow}>
               
               <div className={styles.mission}>
-                <strong>{readiness?.primaryMission?.title ?? "Semua langkah utama sudah didukung data"}</strong>
-                <p>{readiness?.primaryMission?.description ?? readiness?.changeReason ?? "Lanjutkan kebiasaan mencatat agar ringkasan usaha tetap lengkap."}</p>
-                <Link href={readiness?.primaryMission?.href ?? "/umkm/roadmap"} className="mt-3 inline-flex items-center gap-1 text-[10px] font-extrabold text-[#0b5f86]">Lanjutkan <ChevronRight size={12} /></Link>
+                <strong>{readiness?.step?.title ?? "Semua langkah utama sudah didukung data"}</strong>
+                <p>{readiness?.step?.headline ?? "Lanjutkan kebiasaan mencatat agar ringkasan usaha tetap lengkap."}</p>
+                <Link href={readiness?.step?.action?.href ?? "/umkm/kesiapan"} className="mt-3 inline-flex items-center gap-1 text-[10px] font-extrabold text-[#0b5f86]">Lanjutkan <ChevronRight size={12} /></Link>
               </div>
             </div>
           </section>
@@ -216,11 +223,11 @@ export default function BerandaPage() {
             </section>
 
             <section aria-labelledby="mission-desktop-title" className={`${styles.panel} ${styles.fullWidth}`}>
-              <div className={styles.panelHeader}><div><h2 id="mission-desktop-title" className={styles.panelTitle}>Langkah usaha berikutnya</h2><p className="mt-1 text-[10px] text-[#6e859e]">Rekomendasi berdasarkan data yang sudah tersedia</p></div><Link href="/umkm/roadmap" className="text-[10px] font-bold text-[#0b5f86]">Lihat perjalanan</Link></div>
+              <div className={styles.panelHeader}><div><h2 id="mission-desktop-title" className={styles.panelTitle}>Langkah usaha berikutnya</h2><p className="mt-1 text-[10px] text-[#6e859e]">Rekomendasi berdasarkan data yang sudah tersedia</p></div><Link href="/umkm/kesiapan" className="text-[10px] font-bold text-[#0b5f86]">Lihat perjalanan</Link></div>
               <div className="grid gap-5 p-5 lg:grid-cols-[120px_1fr_auto] lg:items-center">
                 
-                <div><p className="text-sm font-bold text-[#1b2a3a]">{readiness?.primaryMission?.title ?? "Data utama usaha sudah lengkap"}</p><p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#6e859e]">{readiness?.primaryMission?.description ?? readiness?.changeReason ?? "Terus catat transaksi yang benar-benar terjadi agar ringkasan tetap terbaru."}</p></div>
-                <Link href={readiness?.primaryMission?.href ?? "/umkm/roadmap"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white">Lanjutkan <ArrowRight size={14} /></Link>
+                <div><p className="text-sm font-bold text-[#1b2a3a]">{readiness?.step?.title ?? "Data utama usaha sudah lengkap"}</p><p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#6e859e]">{readiness?.step?.headline ?? "Terus catat transaksi yang benar-benar terjadi agar ringkasan tetap terbaru."}</p></div>
+                <Link href={readiness?.step?.action?.href ?? "/umkm/kesiapan"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white">Lanjutkan <ArrowRight size={14} /></Link>
               </div>
             </section>
 
