@@ -25,6 +25,14 @@ export default function InstitutionDetailPage() {
   const [contactEmail, setContactEmail] = useState("");
   const [location, setLocation] = useState("");
 
+  const [seats, setSeats] = useState("5");
+  const [dossierCredits, setDossierCredits] = useState("20");
+  const [creditsUsed, setCreditsUsed] = useState("0");
+  const [licenseFrom, setLicenseFrom] = useState("");
+  const [licenseTo, setLicenseTo] = useState("");
+  const [planNote, setPlanNote] = useState("");
+  const [entitlementMsg, setEntitlementMsg] = useState("");
+
   const [isFromProfiles, setIsFromProfiles] = useState(false);
 
   async function fetchDetail() {
@@ -51,6 +59,19 @@ export default function InstitutionDetailPage() {
           setProgramsCount(String(data.programs_count || 1));
           setActive(Boolean(data.active ?? true));
           setIsFromProfiles(false);
+          const { data: entitlement } = await supabase
+            .from("institution_entitlements")
+            .select("seats,dossier_credits,credits_used,license_from,license_to,plan_note")
+            .eq("institution_id", databaseId)
+            .maybeSingle();
+          if (entitlement) {
+            setSeats(String(entitlement.seats ?? 5));
+            setDossierCredits(String(entitlement.dossier_credits ?? 20));
+            setCreditsUsed(String(entitlement.credits_used ?? 0));
+            setLicenseFrom(entitlement.license_from ?? "");
+            setLicenseTo(entitlement.license_to ?? "");
+            setPlanNote(entitlement.plan_note ?? "");
+          }
         }
       } else {
         await fetchFromProfiles(databaseId);
@@ -122,6 +143,29 @@ export default function InstitutionDetailPage() {
       setErrorMsg(err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan data.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEntitlement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isFromProfiles) return;
+    setEntitlementMsg("");
+    setErrorMsg("");
+    try {
+      const databaseId = idParam.replace(/^(institution:|profile:)/, "");
+      await runAdminOperation({
+        action: "set_institution_entitlement",
+        id: databaseId,
+        seats: Math.max(0, Number(seats) || 0),
+        dossierCredits: Math.max(0, Number(dossierCredits) || 0),
+        licenseFrom: licenseFrom || undefined,
+        licenseTo: licenseTo || undefined,
+        planNote: planNote.trim() || undefined,
+      });
+      setEntitlementMsg("Lisensi pilot tersimpan. Kredit hanya berkurang saat permintaan disetujui.");
+      setTimeout(() => setEntitlementMsg(""), 3000);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Lisensi belum tersimpan.");
     }
   };
 
@@ -301,6 +345,39 @@ export default function InstitutionDetailPage() {
                 <Save size={14} />
                 {saving ? "Menyimpan..." : "Simpan Perubahan"}
               </button>
+            </div>
+          </form>
+        )}
+
+        {!loading && !isFromProfiles && name && (
+          <form onSubmit={handleEntitlement} className="mt-6 border-t border-slate-100 pt-6">
+            <h2 className="text-sm font-black text-[#1b2a3a]">Lisensi pilot & kredit dossier</h2>
+            <p className="mt-1 text-xs text-slate-500">Penagihan manual fase pilot. Kredit berkurang hanya saat permintaan disetujui. Terpakai saat ini: {creditsUsed}.</p>
+            {entitlementMsg && <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">{entitlementMsg}</p>}
+            <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Kursi (seats)</label>
+                <input type="number" min="0" value={seats} onChange={(e) => setSeats(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white font-medium" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Kredit dossier</label>
+                <input type="number" min="0" value={dossierCredits} onChange={(e) => setDossierCredits(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white font-medium" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Lisensi dari</label>
+                <input type="date" value={licenseFrom} onChange={(e) => setLicenseFrom(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white font-medium" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Lisensi sampai</label>
+                <input type="date" value={licenseTo} onChange={(e) => setLicenseTo(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white font-medium" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Catatan paket</label>
+                <input type="text" value={planNote} onChange={(e) => setPlanNote(e.target.value)} placeholder="Pilot 5 kursi + 20 kredit dossier" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white font-medium" />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button type="submit" className="px-6 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] cursor-pointer">Simpan lisensi</button>
             </div>
           </form>
         )}

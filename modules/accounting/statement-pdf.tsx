@@ -125,7 +125,26 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 8,
   },
+  watermarkBand: {
+    position: "absolute",
+    top: 8,
+    left: 46,
+    right: 46,
+    borderWidth: 0.8,
+    borderColor: "#0b5f86",
+    padding: 5,
+    fontSize: 7.2,
+    color: "#0b5f86",
+  },
+  watermarkLine: { marginBottom: 1 },
 });
+
+export type StatementWatermark = {
+  institutionName: string;
+  memberLabel: string;
+  downloadedAt: string;
+  documentUid: string;
+};
 
 function idr(value: number): string {
   const text = Math.round(Math.abs(value)).toLocaleString("id-ID");
@@ -189,9 +208,18 @@ function TableHead({ headers, columns }: { headers: string[]; columns: Column[] 
   );
 }
 
-function PageChrome({ data }: { data: StatementDocumentData }) {
+function PageChrome({ data, watermark }: { data: StatementDocumentData; watermark?: StatementWatermark }) {
   return (
     <>
+      {watermark && (
+        <View style={styles.watermarkBand} fixed>
+          <Text style={styles.watermarkLine}>Akses institusi: {watermark.institutionName}</Text>
+          <Text style={styles.watermarkLine}>
+            Dibuka oleh {watermark.memberLabel} · {longDate(watermark.downloadedAt.slice(0, 10))}
+          </Text>
+          <Text>No. dokumen {watermark.documentUid}</Text>
+        </View>
+      )}
       <View style={styles.header} fixed>
         <Text>{data.businessName}</Text>
         <Text>
@@ -200,18 +228,22 @@ function PageChrome({ data }: { data: StatementDocumentData }) {
       </View>
       <View style={styles.footer} fixed>
         <Text>{statementDisclaimer}</Text>
+        {watermark && (
+          <Text>Data kesiapan, bukan penilaian kelayakan pembiayaan. Keputusan pembiayaan sepenuhnya milik lembaga.</Text>
+        )}
         <View style={styles.footerRow}>
           <Text>
-            No. dokumen {data.documentUid} · dicetak {longDate(data.printedAt.slice(0, 10))}
+            No. dokumen {watermark?.documentUid ?? data.documentUid} · dicetak {longDate(data.printedAt.slice(0, 10))}
           </Text>
           <Text render={({ pageNumber, totalPages }) => `Halaman ${pageNumber} dari ${totalPages}`} />
         </View>
+        {watermark && <Text>{watermark.institutionName} · unduhan tercatat</Text>}
       </View>
     </>
   );
 }
 
-function BalanceSheetPage({ data }: { data: StatementDocumentData }) {
+function BalanceSheetPage({ data, watermark }: { data: StatementDocumentData; watermark?: StatementWatermark }) {
   const { current, previous } = data.balanceSheet;
   const columns: Column[] = previous
     ? [{ width: "46%" }, { width: "10%" }, { width: "22%", align: "right" }, { width: "22%", align: "right" }]
@@ -222,7 +254,7 @@ function BalanceSheetPage({ data }: { data: StatementDocumentData }) {
 
   return (
     <Page size="A4" style={styles.page}>
-      <PageChrome data={data} />
+      <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAPORAN POSISI KEUANGAN</Text>
       <Text style={styles.subtitle}>Per {longDate(current.asOf)}</Text>
       <TableHead
@@ -248,7 +280,7 @@ function BalanceSheetPage({ data }: { data: StatementDocumentData }) {
   );
 }
 
-function IncomeStatementPage({ data }: { data: StatementDocumentData }) {
+function IncomeStatementPage({ data, watermark }: { data: StatementDocumentData; watermark?: StatementWatermark }) {
   const { current, previous } = data.incomeStatement;
   const columns: Column[] = previous
     ? [{ width: "46%" }, { width: "10%" }, { width: "22%", align: "right" }, { width: "22%", align: "right" }]
@@ -267,7 +299,7 @@ function IncomeStatementPage({ data }: { data: StatementDocumentData }) {
 
   return (
     <Page size="A4" style={styles.page}>
-      <PageChrome data={data} />
+      <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAPORAN LABA RUGI</Text>
       <Text style={styles.subtitle}>Untuk periode yang berakhir {longDate(current.period.to)}</Text>
       <TableHead
@@ -291,12 +323,12 @@ function IncomeStatementPage({ data }: { data: StatementDocumentData }) {
   );
 }
 
-function CashFlowPage({ data }: { data: StatementDocumentData }) {
+function CashFlowPage({ data, watermark }: { data: StatementDocumentData; watermark?: StatementWatermark }) {
   const flow = data.cashFlow;
   const columns: Column[] = [{ width: "72%" }, { width: "28%", align: "right" }];
   return (
     <Page size="A4" style={styles.page}>
-      <PageChrome data={data} />
+      <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAPORAN ARUS KAS</Text>
       <Text style={styles.subtitle}>
         Untuk periode {longDate(flow.period.from)} sampai {longDate(flow.period.to)}
@@ -329,13 +361,13 @@ function CashFlowPage({ data }: { data: StatementDocumentData }) {
   );
 }
 
-function NotesPage({ data }: { data: StatementDocumentData }) {
+function NotesPage({ data, watermark }: { data: StatementDocumentData; watermark?: StatementWatermark }) {
   const notes = data.notes;
   const twoColumns: Column[] = [{ width: "70%" }, { width: "30%", align: "right" }];
 
   return (
     <Page size="A4" style={styles.page}>
-      <PageChrome data={data} />
+      <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>CATATAN ATAS LAPORAN KEUANGAN</Text>
       <Text style={styles.subtitle}>
         Untuk periode {longDate(data.period.from)} sampai {longDate(data.period.to)}
@@ -492,7 +524,7 @@ function NotesPage({ data }: { data: StatementDocumentData }) {
   );
 }
 
-function IndicatorPage({ data }: { data: StatementDocumentData }) {
+function IndicatorPage({ data, watermark }: { data: StatementDocumentData; watermark?: StatementWatermark }) {
   const columns: Column[] = [
     { width: "16%" },
     { width: "16%", align: "right" },
@@ -504,7 +536,7 @@ function IndicatorPage({ data }: { data: StatementDocumentData }) {
   ];
   return (
     <Page size="A4" style={styles.page}>
-      <PageChrome data={data} />
+      <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAMPIRAN A — INDIKATOR ENAM BULAN</Text>
       <Text style={styles.note}>
         Indikator berikut dihitung langsung dari jurnal. Angka ini menggambarkan aktivitas usaha, bukan penilaian
@@ -536,7 +568,7 @@ function IndicatorPage({ data }: { data: StatementDocumentData }) {
   );
 }
 
-function MethodologyPage({ data }: { data: StatementDocumentData }) {
+function MethodologyPage({ data, watermark }: { data: StatementDocumentData; watermark?: StatementWatermark }) {
   const columns: Column[] = [
     { width: "9%" },
     { width: "26%" },
@@ -556,7 +588,7 @@ function MethodologyPage({ data }: { data: StatementDocumentData }) {
 
   return (
     <Page size="A4" style={styles.page}>
-      <PageChrome data={data} />
+      <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAMPIRAN B — METODOLOGI PENCATATAN</Text>
       <Text style={styles.note}>
         Pemilik usaha memilih satu dari sepuluh kategori dalam bahasa sehari-hari. Pemetaan kategori menjadi akun
@@ -595,17 +627,17 @@ function MethodologyPage({ data }: { data: StatementDocumentData }) {
   );
 }
 
-function StatementDocument({ data }: { data: StatementDocumentData }) {
+function StatementDocument({ data, watermark }: { data: StatementDocumentData; watermark?: StatementWatermark }) {
   return (
     <Document
-      title={`Laporan Keuangan ${data.businessName}`}
+      title={watermark ? `Dossier ${data.businessName} untuk ${watermark.institutionName}` : `Laporan Keuangan ${data.businessName}`}
       author="BERKEMBANG.ID"
-      subject="Laporan keuangan SAK EMKM"
+      subject={watermark ? "Dossier SAK EMKM untuk institusi" : "Laporan keuangan SAK EMKM"}
       creator="BERKEMBANG.ID"
       producer="BERKEMBANG.ID"
     >
       <Page size="A4" style={styles.page}>
-        <PageChrome data={data} />
+        <PageChrome data={data} watermark={watermark} />
         <View style={styles.cover}>
           <Text style={styles.coverTitle}>{data.businessName}</Text>
           <Text style={styles.coverLine}>LAPORAN KEUANGAN</Text>
@@ -614,20 +646,28 @@ function StatementDocument({ data }: { data: StatementDocumentData }) {
           </Text>
           <Text style={[styles.coverNote, { marginTop: 28 }]}>Disusun sesuai SAK EMKM</Text>
           <Text style={styles.coverNote}>{statementDisclaimer}</Text>
+          {watermark && (
+            <Text style={styles.coverNote}>
+              Data kesiapan, bukan penilaian kelayakan pembiayaan. Keputusan pembiayaan sepenuhnya milik lembaga.
+            </Text>
+          )}
         </View>
       </Page>
-      <BalanceSheetPage data={data} />
-      <IncomeStatementPage data={data} />
-      <CashFlowPage data={data} />
-      <NotesPage data={data} />
-      {data.includeIndicators && data.indicators.length > 0 && <IndicatorPage data={data} />}
-      <MethodologyPage data={data} />
+      <BalanceSheetPage data={data} watermark={watermark} />
+      <IncomeStatementPage data={data} watermark={watermark} />
+      <CashFlowPage data={data} watermark={watermark} />
+      <NotesPage data={data} watermark={watermark} />
+      {data.includeIndicators && data.indicators.length > 0 && <IndicatorPage data={data} watermark={watermark} />}
+      <MethodologyPage data={data} watermark={watermark} />
     </Document>
   );
 }
 
-export async function renderFinancialStatementsPdf(data: StatementDocumentData): Promise<Uint8Array> {
-  return renderToBuffer(<StatementDocument data={data} />);
+export async function renderFinancialStatementsPdf(
+  data: StatementDocumentData,
+  watermark?: StatementWatermark,
+): Promise<Uint8Array> {
+  return renderToBuffer(<StatementDocument data={data} watermark={watermark} />);
 }
 
 /** Nama berkas yang muncul saat pemilik menyimpan atau meneruskannya. */

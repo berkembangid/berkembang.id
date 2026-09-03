@@ -15,6 +15,16 @@ export type AdminOperation =
     }
   | { action: "deactivate_institution"; source: "institutions" | "profiles"; id: string }
   | { action: "set_institution_active"; source: "institutions" | "profiles"; id: string; active: boolean }
+  | { action: "set_institution_verification"; id: string; status: "pending" | "verified" | "rejected"; note?: string }
+  | {
+      action: "set_institution_entitlement";
+      id: string;
+      seats: number;
+      dossierCredits: number;
+      licenseFrom?: string;
+      licenseTo?: string;
+      planNote?: string;
+    }
   | {
       action: "save_mitra";
       id?: string;

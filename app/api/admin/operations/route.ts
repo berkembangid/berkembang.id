@@ -25,6 +25,16 @@ const operationSchema = z.discriminatedUnion("action", [
   }),
   z.object({ action: z.literal("deactivate_institution"), source: z.enum(["institutions", "profiles"]), id: uuid }),
   z.object({ action: z.literal("set_institution_active"), source: z.enum(["institutions", "profiles"]), id: uuid, active: z.boolean() }),
+  z.object({ action: z.literal("set_institution_verification"), id: uuid, status: z.enum(["pending", "verified", "rejected"]), note: z.string().trim().max(500).optional() }),
+  z.object({
+    action: z.literal("set_institution_entitlement"),
+    id: uuid,
+    seats: z.number().int().min(0).max(100000),
+    dossierCredits: z.number().int().min(0).max(1000000),
+    licenseFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    licenseTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    planNote: z.string().trim().max(500).nullable().optional(),
+  }),
   z.object({
     action: z.literal("save_mitra"),
     id: uuid.optional(),
@@ -193,6 +203,32 @@ export async function POST(request: Request) {
           ensureNoError((await admin.from("profiles").update({ status: operation.active ? "active" : "inactive" }).eq("id", operation.id)).error, "INSTITUTION_PROFILE_STATUS_UPDATE_FAILED");
         }
         await writeAudit(admin, user.id, user.email ?? null, "UPDATE_INSTITUTION_STATUS", operation.source, operation.id, { active: operation.active });
+        break;
+      }
+      case "set_institution_verification": {
+        const verified = operation.status === "verified";
+        ensureNoError((await admin.from("institutions").update({
+          verification_status: operation.status,
+          verification_note: operation.note || null,
+          verified_by: verified ? user.id : null,
+          verified_at: verified ? new Date().toISOString() : null,
+          active: verified,
+          status: verified ? "active" : operation.status === "rejected" ? "inactive" : "pending",
+        }).eq("id", operation.id)).error, "INSTITUTION_VERIFICATION_UPDATE_FAILED");
+        await writeAudit(admin, user.id, user.email ?? null, "UPDATE_INSTITUTION_VERIFICATION", "institutions", operation.id, { status: operation.status, active: verified });
+        break;
+      }
+      case "set_institution_entitlement": {
+        ensureNoError((await admin.from("institution_entitlements").upsert({
+          institution_id: operation.id,
+          seats: operation.seats,
+          dossier_credits: operation.dossierCredits,
+          license_from: operation.licenseFrom ?? null,
+          license_to: operation.licenseTo ?? null,
+          plan_note: operation.planNote ?? null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "institution_id" })).error, "INSTITUTION_ENTITLEMENT_UPDATE_FAILED");
+        await writeAudit(admin, user.id, user.email ?? null, "UPDATE_INSTITUTION_ENTITLEMENT", "institutions", operation.id, { seats: operation.seats, dossierCredits: operation.dossierCredits });
         break;
       }
       case "save_institution": {

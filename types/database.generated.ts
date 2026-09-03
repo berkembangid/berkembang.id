@@ -1560,6 +1560,105 @@ export type Database = {
           }
         ]
       }
+      discovery_optins: {
+        Row: {
+          business_id: string
+          opted_in: boolean
+          candidate_code: string
+          opted_at: string | null
+          copy_version: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          opted_in?: boolean
+          candidate_code?: string
+          opted_at?: string | null
+          copy_version?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          opted_in?: boolean
+          candidate_code?: string
+          opted_at?: string | null
+          copy_version?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      institution_view_logs: {
+        Row: {
+          id: string
+          institution_id: string
+          member_id: string | null
+          business_id: string | null
+          artifact: string
+          artifact_id: string | null
+          action: string
+          occurred_at: string
+        }
+        Insert: {
+          id?: string
+          institution_id: string
+          member_id?: string | null
+          business_id?: string | null
+          artifact: string
+          artifact_id?: string | null
+          action: string
+          occurred_at?: string
+        }
+        Update: {
+          id?: string
+          institution_id?: string
+          member_id?: string | null
+          business_id?: string | null
+          artifact?: string
+          artifact_id?: string | null
+          action?: string
+          occurred_at?: string
+        }
+        Relationships: []
+      }
+      institution_entitlements: {
+        Row: {
+          institution_id: string
+          seats: number
+          dossier_credits: number
+          credits_used: number
+          license_from: string | null
+          license_to: string | null
+          plan_note: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          institution_id: string
+          seats?: number
+          dossier_credits?: number
+          credits_used?: number
+          license_from?: string | null
+          license_to?: string | null
+          plan_note?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          institution_id?: string
+          seats?: number
+          dossier_credits?: number
+          credits_used?: number
+          license_from?: string | null
+          license_to?: string | null
+          plan_note?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       dossier_requests: {
         Row: {
           id: string
@@ -1988,6 +2087,10 @@ export type Database = {
           created_at: string
           updated_at: string
           legacy_profile_id: string | null
+          verification_status: string
+          verification_note: string | null
+          verified_by: string | null
+          verified_at: string | null
         }
         Insert: {
           id?: string
@@ -2003,6 +2106,10 @@ export type Database = {
           created_at?: string
           updated_at?: string
           legacy_profile_id?: string | null
+          verification_status?: string
+          verification_note?: string | null
+          verified_by?: string | null
+          verified_at?: string | null
         }
         Update: {
           id?: string
@@ -2018,6 +2125,10 @@ export type Database = {
           created_at?: string
           updated_at?: string
           legacy_profile_id?: string | null
+          verification_status?: string
+          verification_note?: string | null
+          verified_by?: string | null
+          verified_at?: string | null
         }
         Relationships: [
           {
@@ -4164,6 +4275,32 @@ export type Database = {
       list_anonymous_business_candidates: {
         Args: {
           p_program_id?: string
+        }
+        Returns: Json
+      }
+      resolve_anonymous_candidate_code: {
+        Args: {
+          p_candidate_code: string
+        }
+        Returns: string | null
+      }
+      get_my_discovery_optin: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      set_my_discovery_optin: {
+        Args: {
+          p_opted_in: boolean
+        }
+        Returns: Json
+      }
+      get_my_institution_shortlist: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      toggle_my_institution_shortlist: {
+        Args: {
+          p_candidate_code: string
         }
         Returns: Json
       }

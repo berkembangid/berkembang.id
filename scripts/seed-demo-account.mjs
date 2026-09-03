@@ -160,6 +160,27 @@ const demo = {
       lokasi: "Depok, Jawa Barat",
     },
   },
+  // Dua persona SPEC Portal Institusi I12: CVC + Dinas program.
+  cvc: {
+    email: "demo.cvc@berkembang.id",
+    metadata: {
+      signup_account_type: "institution",
+      nama_institusi: "BNI Ventures",
+      jenis_institusi: "CVC",
+      nama_contact: "Dimas Arya",
+      lokasi: "Jakarta Selatan",
+    },
+  },
+  dinas: {
+    email: "demo.dinas@berkembang.id",
+    metadata: {
+      signup_account_type: "institution",
+      nama_institusi: "Dinas Koperasi & UKM Kota Depok",
+      jenis_institusi: "DINAS",
+      nama_contact: "Siti Marwah",
+      lokasi: "Depok, Jawa Barat",
+    },
+  },
 };
 
 /**
@@ -661,6 +682,91 @@ async function seedConsent({ koperasiClient, bankClient, ownerClient, businessId
 }
 
 // ---------------------------------------------------------------------------
+// Persona SPEC Portal Institusi I12: BNI Ventures (CVC) + Dinas Depok (program)
+// ---------------------------------------------------------------------------
+
+/**
+ * Alur demo lengkap: opt-in → discovery → request → admin approve → dossier
+ * → download (PDF watermark) → revoke. BNI Ventures memegang dossier aktif
+ * (siap dibuka + diunduh), Dinas memegang program dengan kode gabung.
+ */
+async function seedSpecPersonas({ cvcClient, dinasClient, ownerClient, businessId, institutionIds }) {
+  // UMKM bersedia ditemukan supaya muncul di Temukan.
+  await ownerClient.rpc("set_my_discovery_optin", { p_opted_in: true });
+
+  // BNI Ventures: minta → disetujui → dossier aktif siap dibuka/diunduh.
+  const cvcScopes = ["business_identity", "readiness", "financial_summary"];
+  let cvc = await findExistingRequest(institutionIds.cvc, businessId);
+  if (!cvc) {
+    const created = await cvcClient.rpc("create_dossier_request", {
+      p_business_id: businessId,
+      p_program_id: null,
+      p_purpose_code: "investment_screening",
+      p_purpose_description: "Menilai kesiapan data usaha untuk penjajakan investasi.",
+      p_requested_scopes: cvcScopes,
+      p_required_scopes: ["financial_summary"],
+      p_requested_duration_days: 90,
+      p_download_requested: true,
+      p_idempotency_key: "demo-request-bni-ventures",
+      p_institution_id: institutionIds.cvc,
+    });
+    if (created.error) throw new Error(`Permintaan BNI Ventures gagal: ${created.error.message}`);
+    cvc = { id: created.data?.requestId, status: created.data?.status ?? "pending" };
+  }
+  if (cvc.status === "pending") {
+    const decision = await ownerClient.rpc("respond_to_dossier_request", {
+      p_request_id: cvc.id,
+      p_decision: "approve",
+      p_approved_scopes: cvcScopes,
+      p_download_allowed: true,
+    });
+    if (decision.error) throw new Error(`Persetujuan BNI Ventures gagal: ${decision.error.message}`);
+    console.log("  izin akses          BNI Ventures disetujui pemilik (dossier aktif)");
+  } else {
+    console.log("  izin akses          BNI Ventures sudah disetujui sebelumnya");
+  }
+
+  // Dinas: buat program + kode gabung + UMKM bergabung.
+  const { data: existingProgram } = await admin
+    .from("programs")
+    .select("id,join_code")
+    .eq("institution_id", institutionIds.dinas)
+    .eq("name", "Pembinaan UMKM Depok 2026")
+    .maybeSingle();
+  let programId = existingProgram?.id;
+  let joinCode = existingProgram?.join_code;
+  if (!programId) {
+    const created = await admin.from("programs").insert({
+      institution_id: institutionIds.dinas,
+      name: "Pembinaan UMKM Depok 2026",
+      region: "Kota Depok",
+      status: "active",
+      mission_pack: { default: ["legalitas", "kebiasaan_mencatat"] },
+    }).select("id,join_code").single();
+    if (created.error) throw new Error(`Program Dinas gagal dibuat: ${created.error.message}`);
+    programId = created.data.id;
+    joinCode = created.data.join_code;
+  }
+  const joined = await ownerClient.rpc("join_program_by_code", { p_join_code: joinCode });
+  if (joined.error) throw new Error(`Gabung program gagal: ${joined.error.message}`);
+  console.log(`  program             Dinas Depok aktif, kode gabung ${joinCode}`);
+
+  // Entitlement demo: kredit cukup untuk alur demo, lisensi pilot setahun.
+  for (const key of ["cvc", "dinas"]) {
+    await admin.from("institution_entitlements").upsert({
+      institution_id: institutionIds[key],
+      seats: key === "cvc" ? 5 : 10,
+      dossier_credits: 20,
+      license_from: new Date().toISOString().slice(0, 10),
+      license_to: `${new Date().getUTCFullYear() + 1}-12-31`,
+      plan_note: "Pilot SPEC Portal Institusi",
+    }, { onConflict: "institution_id" });
+  }
+  void dinasClient;
+  return { joinCode };
+}
+
+// ---------------------------------------------------------------------------
 // Jalannya
 // ---------------------------------------------------------------------------
 
@@ -683,7 +789,7 @@ async function main() {
   console.log(`  akun UMKM           ${demo.umkm.email} (${umkmUser.created ? "dibuat" : "diperbarui"})`);
 
   const institutionIds = {};
-  for (const key of ["institution", "institutionPending"]) {
+  for (const key of ["institution", "institutionPending", "cvc", "dinas"]) {
     const account = demo[key];
     const user = await upsertAuthUser(account);
     institutionIds[key] = await bootstrapProfile(user.id, account.email, account.metadata);
@@ -703,12 +809,20 @@ async function main() {
   );
   console.log("  izin akses          permintaan bank menunggu keputusan pemilik");
 
+  const cvcClient = await signIn(demo.cvc.email);
+  const dinasClient = await signIn(demo.dinas.email);
+  const personas = await seedSpecPersonas(
+    { cvcClient, dinasClient, ownerClient: umkmClient, businessId, institutionIds },
+  );
+
   console.log(`
   Selesai.
 
     UMKM       ${demo.umkm.email}
     Koperasi   ${demo.institution.email}      (akses sudah disetujui)
     Bank       ${demo.institutionPending.email}      (permintaan menunggu)
+    BNI Vent.  ${demo.cvc.email}      (dossier aktif + PDF watermark)
+    Dinas      ${demo.dinas.email}      (program, kode ${personas.joinCode})
     Sandi      dari DEMO_PASSWORD
 
   Yang siap diperagakan:
@@ -718,6 +832,8 @@ async function main() {
     - Portal koperasi: profil usaha yang sudah disetujui, siap dibuka
     - Portal bank: permintaan menunggu, siap disetujui pemilik di depan penonton
       (id ${consent.pendingRequestId ?? "lihat daftar permintaan"})
+    - Portal BNI Ventures: dossier aktif → buka → unduh PDF ber-watermark → revoke
+    - Portal Dinas: program "Pembinaan UMKM Depok 2026" → dashboard agregat non-rupiah
 `);
 }
 

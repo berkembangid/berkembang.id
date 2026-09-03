@@ -110,8 +110,9 @@ export async function bootstrapAccountFromSignupMetadata(
         contact_name: contactName,
         contact_email: email,
         location: location || null,
-        active: true,
-        status: "active",
+        active: false,
+        status: "pending",
+        verification_status: "pending",
       })
       .select("id")
       .single();

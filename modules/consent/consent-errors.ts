@@ -1,7 +1,7 @@
 export type ConsentErrorCode =
   | "UNAUTHENTICATED" | "VALIDATION_FAILED" | "ACCESS_DENIED" | "NOT_FOUND"
   | "ALREADY_REQUESTED" | "ACTIVE_ACCESS_EXISTS" | "REQUEST_NOT_PENDING"
-  | "DATA_NOT_APPROVED" | "DOWNLOAD_NOT_APPROVED" | "SERVICE_UNAVAILABLE";
+  | "DATA_NOT_APPROVED" | "DOWNLOAD_NOT_APPROVED" | "LICENSE_LIMIT_REACHED" | "REQUEST_RATE_LIMITED" | "SERVICE_UNAVAILABLE";
 
 const errors: Record<ConsentErrorCode, { status: number; message: string }> = {
   UNAUTHENTICATED: { status: 401, message: "Sesi berakhir. Silakan masuk kembali." },
@@ -13,6 +13,8 @@ const errors: Record<ConsentErrorCode, { status: number; message: string }> = {
   REQUEST_NOT_PENDING: { status: 409, message: "Permintaan ini sudah dijawab atau sudah berakhir." },
   DATA_NOT_APPROVED: { status: 403, message: "Pemilik usaha tidak menyetujui bagian data ini." },
   DOWNLOAD_NOT_APPROVED: { status: 403, message: "Pemilik usaha tidak mengizinkan unduhan." },
+  LICENSE_LIMIT_REACHED: { status: 403, message: "Kredit dossier institusi sudah habis. Hubungi admin platform untuk pembaruan lisensi." },
+  REQUEST_RATE_LIMITED: { status: 429, message: "Batas 20 permintaan per hari tercapai. Lanjutkan besok agar UMKM tidak kebanjiran permintaan." },
   SERVICE_UNAVAILABLE: { status: 503, message: "Layanan izin data sementara tidak tersedia. Silakan coba lagi." },
 };
 
@@ -33,6 +35,8 @@ export function consentOperationError(error: unknown) {
   if (message.includes("PENDING_REQUEST_EXISTS")) return new ConsentOperationError("ALREADY_REQUESTED", error);
   if (message.includes("ACTIVE_ACCESS_EXISTS")) return new ConsentOperationError("ACTIVE_ACCESS_EXISTS", error);
   if (message.includes("REQUEST_NOT_PENDING")) return new ConsentOperationError("REQUEST_NOT_PENDING", error);
+  if (message.includes("DOSSIER_CREDITS_EXHAUSTED")) return new ConsentOperationError("LICENSE_LIMIT_REACHED", error);
+  if (message.includes("REQUEST_RATE_LIMITED")) return new ConsentOperationError("REQUEST_RATE_LIMITED", error);
   if (message.includes("REQUEST_NOT_FOUND") || message.includes("GRANT_NOT_FOUND") || message.includes("CANDIDATE_NOT_FOUND")) return new ConsentOperationError("NOT_FOUND", error);
   if (message.includes("ACCESS_DENIED") || message.includes("PROGRAM_ACCESS_DENIED")) return new ConsentOperationError("ACCESS_DENIED", error);
   if (message.includes("INVALID_") || message.includes("PURPOSE_REQUIRED")) return new ConsentOperationError("VALIDATION_FAILED", error);
