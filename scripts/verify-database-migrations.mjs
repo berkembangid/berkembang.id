@@ -66,6 +66,7 @@ const expectedMigrations = [
   "0058_institution_portal_gaps.sql",
   "0059_dossier_api_keys.sql",
   "0060_owner_consent_authority.sql",
+  "0061_portal_readiness_single_source.sql",
 ];
 
 const coreTables = [
@@ -3367,6 +3368,16 @@ async function verifyConsentVerifiedProfileLifecycle() {
   const business = "b1000000-0000-4000-8000-000000000001";
   const rejectedRequest = "d2000000-0000-4000-8000-000000000001";
 
+  // Tingkat kesiapan yang dilihat lembaga harus tingkat yang sama dengan yang
+  // dilihat pemiliknya. Portal sempat menurunkannya dari tabel skor lama yang
+  // sudah tidak pernah diisi, sehingga setiap usaha baru tampil "Belum
+  // dihitung" kepada lembaga padahal pemiliknya melihat tingkat yang wajar.
+  await client.query(
+    `insert into public.business_readiness_state (business_id, level, level_since, formula_version)
+     values ('${business}', 'PERAK', current_date, 'wp08-pilot-v2')
+     on conflict (business_id) do update set level = 'PERAK', formula_version = 'wp08-pilot-v2'`,
+  );
+
   const candidatesResult = await asAuthenticated(
     institutionUser,
     "select public.list_anonymous_business_candidates(null) as value",
@@ -3379,6 +3390,105 @@ async function verifyConsentVerifiedProfileLifecycle() {
   assert(candidate, "active institution must see anonymous candidate");
   assert.equal(candidate.candidateCode.startsWith("UMKM-"), true);
   assert.equal(JSON.stringify(candidate).includes("Business B"), false, "candidate response must not expose a business name");
+  assert.equal(
+    candidate.readinessLevel,
+    "Perak",
+    "institutions must read the same readiness source the owner sees",
+  );
+  // Angka mentah tidak pernah ikut ke portal.
+  assert.equal(
+    /"(score|totalScore)":/.test(JSON.stringify(candidate)),
+    false,
+    "a raw score must never reach the institution portal",
+  );
+
+  // ---------------------------------------------------------------------
+  // Portal institusi: setiap RPC benar-benar dipanggil
+  // ---------------------------------------------------------------------
+  // Migrasi yang berhasil dipasang tidak membuktikan fungsinya jalan.
+  // `list_anonymous_business_candidates` lolos pemasangan selama berminggu-
+  // minggu lalu gagal pada panggilan pertama karena CTE-nya dipakai oleh
+  // pernyataan berikutnya. Yang membedakan hanya memanggilnya.
+  //
+  // Penolakan aturan usaha (P0001) dibiarkan: "program bukan milik Anda"
+  // adalah jawaban yang sah. Yang ditangkap di sini adalah galat pemrograman
+  // -- kolom, tabel, atau fungsi yang tidak ada, dan kesalahan sintaks.
+  const programmingErrors = new Set(["42703", "42P01", "42883", "42601", "42P02", "XX000", "42804", "42P08"]);
+
+  async function callable(userId, sql, label) {
+    try {
+      await asAuthenticatedCommitted(userId, sql);
+    } catch (cause) {
+      if (programmingErrors.has(cause?.code)) {
+        throw new Error(`${label} tidak bisa dipanggil: ${cause.code} ${cause.message}`);
+      }
+    }
+  }
+
+  const anyProgram = (await client.query("select id from public.programs limit 1")).rows[0]?.id ?? null;
+  const anyInstitution = (await client.query("select id from public.institutions limit 1")).rows[0]?.id ?? null;
+
+  const portalCalls = [
+    [institutionUser, "select public.list_my_institutions()", "list_my_institutions"],
+    [institutionUser, "select public.resolve_my_institution_id(null)", "resolve_my_institution_id"],
+    [institutionUser, "select public.get_my_institution_shortlist()", "get_my_institution_shortlist"],
+    [institutionUser, `select public.toggle_my_institution_shortlist('${candidate.candidateCode}')`, "toggle_my_institution_shortlist"],
+    [institutionUser, `select public.resolve_anonymous_candidate_code('${candidate.candidateCode}')`, "resolve_anonymous_candidate_code"],
+    [institutionUser, "select public.consume_institution_dossier_credit()", "consume_institution_dossier_credit"],
+    [owner, "select public.get_my_discovery_optin()", "get_my_discovery_optin"],
+    [owner, "select public.set_my_discovery_optin(true)", "set_my_discovery_optin"],
+    [owner, "select public.join_program_by_code('KODE-UJI')", "join_program_by_code"],
+    [institutionUser, "select public.exchange_dossier_api_key('a', 'business_identity')", "exchange_dossier_api_key"],
+  ];
+  if (anyProgram) {
+    portalCalls.push([institutionUser, `select public.program_dashboard('${anyProgram}')`, "program_dashboard"]);
+  }
+  if (anyInstitution) {
+    portalCalls.push([
+      institutionUser,
+      `select public.log_institution_view('${anyInstitution}', 'candidate_list', null, null, 'view')`,
+      "log_institution_view",
+    ]);
+  }
+  for (const [actor, sql, label] of portalCalls) {
+    await callable(actor, sql, label);
+  }
+
+  // Bukti bahwa blok di atas benar-benar berjalan, bukan hanya tidak melempar:
+  // menandai kandidat harus benar-benar mengubah keadaan.
+  const shortlisted = await asAuthenticatedCommitted(
+    institutionUser,
+    "select public.get_my_institution_shortlist() as value",
+  );
+  const shortlistPayload = shortlisted.rows[0].value;
+  const shortlistRows = Array.isArray(shortlistPayload)
+    ? shortlistPayload
+    : (shortlistPayload?.items ?? shortlistPayload?.shortlist ?? []);
+  assert.equal(
+    JSON.stringify(shortlistRows).includes(candidate.candidateCode),
+    true,
+    "menandai kandidat harus terlihat di daftar pendeknya",
+  );
+  assert.equal(
+    JSON.stringify(shortlistRows).includes("Business B"),
+    false,
+    "daftar pendek tetap anonim, sama seperti daftar kandidatnya",
+  );
+
+  // Penyaringan daftar kandidat juga harus benar-benar berjalan, bukan hanya
+  // jalur bawaannya: setiap cabang `order by` dan `where` di dalamnya belum
+  // pernah dieksekusi sampai ada yang memintanya.
+  for (const args of [
+    "null, null, null, null, 'Perak', null, null, 'region', 10, 0",
+    "null, null, 'Kuliner', null, null, '< 3 bulan', true, 'newest', 5, 0",
+  ]) {
+    await callable(
+      institutionUser,
+      `select public.list_anonymous_business_candidates(${args})`,
+      `list_anonymous_business_candidates(${args})`,
+    );
+  }
+
 
   const rejection = await asAuthenticatedCommitted(
     owner,
@@ -3424,6 +3534,22 @@ async function verifyConsentVerifiedProfileLifecycle() {
     [requestId],
   );
   const { dossierId, grantId } = approval.rows[0].value;
+  const readinessItem = (await client.query(
+    `select snapshot from public.dossier_items
+     where dossier_id = '${dossierId}' and item_type = 'readiness'`,
+  )).rows[0];
+  if (readinessItem) {
+    assert.equal(
+      readinessItem.snapshot.score,
+      undefined,
+      "the dossier an institution reads must not freeze a mark out of a hundred",
+    );
+    assert.ok(
+      ["MULAI", "TEMBAGA", "PERAK", "EMAS"].includes(readinessItem.snapshot.level),
+      "the dossier must carry the level, not a score",
+    );
+    assert.equal(readinessItem.snapshot.formulaVersion, "wp08-pilot-v2");
+  }
   assert(dossierId && grantId, "approval must atomically create an access grant and frozen profile");
 
   const allowed = await asAuthenticatedCommitted(

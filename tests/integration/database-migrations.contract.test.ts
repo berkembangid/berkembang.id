@@ -66,6 +66,7 @@ const expectedMigrations = [
   "0058_institution_portal_gaps.sql",
   "0059_dossier_api_keys.sql",
   "0060_owner_consent_authority.sql",
+  "0061_portal_readiness_single_source.sql",
 ];
 
 describe("WP-03 migration contract", () => {
