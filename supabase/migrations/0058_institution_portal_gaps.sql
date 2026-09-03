@@ -115,7 +115,7 @@ returns jsonb
 language sql security definer
 set search_path = ''
 as $$
-  select coalesce(jsonb_agg(row order by row.created_at), '[]'::jsonb)
+  select coalesce(jsonb_agg(entry.payload order by entry.created_at), '[]'::jsonb)
   from (
     select jsonb_build_object(
       'institutionId', institution.id,
@@ -126,12 +126,12 @@ as $$
       'role', member.role,
       'memberStatus', member.status,
       'createdAt', member.created_at
-    ) as row, member.created_at
+    ) as payload, member.created_at
     from public.institution_members as member
     join public.institutions as institution on institution.id = member.institution_id
     where member.user_id = (select auth.uid())
       and member.status = 'active'
-  ) as rows;
+  ) as entry;
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -143,7 +143,7 @@ $$;
 
 drop function if exists public.list_anonymous_business_candidates(uuid);
 
-create function public.list_anonymous_business_candidates(
+create or replace function public.list_anonymous_business_candidates(
   p_program_id uuid default null,
   p_institution_id uuid default null,
   p_sector text default null,
@@ -256,12 +256,12 @@ begin
         when 'Emas' then 4 when 'Perak' then 3 when 'Tembaga' then 2 when 'Mulai' then 1 end)
       and (p_age_band is null or "recordingAgeBand" = p_age_band)
       and (p_legal_complete is null or "legalComplete" = p_legal_complete)
-  )
-  select count(*) into total_value from filtered;
-  select coalesce(jsonb_agg(row order by
-    case when p_sort = 'region' then row."generalLocation" end,
-    row.joined_at desc), '[]'::jsonb) into result_value
-  from (
+  ),
+  -- Halaman hasil dan jumlah totalnya dihitung dalam SATU pernyataan. CTE
+  -- hanya hidup selama pernyataan yang memilikinya, jadi `filtered` yang
+  -- dipakai oleh pernyataan berikutnya tidak pernah ada -- fungsinya gagal
+  -- pada panggilan pertama dengan "relasi filtered tidak ada".
+  page as (
     select
       "candidateCode", sector, "generalLocation", "readinessLevel", "recordingAgeBand",
       "legalComplete", "legalEvidenceCount", "recordingActivity", "evidenceAvailability",
@@ -272,7 +272,16 @@ begin
       joined_at desc
     limit greatest(1, least(100, coalesce(p_limit, 50)))
     offset greatest(0, coalesce(p_offset, 0))
-  ) as row;
+  )
+  select
+    coalesce((
+      select jsonb_agg(page order by
+        case when p_sort = 'region' then page."generalLocation" end,
+        page.joined_at desc)
+      from page
+    ), '[]'::jsonb),
+    (select count(*) from filtered)
+  into result_value, total_value;
   return jsonb_build_object('candidates', result_value, 'total', total_value);
 end;
 $$;
@@ -283,7 +292,7 @@ $$;
 
 drop function if exists public.create_dossier_request(uuid,uuid,text,text,text[],text[],integer,boolean,text);
 
-create function public.create_dossier_request(
+create or replace function public.create_dossier_request(
   p_business_id uuid,
   p_program_id uuid,
   p_purpose_code text,
@@ -379,7 +388,7 @@ $$;
 drop function if exists public.get_my_institution_shortlist();
 drop function if exists public.toggle_my_institution_shortlist(text);
 
-create function public.get_my_institution_shortlist(p_institution_id uuid default null)
+create or replace function public.get_my_institution_shortlist(p_institution_id uuid default null)
 returns jsonb
 language sql security definer
 set search_path = ''
@@ -391,7 +400,7 @@ as $$
     and shortlist.created_by = (select auth.uid()) and shortlist.status = 'shortlisted'
 $$;
 
-create function public.toggle_my_institution_shortlist(
+create or replace function public.toggle_my_institution_shortlist(
   p_candidate_code text,
   p_institution_id uuid default null
 )
@@ -710,10 +719,10 @@ begin
       where enrollment.program_id = p_program_id and enrollment.status = 'accepted'
     ),
     'participants', (
-      select coalesce(jsonb_agg(row order by row.joinedAt), '[]'::jsonb) from (
+      select coalesce(jsonb_agg(row order by row."joinedAt"), '[]'::jsonb) from (
         select
           optin.candidate_code as code,
-          business.name as businessName,
+          business.name as "businessName",
           coalesce(state.level, 'MULAI') as level,
           enrollment.applied_at as "joinedAt"
         from public.program_enrollments as enrollment
