@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Clock3, FileCheck2, RefreshCw } from "lucide-react";
 import { consentScopeLabels, type ConsentScope } from "@/modules/consent/consent-schema";
 import { DashboardPage, EmptyState, FeedbackBanner, PageHeader } from "@/components/dashboard";
+import { notifyFromError, notifySuccess } from "@/lib/notify";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
 
 type Request = {
@@ -14,7 +15,7 @@ type Request = {
 export default function InstitutionRequestsPage() {
   const { selectedId } = useInstitution();
   const [requests, setRequests] = useState<Request[]>([]);
-  const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,7 +25,7 @@ export default function InstitutionRequestsPage() {
         if (!response.ok) throw new Error(body.error?.message ?? "Permintaan belum dapat dimuat.");
         setRequests(body.data?.requests ?? []);
       })
-      .catch((error) => setMessage(error instanceof Error ? error.message : "Permintaan belum dapat dimuat."));
+      .catch((error) => setLoadError(error instanceof Error ? error.message : "Permintaan belum dapat dimuat."));
   }, [selectedId]);
 
   const status = (value: string) =>
@@ -37,7 +38,6 @@ export default function InstitutionRequestsPage() {
 
   async function refresh(request: Request) {
     setBusy(request.id);
-    setMessage("");
     try {
       const response = await fetch("/api/v1/profile-access/requests", {
         method: "POST",
@@ -54,9 +54,11 @@ export default function InstitutionRequestsPage() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message ?? "Permintaan pembaruan belum dapat dikirim.");
-      setMessage("Permintaan pembaruan terkirim. Snapshot baru dibuat setelah admin menyetujui.");
+      notifySuccess("Permintaan pembaruan terkirim", {
+        description: "Snapshot baru dibuat setelah admin menyetujuinya.",
+      });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Permintaan pembaruan belum dapat dikirim.");
+      notifyFromError(error, "Permintaan pembaruan belum dapat dikirim.");
     } finally {
       setBusy(null);
     }
@@ -67,7 +69,7 @@ export default function InstitutionRequestsPage() {
 
   return <DashboardPage>
     <PageHeader title="Permintaan akses" description="Pantau permintaan profil anonim: menunggu, disetujui, ditolak, kedaluwarsa, dan ajukan pembaruan." icon={Clock3} />
-    {message && <FeedbackBanner live>{message}</FeedbackBanner>}
+    {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
     {requests.length === 0
       ? <EmptyState icon={FileCheck2} title="Belum ada permintaan" description="Ajukan ketertarikan dari halaman Kandidat pendanaan." />
       : <div className="space-y-3">

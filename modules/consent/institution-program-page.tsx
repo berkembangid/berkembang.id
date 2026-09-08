@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { LayoutGrid, Plus, Users } from "lucide-react";
 import { DashboardPage, EmptyState, FeedbackBanner, PageHeader } from "@/components/dashboard";
+import { notifyFromError, notifySuccess } from "@/lib/notify";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
 
 type Program = { id: string; name: string; region: string | null; join_code: string; status: string; starts_on: string | null; ends_on: string | null };
@@ -17,7 +18,7 @@ export default function InstitutionProgramPage() {
   const { selectedId, selected } = useInstitution();
   const [programs, setPrograms] = useState<Program[]>([]);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-  const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [name, setName] = useState("");
   const [region, setRegion] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,13 +33,12 @@ export default function InstitutionProgramPage() {
         if (!response.ok) throw new Error(body.error ?? "Program belum dapat dimuat.");
         setPrograms(body.data ?? []);
       })
-      .catch((error) => setMessage(error instanceof Error ? error.message : "Program belum dapat dimuat."));
+      .catch((error) => setLoadError(error instanceof Error ? error.message : "Program belum dapat dimuat."));
   }, [selectedId]);
 
   async function create() {
     if (!selectedId || name.trim().length < 3) return;
     setBusy(true);
-    setMessage("");
     try {
       const response = await fetch("/api/v1/institution/programs", {
         method: "POST",
@@ -48,29 +48,34 @@ export default function InstitutionProgramPage() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Program belum dapat dibuat.");
       setName(""); setRegion("");
-      setMessage(`Program dibuat. Kode gabung: ${body.data.join_code} — bagikan ke UMKM.`);
+      // Kode gabungnya tetap dibaca ulang dari daftar di bawah; toast hanya
+      // memberitahu bahwa ia sudah ada, bukan menjadi satu-satunya tempat
+      // kode itu pernah terlihat.
+      notifySuccess(`Program dibuat · kode ${body.data.join_code}`, {
+        description: "Bagikan kode ini ke UMKM yang akan bergabung.",
+        duration: 9000,
+      });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Program belum dapat dibuat.");
+      notifyFromError(error, "Program belum dapat dibuat.");
     } finally {
       setBusy(false);
     }
   }
 
   async function openDashboard(id: string) {
-    setMessage("");
     try {
       const response = await fetch(`/api/v1/institution/programs/${id}/dashboard`, { cache: "no-store", headers: institutionHeaders(selectedId) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Dashboard belum dapat dimuat.");
       setDashboard(body.data as Dashboard);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Dashboard belum dapat dimuat.");
+      notifyFromError(error, "Ringkasan program belum dapat dimuat.");
     }
   }
 
   return <DashboardPage>
     <PageHeader title="Program / kohort" description="Unit kerja dinas & CSR: undang via kode, pantau agregat non-rupiah. Akses laporan individual tetap butuh consent per-UMKM." icon={LayoutGrid} />
-    {message && <FeedbackBanner live>{message}</FeedbackBanner>}
+    {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
 
     {isOrgAdmin && <section className="mt-5 flex flex-wrap items-end gap-2 rounded-2xl border border-dashed border-slate-300 bg-white p-4">
       <label className="text-xs font-bold text-slate-600">Nama program<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Pembinaan UMKM Depok 2026" className="mt-1 min-h-10 w-64 rounded-lg border border-slate-300 px-3 font-normal" /></label>

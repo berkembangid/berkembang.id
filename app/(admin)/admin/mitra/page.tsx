@@ -6,6 +6,8 @@ import { Handshake, Plus, Edit, Users, MapPin, Trash2, X, RefreshCw } from "luci
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/Modal";
 import { runAdminOperation } from "@/modules/admin/operations";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFromError, notifySuccess } from "@/lib/notify";
 
 interface Mitra {
   id: string;
@@ -17,6 +19,7 @@ interface Mitra {
 }
 
 export default function AdminMitraPage() {
+  const { confirm } = useConfirm();
   const [mitraList, setMitraList] = useState<Mitra[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -60,11 +63,22 @@ export default function AdminMitraPage() {
   }
 
   const handleDelete = async (id: string) => {
+    const target = mitraList.find((item) => item.id === id);
+    const yes = await confirm({
+      title: `Hapus ${target?.name ?? "mitra ini"}?`,
+      description: "Mitra ini hilang dari daftar pendamping. UMKM yang pernah didampinginya tidak terpengaruh.",
+      confirmLabel: "Hapus",
+      cancelLabel: "Batal",
+      tone: "danger",
+    });
+    if (!yes) return;
     try {
       await runAdminOperation({ action: "delete_mitra", id });
       setMitraList(mitraList.filter(m => m.id !== id));
+      notifySuccess(`${target?.name ?? "Mitra"} dihapus`);
     } catch (err) {
       console.error("Error deleting mitra:", err);
+      notifyFromError(err, "Mitra belum berhasil dihapus.");
     }
   };
 

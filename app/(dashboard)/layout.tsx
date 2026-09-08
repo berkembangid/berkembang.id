@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart2, Bell, Bookmark, Building2, Clock3, FolderOpen, LayoutGrid, LogOut, Menu, ScrollText, Settings2, Sparkles, TrendingUp, X } from "lucide-react";
+import { BarChart2, Bell, Bookmark, Building2, Clock3, FolderOpen, LayoutGrid, LogOut, ScrollText, Settings2, Sparkles, TrendingUp, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure } from "@/lib/notify";
 import { InstitutionProvider, useInstitution } from "@/modules/institution/institution-context";
+import PortalHeader from "@/components/shell/PortalHeader";
+import { INSTITUSI_ROUTES } from "./institusi-navigation";
 import styles from "../dashboard-shell.module.css";
 
 const NAV_ITEMS = [
@@ -60,7 +62,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const { selected } = useInstitution();
-  const activeLabel = NAV_ITEMS.find((item) => item.href === "/institusi" ? pathname === item.href : pathname.startsWith(item.href))?.label ?? "Portal institusi";
 
   async function handleSignOut() {
     const yes = await confirm({
@@ -93,7 +94,21 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     <div data-world="institusi" className={styles.portal}>
       <SidebarShell pathname={pathname} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} unread={unread} contextName={selected?.name ?? "Akun lembaga"} handleSignOut={handleSignOut} />
       <div className={styles.main}>
-        <header className={styles.topbar}><div className="flex items-center gap-3"><button type="button" onClick={() => setMobileOpen(true)} aria-label="Buka menu" className={styles.menuButton}><Menu size={19} /></button><div><p className="hidden text-[9px] font-bold uppercase tracking-[.12em] text-[#9fb0c2] sm:block">Portal lembaga</p><p className={styles.pageLabel}>{activeLabel}</p></div></div><span className={styles.portalBadge}>Akses berizin</span></header>
+        <PortalHeader
+          routes={INSTITUSI_ROUTES}
+          fallbackTitle="Portal lembaga"
+          eyebrow="Portal lembaga"
+          badge="Akses berizin"
+          onOpenMenu={() => setMobileOpen(true)}
+          contextName={selected?.name ?? "Akun lembaga"}
+          contextHint="Akses hanya sesuai izin pemilik usaha"
+          menuLinks={[
+            { href: "/institusi/organisasi", label: "Organisasi & anggota", Icon: Settings2 },
+            { href: "/institusi/audit", label: "Log audit", Icon: ScrollText },
+          ]}
+          notifications={{ href: "/institusi/notifikasi", unread }}
+          onSignOut={() => void handleSignOut()}
+        />
         {children}
       </div>
     </div>

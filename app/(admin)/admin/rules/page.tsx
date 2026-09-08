@@ -5,6 +5,8 @@ import { Sliders, Save, History, Check, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import DemoBanner from "@/components/DemoBanner";
 import { runAdminOperation } from "@/modules/admin/operations";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFromError, notifySuccess } from "@/lib/notify";
 import { InlineMoneyInput } from "@/components/warung/MoneyInput";
 
 type Weights = {
@@ -46,6 +48,7 @@ const DEFAULT_SAMPLE_UMKM = [
 ];
 
 export default function RulesPage() {
+  const { confirm } = useConfirm();
   const [weights, setWeights] = useState<Weights>({
     konsistensi: 35,
     kas: 35,
@@ -158,8 +161,23 @@ export default function RulesPage() {
     setSaved(false);
   };
 
+  /**
+   * Menerbitkan aturan mengubah tingkat kesiapan SETIAP usaha di platform,
+   * sekaligus, tanpa satu pun pemiliknya melakukan apa pun. Itu perubahan
+   * paling luas yang bisa dilakukan dari portal ini, dan sebelumnya ia hanya
+   * satu ketukan tanpa pertanyaan.
+   */
   const handlePublish = async () => {
     if (!isValid) return;
+
+    const yes = await confirm({
+      title: "Terbitkan versi aturan baru?",
+      description: `Bobot baru: konsistensi ${weights.konsistensi}%, kas ${weights.kas}%, legalitas ${weights.legalitas}%, stabilitas ${weights.stabilitas}%. Tingkat kesiapan setiap usaha dihitung ulang dengan aturan ini, dan sebagian akan naik atau turun tanpa mereka mengubah apa pun. Versi lama tetap tersimpan di riwayat.`,
+      confirmLabel: "Terbitkan",
+      cancelLabel: "Periksa lagi",
+    });
+    if (!yes) return;
+
     setPublishing(true);
 
     try {
@@ -181,8 +199,13 @@ export default function RulesPage() {
       setVersionHistory([newVersionObj, ...versionHistory]);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+      notifySuccess(`Aturan ${newVersionName} diterbitkan`, {
+        description: "Tingkat kesiapan dihitung ulang memakai bobot baru ini.",
+        duration: 7000,
+      });
     } catch (err) {
       console.error("Error publishing rules config:", err);
+      notifyFromError(err, "Aturan belum berhasil diterbitkan.");
     } finally {
       setPublishing(false);
     }

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Building2, Plus, Users } from "lucide-react";
 import { DashboardPage, EmptyState, FeedbackBanner, PageHeader } from "@/components/dashboard";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFromError, notifySuccess } from "@/lib/notify";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
 
 type Member = { id: string; user_id: string | null; role: string; status: string; joined_at: string | null };
@@ -16,7 +18,8 @@ export default function InstitutionOrganizationPage() {
   const [institution, setInstitution] = useState<Institution | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
-  const [message, setMessage] = useState("");
+  const { confirm } = useConfirm();
+  const [loadError, setLoadError] = useState("");
   const [inviteRole, setInviteRole] = useState<(typeof roles)[number]>("VIEWER");
   const [inviteUserId, setInviteUserId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,13 +41,26 @@ export default function InstitutionOrganizationPage() {
           body: JSON.stringify({ artifact: "ORGANIZATION" }),
         }).catch(() => undefined);
       })
-      .catch((error) => setMessage(error instanceof Error ? error.message : "Organisasi belum dapat dimuat."));
+      .catch((error) => setLoadError(error instanceof Error ? error.message : "Organisasi belum dapat dimuat."));
   }, [selectedId]);
 
+  /**
+   * Menambah anggota memberi orang itu akses ke seluruh data yang sudah
+   * diizinkan kepada organisasi ini -- termasuk profil UMKM yang izinnya masih
+   * berlaku. Perannya menentukan seberapa jauh, dan itu yang ditanyakan.
+   */
   async function invite() {
     if (!selectedId || !inviteUserId.trim()) return;
+
+    const yes = await confirm({
+      title: `Tambahkan anggota sebagai ${inviteRole.toUpperCase()}?`,
+      description: "Anggota baru langsung dapat melihat profil UMKM yang izinnya masih berlaku untuk organisasi ini. Setiap pembukaan dan unduhan yang ia lakukan tercatat atas nama organisasi.",
+      confirmLabel: "Tambahkan",
+      cancelLabel: "Batal",
+    });
+    if (!yes) return;
+
     setBusy(true);
-    setMessage("");
     try {
       const response = await fetch("/api/v1/institution/members", {
         method: "POST",
@@ -54,17 +70,35 @@ export default function InstitutionOrganizationPage() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Undangan belum dapat dikirim.");
       setInviteUserId("");
-      setMessage("Anggota ditambahkan. Peran mengikuti standar SPEC: ADMIN, ANALYST, VIEWER.");
+      notifySuccess("Anggota ditambahkan", {
+        description: "Perannya bisa diubah kapan saja dari daftar di bawah.",
+      });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Undangan belum dapat dikirim.");
+      notifyFromError(error, "Undangan belum dapat dikirim.");
     } finally {
       setBusy(false);
     }
   }
 
+  /**
+   * Mengubah peran bisa dibalik dan tidak ditanyakan. Menonaktifkan tidak
+   * dibalik oleh orang yang terkena: ia kehilangan akses seketika dan tidak
+   * bisa mengembalikannya sendiri -- itulah yang ditanyakan.
+   */
   async function updateMember(memberId: string, patch: { role?: string; status?: string }) {
     if (!selectedId) return;
-    setMessage("");
+
+    if (patch.status && patch.status !== "active") {
+      const yes = await confirm({
+        title: "Nonaktifkan anggota ini?",
+        description: "Aksesnya ke profil UMKM organisasi ini berhenti seketika. Jejak pembukaan dan unduhan yang pernah ia lakukan tetap tersimpan.",
+        confirmLabel: "Nonaktifkan",
+        cancelLabel: "Batal",
+        tone: "danger",
+      });
+      if (!yes) return;
+    }
+
     try {
       const response = await fetch("/api/v1/institution/members", {
         method: "PATCH",
@@ -74,14 +108,15 @@ export default function InstitutionOrganizationPage() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Anggota belum dapat diperbarui.");
       setMembers((current) => current.map((row) => row.id === memberId ? { ...row, ...patch } : row));
+      notifySuccess(patch.status && patch.status !== "active" ? "Anggota dinonaktifkan" : "Anggota diperbarui");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Anggota belum dapat diperbarui.");
+      notifyFromError(error, "Anggota belum dapat diperbarui.");
     }
   }
 
   return <DashboardPage>
     <PageHeader title="Organisasi" description="Kelola identitas organisasi, anggota, peran, dan lisensi pilot." icon={Building2} />
-    {message && <FeedbackBanner live>{message}</FeedbackBanner>}
+    {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
 
     {institutions.length > 1 && <section aria-label="Pilih organisasi" className="mt-5 flex flex-wrap gap-2">
       {institutions.map((row) => <button key={row.institutionId} onClick={() => select(row.institutionId)} aria-pressed={row.institutionId === selectedId} className={`min-h-10 rounded-full px-4 text-xs font-bold ${row.institutionId === selectedId ? "bg-[#0b5f86] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>{row.name} · {row.role.toUpperCase()}</button>)}

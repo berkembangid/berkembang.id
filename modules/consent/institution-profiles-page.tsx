@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { Clock3, Download, Eye, FileCheck2, FileText, LockKeyhole, RefreshCw } from "lucide-react";
 import { consentScopeLabels, type ConsentScope } from "@/modules/consent/consent-schema";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFromError, notifySuccess } from "@/lib/notify";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
 
 type DossierRow = { id: string; request_id: string; grant_id: string; business_id: string; candidateCode: string; status: string; expires_at: string | null; generated_at: string | null };
@@ -32,7 +34,8 @@ export default function InstitutionProfilesPage() {
   const { selectedId } = useInstitution();
   const [dossiers, setDossiers] = useState<DossierRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
+  const { confirm } = useConfirm();
+  const [loadError, setLoadError] = useState("");
   const [openedId, setOpenedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<DossierDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -51,7 +54,7 @@ export default function InstitutionProfilesPage() {
           body: JSON.stringify({ artifact: "DOSSIER" }),
         }).catch(() => undefined);
       })
-      .catch((error) => { if (error instanceof Error && error.name !== "AbortError") setMessage(error.message); })
+      .catch((error) => { if (error instanceof Error && error.name !== "AbortError") setLoadError(error.message); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [selectedId]);
@@ -60,23 +63,36 @@ export default function InstitutionProfilesPage() {
     setOpenedId(dossier.id);
     setDetail(null);
     setDetailLoading(true);
-    setMessage("");
     try {
       const response = await fetch(`/api/v1/institution/dossiers/${dossier.id}`, { cache: "no-store", headers: institutionHeaders(selectedId) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message ?? body.error ?? "Dossier belum dapat dibuka.");
       setDetail(body.data as DossierDetail);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Dossier belum dapat dibuka.");
+      notifyFromError(error, "Dossier belum dapat dibuka.");
       setOpenedId(null);
     } finally {
       setDetailLoading(false);
     }
   }
 
+  /**
+   * Mengunduh PDF ditanyakan lebih dulu, dan alasannya bukan sopan santun.
+   *
+   * Setiap unduhan MEMAKAI SATU KUOTA dossier lembaga, dan tercatat di jejak
+   * dokumen yang dilihat pemilik usahanya. Dua akibat yang tidak terlihat dari
+   * tombolnya, dan keduanya tidak bisa ditarik kembali.
+   */
   async function downloadPdf(dossier: DossierRow) {
+    const yes = await confirm({
+      title: `Unduh berkas ${dossier.candidateCode}?`,
+      description: "Unduhan memakai satu kuota dossier lembaga Anda dan tercatat di jejak dokumen yang dilihat pemilik usahanya. Berkasnya ber-watermark dan bernomor.",
+      confirmLabel: "Unduh",
+      cancelLabel: "Batal",
+    });
+    if (!yes) return;
+
     setDownloading(dossier.id);
-    setMessage("");
     try {
       const response = await fetch(`/api/v1/institution/dossiers/${dossier.id}/pdf`, { headers: institutionHeaders(selectedId) });
       if (!response.ok) {
@@ -91,16 +107,17 @@ export default function InstitutionProfilesPage() {
       anchor.download = `dossier-${dossier.candidateCode}-${uid}.pdf`;
       anchor.click();
       URL.revokeObjectURL(url);
-      setMessage(`PDF ber-watermark tersimpan (No. ${uid}). Unduhan tercatat di jejak dokumen.`);
+      notifySuccess(`Berkas tersimpan · No. ${uid}`, {
+        description: "Ber-watermark dan bernomor. Unduhannya tercatat di jejak dokumen.",
+      });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "PDF belum dapat diunduh.");
+      notifyFromError(error, "PDF belum dapat diunduh.");
     } finally {
       setDownloading(null);
     }
   }
 
   async function requestRefresh(dossier: DossierRow) {
-    setMessage("");
     try {
       const response = await fetch("/api/v1/profile-access/requests", {
         method: "POST",
@@ -117,15 +134,17 @@ export default function InstitutionProfilesPage() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message ?? "Permintaan pembaruan belum dapat dikirim.");
-      setMessage("Permintaan pembaruan terkirim. Admin akan meninjau dan membuat snapshot baru.");
+      notifySuccess("Permintaan pembaruan terkirim", {
+        description: "Snapshot baru dibuat setelah admin menyetujuinya.",
+      });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Permintaan pembaruan belum dapat dikirim.");
+      notifyFromError(error, "Permintaan pembaruan belum dapat dikirim.");
     }
   }
 
   return <DashboardPage>
     <PageHeader title="Dossier usaha" description="Snapshot beku saat admin menyetujui: kesiapan, keuangan 6 bulan, legalitas, kualitas data, dan jejak dokumen." icon={FileCheck2} />
-    {message && <FeedbackBanner live>{message}</FeedbackBanner>}
+    {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
     {loading ? <p className="py-16 text-center text-sm text-slate-500">Memuat dossier...</p> : <>
       <div className="mt-7 grid gap-4 lg:grid-cols-2">{dossiers.map((dossier) => <article key={dossier.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex justify-between gap-3">

@@ -47,10 +47,20 @@ if (reason === null) return;
 `description` adalah AKIBATNYA, bukan mekanismenya. Bandingkan "Yakin?" dengan
 "Setelah ditutup, transaksi tanggal itu tidak dapat diubah lagi."
 
-Sudah dipasang di: keluar akun, batalkan transaksi (beralasan), tutup kas,
-simpan kondisi awal, buang draf catatan, arsipkan dokumen, hapus akses admin,
-setujui/tolak permintaan akses, cabut akses, bersedia ditemukan lembaga, gabung
+Sudah dipasang di ketiga portal.
+
+**UMKM** — keluar akun, batalkan transaksi (beralasan), tutup kas, simpan kondisi
+awal, buang draf catatan, arsipkan dokumen, bersedia ditemukan lembaga, gabung
 program.
+
+**Lembaga** — kirim ketertarikan (menyebutkan ruang lingkup dan lamanya izin),
+unduh berkas dossier (memakai kuota dan tercatat di jejak yang dilihat pemilik),
+tambah anggota, nonaktifkan anggota.
+
+**Admin** — hapus akses admin, setujui/tolak permintaan akses, cabut akses
+lembaga, matikan sakelar fitur, tandai/lepas akun demo, bekukan akun usaha,
+nonaktifkan lembaga, ubah status verifikasi, hapus mitra, terbitkan aturan
+kesiapan.
 
 **Tidak dipasang** — dan ini disengaja — pada tiga tempat yang sudah punya
 langkah konfirmasinya sendiri di dalam layar, dan langkah itu menjelaskan lebih
@@ -58,6 +68,21 @@ banyak daripada dialog umum: hapus akun (`AccountDataPanel`), tandai alat sudah
 tidak dipakai (`AssetLoanRegister`), dan hapus satu baris draf di layar Catat —
 yang terakhir memakai toast "Urungkan", karena dialog untuk satu baris lebih
 mengganggu daripada kekeliruannya.
+
+## Header
+
+Ketiga portal memakai pola yang sama: judul layar yang sebenarnya (bukan label
+menu induknya), tombol kembali pada halaman yang tidak ada di menu, dan menu
+akun yang memuat jalan keluar. UMKM memakai `app/(umkm)/umkm-header.tsx`;
+Lembaga dan Admin berbagi satu `components/shell/PortalHeader.tsx` karena
+keduanya memakai cangkang `.topbar` yang sama.
+
+Tabel judulnya di `app/(admin)/admin-navigation.ts` dan
+`app/(dashboard)/institusi-navigation.ts`. Aturannya satu: **yang paling dalam
+menang**, dan halaman detail memakai awalan bergaris miring penutup
+(`/admin/umkm/`) supaya tidak bertabrakan dengan daftarnya. Dikunci di
+`tests/unit/portal-navigation.test.ts`, termasuk uji yang menangkap layar baru
+yang lupa didaftarkan.
 
 ## Yang harus ada supaya keduanya bekerja
 

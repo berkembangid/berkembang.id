@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Store, Save, ShieldAlert, CheckCircle2, Award, Calendar } from "lucide-react";
+import { ArrowLeft, Store, Save, ShieldAlert, Award, Calendar } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 import { runAdminOperation } from "@/modules/admin/operations";
+import { notifySuccess } from "@/lib/notify";
 
 const UMKM_SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
 
@@ -23,7 +24,6 @@ export default function UMKMDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
   const [ownerName, setOwnerName] = useState("");
@@ -84,7 +84,6 @@ export default function UMKMDetailPage() {
     if (!businessName.trim()) return;
 
     setSaving(true);
-    setSuccessMsg("");
     setErrorMsg("");
 
     try {
@@ -106,8 +105,7 @@ export default function UMKMDetailPage() {
       });
       setOldScore(score);
 
-      setSuccessMsg("Data UMKM berhasil diperbarui!");
-      setTimeout(() => setSuccessMsg(""), 3000);
+      notifySuccess("Data UMKM tersimpan");
     } catch (err: unknown) {
       console.error("Error saving UMKM:", err);
       setErrorMsg(err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan data.");
@@ -163,12 +161,6 @@ export default function UMKMDetailPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
-            {successMsg && (
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold flex items-center gap-2 animate-fade-in">
-                <CheckCircle2 size={16} />
-                {successMsg}
-              </div>
-            )}
             {errorMsg && (
               <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold animate-fade-in">
                 {errorMsg}

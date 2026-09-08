@@ -19,7 +19,7 @@ const artifactLabels: Record<string, string> = {
 export default function InstitutionAuditPage() {
   const { selectedId } = useInstitution();
   const [logs, setLogs] = useState<LogRow[]>([]);
-  const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -29,13 +29,13 @@ export default function InstitutionAuditPage() {
         if (!response.ok) throw new Error(body.error ?? "Log audit belum dapat dimuat.");
         setLogs(body.data ?? []);
       })
-      .catch((error) => { if (error instanceof Error && error.name !== "AbortError") setMessage(error.message); });
+      .catch((error) => { if (error instanceof Error && error.name !== "AbortError") setLoadError(error.message); });
     return () => controller.abort();
   }, [selectedId]);
 
   return <DashboardPage>
     <PageHeader title="Log audit organisasi" description="Setiap tatapan tercatat: siapa membuka apa, kapan. Terlihat oleh admin lembaga dan pemilik data." icon={ScrollText} />
-    {message && <FeedbackBanner tone="attention" live>{message}</FeedbackBanner>}
+    {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
     {logs.length === 0
       ? <EmptyState icon={ScrollText} title="Belum ada aktivitas tercatat" description="Pembukaan dossier, PDF, daftar kandidat, dan halaman organisasi akan muncul di sini." />
       : <div className="mt-4 space-y-2">{logs.map((log) => <div key={log.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-xs">

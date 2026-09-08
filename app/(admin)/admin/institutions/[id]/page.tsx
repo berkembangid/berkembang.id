@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Building2, ArrowLeft, Save, ShieldCheck, ShieldAlert, CheckCircle2, Award, Calendar, Mail, User, Shield } from "lucide-react";
+import { Building2, ArrowLeft, Save, ShieldCheck, ShieldAlert, Award, Calendar, Mail, User, Shield } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 import { runAdminOperation } from "@/modules/admin/operations";
+import { notifySuccess } from "@/lib/notify";
 
 export default function InstitutionDetailPage() {
   const params = useParams();
@@ -14,7 +15,6 @@ export default function InstitutionDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
   const [name, setName] = useState("");
@@ -116,7 +116,6 @@ export default function InstitutionDetailPage() {
     if (!name.trim()) return;
 
     setSaving(true);
-    setSuccessMsg("");
     setErrorMsg("");
 
     const progsNum = Number(programsCount) || 1;
@@ -136,8 +135,7 @@ export default function InstitutionDetailPage() {
         location: location.trim(),
       });
 
-      setSuccessMsg("Data lembaga berhasil diperbarui!");
-      setTimeout(() => setSuccessMsg(""), 3000);
+      notifySuccess("Data lembaga tersimpan");
     } catch (err: unknown) {
       console.error("Error saving institution:", err);
       setErrorMsg(err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan data.");
@@ -208,12 +206,6 @@ export default function InstitutionDetailPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
-            {successMsg && (
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold flex items-center gap-2 animate-fade-in">
-                <CheckCircle2 size={16} />
-                {successMsg}
-              </div>
-            )}
             {errorMsg && (
               <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold animate-fade-in">
                 {errorMsg}

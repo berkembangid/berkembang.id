@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Bell, CheckCheck } from "lucide-react";
 import { DashboardPage, EmptyState, FeedbackBanner, PageHeader } from "@/components/dashboard";
+import { notifyFromError, notifySuccess } from "@/lib/notify";
 
 type Notification = { id: string; title: string; body: string; status: string; created_at: string; notification_type?: string; data?: { requestId?: string; dossierId?: string; status?: string } | null };
 
@@ -18,7 +19,7 @@ const typeLabels: Record<string, string> = {
 export default function InstitutionNotificationsPage() {
   const [items, setItems] = useState<Notification[]>([]);
   const [filter, setFilter] = useState("Semua");
-  const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     fetch("/api/v1/notifications", { cache: "no-store" })
@@ -27,17 +28,36 @@ export default function InstitutionNotificationsPage() {
         if (!response.ok) throw new Error(body.error?.message ?? "Notifikasi belum dapat dimuat.");
         setItems(body.data ?? []);
       })
-      .catch((error) => setMessage(error instanceof Error ? error.message : "Notifikasi belum dapat dimuat."));
+      .catch((error) => setLoadError(error instanceof Error ? error.message : "Notifikasi belum dapat dimuat."));
   }, []);
 
+  // Menandai terbaca tidak perlu dikonfirmasi dan tidak perlu dikabarkan:
+  // barisnya sendiri yang berubah di depan mata. Yang perlu dikabarkan justru
+  // KEGAGALANNYA -- sebelumnya permintaan yang gagal tidak menghasilkan apa
+  // pun di layar, dan barisnya tetap berubah seolah berhasil.
   async function markRead(id: string) {
-    await fetch(`/api/v1/notifications/${id}`, { method: "PATCH" });
-    setItems((current) => current.map((item) => item.id === id ? { ...item, status: "read" } : item));
+    try {
+      const response = await fetch(`/api/v1/notifications/${id}`, { method: "PATCH" });
+      if (!response.ok) throw new Error("Tanda baca belum tersimpan.");
+      setItems((current) => current.map((item) => item.id === id ? { ...item, status: "read" } : item));
+    } catch (error) {
+      notifyFromError(error, "Tanda baca belum tersimpan.");
+    }
   }
 
   async function markAll() {
-    await Promise.all(items.filter((item) => item.status === "unread").map((item) => fetch(`/api/v1/notifications/${item.id}`, { method: "PATCH" })));
-    setItems((current) => current.map((item) => ({ ...item, status: "read" })));
+    const pending = items.filter((item) => item.status === "unread");
+    if (pending.length === 0) return;
+    try {
+      const results = await Promise.all(
+        pending.map((item) => fetch(`/api/v1/notifications/${item.id}`, { method: "PATCH" })),
+      );
+      if (results.some((response) => !response.ok)) throw new Error("Sebagian tanda baca belum tersimpan.");
+      setItems((current) => current.map((item) => ({ ...item, status: "read" })));
+      notifySuccess(`${pending.length} pemberitahuan ditandai terbaca`);
+    } catch (error) {
+      notifyFromError(error, "Tanda baca belum tersimpan.");
+    }
   }
 
   const unread = items.filter((item) => item.status === "unread").length;
@@ -51,7 +71,7 @@ export default function InstitutionNotificationsPage() {
 
   return <DashboardPage>
     <PageHeader title="Notifikasi" description="Keputusan akses, kedaluwarsa, pencabutan, dan unduhan PDF." icon={Bell} actions={unread > 0 ? <button onClick={() => void markAll()} className="flex min-h-9 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-[#0b5f86]"><CheckCheck size={14} />Tandai semua dibaca ({unread})</button> : undefined} />
-    {message && <FeedbackBanner tone="attention" live>{message}</FeedbackBanner>}
+    {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
     <div className="mb-4 flex flex-wrap gap-2">{["Semua", ...Object.values(typeLabels)].map((label) => <button key={label} onClick={() => setFilter(label)} className={`min-h-9 rounded-full px-3 text-xs font-bold ${filter === label ? "bg-[#0b5f86] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>{label}</button>)}</div>
     {visible.length === 0
       ? <EmptyState icon={Bell} title="Belum ada notifikasi" description="Pembaruan penting akan muncul di sini." />

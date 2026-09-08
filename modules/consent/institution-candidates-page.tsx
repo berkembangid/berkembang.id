@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, Bookmark, Building2, Check, FileSearch, MapPin, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
 import { consentScopeLabels, durationTemplates, type ConsentScope } from "@/modules/consent/consent-schema";
 import { DashboardPage, FeedbackBanner, PageHeader, StatusBadge } from "@/components/dashboard";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFromError, notifyInfo, notifySuccess } from "@/lib/notify";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
 
 type Candidate = {
@@ -25,7 +27,14 @@ export default function InstitutionCandidatesPage() {
   const [downloadRequested, setDownloadRequested] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [message, setMessage] = useState("");
+  const { confirm } = useConfirm();
+  /**
+   * Hanya kegagalan MEMUAT daftar yang tinggal di layar. Sebelumnya satu
+   * `message` dipakai untuk kabar berhasil dan kabar gagal sekaligus, dengan
+   * warna yang sama -- "Ketertarikan berhasil dikirim" dan "Permintaan belum
+   * dapat dikirim" tampil persis serupa.
+   */
+  const [loadError, setLoadError] = useState("");
   const [sector, setSector] = useState("Semua");
   const [readinessFilter, setReadinessFilter] = useState("Semua");
   const [recordingFilter, setRecordingFilter] = useState("Semua");
@@ -56,7 +65,7 @@ export default function InstitutionCandidatesPage() {
           body: JSON.stringify({ artifact: "CANDIDATE_LIST" }),
         }).catch(() => undefined);
       })
-      .catch((error) => { if (error instanceof Error && error.name !== "AbortError") setMessage(error.message); })
+      .catch((error) => { if (error instanceof Error && error.name !== "AbortError") setLoadError(error.message); })
       .finally(() => { if (!signal?.aborted) setLoading(false); });
   }, [legalFilter, readinessFilter, recordingFilter, region, sector, selectedId, sortBy]);
 
@@ -99,13 +108,35 @@ export default function InstitutionCandidatesPage() {
       const response = await fetch("/api/v1/institution/shortlist", { method: "POST", headers: { "Content-Type": "application/json", ...institutionHeaders(selectedId) }, body: JSON.stringify({ candidateCode }) });
       const body = await response.json();
       if (!response.ok) throw new Error("Shortlist belum dapat diperbarui.");
-      setShortlist((current) => body.data.shortlisted ? [...new Set([...current, candidateCode])] : current.filter((item) => item !== candidateCode));
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Shortlist belum dapat diperbarui."); }
+      const saved = Boolean(body.data.shortlisted);
+      setShortlist((current) => saved ? [...new Set([...current, candidateCode])] : current.filter((item) => item !== candidateCode));
+      // Menyimpan dan melepas sama-sama satu ketukan dan sama-sama bisa
+      // diulang; yang dibutuhkan kabar sekilas, bukan dialog.
+      notifyInfo(saved ? `${candidateCode} disimpan ke shortlist` : `${candidateCode} dilepas dari shortlist`);
+    } catch (error) { notifyFromError(error, "Shortlist belum dapat diperbarui."); }
   }
 
+  /**
+   * Mengirim ketertarikan ditanyakan lebih dulu, dan yang ditanyakan bukan
+   * "Anda yakin" melainkan APA YANG DIMINTA.
+   *
+   * Permintaan ini berjalan ke admin platform, lalu -- bila disetujui -- ke
+   * identitas dan kontak seseorang yang sampai detik ini masih anonim.
+   * Ruang lingkup dan lamanya izin ditentukan di formulir ini, tidak bisa
+   * diubah setelah terkirim, dan pemiliknya melihat persis apa yang diminta.
+   */
   async function submitRequest() {
     if (!selected || scopes.length === 0) return;
-    setSending(true); setMessage("");
+
+    const yes = await confirm({
+      title: `Kirim ketertarikan pada ${selected.candidateCode}?`,
+      description: `Yang diminta: ${scopes.map((scope) => consentScopeLabels[scope] ?? scope).join(", ")} selama ${duration} hari${downloadRequested ? ", dengan izin mengunduh" : ""}. Permintaan ini ditinjau admin platform lebih dulu, dan pemilik usahanya melihat persis apa yang Anda minta. Ruang lingkupnya tidak bisa diubah setelah terkirim.`,
+      confirmLabel: "Kirim permintaan",
+      cancelLabel: "Periksa lagi",
+    });
+    if (!yes) return;
+
+    setSending(true);
     try {
       const response = await fetch("/api/v1/profile-access/requests", {
         method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID(), ...institutionHeaders(selectedId) },
@@ -116,14 +147,18 @@ export default function InstitutionCandidatesPage() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message ?? "Permintaan belum dapat dikirim.");
       setCandidates((current) => current.map((item) => item.candidateCode === selected.candidateCode ? { ...item, requestStatus: "pending" } : item));
-      setSelected(null); setMessage("Ketertarikan berhasil dikirim. Admin akan meninjau permintaan dan menghubungkan Anda jika disetujui.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Permintaan belum dapat dikirim."); }
+      setSelected(null);
+      notifySuccess("Ketertarikan terkirim", {
+        description: "Admin platform akan meninjaunya. Anda diberi tahu setelah ada keputusan.",
+        duration: 7000,
+      });
+    } catch (error) { notifyFromError(error, "Permintaan belum dapat dikirim."); }
     finally { setSending(false); }
   }
 
   return <DashboardPage>
     <PageHeader title="Kandidat pendanaan" description="Bandingkan kesiapan data usaha secara anonim. Filter dihitung di server; tanpa skor, tanpa ranking, tanpa rupiah." icon={Building2} actions={<StatusBadge tone="success"><ShieldCheck size={13} className="mr-1.5" />Identitas tersamar</StatusBadge>} />
-    {message && <FeedbackBanner live>{message}</FeedbackBanner>}
+    {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
     <div className="mb-5 flex flex-wrap gap-2" aria-label="Saring berdasarkan bidang usaha">{sectors.map((item) => <button key={item} onClick={() => apply({ sector: item })} className={`min-h-10 rounded-full px-4 text-xs font-bold ${sector === item ? "bg-[#0b5f86] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>{item}</button>)}</div>
     <div className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[auto_1fr_1fr_1fr_1fr_auto] md:items-end">
       <div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal size={15} className="text-[#0b5f86]" />Saring kandidat</div>

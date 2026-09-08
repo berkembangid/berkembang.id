@@ -3,11 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart2, BookOpen, Building2, FileCheck, Gauge, Handshake, History, LayoutDashboard, LogOut, Menu, MonitorPlay, ShieldCheck, Sliders, Sparkles, ToggleLeft, Users, X } from "lucide-react";
+import { BarChart2, BookOpen, Building2, FileCheck, Gauge, Handshake, History, LayoutDashboard, LogOut, MonitorPlay, ShieldCheck, Sliders, Sparkles, ToggleLeft, Users, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure } from "@/lib/notify";
+import PortalHeader from "@/components/shell/PortalHeader";
+import { ADMIN_ROUTES } from "./admin-navigation";
 import styles from "../dashboard-shell.module.css";
 
 type NavGroup = { category: string; items: { href: string; label: string; Icon: LucideIcon }[] };
@@ -25,8 +27,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { confirm } = useConfirm();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const allItems = NAV_GROUPS.flatMap((group) => group.items);
-  const activeLabel = allItems.find((item) => item.href === "/admin" ? pathname === item.href : pathname.startsWith(item.href))?.label ?? "Admin";
 
   async function handleSignOut() {
     const yes = await confirm({
@@ -60,7 +60,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className={styles.sidebarFooter}><button type="button" onClick={() => void handleSignOut()} className={`${styles.navLink} !m-0 w-full`}><LogOut size={16} /><span>Keluar akun</span></button></div>
       </aside>
       <div className={styles.main}>
-        <header className={styles.topbar}><div className="flex items-center gap-3"><button type="button" onClick={() => setMobileOpen(true)} aria-label="Buka menu" className={styles.menuButton}><Menu size={19} /></button><div><p className="hidden text-[9px] font-bold uppercase tracking-[.12em] text-[#9fb0c2] sm:block">Administrasi</p><p className={styles.pageLabel}>{activeLabel}</p></div></div><span className={styles.portalBadge}>Admin</span></header>
+        <PortalHeader
+          routes={ADMIN_ROUTES}
+          fallbackTitle="Administrasi"
+          eyebrow="Administrasi"
+          badge="Admin"
+          onOpenMenu={() => setMobileOpen(true)}
+          contextName="Sesi admin"
+          contextHint="Kontrol operasional platform"
+          menuLinks={[
+            { href: "/admin/panduan", label: "Panduan Ruang Mesin", Icon: BookOpen },
+            { href: "/admin/audit", label: "Riwayat audit", Icon: History },
+            { href: "/admin/admins", label: "Kelola admin", Icon: ShieldCheck },
+          ]}
+          onSignOut={() => void handleSignOut()}
+        />
         <main className="min-h-[calc(100vh-72px)] w-full max-w-full overflow-x-hidden p-4 sm:p-6 md:p-7">{children}</main>
       </div>
     </div>

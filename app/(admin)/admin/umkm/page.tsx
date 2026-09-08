@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import Modal from "@/components/Modal";
 import CitySelect from "@/components/CitySelect";
 import { runAdminOperation } from "@/modules/admin/operations";
+import { notifyFromError, notifySuccess, notifyWarning } from "@/lib/notify";
 
 interface UMKMProfile {
   id: string;
@@ -109,10 +110,21 @@ export default function AdminUMKMPage() {
 
   const handleSaveOverrideScore = async () => {
     if (!editScore) return;
+
+    // Alasannya dulu punya nilai bawaan "Penyesuaian manual oleh admin", yang
+    // artinya riwayat penuh berisi kalimat yang tidak menjelaskan apa pun.
+    // Alasan yang boleh kosong adalah alasan yang tidak pernah diisi.
+    if (overrideReason.trim().length < 3) {
+      notifyWarning("Tuliskan alasan penyesuaiannya minimal 3 huruf.", {
+        description: "Alasannya ikut tersimpan di riwayat audit, dan yang terlalu pendek tidak menjelaskan apa pun nanti.",
+      });
+      return;
+    }
+
     setSaving(true);
 
     const { id, score, oldScore } = editScore;
-    const reasonText = overrideReason.trim() || "Penyesuaian manual oleh admin";
+    const reasonText = overrideReason.trim();
 
     try {
       await runAdminOperation({
@@ -124,8 +136,12 @@ export default function AdminUMKMPage() {
 
       // Local state update
       setUmkmList(umkmList.map((u) => (u.id === id ? { ...u, score } : u)));
+      notifySuccess("Penyesuaian tersimpan", {
+        description: "Perubahannya beserta alasannya tercatat di riwayat audit.",
+      });
     } catch (err) {
       console.error("Error saving score override:", err);
+      notifyFromError(err, "Penyesuaian belum berhasil disimpan.");
     } finally {
       setSaving(false);
       setEditScore(null);

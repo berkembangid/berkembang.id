@@ -6,6 +6,8 @@ import { Building2, Plus, Edit, Trash2, Shield, ShieldAlert, X, RefreshCw } from
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/Modal";
 import { runAdminOperation } from "@/modules/admin/operations";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFromError, notifySuccess } from "@/lib/notify";
 
 interface Institution {
   id: string;
@@ -23,7 +25,15 @@ function parseInstitutionListId(id: string) {
   return { source: "institutions" as const, id };
 }
 
+/** Kata yang dibaca admin, bukan kode statusnya. */
+const VERIFICATION_LABEL: Record<string, string> = {
+  verified: "terverifikasi",
+  rejected: "tidak terverifikasi",
+  pending: "menunggu peninjauan",
+};
+
 export default function AdminInstitutionsPage() {
+  const { confirm } = useConfirm();
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -101,8 +111,27 @@ export default function AdminInstitutionsPage() {
     }
   }
 
+  /**
+   * Menonaktifkan sebuah lembaga memutus akses seluruh anggotanya sekaligus,
+   * jadi ia ditanyakan. Mengaktifkan kembali tidak: mengembalikan sesuatu ke
+   * keadaan semula tidak pernah mengejutkan siapa pun.
+   *
+   * Kegagalannya juga tidak lagi berhenti di konsol. Sebelumnya barisnya tetap
+   * berubah di layar meski permintaannya gagal -- admin melihat "nonaktif",
+   * lembaganya tetap bisa masuk, dan tidak ada yang memberi tahu.
+   */
   const handleToggleActive = async (inst: Institution) => {
     const updatedStatus = !inst.active;
+    if (!updatedStatus) {
+      const yes = await confirm({
+        title: `Nonaktifkan ${inst.name}?`,
+        description: "Seluruh anggota lembaga ini kehilangan akses ke portal seketika. Izin yang sudah diberikan pemilik usaha tidak ikut dicabut, tetapi tidak ada yang bisa membukanya selama lembaga nonaktif.",
+        confirmLabel: "Nonaktifkan",
+        cancelLabel: "Batal",
+        tone: "danger",
+      });
+      if (!yes) return;
+    }
     try {
       const target = parseInstitutionListId(inst.id);
       await runAdminOperation({
@@ -113,27 +142,57 @@ export default function AdminInstitutionsPage() {
       });
 
       setInstitutions(institutions.map(i => i.id === inst.id ? { ...i, active: updatedStatus } : i));
+      notifySuccess(updatedStatus ? `${inst.name} diaktifkan` : `${inst.name} dinonaktifkan`);
     } catch (err) {
       console.error("Error updating status:", err);
+      notifyFromError(err, "Status lembaga belum berhasil diubah.");
     }
   };
 
   const handleVerification = async (inst: Institution, status: Institution["verificationStatus"]) => {
+    // Memverifikasi membuka portal untuk lembaga ini; menolak menutupnya.
+    // Keduanya mengubah apa yang bisa dilihat orang lain, jadi keduanya
+    // ditanyakan -- yang tidak ditanyakan hanya mengembalikannya ke menunggu.
+    if (status !== "pending") {
+      const yes = await confirm({
+        title: status === "verified" ? `Verifikasi ${inst.name}?` : `Tandai ${inst.name} tidak terverifikasi?`,
+        description: status === "verified"
+          ? "Lembaga ini menjadi aktif dan anggotanya bisa masuk portal. Permintaan akses yang ia ajukan tetap harus Anda tinjau satu per satu."
+          : "Lembaga ini berhenti aktif dan anggotanya tidak bisa masuk portal sampai statusnya diubah lagi.",
+        confirmLabel: status === "verified" ? "Verifikasi" : "Tandai",
+        cancelLabel: "Batal",
+        tone: status === "verified" ? "default" : "danger",
+      });
+      if (!yes) return;
+    }
     try {
       await runAdminOperation({ action: "set_institution_verification", id: parseInstitutionListId(inst.id).id, status });
       setInstitutions(institutions.map((item) => item.id === inst.id ? { ...item, verificationStatus: status, active: status === "verified" } : item));
+      notifySuccess(`${inst.name} kini ${VERIFICATION_LABEL[status] ?? status}`);
     } catch (err) {
       console.error("Error updating verification:", err);
+      notifyFromError(err, "Status verifikasi belum berhasil diubah.");
     }
   };
 
   const handleDelete = async (id: string) => {
+    const target = institutions.find((item) => item.id === id);
+    const yes = await confirm({
+      title: `Hapus ${target?.name ?? "lembaga ini"} dari daftar?`,
+      description: "Datanya tidak dihapus, hanya dinonaktifkan dan hilang dari daftar ini. Jejak akses yang pernah dilakukannya tetap tersimpan di log audit.",
+      confirmLabel: "Hapus dari daftar",
+      cancelLabel: "Batal",
+      tone: "danger",
+    });
+    if (!yes) return;
     try {
-      const target = parseInstitutionListId(id);
-      await runAdminOperation({ action: "deactivate_institution", source: target.source, id: target.id });
+      const parsed = parseInstitutionListId(id);
+      await runAdminOperation({ action: "deactivate_institution", source: parsed.source, id: parsed.id });
       setInstitutions(institutions.filter(i => i.id !== id));
+      notifySuccess(`${target?.name ?? "Lembaga"} dihapus dari daftar`);
     } catch (err) {
       console.error("Error deleting institution:", err);
+      notifyFromError(err, "Lembaga belum berhasil dihapus dari daftar.");
     }
   };
 
