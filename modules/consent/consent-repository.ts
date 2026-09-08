@@ -117,7 +117,7 @@ export async function listConsentWorkspace() {
   const programs = new Map((programsResult.data ?? []).map((row) => [row.id, row.name]));
   const candidateCodes = new Map((optinsResult.data ?? []).map((row) => [row.business_id, row.candidate_code]));
   return {
-    requests: (requestsResult.data ?? []).map((row) => ({ ...row, candidateCode: candidateCodes.get(row.business_id) ?? "Kandidat", institutionName: institutions.get(row.institution_id) ?? "Institusi", programName: row.program_id ? programs.get(row.program_id) ?? null : null })),
+    requests: (requestsResult.data ?? []).map((row) => ({ ...row, candidateCode: candidateCodes.get(row.business_id) ?? "Kandidat", institutionName: institutions.get(row.institution_id) ?? "Lembaga", programName: row.program_id ? programs.get(row.program_id) ?? null : null })),
     grants: grantsResult.data ?? [], dossiers: dossiersResult.data ?? [],
   };
 }

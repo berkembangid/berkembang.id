@@ -138,6 +138,127 @@ describe("WP-05 capture endpoint contract", () => {
     expect(createCapture).toHaveBeenCalledOnce();
   });
 
+  /**
+   * Foto nota berjalan di jalur yang berbeda dari audio, dan yang harus
+   * dibuktikan adalah bahwa BENTUK JAWABANNYA tidak ikut berbeda.
+   *
+   * Kalau jalur kamera pulang tanpa sesi unggah, capture-nya lahir dengan
+   * tempat penyimpanan yang tidak akan pernah terisi, dan pekerja OCR menunggu
+   * berkas yang tidak pernah datang. Kegagalan itu tidak terlihat di mana pun
+   * kecuali di sini: tidak ada galat, hanya draf yang tidak pernah selesai.
+   */
+  it("hands the camera path an upload session, exactly like audio", async () => {
+    const createCapture = vi.fn().mockResolvedValue({
+      id: captureId,
+      businessId,
+      inputMethod: "camera",
+      status: "draft",
+      storagePath: `${user.id}/${captureId}.jpg`,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      idempotent: false,
+    });
+    const createUploadSession = vi.fn().mockResolvedValue({
+      bucket: "captures",
+      path: `${user.id}/${captureId}.jpg`,
+      token: "signed-token",
+      expiresIn: 300,
+    });
+
+    const response = await handleCreate(
+      new Request("http://localhost/api/v1/captures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": "capture-camera-1" },
+        body: JSON.stringify({
+          inputMethod: "camera",
+          file: { mimeType: "image/jpeg", size: 400_000 },
+        }),
+      }),
+      {
+        authenticate: async () => user,
+        createCapture,
+        createUploadSession,
+        cameraEnabled: async () => true,
+      },
+    );
+
+    expect(response.status).toBe(201);
+    expect(await json(response)).toMatchObject({
+      data: {
+        capture: { id: captureId, inputMethod: "camera" },
+        upload: { bucket: "captures", token: "signed-token" },
+        path: "OCR",
+        drafts: [],
+        questions: [],
+      },
+    });
+    expect(createUploadSession).toHaveBeenCalledOnce();
+    expect(createCapture).toHaveBeenCalledWith(expect.anything(), "capture-camera-1", "OCR");
+  });
+
+  it("closes the camera path when its feature flag is off", async () => {
+    const createCapture = vi.fn();
+    const response = await handleCreate(
+      new Request("http://localhost/api/v1/captures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": "capture-camera-2" },
+        body: JSON.stringify({
+          inputMethod: "camera",
+          file: { mimeType: "image/jpeg", size: 400_000 },
+        }),
+      }),
+      {
+        authenticate: async () => user,
+        createCapture,
+        createUploadSession: vi.fn(),
+        cameraEnabled: async () => false,
+      },
+    );
+
+    expect(response.status).toBe(409);
+    expect((await json(response)).error).toMatchObject({ code: "CAPTURE_PATH_DISABLED" });
+    // Sakelar yang mati harus menutup pintunya, bukan sekadar menyembunyikan
+    // tombolnya: tidak ada satu baris pun yang boleh tertulis.
+    expect(createCapture).not.toHaveBeenCalled();
+  });
+
+  it("never asks the voice path about the camera flag", async () => {
+    // Uji ini menjaga arah ketergantungan: mematikan kamera tidak boleh punya
+    // jalan apa pun untuk ikut mematikan suara.
+    const cameraEnabled = vi.fn().mockResolvedValue(false);
+    const response = await handleCreate(
+      new Request("http://localhost/api/v1/captures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": "capture-voice-flag" },
+        body: JSON.stringify({
+          inputMethod: "voice",
+          file: { mimeType: "audio/webm", size: 1024 },
+        }),
+      }),
+      {
+        authenticate: async () => user,
+        createCapture: vi.fn().mockResolvedValue({
+          id: captureId,
+          businessId,
+          inputMethod: "voice",
+          status: "draft",
+          storagePath: `${user.id}/${captureId}.webm`,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          idempotent: false,
+        }),
+        createUploadSession: vi.fn().mockResolvedValue({
+          bucket: "captures",
+          path: `${user.id}/${captureId}.webm`,
+          token: "signed-token",
+          expiresIn: 300,
+        }),
+        cameraEnabled,
+      },
+    );
+
+    expect(response.status).toBe(201);
+    expect(cameraEnabled).not.toHaveBeenCalled();
+  });
+
   it("returns validation, forbidden, and not-found errors without dishonest success", async () => {
     const invalid = await handleCreate(
       new Request("http://localhost/api/v1/captures", {
@@ -188,6 +309,7 @@ describe("WP-05 capture endpoint contract", () => {
         status: "needs_review",
         transcription: "Jual dua nasi kotak",
         draft,
+        ocrSummary: null,
         failure: null,
         createdAt: "2026-08-26T00:00:00Z",
         updatedAt: "2026-08-26T00:00:01Z",

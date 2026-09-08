@@ -10,7 +10,9 @@ import { User, Mail, Building2, Phone, Save, FileText, Camera, LogOut, ChevronRi
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 import OwnerConsentPanel from "@/modules/consent/owner-consent-panel";
-import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
+import { DashboardPage, PageHeader } from "@/components/dashboard";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFailure, notifySuccess, notifyWarning } from "@/lib/notify";
 
 /**
  * Pilihan sektor datang dari tabel pemetaan, bukan daftar tersendiri.
@@ -103,7 +105,7 @@ function ChipGroup<T extends string>({
 
 export default function ProfilPage() {
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const { confirm } = useConfirm();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewAvatar, setPreviewAvatar] = useState<string | null>(null);
   const [deletionScheduledFor, setDeletionScheduledFor] = useState<string | null>(null);
@@ -188,12 +190,11 @@ export default function ProfilPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    setMessage(null);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setMessage({ type: "error", text: "Sesi habis. Silakan masuk kembali." });
+        notifyWarning("Sesi habis. Silakan masuk kembali.");
         setSaving(false);
         return;
       }
@@ -262,20 +263,26 @@ export default function ProfilPage() {
       }
 
       setForm((prev) => ({ ...prev, avatarUrl: finalAvatarUrl }));
-      setMessage({ type: "success", text: "Profil berhasil disimpan." });
-      setTimeout(() => setMessage(null), 3000);
+      notifySuccess("Profil usaha tersimpan", {
+        description: "Nama ini yang muncul di laporan dan berkas yang Anda bagikan.",
+      });
     } catch (err: unknown) {
       console.error("Save profile error");
-      setMessage({
-        type: "error",
-        text: err instanceof Error ? err.message : "Gagal menyimpan profil.",
-      });
+      notifyFailure(err instanceof Error ? err.message : "Profil belum berhasil disimpan.");
     } finally {
       setSaving(false);
     }
   };
 
   const handleSignOut = async () => {
+    const yes = await confirm({
+      title: "Keluar dari akun?",
+      description: "Catatan yang sudah dikonfirmasi tetap tersimpan. Draf yang belum dikonfirmasi akan hilang, dan Anda perlu masuk lagi untuk membukanya.",
+      confirmLabel: "Keluar",
+      cancelLabel: "Tetap di sini",
+      tone: "danger",
+    });
+    if (!yes) return;
     try {
       await supabase.auth.signOut();
     } catch (e) {
@@ -302,12 +309,6 @@ export default function ProfilPage() {
             </button>
           }
         />
-
-        {message && (
-          <FeedbackBanner tone={message.type === "success" ? "success" : "error"} live>
-            {message.text}
-          </FeedbackBanner>
-        )}
 
         <form onSubmit={handleSave} className="space-y-4">
           {/* Identity card */}
@@ -473,7 +474,7 @@ export default function ProfilPage() {
                     <FileText size={15} className="text-[#0b5f86]" />
                     <h2 className="text-xs font-bold text-[#1b2a3a]">Legalitas usaha</h2>
                   </div>
-                  <Link href="/umkm/upload" className="flex items-center gap-1 text-[10px] font-bold text-[#0b5f86] hover:underline">
+                  <Link href="/umkm/profil/dokumen" className="flex items-center gap-1 text-[10px] font-bold text-[#0b5f86] hover:underline">
                     Kelola dokumen <ChevronRight size={11} />
                   </Link>
                 </div>

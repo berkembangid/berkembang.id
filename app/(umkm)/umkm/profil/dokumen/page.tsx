@@ -26,6 +26,8 @@ import { compressImageFile } from "@/modules/documents/image-compression";
 import type { CabinetPayload } from "@/modules/documents/cabinet-repository";
 import { DocumentUploadConsentDialog } from "@/components/documents/DocumentUploadConsentDialog";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
+import { useConfirm } from "@/components/ui/confirm";
+import { dismissNotice, notifyBusy, notifyFromError, notifySuccess } from "@/lib/notify";
 import { supabase } from "@/lib/supabase";
 import {
   archiveDocument,
@@ -115,6 +117,7 @@ function fileSizeLabel(bytes: number | null) {
 }
 
 export default function UploadPage() {
+  const { confirm } = useConfirm();
   const [documents, setDocuments] = useState<DocumentView[]>([]);
   const [busyType, setBusyType] = useState<DocumentType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -189,7 +192,11 @@ export default function UploadPage() {
     ocrConsent = false,
   ) => {
     setBusyType(docType);
-    setMessage({ tone: "info", text: "Memeriksa file sebelum disimpan..." });
+    // Satu toast dipakai ulang untuk seluruh tahapan, bukan satu toast per
+    // tahap. Unggah dokumen melewati empat keadaan; empat pemberitahuan
+    // berturut-turut membuat layar berkedip dan yang terakhir menutupi yang
+    // sebenarnya perlu dibaca.
+    const progress = notifyBusy("Memeriksa file sebelum disimpan...");
     try {
       // Foto dokumen dari ponsel datang pada 3-5 MB. Di sinyal 3G itu berarti
       // unggahan puluhan detik yang sering putus di tengah, dan pemilik
@@ -217,7 +224,7 @@ export default function UploadPage() {
         );
       }
 
-      setMessage({ tone: "info", text: "Menyiapkan penyimpanan aman..." });
+      notifyBusy("Menyiapkan penyimpanan aman...", { id: progress });
       const session = await createDocumentUploadSession(
         parsed.data,
         `document:${crypto.randomUUID()}`,
@@ -236,20 +243,19 @@ export default function UploadPage() {
         );
       }
 
-      setMessage({ tone: "info", text: "Memastikan file tersimpan dengan lengkap..." });
+      notifyBusy("Memastikan file tersimpan dengan lengkap...", { id: progress });
       await completeDocumentVersion(session.documentId, session.sessionId);
-      setMessage({
-        tone: "success",
-        text: supportsDocumentOcr(docType)
-          ? `${documentTypeLabels[docType]} berhasil disimpan dan sedang dibaca. Biasanya selesai kurang dari satu menit.`
-          : `${documentTypeLabels[docType]} berhasil disimpan dengan aman.`,
+      notifySuccess(`${documentTypeLabels[docType]} tersimpan`, {
+        id: progress,
+        duration: 5000,
+        description: supportsDocumentOcr(docType)
+          ? "Isinya sedang dibaca otomatis. Biasanya selesai kurang dari satu menit."
+          : "Tersimpan privat. Hanya Anda yang dapat membukanya.",
       });
       await loadDocuments();
     } catch (error) {
-      setMessage({
-        tone: "error",
-        text: error instanceof Error ? error.message : "Dokumen belum berhasil diunggah.",
-      });
+      dismissNotice(progress);
+      notifyFromError(error, "Dokumen belum berhasil diunggah.");
     } finally {
       setBusyType(null);
     }
@@ -274,7 +280,6 @@ export default function UploadPage() {
   const handleReviewOcr = async (document: DocumentView) => {
     if (!supportsDocumentOcr(document.docType)) return;
     setBusyType(document.docType);
-    setMessage({ tone: "info", text: "Memuat data yang berhasil dibaca..." });
     try {
       const detail = await getDocument(document.id);
       const currentVersion = detail.versions.find((version) => version.version === detail.currentVersion);
@@ -292,9 +297,8 @@ export default function UploadPage() {
         docType: document.docType,
         data,
       });
-      setMessage(null);
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Data dokumen belum dapat dimuat." });
+      notifyFromError(error, "Data dokumen belum dapat dimuat.");
     } finally {
       setBusyType(null);
     }
@@ -302,13 +306,14 @@ export default function UploadPage() {
 
   const handleRetryReading = async (document: DocumentView) => {
     setBusyType(document.docType);
-    setMessage({ tone: "info", text: "Mencoba membaca kembali dokumen..." });
+    const progress = notifyBusy("Mencoba membaca kembali dokumen...");
     try {
       await retryDocumentExtraction(document.id);
-      setMessage({ tone: "success", text: "Dokumen sedang dibaca kembali. Anda tidak perlu mengunggah file yang sama." });
+      notifySuccess("Dokumen sedang dibaca kembali", { id: progress, description: "Anda tidak perlu mengunggah file yang sama." });
       await loadDocuments();
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Dokumen belum dapat dibaca kembali." });
+      dismissNotice(progress);
+      notifyFromError(error, "Dokumen belum dapat dibaca kembali.");
     } finally {
       setBusyType(null);
     }
@@ -324,15 +329,13 @@ export default function UploadPage() {
         data,
       );
       setOcrReview(null);
-      setMessage({
-        tone: "success",
-        text: result.reviewStatus === "owner_corrected"
-          ? "Perbaikan data telah disimpan. Dokumen masih menunggu pemeriksaan keaslian."
-          : "Data telah Anda konfirmasi. Dokumen masih menunggu pemeriksaan keaslian.",
-      });
+      notifySuccess(
+        result.reviewStatus === "owner_corrected" ? "Perbaikan data tersimpan" : "Data sudah Anda konfirmasi",
+        { description: "Dokumen masih menunggu pemeriksaan keaslian." },
+      );
       await loadDocuments();
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Konfirmasi data belum berhasil." });
+      notifyFromError(error, "Konfirmasi data belum berhasil.");
       throw error;
     } finally {
       setConfirmingOcr(false);
@@ -340,24 +343,30 @@ export default function UploadPage() {
   };
 
   const handleView = async (documentId: string) => {
-    setMessage(null);
     try {
       const result = await createDocumentSignedUrl(documentId);
       window.open(result.signedUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Dokumen belum dapat dibuka." });
+      notifyFromError(error, "Dokumen belum dapat dibuka.");
     }
   };
 
   const handleArchive = async (document: DocumentView) => {
-    if (!window.confirm(`Arsipkan ${documentTypeLabels[document.docType]}? File tidak dihapus dan riwayat versi tetap disimpan.`)) return;
+    const yes = await confirm({
+      title: `Arsipkan ${documentTypeLabels[document.docType]}?`,
+      description: "File tidak dihapus dan riwayat versinya tetap disimpan. Dokumen ini berhenti dihitung sebagai kelengkapan usaha sampai Anda mengunggah yang baru.",
+      confirmLabel: "Arsipkan",
+      cancelLabel: "Batal",
+      tone: "danger",
+    });
+    if (!yes) return;
     setBusyType(document.docType);
     try {
       await archiveDocument(document.id);
-      setMessage({ tone: "success", text: "Dokumen diarsipkan. Riwayat dan audit tetap tersimpan." });
+      notifySuccess("Dokumen diarsipkan", { description: "Riwayat dan catatan aksesnya tetap tersimpan." });
       await loadDocuments();
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Dokumen belum dapat diarsipkan." });
+      notifyFromError(error, "Dokumen belum dapat diarsipkan.");
     } finally {
       setBusyType(null);
     }

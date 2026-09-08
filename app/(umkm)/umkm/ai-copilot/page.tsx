@@ -5,7 +5,7 @@ import { DashboardPage, DashboardPanel, PageHeader } from "@/components/dashboar
 const guides = [
   { title: "Catat transaksi", description: "Gunakan suara atau tulisan, lalu periksa hasil sebelum menyimpan.", href: "/umkm/catat", icon: Mic, action: "Mulai mencatat" },
   { title: "Pahami kondisi kas", description: "Bandingkan uang masuk, biaya, dan selisih pada periode yang Anda pilih.", href: "/umkm/laporan", icon: BarChart3, action: "Buka laporan" },
-  { title: "Lengkapi dokumen", description: "Lihat dokumen yang tersedia dan bagian yang masih perlu dilengkapi.", href: "/umkm/upload", icon: FileCheck2, action: "Periksa dokumen" },
+  { title: "Lengkapi dokumen", description: "Lihat dokumen yang tersedia dan bagian yang masih perlu dilengkapi.", href: "/umkm/profil/dokumen", icon: FileCheck2, action: "Periksa dokumen" },
   { title: "Tentukan langkah berikutnya", description: "Ikuti rekomendasi yang dibuat dari bukti usaha yang sudah tercatat.", href: "/umkm/roadmap", icon: Route, action: "Lihat perjalanan" },
 ];
 

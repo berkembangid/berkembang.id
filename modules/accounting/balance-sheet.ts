@@ -239,7 +239,7 @@ export function buildBusinessCondition(sheet: BalanceSheetView): BusinessConditi
     { label: "Uang di laci", amountIdr: amount("BS_KAS") },
     { label: "Uang di rekening", amountIdr: amount("BS_GIRO") },
     { label: "Pelanggan yang belum bayar", amountIdr: amount("BS_PIUTANG_USAHA") },
-    { label: "Stok bahan", amountIdr: amount("BS_PERSEDIAAN") },
+    { label: "Stok barang", amountIdr: amount("BS_PERSEDIAAN") },
     {
       label: "Alat usaha",
       amountIdr: amount("BS_ASET_TETAP") + amount("BS_AKUMULASI_PENYUSUTAN"),

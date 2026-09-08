@@ -15,7 +15,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, Package, RotateCcw } from "lucide-react";
 import {
-  AccountingClientError,
   getInventoryCountClient,
   getRemindersClient,
   saveInventoryCountClient,
@@ -23,6 +22,7 @@ import {
 import type { InventoryCountView } from "@/modules/accounting/period";
 import { MoneyInput } from "@/components/warung/MoneyInput";
 import { formatIdr, monthLabel } from "@/modules/accounting/warung";
+import { notifyFromError, notifySuccess } from "@/lib/notify";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
 
 /** Kartu menonjol di tiga hari terakhir bulan berjalan. */
@@ -73,7 +73,13 @@ export function StockCountCard({
   const [state, setState] = useState<InventoryCountView | null>(null);
   const [draft, setDraft] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  /**
+   * Kotak ini hanya berisi KALIMAT AKIBAT -- "untung bulan ini naik sekian
+   * karena bahan belum terpakai". Sebelumnya ia juga dipakai untuk pesan
+   * kesalahan, dan karena penandanya centang hijau, kegagalan menyimpan
+   * tampil persis seperti keberhasilan.
+   */
+  const [effect, setEffect] = useState("");
   const [editing, setEditing] = useState(false);
 
   const load = useCallback(async () => {
@@ -127,19 +133,20 @@ export function StockCountCard({
   const submit = async () => {
     if (draft === null) return;
     setBusy(true);
-    setMessage("");
     try {
       const result = await saveInventoryCountClient({
         periodMonth: month,
         countedValueIdr: draft,
         notes: null,
       });
-      setMessage(stockEffectSentence(result.previousValueIdr, result.countedValueIdr));
+      const sentence = stockEffectSentence(result.previousValueIdr, result.countedValueIdr);
+      setEffect(sentence);
+      notifySuccess("Hitungan stok tersimpan", { description: sentence, duration: 7000 });
       setEditing(false);
       await load();
       onSaved?.();
     } catch (cause) {
-      setMessage(cause instanceof AccountingClientError ? cause.message : "Hitungan stok belum tersimpan.");
+      notifyFromError(cause, "Hitungan stok belum tersimpan.");
     } finally {
       setBusy(false);
     }
@@ -251,9 +258,9 @@ export function StockCountCard({
         </div>
       )}
 
-      {message && (
+      {effect && (
         <p role="status" className="mt-3 flex items-start gap-1.5 text-xs font-semibold text-[#1b2a3a]">
-          <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-[#0b7a55]" /> {message}
+          <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-[#0b7a55]" /> {effect}
         </p>
       )}
     </section>

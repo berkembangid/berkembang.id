@@ -68,6 +68,9 @@ function repository(options?: { retryFirstFailure?: boolean }) {
     async downloadAudio() {
       throw new Error("not used");
     },
+    async downloadImage() {
+      throw new Error("not used");
+    },
     complete,
     fail,
     removeUpload,

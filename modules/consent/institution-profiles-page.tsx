@@ -184,7 +184,7 @@ export default function InstitutionProfilesPage() {
           </Block>
 
           <Block title="Jejak dokumen (report_issues)">
-            {detail.reportTrail.length === 0 && <p className="text-xs text-slate-500">Belum ada PDF yang diterbitkan ke institusi ini.</p>}
+            {detail.reportTrail.length === 0 && <p className="text-xs text-slate-500">Belum ada PDF yang diterbitkan ke lembaga ini.</p>}
             {detail.reportTrail.map((issue) => <div key={issue.id} className="flex items-center gap-2 rounded-xl bg-slate-50 p-3 text-xs">
               <FileText size={14} className="text-[#0b5f86]" />
               <div><p className="font-bold text-slate-800">No. {issue.document_uid}</p><p className="text-slate-500">{issue.report_kind} · {date(issue.created_at)}</p></div>

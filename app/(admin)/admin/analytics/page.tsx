@@ -71,7 +71,7 @@ export default function AdminAnalyticsPage() {
           const reqs = progs * 10;
           const convs = inst.active ? Math.round(reqs * 0.5) : 0;
           return {
-            name: String(inst.name ?? "Institusi"),
+            name: String(inst.name ?? "Lembaga"),
             requests: reqs,
             conversions: convs,
             rate: reqs > 0 ? `${Math.round((convs / reqs) * 100)}%` : "0%"
@@ -178,13 +178,13 @@ export default function AdminAnalyticsPage() {
       {/* Top Institutions */}
       <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="font-bold text-sm text-[#1b2a3a]">Top Institusi — Tingkat konversi</h2>
+          <h2 className="font-bold text-sm text-[#1b2a3a]">Top Lembaga — Tingkat konversi</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-[#f3f2ff]">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase">Institusi</th>
+                <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase">Lembaga</th>
                 <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase">Request Program</th>
                 <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase">Konversi Setuju</th>
                 <th className="text-left px-4 py-3 text-xs font-bold text-[#4a6280] uppercase">Tingkat konversi</th>
@@ -194,13 +194,13 @@ export default function AdminAnalyticsPage() {
               {loading ? (
                 <tr>
                   <td colSpan={4} className="text-center py-6 text-xs text-slate-400 font-medium">
-                    Memuat data analitik institusi...
+                    Memuat data analitik lembaga...
                   </td>
                 </tr>
               ) : data.topInstitutions.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="text-center py-6 text-xs text-slate-400 font-medium">
-                    Belum ada data institusi.
+                    Belum ada data lembaga.
                   </td>
                 </tr>
               ) : (

@@ -7,14 +7,19 @@ import { cancelLedgerTransactionClient, closeLedgerDayClient, createLedgerTransa
 import { categoryOptions, jakartaDate, ledgerTransactionInputSchema, paymentMethodLabels, type LedgerTransactionInput } from "@/modules/ledger/ledger-schema";
 import type { LedgerReportView, LedgerTransactionView } from "@/modules/ledger/ledger-repository";
 import { MonthlyTab } from "@/components/warung/MonthlyTab";
-import { ConditionTab } from "@/components/warung/ConditionTab";
 import { BankReportCard } from "@/components/warung/BankReportCard";
 import { InlineMoneyInput } from "@/components/warung/MoneyInput";
 import { closingPromptText, closingTargetDate } from "@/modules/ledger/closing-day";
 import { ComparisonBarChart, DashboardPage, DashboardPanel, FeedbackBanner, MetricCard, PageHeader, PanelHeader, StatusBadge, type ComparisonDatum } from "@/components/dashboard";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFromError, notifySuccess, notifyWarning } from "@/lib/notify";
 
 type Preset = "today" | "week" | "month" | "custom";
-type Tab = "month" | "condition" | "bank" | "cash";
+// Kondisi awal usaha pindah ke menu Profil. Laporan menjawab « bagaimana
+// usaha saya berjalan » dan dibaca berulang kali; kondisi awal menjawab
+// « dari mana saya mulai » dan diisi sekali seumur usaha. Bersebelahan,
+// yang sekali seumur hidup terlihat seperti sesuatu yang rutin diperbarui.
+type Tab = "month" | "bank" | "cash";
 type FormState = { transactionType: "income" | "expense"; amount: string; date: string; categoryCode: string; description: string; paymentMethod: string; counterparty: string; reason: string };
 function formatIdr(value: number) { return `Rp${Math.abs(value).toLocaleString("id-ID")}`; }
 function dateRange(preset: Exclude<Preset, "custom">) {
@@ -40,6 +45,7 @@ function cashFlowData(transactions: LedgerTransactionView[]): ComparisonDatum[] 
 }
 
 export default function LaporanPage() {
+  const { confirm, confirmWithReason } = useConfirm();
   const [tab, setTab] = useState<Tab>("month");
   const [range, setRange] = useState(dateRange("month")); const [preset, setPreset] = useState<Preset>("today");
   const [report, setReport] = useState<LedgerReportView | null>(null); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false);
@@ -83,12 +89,66 @@ export default function LaporanPage() {
   const transactionInput = (): LedgerTransactionInput => ({ transactionType: form.transactionType, amountIdr: Number(form.amount), transactionDate: form.date, categoryGroup: selectedCategory.group, categoryCode: selectedCategory.code, description: form.description, paymentMethod: form.paymentMethod as LedgerTransactionInput["paymentMethod"], counterparty: form.counterparty || null });
   const saveTransaction = async (event: React.FormEvent) => {
     event.preventDefault(); const input = ledgerTransactionInputSchema.safeParse(transactionInput());
-    if (!input.success) { setMessage({ tone: "error", text: input.error.issues[0]?.message ?? "Periksa kembali transaksi." }); return; }
-    if (editing && form.reason.trim().length < 3) { setMessage({ tone: "error", text: "Tuliskan alasan perubahan minimal 3 karakter." }); return; }
-    setBusy(true); try { if (editing) await updateLedgerTransactionClient(editing.id, input.data, form.reason); else await createLedgerTransactionClient(input.data); setShowTransactionForm(false); setMessage({ tone: "success", text: editing ? "Perubahan transaksi disimpan dan riwayatnya dicatat." : "Transaksi berhasil disimpan." }); await loadReport(); } catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "Transaksi belum berhasil disimpan." }); } finally { setBusy(false); }
+    // Salah isi bukan kegagalan sistem, jadi warnanya kuning, bukan merah.
+    if (!input.success) { notifyWarning(input.error.issues[0]?.message ?? "Periksa kembali transaksi."); return; }
+    if (editing && form.reason.trim().length < 3) { notifyWarning("Tuliskan alasan perubahan minimal 3 huruf.", { description: "Alasannya ikut tersimpan di riwayat, dan yang terlalu pendek tidak menjelaskan apa pun nanti." }); return; }
+    setBusy(true); try { if (editing) await updateLedgerTransactionClient(editing.id, input.data, form.reason); else await createLedgerTransactionClient(input.data); setShowTransactionForm(false); notifySuccess(editing ? "Perubahan tersimpan" : "Transaksi tersimpan", { description: editing ? "Catatan lama tetap ada di riwayat beserta alasan perubahannya." : `${form.transactionType === "income" ? "Uang masuk" : "Uang keluar"} ${formatIdr(Number(form.amount))} sudah masuk buku kas.` }); await loadReport(); } catch (error) { notifyFromError(error, "Transaksi belum berhasil disimpan."); } finally { setBusy(false); }
   };
-  const cancelTransaction = async (transaction: LedgerTransactionView) => { const reason = window.prompt("Mengapa transaksi ini dibatalkan? Riwayat transaksi tetap disimpan."); if (!reason) return; setBusy(true); try { await cancelLedgerTransactionClient(transaction.id, reason); setMessage({ tone: "success", text: "Transaksi dibatalkan. Riwayatnya tetap tersimpan." }); await loadReport(); } catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "Transaksi belum dapat dibatalkan." }); } finally { setBusy(false); } };
-  const closeToday = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); try { await closeLedgerDayClient({ closingDate, openingCashIdr: openingCash ? Number(openingCash) : null, physicalCashIdr: physicalCash ? Number(physicalCash) : null, note: closingNote || null }); setShowClosing(false); setMessage({ tone: "success", text: `${closingPromptText(new Date())} selesai. Transaksi hari itu sekarang terkunci dari pengeditan.` }); await loadReport(); } catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "Tutup kas belum berhasil." }); } finally { setBusy(false); } };
+  /**
+   * Pembatalan menanyakan alasannya di dalam aplikasi, bukan lewat
+   * `window.prompt`. Kotak peramban tidak bisa menjelaskan bahwa catatannya
+   * TIDAK hilang, dan tidak bisa menolak alasan sependek satu huruf -- aturan
+   * tiga huruf itu dulu baru ditegakkan setelah permintaannya dikirim.
+   */
+  const cancelTransaction = async (transaction: LedgerTransactionView) => {
+    const reason = await confirmWithReason({
+      title: "Batalkan transaksi ini?",
+      description: `${transaction.description} — ${formatIdr(transaction.amountIdr)}. Catatannya tidak dihapus: tetap terlihat di riwayat dengan tanda dibatalkan, dan pengaruhnya pada laporan ikut dibalik pada tanggal yang sama.`,
+      reasonLabel: "Kenapa dibatalkan?",
+      reasonPlaceholder: "Contoh: pembeli mengembalikan barang",
+      confirmLabel: "Batalkan transaksi",
+      cancelLabel: "Tidak jadi",
+      tone: "danger",
+    });
+    if (reason === null) return;
+    setBusy(true);
+    try {
+      await cancelLedgerTransactionClient(transaction.id, reason);
+      notifySuccess("Transaksi dibatalkan", { description: "Riwayatnya tetap tersimpan beserta alasan yang Anda tulis." });
+      await loadReport();
+    } catch (error) {
+      notifyFromError(error, "Transaksi belum dapat dibatalkan.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  /**
+   * Tutup kas dikonfirmasi karena akibatnya tidak terlihat di formulirnya:
+   * setelah ditutup, transaksi tanggal itu tidak bisa diubah lagi. Kalimat
+   * peringatannya memang ada di dalam dialog, tetapi terbaca sebagai
+   * keterangan, bukan sebagai sesuatu yang perlu dijawab.
+   */
+  const closeToday = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const yes = await confirm({
+      title: `Tutup kas tanggal ${closingDate}?`,
+      description: "Setelah ditutup, transaksi pada tanggal itu tidak dapat diubah lagi. Kalau nanti ada yang keliru, transaksinya masih bisa dibatalkan dengan alasan.",
+      confirmLabel: "Tutup kas",
+      cancelLabel: "Periksa lagi",
+    });
+    if (!yes) return;
+    setBusy(true);
+    try {
+      await closeLedgerDayClient({ closingDate, openingCashIdr: openingCash ? Number(openingCash) : null, physicalCashIdr: physicalCash ? Number(physicalCash) : null, note: closingNote || null });
+      setShowClosing(false);
+      notifySuccess(`${closingPromptText(new Date())} selesai`, { description: "Transaksi tanggal itu sekarang terkunci dari pengubahan." });
+      await loadReport();
+    } catch (error) {
+      notifyFromError(error, "Tutup kas belum berhasil.");
+    } finally {
+      setBusy(false);
+    }
+  };
   const todayClosing = report?.closings.find((item) => item.closingDate === closingDate);
   const maxCategory = Math.max(...(report?.categoryDistribution.map((item) => item.amountIdr) ?? [1]), 1);
 
@@ -96,12 +156,11 @@ export default function LaporanPage() {
     <PageHeader title="Buku kas & laporan" description="Pahami uang masuk, biaya, dan selisih usaha dari catatan yang sudah Anda konfirmasi." icon={BarChart3} actions={<><a href={`/api/v1/ledger/export?startDate=${range.startDate}&endDate=${range.endDate}`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#a9ebd0] bg-[#edfbf5] px-3 text-xs font-bold text-[#0b7a55]"><Download size={14} /> Unduh data</a><button onClick={() => setShowClosing(true)} disabled={Boolean(todayClosing)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#addcf4] bg-[#eef8fd] px-3 text-xs font-bold text-[#0b5f86] disabled:cursor-not-allowed disabled:opacity-50"><CalendarCheck size={14} /> {todayClosing ? "Kas sudah ditutup" : "Tutup kas"}</button><button onClick={openCreate} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#0b5f86] px-3 text-xs font-bold text-white"><Plus size={14} /> Catat transaksi</button></>} />
     {message && <FeedbackBanner tone={message.tone === "error" ? "error" : message.tone} live>{message.text}</FeedbackBanner>}
     <nav aria-label="Tampilan laporan" className="flex gap-1 rounded-xl border border-[#e3e9f0] bg-white p-1 shadow-[0_5px_18px_rgba(27,42,58,.04)]">
-      {([{ id: "month", label: "Bulan Ini" }, { id: "condition", label: "Kondisi Usaha" }, { id: "bank", label: "Untuk Bank" }, { id: "cash", label: "Buku Kas" }] as const).map((item) =>
+      {([{ id: "month", label: "Bulan Ini" }, { id: "bank", label: "Untuk Bank" }, { id: "cash", label: "Buku Kas" }] as const).map((item) =>
         <button key={item.id} onClick={() => setTab(item.id)} aria-current={tab === item.id ? "page" : undefined} className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-bold transition-colors ${tab === item.id ? "bg-[#eef8fd] text-[#0b5f86] shadow-sm" : "text-[#6e859e] hover:bg-[#f3f6f9]"}`}>{item.label}</button>)}
     </nav>
     {tab === "month" && <MonthlyTab month={jakartaDate().slice(0, 7)} />}
-    {tab === "condition" && <ConditionTab />}
-    {tab === "bank" && <BankReportCard onOpenCondition={() => setTab("condition")} />}
+    {tab === "bank" && <BankReportCard onOpenCondition={() => { window.location.href = "/umkm/profil/kondisi-awal"; }} />}
     {tab === "cash" && <>
     <section className="rounded-2xl border border-[#e3e9f0] bg-white p-3 shadow-[0_8px_28px_rgba(27,42,58,.04)]"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div className="flex gap-2 overflow-x-auto">{([{ id: "today", label: "Hari ini" }, { id: "week", label: "7 hari" }, { id: "month", label: "Bulan ini" }] as const).map((item) => <button key={item.id} onClick={() => choosePreset(item.id)} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold ${preset === item.id ? "bg-[#0b5f86] text-white" : "bg-[#f3f6f9] text-[#4a6280]"}`}>{item.label}</button>)}</div><div className="flex items-center gap-2"><input type="date" value={range.startDate} max={range.endDate} onChange={(e) => { setPreset("custom"); setRange((r) => ({ ...r, startDate: e.target.value })); }} className="min-h-10 rounded-lg border border-[#d5dfe9] px-2 text-xs" /><span className="text-xs text-[#6e859e]">sampai</span><input type="date" value={range.endDate} min={range.startDate} max={jakartaDate()} onChange={(e) => { setPreset("custom"); setRange((r) => ({ ...r, endDate: e.target.value })); }} className="min-h-10 rounded-lg border border-[#d5dfe9] px-2 text-xs" /><button onClick={() => void loadReport()} aria-label="Muat ulang" className="rounded-lg p-2 text-[#6e859e] hover:bg-[#f3f6f9]"><RefreshCcw size={15} /></button></div></div></section>
     {loading || !report ? <div role="status" className="flex items-center justify-center gap-2 rounded-2xl bg-white p-12 text-sm text-[#6e859e]"><LoaderCircle className="animate-spin" size={18} /> Memuat buku kas...</div> : <>

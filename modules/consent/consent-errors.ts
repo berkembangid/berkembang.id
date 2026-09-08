@@ -13,7 +13,7 @@ const errors: Record<ConsentErrorCode, { status: number; message: string }> = {
   REQUEST_NOT_PENDING: { status: 409, message: "Permintaan ini sudah dijawab atau sudah berakhir." },
   DATA_NOT_APPROVED: { status: 403, message: "Pemilik usaha tidak menyetujui bagian data ini." },
   DOWNLOAD_NOT_APPROVED: { status: 403, message: "Pemilik usaha tidak mengizinkan unduhan." },
-  LICENSE_LIMIT_REACHED: { status: 403, message: "Kredit dossier institusi sudah habis. Hubungi admin platform untuk pembaruan lisensi." },
+  LICENSE_LIMIT_REACHED: { status: 403, message: "Kredit dossier lembaga sudah habis. Hubungi admin platform untuk pembaruan lisensi." },
   REQUEST_RATE_LIMITED: { status: 429, message: "Batas 20 permintaan per hari tercapai. Lanjutkan besok agar UMKM tidak kebanjiran permintaan." },
   SERVICE_UNAVAILABLE: { status: 503, message: "Layanan izin data sementara tidak tersedia. Silakan coba lagi." },
 };

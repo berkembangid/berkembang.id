@@ -120,7 +120,7 @@ export const documentTypeLabels: Record<DocumentType, string> = {
   sewa: "Perjanjian Sewa",
   perjanjian_pinjaman: "Perjanjian Pinjaman",
   pdf_sak_emkm: "Laporan Keuangan (PDF)",
-  snapshot_dossier: "Ringkasan untuk Institusi",
+  snapshot_dossier: "Ringkasan untuk Lembaga",
 };
 
 const fiveMiB = 5 * 1024 * 1024;

@@ -14,20 +14,30 @@ import { AlertCircle, LoaderCircle, Receipt, RefreshCcw, Wallet } from "lucide-r
 import {
   AccountingClientError,
   getBalanceSheetClient,
-  getOpeningBalanceAnswersClient,
   getOpeningBalanceClient,
   getTaxEstimateClient,
-  getWarungReportClient,
 } from "@/modules/accounting/accounting-client";
-import type { OpeningBalanceAnswers, TaxEstimateView } from "@/modules/accounting/period";
+import type { TaxEstimateView } from "@/modules/accounting/period";
 import { AssetLoanRegister } from "@/components/warung/AssetLoanRegister";
-import { FeedbackBanner } from "@/components/dashboard";
 import { buildBusinessCondition, type BusinessConditionView } from "@/modules/accounting/balance-sheet";
 import { formatIdr, taxEstimateDisclaimer, taxEstimateSentence } from "@/modules/accounting/warung";
 import { OpeningBalanceWizard } from "@/components/warung/OpeningBalanceWizard";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
 
-type View = "summary" | "edit" | "register";
+/**
+ * Kondisi awal diisi SEKALI, dan tidak punya layar koreksi.
+ *
+ * Ia titik mulai usaha, bukan angka yang dipelihara. Salah ketik uang tunai di
+ * laci tidak diperbaiki dengan menulis ulang sejarah -- ia diperbaiki dengan
+ * mencatat transaksi pemasukan atau pengeluaran, persis seperti selisih kas
+ * mana pun yang ditemukan kemudian. Cara itu meninggalkan jejak: kapan
+ * selisihnya ketahuan dan berapa besarnya, bukan seolah-olah angka awalnya
+ * memang selalu begitu.
+ *
+ * Yang tersisa hanyalah daftar alat usaha dan pinjaman, dan itu pun hanya
+ * untuk dibaca serta menandai alat yang sudah dijual.
+ */
+type View = "summary" | "register";
 
 export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
   const [condition, setCondition] = useState<BusinessConditionView | null>(null);
@@ -35,9 +45,6 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState<View>("summary");
-  const [answers, setAnswers] = useState<OpeningBalanceAnswers | null>(null);
-  const [monthsRecorded, setMonthsRecorded] = useState(0);
-  const [notice, setNotice] = useState("");
   const [tax, setTax] = useState<TaxEstimateView | null>(null);
 
   const load = useCallback(async () => {
@@ -51,12 +58,8 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
         return;
       }
       setNeedsOpening(false);
-      const [{ current }, report] = await Promise.all([
-        getBalanceSheetClient(asOf),
-        getWarungReportClient(jakartaDate().slice(0, 7)),
-      ]);
+      const { current } = await getBalanceSheetClient(asOf);
       setCondition(buildBusinessCondition(current));
-      setMonthsRecorded(report.series.filter((row) => row.daysRecorded > 0).length);
 
       // Perkiraan pajak adalah keterangan tambahan, bukan isi utama layar ini.
       // Kalau ia gagal dimuat, kondisi usaha tetap harus terbaca -- satu kartu
@@ -78,19 +81,6 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  // Layar koreksi memakai jawaban yang dulu diketik pemilik, bukan angka hasil
-  // hitungan sistem, supaya ia mengenali kembali isiannya.
-  const openCorrection = useCallback(async () => {
-    setNotice("");
-    try {
-      const { answers: saved } = await getOpeningBalanceAnswersClient();
-      if (!saved) return;
-      setAnswers(saved);
-      setView("edit");
-    } catch (cause) {
-      setError(cause instanceof AccountingClientError ? cause.message : "Jawaban lama belum dapat dibuka.");
-    }
-  }, []);
 
   if (loading) {
     return (
@@ -131,33 +121,12 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
       <AssetLoanRegister
         onBack={() => setView("summary")}
         onChanged={() => void load()}
-        onEditOpening={() => void openCorrection()}
-      />
-    );
-  }
-
-  if (view === "edit" && answers) {
-    return (
-      <OpeningBalanceWizard
-        answers={answers}
-        monthsRecorded={monthsRecorded}
-        onSkip={() => setView("summary")}
-        onDone={() => {
-          setView("summary");
-          setNotice("Kondisi awal usaha diperbarui. Untung bulan-bulan sebelumnya sudah ikut dihitung ulang.");
-          void load();
-        }}
       />
     );
   }
 
   return (
     <div className="space-y-4">
-      {notice && (
-        <FeedbackBanner tone="success" live>
-          {notice}
-        </FeedbackBanner>
-      )}
 
       <section className="rounded-2xl border border-[#addcf4] bg-[#eef8fd] p-5">
         <p className="text-[11px] font-bold uppercase tracking-wide text-[#0b5f86]">Milik saya bersih</p>
@@ -185,14 +154,7 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <button
-          type="button"
-          onClick={() => void openCorrection()}
-          className="min-h-10 text-xs font-bold text-[#0b5f86]"
-        >
-          Perbaiki kondisi awal usaha
-        </button>
+      <div className="space-y-3">
         <button
           type="button"
           onClick={() => setView("register")}
@@ -200,6 +162,13 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
         >
           Alat usaha &amp; pinjaman
         </button>
+        <p className="rounded-xl border border-[#e3e9f0] bg-[#f8fafc] p-3 text-[11px] leading-relaxed text-[#6e859e]">
+          Kondisi awal hanya diisi sekali, karena ia titik mulai usaha Anda. Bila
+          ada selisih &mdash; misalnya uang tunai di laci ternyata berbeda dari
+          yang diketik &mdash; perbaikinya lewat <strong className="font-bold text-[#4a6280]">catat transaksi</strong>{" "}
+          pemasukan atau pengeluaran. Cara itu menyimpan jejak kapan selisihnya
+          ketahuan dan berapa besarnya.
+        </p>
       </div>
 
       {tax && (

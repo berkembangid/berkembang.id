@@ -10,16 +10,27 @@ import { describe, expect, it } from "vitest";
  */
 const root = process.cwd();
 const register = readFileSync(join(root, "app", "auth", "register", "page.tsx"), "utf8");
-const terms = readFileSync(join(root, "app", "terms", "page.tsx"), "utf8");
+// Naskahnya tidak lagi tertanam di berkas halaman: sejak `/terms` memuat DUA
+// dokumen -- pengguna UMKM dan lembaga -- isinya pindah ke satu modul yang
+// dipakai bersama oleh halaman dan ringkasan pendaftaran. Yang diperiksa di
+// sini adalah janjinya, jadi yang dibaca harus tempat janji itu benar-benar
+// ditulis.
+const terms = readFileSync(join(root, "modules", "legal", "terms.ts"), "utf8");
 const rootLayout = readFileSync(join(root, "app", "layout.tsx"), "utf8");
 
 describe("kolom isian", () => {
   it("declares its own left padding so the icon cannot sit on the text", () => {
-    // `.field-input` memakai shorthand `padding`, dan styled-jsx menghasilkan
-    // selektor dua kelas yang menang atas `pl-10` dari Tailwind. Ikonnya
+    // `.field-input` memakai shorthand `padding` supaya tidak ada aturan lain
+    // yang menyisipkan ruang untuk ikonnya setengah jalan; tanpa itu ikonnya
     // menimpa huruf pertama yang diketik pemilik.
-    expect(register).toContain("padding:0 14px 0 40px");
-    expect(register).toContain(".field-input.has-toggle{padding-right:48px}");
+    //
+    // Aturannya pindah dari `style jsx` halaman ini ke berkas gaya bersama
+    // ketika halaman lupa kata sandi mulai memakai kelas yang sama: sebuah
+    // primitif yang dipakai lebih dari satu layar tidak boleh terkurung di
+    // dalam salah satunya.
+    const css = readFileSync(join(root, "app", "globals.css"), "utf8");
+    expect(css).toContain("padding:0 14px 0 40px");
+    expect(css).toContain(".field-input.has-toggle { padding-right:48px; }");
     expect(register).not.toContain("[&_input]:pl-10");
     expect(register).not.toContain('"field-input pr-12"');
   });
@@ -57,6 +68,22 @@ describe("kotak centang berukuran kotak centang", () => {
 });
 
 describe("membaca syarat bukan menyetujuinya", () => {
+  it("keeps the terms trigger inside the sentence, not in a 44px button", () => {
+    // `.auth-form-card button { min-height:44px }` ditulis untuk tombol yang
+    // ditekan. Pemicu syarat dulunya baris tersendiri, jadi aturan itu
+    // menghasilkan kotak 44 px berisi teks 16 px -- dua puluh delapan piksel
+    // kosong yang terbaca sebagai kesalahan tata letak, bukan sebagai ruang.
+    expect(register).toContain('className="auth-inline-link"');
+    const css = readFileSync(join(root, "app", "globals.css"), "utf8");
+    expect(css).toContain(".auth-form-card button.auth-inline-link { min-height:0;");
+  });
+
+  it("names the party being agreed with, right in the sentence", () => {
+    // Pemilik usaha dan lembaga terikat pada perjanjian yang berbeda, jadi
+    // yang mana harus terbaca pada saat persetujuan diberikan.
+    expect(register).toContain('role === "umkm" ? "pemilik usaha" : "lembaga"');
+  });
+
   it("keeps the terms button outside the agreement label", () => {
     // Tombolnya pernah bersarang di dalam `<label>`, jadi mengekliknya ikut
     // mencentang kotak persetujuan: pemilik yang hanya ingin membaca justru
@@ -76,12 +103,21 @@ describe("isi syarat menggambarkan produk yang sekarang", () => {
   it("summarises the promises the product actually keeps", () => {
     for (const promise of [
       "tidak menjual",
-      "bisa Anda cabut kapan saja",
-      "bukan penilaian kelayakan",
-      "boleh berhenti dan membawa data",
+      "dapat Anda cabut",
+      "bukan penilaian kelayakan pembiayaan",
+      "dapat Anda unduh",
     ]) {
-      expect(register, promise).toContain(promise);
+      expect(terms, promise).toContain(promise);
     }
+  });
+
+  it("gives institutions their own agreement, not the owner's", () => {
+    // Naskah lembaga menyatakannya sendiri: ia berbeda dari, dan tidak
+    // menggantikan, ketentuan pengguna UMKM. Sebelum ini lembaga mendaftar
+    // lewat halaman yang sama dan menyetujui ringkasan yang bukan miliknya.
+    expect(register).toContain("TERMS_HIGHLIGHTS[role]");
+    expect(terms).toContain("Syarat dan Ketentuan Lembaga & Investor");
+    expect(terms).toContain("hanya dapat melihat profil anonim");
   });
 
   it("no longer calls the ladder a score", () => {
@@ -94,9 +130,9 @@ describe("isi syarat menggambarkan produk yang sekarang", () => {
   it("states the rights that already exist in the app", () => {
     // Dokumen yang menjanjikan kurang dari kenyataan sama menyesatkannya
     // dengan yang menjanjikan lebih.
-    expect(terms).toContain("Unduh semua data saya");
+    expect(terms).toContain("meminta salinan seluruh data");
     expect(terms).toContain("30 hari");
-    expect(terms).toContain("bukan oleh AI");
+    expect(terms).toContain("bukan oleh kecerdasan artifisial");
   });
 
   it("is dated when it was last actually changed", () => {

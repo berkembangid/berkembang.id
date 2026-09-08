@@ -11,6 +11,7 @@ export type CaptureErrorCode =
   | "CAPTURE_CANCELLED"
   | "CAPTURE_PROCESSING_FAILED"
   | "IDEMPOTENCY_CONFLICT"
+  | "CAPTURE_PATH_DISABLED"
   | "UNSUPPORTED_MEDIA_TYPE"
   | "FILE_TOO_LARGE"
   | "AI_PROCESSING_FAILED"
@@ -37,6 +38,14 @@ const errorDefinitions: Record<
   IDEMPOTENCY_CONFLICT: {
     status: 409,
     message: "Kunci idempotensi sudah digunakan untuk permintaan lain.",
+    retryable: false,
+  },
+  // Sakelar yang dimatikan bukan kerusakan, dan pesannya tidak boleh
+  // terbaca seperti kerusakan. Layar Catat menangkapnya dengan menyembunyikan
+  // tombolnya; pesan ini untuk yang sempat menekannya sedetik sebelum mati.
+  CAPTURE_PATH_DISABLED: {
+    status: 409,
+    message: "Cara catat ini sedang tidak tersedia. Gunakan cara lain dulu, catatan Anda tetap tersimpan.",
     retryable: false,
   },
   UNSUPPORTED_MEDIA_TYPE: {

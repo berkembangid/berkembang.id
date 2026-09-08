@@ -9,7 +9,7 @@ import {
   type CaptureProviderAdapter,
 } from "@/modules/ai/capture-providers";
 import type { Json } from "@/types/database.generated";
-import { enforceParserAmounts } from "@/modules/ledger/capture-amount-guard";
+import { enforceParserAmounts, enforceReceiptAmount } from "@/modules/ledger/capture-amount-guard";
 
 const claimedJobSchema = z.object({
   jobId: z.uuid(),
@@ -19,7 +19,7 @@ const claimedJobSchema = z.object({
   captureId: z.uuid(),
   businessId: z.uuid(),
   requestedBy: z.uuid().nullable(),
-  inputMethod: z.enum(["voice", "manual"]),
+  inputMethod: z.enum(["voice", "manual", "camera"]),
   sourceText: z.string().nullable(),
   storagePath: z.string().nullable(),
   mimeType: z.string().nullable(),
@@ -47,6 +47,8 @@ export type CaptureWorkerRepository = {
     model: string,
   ): Promise<ClaimedJob | null>;
   downloadAudio(path: string, mimeType: string): Promise<AudioInput>;
+  /** Foto nota, untuk jalur kamera. Dibaca menjadi teks, bukan diserahkan ke penyedia. */
+  downloadImage(path: string): Promise<{ bytes: Uint8Array; mimeType: "image/jpeg" | "image/png" }>;
   complete(input: {
     jobId: string;
     attemptNumber: number;
@@ -55,6 +57,15 @@ export type CaptureWorkerRepository = {
     latencyMs: number;
     promptTokens?: number;
     completionTokens?: number;
+    /** Jejak penjaga nominal: berapa yang ditimpa, dan baris mana sumbernya. */
+    guard?: {
+      overridden: number;
+      dropped: number;
+      excerpt?: string;
+      ambiguous?: boolean;
+      /** Nominal kandidat saja; barisnya cukup satu, yang terpilih. */
+      candidates?: number[];
+    };
   }): Promise<void>;
   fail(input: {
     jobId: string;
@@ -114,6 +125,18 @@ function createWorkerRepository(): CaptureWorkerRepository {
         mimeType,
       };
     },
+    async downloadImage(path) {
+      const { data, error } = await client.storage.from("captures").download(path);
+      if (error || !data) throw new CaptureProviderError("CAPTURE_IMAGE_UNAVAILABLE", false);
+      // Batasnya dua megabyte, sama dengan yang ditolak `create_transaction_capture`.
+      // Diperiksa lagi di sini karena berkas di penyimpanan bisa saja bukan yang
+      // baru saja diunggah.
+      if (data.size < 1 || data.size > 2 * 1024 * 1024) {
+        throw new CaptureProviderError("CAPTURE_IMAGE_INVALID", false);
+      }
+      const mimeType = data.type === "image/png" ? "image/png" : "image/jpeg";
+      return { bytes: new Uint8Array(await data.arrayBuffer()), mimeType };
+    },
     async complete(input) {
       const { error } = await client.rpc("complete_capture_ai_job", {
         p_job_id: input.jobId,
@@ -125,6 +148,7 @@ function createWorkerRepository(): CaptureWorkerRepository {
         ...(input.completionTokens === undefined
           ? {}
           : { p_completion_tokens: input.completionTokens }),
+        ...(input.guard === undefined ? {} : { p_guard: input.guard as unknown as Json }),
       });
       databaseError(error);
     },
@@ -217,6 +241,18 @@ export async function processQueuedCaptureJob(
       // memakai transkrip peramban dan sengaja tidak pernah mengunggah apa pun.
       // Yang tetap terlarang adalah capture tanpa audio DAN tanpa teks — di
       // situ memang tidak ada bahan untuk diproses.
+      // Jalur kamera membaca foto menjadi teks lebih dulu. Sesudah itu ia
+      // tidak berbeda sedikit pun dari ucapan: teks yang sama masuk penyedia
+      // yang sama, dan `enforceParserAmounts` yang sama menjaga agar tidak ada
+      // satu angka pun yang berasal dari model.
+      let ocrText: string | undefined;
+      if (claim.inputMethod === "camera") {
+        if (!claim.storagePath) throw new CaptureProviderError("CAPTURE_IMAGE_UNAVAILABLE", false);
+        const image = await repository.downloadImage(claim.storagePath);
+        const { readReceiptText } = await import("@/modules/ai/receipt-text");
+        ocrText = (await readReceiptText(image)).text;
+      }
+
       let audio: AudioInput | undefined;
       if (claim.inputMethod === "voice" && (claim.storagePath || !claim.sourceText)) {
         if (!claim.storagePath || !claim.mimeType) {
@@ -227,14 +263,21 @@ export async function processQueuedCaptureJob(
 
       const result = await withProviderTimeout(
         provider.process({
-          ...(claim.sourceText ? { sourceText: claim.sourceText } : {}),
+          ...(ocrText ?? claim.sourceText ? { sourceText: ocrText ?? claim.sourceText! } : {}),
           ...(audio ? { audio } : {}),
         }),
       );
       // Nominal yang dikembalikan model tidak pernah menjadi kebenaran.
       // Parser deterministik membacanya ulang dari transkrip yang sama, dan
       // hasilnyalah yang masuk draf. Lihat `capture-amount-guard.ts`.
-      const guarded = enforceParserAmounts(result.items, result.transcription);
+      // Struk memakai aturan nominalnya sendiri: kandidat teratas dari
+      // pemeringkat, bukan nominal ke-n dari teksnya. Lihat
+      // `enforceReceiptAmount` untuk alasannya.
+      // Dipisah, bukan disatukan lewat ternary: hanya jalur struk yang punya
+      // potongan baris dan kandidat, dan menyatukannya membuat keduanya
+      // berbentuk "mungkin ada" di sepanjang sisa fungsi ini.
+      const receipt = ocrText ? enforceReceiptAmount(result.items, ocrText) : null;
+      const guarded = receipt ?? enforceParserAmounts(result.items, result.transcription);
       if (guarded.overridden > 0 || guarded.dropped > 0) {
         console.warn("Capture draft amounts corrected by parser", {
           jobId,
@@ -249,6 +292,20 @@ export async function processQueuedCaptureJob(
         attemptNumber: claim.attemptNumber,
         transcription: result.transcription,
         draft: JSON.parse(JSON.stringify(guarded.items)) as Json,
+        // Jejak penjaga ikut disimpan, bukan hanya dicatat ke konsol. Angka
+        // `overridden` adalah bukti bahwa nominal tidak pernah datang dari
+        // model; tanpa disimpan, ia hilang setiap kali proses berakhir.
+        guard: {
+          overridden: guarded.overridden,
+          dropped: guarded.dropped,
+          ...(receipt
+            ? {
+                ...(receipt.excerpt ? { excerpt: receipt.excerpt } : {}),
+                ambiguous: receipt.ambiguous,
+                candidates: receipt.candidates,
+              }
+            : {}),
+        },
         latencyMs: Date.now() - startedAt,
         ...(result.promptTokens === undefined ? {} : { promptTokens: result.promptTokens }),
         ...(result.completionTokens === undefined

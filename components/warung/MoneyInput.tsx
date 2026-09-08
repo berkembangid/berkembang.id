@@ -43,6 +43,41 @@ export function formatMoneyInput(value: number | null): string {
   return value === null ? "" : value.toLocaleString("id-ID");
 }
 
+/**
+ * Kerangka kolom rupiah: bingkai, awalan "Rp", dan kolom angkanya.
+ *
+ * Ada dua varian di berkas ini, dan sebelumnya keduanya menyalin markup yang
+ * sama dengan jarak yang berbeda. Akibatnya kolom rupiah tampil berbeda
+ * tergantung di layar mana ia muncul, dan memperbaiki satu tidak memperbaiki
+ * yang lain.
+ *
+ * Tiga hal yang diperbaiki di sini:
+ *
+ *   1. Awalannya `shrink-0`. Sebagai item flex tanpa itu, ia bisa diperas oleh
+ *      kolom angka yang meminta lebar penuh, lalu terpotong `overflow-hidden`.
+ *   2. Awalannya berlatar dan berbatas, bukan sekadar teks yang menempel pada
+ *      angka. Tanpa pemisah, "Rp" dan angkanya terbaca sebagai satu gumpalan,
+ *      dan karet teks di posisi awal duduk tepat di sebelah hurufnya.
+ *   3. Kolom angkanya `min-w-0`. Di baris yang sempit, yang mengalah adalah
+ *      angkanya -- yang tetap bisa digulir -- bukan awalan yang hilang.
+ */
+function MoneyField({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-11 items-stretch overflow-hidden rounded-xl border border-[#d5dfe9] bg-white transition-colors focus-within:border-[#0b5f86]">
+      <span
+        aria-hidden
+        className="flex shrink-0 items-center border-r border-[#e3e9f0] bg-[#f5f7fb] px-3 text-sm font-bold text-[#6e859e]"
+      >
+        Rp
+      </span>
+      {children}
+    </div>
+  );
+}
+
+const fieldClass =
+  "min-h-11 min-w-0 flex-1 border-0 bg-transparent px-3 text-sm font-medium tabular-nums text-[#1b2a3a] outline-none";
+
 export function MoneyInput({
   label,
   value,
@@ -58,20 +93,19 @@ export function MoneyInput({
       <label htmlFor={id} className="block text-xs font-bold text-[#1b2a3a]">
         {label}
       </label>
-      <div className="mt-1.5 flex min-h-11 items-center overflow-hidden rounded-xl border border-[#d5dfe9] bg-white focus-within:border-[#0b5f86]">
-        <span aria-hidden className="px-3 text-sm font-bold text-[#6e859e]">
-          Rp
-        </span>
-        <input
-          id={id}
-          inputMode="numeric"
-          autoFocus={autoFocus}
-          value={formatMoneyInput(value)}
-          onChange={(event) => onChange(parseMoneyInput(event.target.value))}
-          placeholder={placeholder}
-          aria-describedby={helper ? `${id}-helper` : undefined}
-          className="min-h-11 w-full border-0 bg-transparent pr-3 text-sm font-medium tabular-nums text-[#1b2a3a] outline-none"
-        />
+      <div className="mt-1.5">
+        <MoneyField>
+          <input
+            id={id}
+            inputMode="numeric"
+            autoFocus={autoFocus}
+            value={formatMoneyInput(value)}
+            onChange={(event) => onChange(parseMoneyInput(event.target.value))}
+            placeholder={placeholder}
+            aria-describedby={helper ? `${id}-helper` : undefined}
+            className={fieldClass}
+          />
+        </MoneyField>
       </div>
       {helper && (
         <p id={`${id}-helper`} className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
@@ -95,18 +129,15 @@ export function InlineMoneyInput({
   ariaLabel: string;
 }) {
   return (
-    <div className="flex min-h-11 items-center overflow-hidden rounded-xl border border-[#d5dfe9] bg-white focus-within:border-[#0b5f86]">
-      <span aria-hidden className="pl-3 text-sm font-bold text-[#6e859e]">
-        Rp
-      </span>
+    <MoneyField>
       <input
         inputMode="numeric"
         aria-label={ariaLabel}
         value={formatMoneyInput(value)}
         onChange={(event) => onChange(parseMoneyInput(event.target.value))}
         placeholder={placeholder}
-        className="min-h-11 w-full border-0 bg-transparent px-2 text-sm font-medium tabular-nums text-[#1b2a3a] outline-none"
+        className={fieldClass}
       />
-    </div>
+    </MoneyField>
   );
 }

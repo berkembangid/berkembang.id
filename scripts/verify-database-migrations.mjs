@@ -67,6 +67,18 @@ const expectedMigrations = [
   "0059_dossier_api_keys.sql",
   "0060_owner_consent_authority.sql",
   "0061_portal_readiness_single_source.sql",
+  "0062_grants_for_tables_added_after_0013.sql",
+  "0063_satu_akun_satu_akses.sql",
+  "0064_kondisi_awal_sekali_isi.sql",
+  "0065_rincian_persediaan_awal.sql",
+  "0066_rincian_barang_persediaan.sql",
+  "0067_nilai_sisa_alat_usaha.sql",
+  "0068_jalur_ocr_kamera.sql",
+  "0069_ruang_mesin_fondasi.sql",
+  "0070_sakelar_fitur_dua_arah.sql",
+  "0071_jejak_nominal_dan_nota.sql",
+  "0072_metrik_ruang_mesin.sql",
+  "0073_daftar_akun_demo.sql",
 ];
 
 const coreTables = [
@@ -93,9 +105,24 @@ if (
 const migrationDirectory = path.resolve("supabase/migrations");
 const migrationNames = (await readdir(migrationDirectory)).filter((name) => name.endsWith(".sql")).sort();
 assert.deepEqual(migrationNames, expectedMigrations, "migration order drifted from the playbook");
-const migrations = await Promise.all(
-  migrationNames.map(async (name) => ({ name, sql: await readFile(path.join(migrationDirectory, name), "utf8") })),
-);
+/**
+ * `BASELINE=1` menjalankan seluruh skenario di atas skema dasar, bukan di atas
+ * 61 migrasi.
+ *
+ * Membandingkan dua dump membuktikan bentuknya sama. Ini membuktikan hal yang
+ * berbeda dan lebih penting: bahwa skema dasar itu benar-benar BEKERJA --
+ * jurnalnya seimbang, RLS-nya menutup, trigger-nya menolak, dan kesiapannya
+ * terhitung. Skema yang benar bentuknya tetapi salah perilakunya akan lolos
+ * perbandingan dan gagal di produksi.
+ */
+const migrations = process.env.BASELINE === "1"
+  ? [{
+      name: "0001_baseline_schema.sql",
+      sql: await readFile(path.resolve("supabase/baseline/0001_baseline_schema.sql"), "utf8"),
+    }]
+  : await Promise.all(
+      migrationNames.map(async (name) => ({ name, sql: await readFile(path.join(migrationDirectory, name), "utf8") })),
+    );
 
 const client = new Client({ connectionString: databaseUrl });
 await client.connect();
@@ -178,6 +205,60 @@ async function applyMigrations(label) {
   }
 }
 
+/**
+ * Sampai mana rantai migrasi masih bisa dijalankan ulang.
+ *
+ * Dulu uji ini memasang SELURUH migrasi dua kali. Itu berhenti mungkin di
+ * `0063`, yang membuang kolom `business_members.role` beserta dua fungsi
+ * peran: lima belas migrasi lama menyebut salah satunya dan tidak akan pernah
+ * bisa dijalankan lagi.
+ *
+ * Yang lebih berbahaya daripada gagal: beberapa migrasi lama BERHASIL
+ * dijalankan ulang, dan sambil berhasil mereka menulis ulang fungsi ke
+ * definisi lamanya -- yang masih membaca kolom peran. Memasang rantai dua kali
+ * kini justru membatalkan `0063`.
+ *
+ * Jadi yang dipasang ulang hanya migrasi yang lahir SETELAH migrasi satu arah
+ * terakhir. Itu berkas-berkas yang baru ditulis, dan satu-satunya yang mungkin
+ * masih setengah terpasang di sebuah basis data yang sudah mutakhir. Batasnya
+ * bergerak sendiri: menambah migrasi satu arah baru ke daftar ini otomatis
+ * mempersempit apa yang diuji, tanpa ada yang perlu ingat mengubah ujinya.
+ */
+const migrasiSatuArah = [
+  // Semuanya menyebut `business_members.role`, `private.business_role()`,
+  // atau `private.has_any_business_role()` -- ketiganya dibuang oleh `0063`.
+  "0008_indexes_constraints.sql",
+  "0011_backfill_existing_data.sql",
+  "0013_identity_membership_rls.sql",
+  "0014_storage_object_policies.sql",
+  "0016_private_document_lifecycle.sql",
+  "0021_ledger_report_daily_closing.sql",
+  "0023_consent_verified_business_profile.sql",
+  "0024_umkm_owner_without_membership.sql",
+  "0025_umkm_roleless_internal_plumbing.sql",
+  "0027_umkm_complete_roleless_access.sql",
+  "0028_fix_capture_roleless_functions.sql",
+  "0030_restore_business_isolation.sql",
+  "0045_profile_and_document_cleanup.sql",
+  "0048_admin_consent_decisions.sql",
+  "0051_discovery_privacy_boundary.sql",
+  "0055_institution_view_logs.sql",
+];
+
+async function replayMigrations() {
+  const batas = migrasiSatuArah.slice().sort().at(-1);
+  const dapatDiulang = migrations.filter((migration) => migration.name > batas);
+  assert.ok(dapatDiulang.length > 0, "harus ada migrasi yang diuji ulang-pasang");
+  for (const migration of dapatDiulang) {
+    try {
+      await client.query(migration.sql);
+    } catch (cause) {
+      cause.message = `ulang-pasang ${migration.name}: ${cause.message}`;
+      throw cause;
+    }
+  }
+}
+
 async function scalar(sql) {
   const result = await client.query(sql);
   return Number(result.rows[0].value);
@@ -255,7 +336,7 @@ async function expectAuthenticatedRejected(userId, sql, expectedCode = "42501") 
 
 async function verifyRlsIsolation() {
   const userA = "a0000000-0000-4000-8000-000000000001";
-  const staffA = "a0000000-0000-4000-8000-000000000002";
+  const unrelatedUser = "a0000000-0000-4000-8000-000000000002";
   const userB = "b0000000-0000-4000-8000-000000000001";
   const institutionAUser = "c0000000-0000-4000-8000-000000000001";
   const institutionBUser = "d0000000-0000-4000-8000-000000000001";
@@ -271,7 +352,7 @@ async function verifyRlsIsolation() {
   await client.query(`
     insert into auth.users (id, email) values
       ('${userA}', 'owner-a@example.test'),
-      ('${staffA}', 'staff-a@example.test'),
+      ('${unrelatedUser}', 'orang-lain@example.test'),
       ('${userB}', 'owner-b@example.test'),
       ('${institutionAUser}', 'institution-a@example.test'),
       ('${institutionBUser}', 'institution-b@example.test'),
@@ -280,7 +361,7 @@ async function verifyRlsIsolation() {
 
     insert into public.profiles (id, auth_user_id, email, role, name) values
       ('${userA}', '${userA}', 'owner-a@example.test', 'umkm', 'Owner A'),
-      ('${staffA}', '${staffA}', 'staff-a@example.test', 'admin', 'Staff A'),
+      ('${unrelatedUser}', '${unrelatedUser}', 'orang-lain@example.test', 'admin', 'Orang Lain'),
       ('${userB}', '${userB}', 'owner-b@example.test', 'umkm', 'Owner B'),
       ('${institutionAUser}', '${institutionAUser}', 'institution-a@example.test', 'institution', 'Institution A User'),
       ('${institutionBUser}', '${institutionBUser}', 'institution-b@example.test', 'institution', 'Institution B User'),
@@ -300,10 +381,9 @@ async function verifyRlsIsolation() {
     update public.businesses set legacy_profile_id = '${userA}' where id = '${businessA}';
     update public.businesses set legacy_profile_id = '${userB}' where id = '${businessB}';
 
-    insert into public.business_members (business_id, profile_id, user_id, role, status) values
-      ('${businessA}', '${userA}', '${userA}', 'owner', 'active'),
-      ('${businessA}', '${staffA}', '${staffA}', 'staff', 'active'),
-      ('${businessB}', '${userB}', '${userB}', 'owner', 'active')
+    insert into public.business_members (business_id, profile_id, user_id, status) values
+      ('${businessA}', '${userA}', '${userA}', 'active'),
+      ('${businessB}', '${userB}', '${userB}', 'active')
     on conflict do nothing;
 
     insert into public.institutions (id, name) values
@@ -318,7 +398,7 @@ async function verifyRlsIsolation() {
 
     insert into public.transactions (business_id, user_id, item, type, nominal, kategori, tanggal) values
       ('${businessA}', '${userA}', 'Owner sale', 'masuk', 10000, 'Penjualan', current_date),
-      ('${businessA}', '${staffA}', 'Staff sale', 'masuk', 20000, 'Penjualan', current_date),
+      ('${businessA}', '${unrelatedUser}', 'Catatan orang lain', 'masuk', 20000, 'Penjualan', current_date),
       ('${businessB}', '${userB}', 'Other sale', 'masuk', 30000, 'Penjualan', current_date);
 
     insert into public.dossier_requests (
@@ -360,28 +440,41 @@ async function verifyRlsIsolation() {
   assert.equal((await asAuthenticated(userA, "select id from public.businesses where id = $1", [businessA])).rowCount, 1);
   assert.equal((await asAuthenticated(userA, "select id from public.businesses where id = $1", [businessB])).rowCount, 0);
   assert.equal((await asAuthenticated(userA, "select id from public.transactions where business_id = $1", [businessA])).rowCount, 2);
-  assert.equal((await asAuthenticated(staffA, "select id from public.transactions where business_id = $1", [businessA])).rowCount, 1);
-
-  const staffEscalation = await asAuthenticated(
-    staffA,
-    "update public.business_members set role = 'owner' where user_id = $1 returning role",
-    [staffA],
-  );
-  assert.equal(staffEscalation.rowCount, 0, "staff must not update its own membership authority");
+  // Sejak 0063 tidak ada tingkat di bawah pemilik. Satu akun yang bukan
+  // pemilik usaha ini bukan « staf dengan akses terbatas » -- ia orang luar,
+  // dan tidak melihat apa pun, termasuk transaksi yang dulu ia sendiri catat.
   assert.equal(
-    await scalar(`select count(*)::int as value from public.business_members where user_id = '${staffA}' and role = 'staff'`),
+    (await asAuthenticated(unrelatedUser, "select id from public.transactions where business_id = $1", [businessA])).rowCount,
+    0,
+    "akun di luar usaha tidak boleh melihat transaksinya",
+  );
+
+  // Menempelkan diri ke usaha orang lain tidak lagi punya jalan: hak tulis
+  // atas tabel keanggotaan sudah dicabut dari `authenticated` sepenuhnya.
+  await assert.rejects(
+    asAuthenticated(
+      unrelatedUser,
+      "insert into public.business_members (business_id, profile_id, user_id, status) values ($1, $2, $2, 'active')",
+      [businessA, unrelatedUser],
+    ),
+    (error) => error.code === "42501",
+    "tidak ada akun yang boleh menulis ke tabel keanggotaan",
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.business_members where business_id = '${businessA}'`),
     1,
+    "satu usaha hanya punya satu anggota",
   );
 
   assert.equal(
-    (await asAuthenticated(staffA, "select id from public.dossier_requests where business_id = $1", [businessA])).rowCount,
+    (await asAuthenticated(unrelatedUser, "select id from public.dossier_requests where business_id = $1", [businessA])).rowCount,
     0,
-    "staff must not manage consent requests",
+    "akun di luar usaha tidak boleh mengurus permintaan berbagi data",
   );
   assert.equal(
-    (await asAuthenticated(staffA, "update public.consent_grants set status = 'revoked' where business_id = $1 returning id", [businessA])).rowCount,
+    (await asAuthenticated(unrelatedUser, "update public.consent_grants set status = 'revoked' where business_id = $1 returning id", [businessA])).rowCount,
     0,
-    "staff must not revoke consent",
+    "akun di luar usaha tidak boleh mencabut izin berbagi data",
   );
 
   assert.equal(
@@ -437,7 +530,7 @@ async function verifyRlsIsolation() {
     "capture state must survive a later authenticated request",
   );
   assert.equal(
-    (await asAuthenticated(staffA, "select id from public.transaction_captures where id = $1", [captureId])).rowCount,
+    (await asAuthenticated(unrelatedUser, "select id from public.transaction_captures where id = $1", [captureId])).rowCount,
     0,
     "staff must not read another member's capture",
   );
@@ -730,8 +823,8 @@ async function verifyRlsIsolation() {
     `insert into storage.objects (bucket_id, name, owner_id) values ('captures', '${userA}/capture/source.webm', '${userA}')`,
   );
   await expectAuthenticatedRejected(
-    staffA,
-    `insert into storage.objects (bucket_id, name, owner_id) values ('documents', '${staffA}/nib.pdf', '${staffA}')`,
+    unrelatedUser,
+    `insert into storage.objects (bucket_id, name, owner_id) values ('documents', '${unrelatedUser}/nib.pdf', '${unrelatedUser}')`,
   );
   await expectAuthenticatedRejected(
     userA,
@@ -748,7 +841,7 @@ async function verifyRlsIsolation() {
   );
   await assert.rejects(
     () => asAuthenticated(
-      staffA,
+      unrelatedUser,
       "select public.create_document_upload_session($1, 'nib', 'nib.pdf', 'application/pdf', 8, $2, $3) as value",
       ["document-staff-denied", "a".repeat(64), businessA],
     ),
@@ -810,7 +903,7 @@ async function verifyRlsIsolation() {
     1,
   );
   assert.equal(
-    (await asAuthenticated(staffA, "select id from public.documents where id = $1", [firstSession.documentId])).rowCount,
+    (await asAuthenticated(unrelatedUser, "select id from public.documents where id = $1", [firstSession.documentId])).rowCount,
     0,
     "staff must not read owner legal documents",
   );
@@ -1375,7 +1468,7 @@ async function verifyAccountingPeriodReports() {
       p_bank_idr => 200000,
       p_receivables => $2::jsonb,
       p_payables => $3::jsonb,
-      p_inventory_idr => 300000,
+      p_inventory_details => $5::jsonb,
       p_assets => $4::jsonb,
       p_notes => 'Saldo awal uji'
     ) as value`,
@@ -1383,14 +1476,87 @@ async function verifyAccountingPeriodReports() {
       startDate,
       JSON.stringify([{ name: "Bu Sari", amountIdr: 50000 }]),
       JSON.stringify([{ name: "Koperasi Maju", amountIdr: 1000000, lenderType: "KOPERASI", monthlyInstallmentIdr: 100000 }]),
-      JSON.stringify([{ name: "Kulkas", costIdr: 3000000, acquiredOn: "2026-06-10", category: "mesin" }]),
+      JSON.stringify([{ name: "Kulkas", costIdr: 3000000, acquiredOn: "2026-06-10", category: "mesin", salvageValueIdr: 600000 }]),
+      JSON.stringify([
+        { kind: "bahan_baku", items: [{ name: "Tepung 25 kg", amountIdr: 120000 }, { name: "Minyak 20 L", amountIdr: 40000 }], otherAmountIdr: 20000 },
+        { kind: "setengah_jadi", items: [], otherAmountIdr: 50000 },
+        { kind: "barang_jadi", items: [], otherAmountIdr: 70000 },
+      ]),
     ],
   );
   assert.equal(opening.rows[0].value.idempotent, false);
+
+  // Nilai sisa tidak pernah ikut disusutkan. Kulkas 3.000.000 dengan nilai
+  // sisa 600.000 dan umur 96 bulan menyusut (3.000.000 - 600.000) / 96 =
+  // 25.000 sebulan -- bukan 31.250 seperti kalau nilai sisanya diabaikan.
+  //
+  // Alat ini dibeli 10 Juni sementara pembukuan mulai 1 Agustus, jadi satu
+  // bulan penuh sudah terpakai: nilai pakainya 600.000 + 2.400.000 x 95/96.
+  const kulkasAwal = (await client.query(`
+    select cost_idr::bigint as book, salvage_value_idr::bigint as salvage, useful_life_months as life
+    from public.fixed_assets where business_id = '${businessB}' and name = 'Kulkas'
+  `)).rows[0];
+  assert.equal(Number(kulkasAwal.salvage), 600000, "nilai sisa harus tersimpan, bukan nol");
+  assert.equal(Number(kulkasAwal.life), 95);
+  assert.equal(Number(kulkasAwal.book), 600000 + Math.trunc(2400000 * 95 / 96));
+  assert.equal(
+    Math.trunc((Number(kulkasAwal.book) - Number(kulkasAwal.salvage)) / Number(kulkasAwal.life)),
+    25000,
+    "penyusutan bulanannya harus tetap sama dengan hitungan aslinya",
+  );
+
+  // Nilai sisa yang sama besar dengan harga belinya berarti alat itu tidak
+  // pernah menyusut sama sekali -- hampir selalu salah ketik, jadi ditolak.
+  await assert.rejects(
+    asAuthenticatedCommitted(userA, `select public.save_opening_balances(
+      p_start_date => current_date,
+      p_assets => '[{"name":"Etalase","costIdr":1000000,"salvageValueIdr":1000000}]'::jsonb
+    )`),
+    (cause) => cause.message.includes("VALIDATION_FAILED"),
+  );
+
+  // Rincian persediaan tersimpan, dan totalnya dihitung fungsi itu sendiri
+  // dari rinciannya -- bukan diterima dari pemanggil. Angka yang dihitung di
+  // satu tempat tidak bisa berselisih dengan rinciannya.
+  assert.equal(
+    await scalar(`select inventory_idr::bigint as value from public.opening_balances where business_id = '${businessB}'`),
+    300000,
+    "the inventory total must be the sum of its parts",
+  );
+  assert.deepEqual(
+    (await client.query(`
+      select detail->>'kind' as kind, (detail->>'amountIdr')::bigint as amount,
+             jsonb_array_length(detail->'items') as items
+      from public.opening_balances, lateral jsonb_array_elements(inventory_details) as detail
+      where business_id = '${businessB}' order by kind
+    `)).rows.map((row) => [row.kind, Number(row.amount), Number(row.items)]),
+    // 120.000 + 40.000 + sisanya 20.000 = 180.000. Totalnya dihitung fungsi
+    // itu sendiri dari barang ditambah sisanya, bukan diterima pemanggil.
+    [["bahan_baku", 180000, 2], ["barang_jadi", 70000, 0], ["setengah_jadi", 50000, 0]],
+  );
+
+  // Merinci tidak pernah wajib, tetapi ada batasnya: dua puluh baris per
+  // kategori. Tanpa batas, formulir sekali isi ini berubah menjadi tempat
+  // orang mencoba membangun katalog barang.
+  await assert.rejects(
+    asAuthenticatedCommitted(userA, `select public.save_opening_balances(
+      p_start_date => current_date,
+      p_inventory_details => $1::jsonb
+    )`, [JSON.stringify([{ kind: "bahan_baku", otherAmountIdr: 0,
+      items: Array.from({ length: 21 }, (_unused, index) => ({ name: `Barang ${index}`, amountIdr: 1000 })) }])]),
+    (cause) => cause.message.includes("INVENTORY_ITEMS_TOO_MANY"),
+  );
+  await assert.rejects(
+    asAuthenticatedCommitted(userA, `select public.save_opening_balances(
+      p_start_date => current_date,
+      p_inventory_details => '[{"kind":"bahan_baku","items":[{"name":"  ","amountIdr":1}],"otherAmountIdr":0}]'::jsonb
+    )`),
+    (cause) => cause.message.includes("INVENTORY_ITEM_INVALID"),
+  );
   // Kulkas dibeli 10 Juni, pemilik mulai mencatat 1 Agustus: satu bulan sudah
-  // terpakai, jadi yang masuk buku nilai pakainya (95/96 x 3.000.000), bukan
-  // harga barunya.
-  assert.equal(Number(opening.rows[0].value.equityIdr), 3018750, "opening equity must be assets minus debts");
+  // terpakai, jadi yang masuk buku nilai pakainya -- dan yang menyusut hanya
+  // bagian di atas nilai sisanya, 600.000 + 95/96 x 2.400.000.
+  assert.equal(Number(opening.rows[0].value.equityIdr), 3025000, "opening equity must be assets minus debts");
   assert.equal(opening.rows[0].value.negativeEquity, false);
 
   const repeatedOpening = await asAuthenticatedCommitted(
@@ -1405,9 +1571,9 @@ async function verifyAccountingPeriodReports() {
   );
 
   const afterOpening = await assertBalanced(startDate, "after the opening entry");
-  assert.equal(afterOpening.assets, 4018750, "opening assets must add up");
+  assert.equal(afterOpening.assets, 4025000, "opening assets must add up");
   assert.equal(afterOpening.liabilities, 1000000, "the cooperative loan must land in liabilities");
-  assert.equal(afterOpening.equity, 3018750);
+  assert.equal(afterOpening.equity, 3025000);
 
   // Rincian saldo awal harus bisa dibaca lagi oleh CALK.
   assert.equal(
@@ -1419,7 +1585,7 @@ async function verifyAccountingPeriodReports() {
       select count(*)::int as value from public.fixed_assets
       where business_id = '${businessB}' and name = 'Kulkas'
         and original_useful_life_months = 96 and useful_life_months = 95
-        and original_cost_idr = 3000000 and cost_idr = 2968750
+        and original_cost_idr = 3000000 and cost_idr = 2975000
     `),
     1,
     "a machine defaults to 96 months, minus the month already used before recording began",
@@ -1458,8 +1624,11 @@ async function verifyAccountingPeriodReports() {
   assert.equal(Number(repeatedDepreciation.rows[0].value), 0, "depreciation must never post twice for a month");
   assert.equal(
     await scalar(`select coalesce(sum(amount_idr), 0)::bigint as value from public.depreciation_postings where business_id = '${businessB}'`),
-    31250,
-    "straight line depreciation must be cost divided by useful life",
+    // (3.000.000 - nilai sisa 600.000) / 96 bulan. Nilai sisanya tidak pernah
+    // ikut menyusut, jadi angkanya 25.000 -- bukan 31.250 seperti dulu ketika
+    // setiap alat dianggap berakhir di nol.
+    25000,
+    "straight line depreciation must be cost less salvage, divided by useful life",
   );
   assert.equal(
     await scalar(`
@@ -1468,7 +1637,7 @@ async function verifyAccountingPeriodReports() {
       join public.journal_entries entry on entry.id = line.entry_id
       where line.business_id = '${businessB}' and line.account_code = '1690'
     `),
-    31250,
+    25000,
     "depreciation must accumulate in the contra asset account",
   );
   await assertBalanced(monthEnd, "after depreciation");
@@ -1597,7 +1766,7 @@ async function verifyAccountingPeriodReports() {
   assert.equal(payload.receivables[0].name, "Bu Sari");
   assert.equal(Number(payload.inventory.balanceIdr), 280000);
   assert.equal(payload.fixedAssets.length, 2, "the opening machine and the purchased tool must both be listed");
-  assert.equal(Number(payload.fixedAssets[0].accumulatedIdr), 31250);
+  assert.equal(Number(payload.fixedAssets[0].accumulatedIdr), 25000);
   assert.equal(payload.loans.length, 1);
   assert.equal(Number(payload.equity.ownerDrawIdr), 300000);
   assert.ok(payload.expenseByAccount.some((row) => row.accountCode === "5280"), "depreciation must show in the expense note");
@@ -1817,9 +1986,8 @@ async function verifyAccountingPeriodReports() {
   await assertBalanced("2026-10-31", "after a cheap tool became a running cost");
 
   // ---------------------------------------------------------------------
-  // Memperbaiki kondisi awal setelah berbulan-bulan mencatat.
+  // Cicilan dan penyusutan setelah berbulan-bulan mencatat.
   // ---------------------------------------------------------------------
-  const ladder = ["2026-07-31", "2026-08-01", "2026-08-15", "2026-08-31", "2026-09-30", "2026-10-31"];
 
   // Satu cicilan dulu, supaya ada riwayat pembayaran yang harus selamat.
   await asAuthenticatedCommitted(
@@ -1839,175 +2007,30 @@ async function verifyAccountingPeriodReports() {
   );
 
   await asAuthenticatedCommitted(userB, "select public.ensure_depreciation_posted(date '2026-10-31')");
-  const accumulatedByAssetBefore = new Map(
-    (await client.query(`
-      select asset.name, coalesce(sum(posting.amount_idr), 0)::bigint as accumulated
-      from public.fixed_assets asset
-      left join public.depreciation_postings posting on posting.asset_id = asset.id
-      where asset.business_id = '${businessB}'
-      group by asset.name
-    `)).rows.map((row) => [row.name, Number(row.accumulated)]),
-  );
 
-  // Koreksi: uang di laci ternyata 700.000, kulkas ternyata 3.600.000,
-  // pinjaman koperasi ternyata 1.200.000.
-  const correctionPayload = [
-    JSON.stringify([{ name: "Bu Sari", amountIdr: 50000 }]),
-    JSON.stringify([{ name: "Koperasi Maju", amountIdr: 1200000, lenderType: "KOPERASI", monthlyInstallmentIdr: 100000 }]),
-    JSON.stringify([{ name: "Kulkas", costIdr: 3600000, acquiredOn: "2026-06-10", category: "mesin" }]),
-  ];
-  const corrected = await asAuthenticatedCommitted(
-    userB,
-    `select public.correct_opening_balances(
-      p_reason => 'Uang di laci waktu itu salah hitung',
-      p_start_date => $1::date, p_cash_idr => 700000, p_bank_idr => 200000,
-      p_receivables => $2::jsonb, p_payables => $3::jsonb,
-      p_inventory_idr => 300000, p_assets => $4::jsonb
-    ) as value`,
-    [startDate, ...correctionPayload],
-  );
-  assert.ok(Number(corrected.rows[0].value.depreciationMonthsRecomputed) > 0, "depreciation must be recomputed");
-
-  // Koreksi memasang kembali penyusutan sampai bulan berjalan saja -- bulan
-  // yang belum tiba memang tidak boleh diposting. Snapshot pembanding diambil
-  // sampai Oktober, jadi horizonnya disamakan dulu sebelum dibandingkan.
-  await asAuthenticatedCommitted(userB, "select public.ensure_depreciation_posted(date '2026-10-31')");
-
-  // Seimbang di SETIAP tanggal historis, bukan hanya hari ini.
-  for (const date of ladder) await assertBalanced(date, `after correcting the opening balance (${date})`);
-  assert.equal(
-    (await balanceSheetTotals("2026-07-31")).assets,
-    0,
-    "a correction must not leak backwards past the day recording started",
-  );
-
-  // Penyusutan dihitung ulang, tidak dobel dan tidak hilang: sisa akun 1690
-  // di jurnal -- termasuk seluruh pembalikannya -- harus sama persis dengan
-  // jumlah yang tercatat di depreciation_postings.
-  assert.equal(
-    await scalar(`
-      select coalesce(sum(line.credit) - sum(line.debit), 0)::bigint as value
-      from public.journal_lines line
-      join public.journal_entries entry on entry.id = line.entry_id
-      where line.business_id = '${businessB}' and line.account_code = '1690'
-    `),
-    await scalar(`select coalesce(sum(amount_idr), 0)::bigint as value from public.depreciation_postings where business_id = '${businessB}'`),
-    "accumulated depreciation in the journal must equal the postings that justify it",
-  );
-  // Jumlah bulannya bergantung tanggal berjalan, jadi yang diuji adalah
-  // besaran per bulannya: 3.600.000 dibagi 96 bulan.
-  const kulkasPostings = await client.query(`
-    select posting.amount_idr from public.depreciation_postings posting
-    join public.fixed_assets asset on asset.id = posting.asset_id
-    where asset.business_id = '${businessB}' and asset.name = 'Kulkas'
-  `);
-  assert.ok(kulkasPostings.rows.length > 0, "the corrected asset must be depreciated again");
-  for (const row of kulkasPostings.rows) {
-    assert.equal(Number(row.amount_idr), 37500, "the corrected cost must drive the recomputed depreciation");
-  }
-
-  // Riwayat pembayaran cicilan selamat, dan lawan transaksinya tetap sama
-  // supaya cicilan berikutnya masih mengurangi pinjaman yang benar.
-  const loanAfter = (await client.query(
-    `select principal_idr, outstanding_idr, counterparty_id from public.loans
-     where business_id = '${businessB}' and lender_name = 'Koperasi Maju'`,
-  )).rows[0];
-  assert.equal(Number(loanAfter.principal_idr), 1200000);
-  assert.equal(Number(loanAfter.outstanding_idr), 1200000 - 130000, "payments already made must survive a correction");
-  assert.equal(loanAfter.counterparty_id, koperasiId, "the loan must keep the counterparty future installments use");
-
-  // Aset yang berasal dari transaksi tidak ikut berubah.
-  for (const [name, accumulated] of accumulatedByAssetBefore) {
-    if (name === "Kulkas") continue;
-    assert.equal(
-      await scalar(`
-        select coalesce(sum(posting.amount_idr), 0)::bigint as value
-        from public.depreciation_postings posting
-        join public.fixed_assets asset on asset.id = posting.asset_id
-        where asset.business_id = '${businessB}' and asset.name = '${name}'
-      `),
-      accumulated,
-      `an untouched asset (${name}) must come out of a correction identical`,
+  // ---------------------------------------------------------------------
+  // Kondisi awal diisi sekali
+  // ---------------------------------------------------------------------
+  // Titik mulai usaha bukan angka yang dipelihara. Salah ketik uang di laci
+  // diperbaiki dengan mencatat transaksi, bukan dengan menulis ulang sejarah:
+  // cara itu meninggalkan jejak kapan selisihnya ketahuan dan berapa besarnya.
+  //
+  // Menyembunyikan tombolnya saja tidak cukup. Selama fungsinya masih bisa
+  // dipanggil, aturannya hanya berlaku bagi yang tidak mencarinya.
+  for (const call of [
+    "select public.correct_opening_balances(p_reason => 'apa saja', p_start_date => current_date, p_cash_idr => 1, p_bank_idr => 0, p_receivables => '[]'::jsonb, p_payables => '[]'::jsonb, p_inventory_idr => 0, p_assets => '[]'::jsonb)",
+    "select public.update_fixed_asset('00000000-0000-4000-8000-000000000001', 'x', 'mesin', 12)",
+    "select public.update_loan('00000000-0000-4000-8000-000000000001', 'x', 1, 1)",
+  ]) {
+    await assert.rejects(
+      asAuthenticatedCommitted(userB, call),
+      (cause) => cause.code === "42501",
+      `pemilik usaha tidak boleh bisa memanggil: ${call.slice(14, 46)}`,
     );
   }
 
-  // Menghilangkan pinjaman yang sudah dicicil ditolak, dan penolakannya
-  // membatalkan seluruh koreksi.
-  await assert.rejects(
-    () => asAuthenticatedCommitted(
-      userB,
-      `select public.correct_opening_balances(
-        p_reason => 'Pinjaman dihapus', p_start_date => $1::date, p_cash_idr => 700000,
-        p_payables => '[]'::jsonb
-      )`,
-      [startDate],
-    ),
-    (error) => error.code === "P0001" && error.message.startsWith("LOAN_HAS_PAYMENTS"),
-  );
-  // Koreksi menulis ulang baris pinjaman, jadi ia dicari lagi lewat namanya.
-  assert.equal(
-    await scalar(`
-      select outstanding_idr::bigint as value from public.loans
-      where business_id = '${businessB}' and lender_name = 'Koperasi Maju'
-    `),
-    1070000,
-    "a refused correction must roll back completely",
-  );
-
-  // Tanggal mulai tidak boleh dimajukan melewati catatan yang sudah ada.
-  await assert.rejects(
-    () => asAuthenticatedCommitted(
-      userB,
-      `select public.correct_opening_balances(
-        p_reason => 'Ganti tanggal mulai', p_start_date => date '2026-09-01',
-        p_cash_idr => 700000, p_payables => $1::jsonb
-      )`,
-      [correctionPayload[1]],
-    ),
-    (error) => error.code === "P0001" && error.message.startsWith("OPENING_START_DATE_CONFLICT"),
-  );
-
-  // Koreksi berulang: menguji jebakan idempotensi pembalikan.
-  for (const round of [2, 3]) {
-    await asAuthenticatedCommitted(
-      userB,
-      `select public.correct_opening_balances(
-        p_reason => $1, p_start_date => $2::date, p_cash_idr => $3, p_bank_idr => 200000,
-        p_receivables => $4::jsonb, p_payables => $5::jsonb, p_inventory_idr => 300000, p_assets => $6::jsonb
-      )`,
-      [`Perbaikan ke-${round}`, startDate, 700000 + round * 1000, ...correctionPayload],
-    );
-    for (const date of ladder) await assertBalanced(date, `after correction ${round} (${date})`);
-  }
-  assert.equal(
-    await scalar(`select count(*)::int as value from public.journal_entries where business_id = '${businessB}' and source = 'OPENING'`),
-    4,
-    "every correction posts a fresh opening entry",
-  );
-  assert.equal(
-    await scalar(`
-      select count(*)::int as value from public.journal_entries
-      where business_id = '${businessB}'
-        and reverses_entry_id in (select id from public.journal_entries where business_id = '${businessB}' and source = 'OPENING')
-    `),
-    3,
-    "every superseded opening entry is reversed exactly once",
-  );
-  assert.equal(
-    await scalar(`select correction_count::int as value from public.opening_balances where business_id = '${businessB}'`),
-    3,
-  );
-  assert.equal(
-    await scalar(`select count(*)::int as value from public.opening_balances where business_id = '${businessB}'`),
-    1,
-    "corrections never create a second opening balance row",
-  );
-  assert.equal(
-    await scalar(`select jsonb_array_length(payable_details)::int as value from public.opening_balances where business_id = '${businessB}'`),
-    1,
-    "the answers to question four must be readable back for the edit screen",
-  );
-
+  // Menandai alat sudah dijual TETAP boleh -- tanpa itu penyusutannya jalan
+  // terus atas alat yang sudah tidak ada.
   // ---------------------------------------------------------------------
   // Register alat & pinjaman.
   // ---------------------------------------------------------------------
@@ -2015,32 +2038,16 @@ async function verifyAccountingPeriodReports() {
     `select id from public.fixed_assets where business_id = '${businessB}' and name = 'Kulkas'`,
   )).rows[0].id;
 
-  // Memperpanjang umur alat menghitung ulang penyusutan yang sudah diposting.
-  await asAuthenticatedCommitted(
-    userB,
-    "select public.update_fixed_asset($1, 'Kulkas besar', 'mesin', 120)",
-    [kulkasId],
-  );
-  const relifed = await client.query(`
-    select posting.amount_idr from public.depreciation_postings posting
-    where posting.asset_id = '${kulkasId}'
-  `);
-  assert.ok(relifed.rows.length > 0, "a re-lifed asset keeps depreciating");
-  for (const row of relifed.rows) {
-    assert.equal(
-      Number(row.amount_idr),
-      Math.floor(3562500 / 120),
-      "a longer life must spread the same value over more months",
-    );
-  }
-  await assertBalanced("2026-10-31", "after changing an asset life");
-
-  // Melepas alat: sisa nilainya jadi beban, hasil jualnya masuk kas, dan
-  // penyusutannya berhenti.
+  // Nilai buku dihitung PADA TANGGAL YANG SAMA dengan pelepasannya. Skenario
+  // sebelumnya sempat memposting penyusutan sampai Oktober untuk keperluan
+  // lain, jadi menjumlahkan seluruh posting tanpa batas tanggal berarti
+  // membandingkan dua tanggal yang berbeda -- dan selisihnya persis satu bulan
+  // penyusutan, cukup untuk menjatuhkan perbandingan yang sebenarnya benar.
   const bookBefore = await scalar(`
     select (asset.cost_idr - coalesce(sum(posting.amount_idr), 0))::bigint as value
     from public.fixed_assets asset
-    left join public.depreciation_postings posting on posting.asset_id = asset.id
+    left join public.depreciation_postings posting
+      on posting.asset_id = asset.id and posting.period_month <= date_trunc('month', current_date)::date
     where asset.id = '${kulkasId}' group by asset.cost_idr
   `);
   const disposal = await asAuthenticatedCommitted(
@@ -2076,21 +2083,6 @@ async function verifyAccountingPeriodReports() {
     (error) => error.code === "P0001" && error.message === "FIXED_ASSET_ALREADY_DISPOSED",
   );
 
-  // Nama dan cicilan pinjaman boleh diperbarui; sisa pinjaman tidak diketik.
-  const loanRow = (await client.query(
-    `select id from public.loans where business_id = '${businessB}' and lender_name = 'Koperasi Maju'`,
-  )).rows[0];
-  await asAuthenticatedCommitted(
-    userB,
-    "select public.update_loan($1, 'Koperasi Maju Bersama', 120000, 18)",
-    [loanRow.id],
-  );
-  assert.equal(
-    await scalar(`select outstanding_idr::bigint as value from public.loans where id = '${loanRow.id}'`),
-    1070000,
-    "updating loan terms must never move the amount still owed",
-  );
-
   // Jalur pendaftaran alat/pinjaman tanpa jurnal ditutup untuk pemilik.
   await expectAuthenticatedRejected(
     userB,
@@ -2103,10 +2095,11 @@ async function verifyAccountingPeriodReports() {
     "42501",
   );
 
-  // Alat & pinjaman usaha lain tetap tidak bisa disentuh.
+  // Alat usaha lain tetap tidak bisa disentuh. Diuji lewat penandaan « sudah
+  // dijual », karena itulah satu-satunya jalan tulis yang masih terbuka.
   await assert.rejects(
-    () => asAuthenticatedCommitted(userA, "select public.update_loan($1, 'Bajakan')", [loanRow.id]),
-    (error) => error.code === "42501",
+    () => asAuthenticatedCommitted(userA, "select public.dispose_fixed_asset($1, current_date, 0)", [kulkasId]),
+    (error) => error.code === "42501" || error.code === "P0001",
   );
 
   // ---------------------------------------------------------------------
@@ -3587,6 +3580,387 @@ async function verifyConsentVerifiedProfileLifecycle() {
   );
 }
 
+/**
+ * Fondasi Ruang Mesin (`0069`).
+ *
+ * Yang diperiksa di sini bukan "apakah tabelnya ada" -- itu sudah dijawab
+ * penjaga di dalam migrasinya. Yang diperiksa adalah hal yang hanya bisa
+ * dibuktikan dengan benar-benar mencoba: apakah pintu yang dikunci memang
+ * terkunci, dan apakah catatan yang katanya tidak bisa dihapus memang menolak
+ * dihapus oleh peran yang punya seluruh hak.
+ */
+async function verifyRuangMesinFoundation() {
+  const adminOne = "f0000000-0000-4000-8000-000000000002";
+  const adminTwo = "f0000000-0000-4000-8000-000000000003";
+  const plainOwner = "a0000000-0000-4000-8000-000000000001";
+  const ownedBusiness = "a1000000-0000-4000-8000-000000000001";
+  const frozenBusiness = "f1000000-0000-4000-8000-000000000001";
+
+  await client.query(`
+    insert into auth.users (id, email) values
+      ('${adminOne}', 'ruang-mesin-1@example.test'),
+      ('${adminTwo}', 'ruang-mesin-2@example.test');
+    insert into public.profiles (id, auth_user_id, email, role, name) values
+      ('${adminOne}', '${adminOne}', 'ruang-mesin-1@example.test', 'admin', 'Admin Satu'),
+      ('${adminTwo}', '${adminTwo}', 'ruang-mesin-2@example.test', 'admin', 'Admin Dua');
+    insert into public.platform_admins (user_id, profile_id, status, source) values
+      ('${adminOne}', '${adminOne}', 'active', 'manual'),
+      ('${adminTwo}', '${adminTwo}', 'active', 'manual');
+    insert into public.businesses (id, name) values ('${frozenBusiness}', 'Usaha Uji Bekukan');
+  `);
+
+  // ── Kasus 1: pemasangan pertama ────────────────────────────────────────
+  // Dari nol SUPER_ADMIN, admin platform mana pun boleh membuat yang pertama.
+  // Tanpa jalan ini, sistem yang baru dipasang terkunci selamanya.
+  const bootstrap = await asAuthenticatedCommitted(
+    adminOne,
+    `select public.admin_grant_role($1, 'SUPER_ADMIN', $2) as result`,
+    [adminOne, "pemasangan pertama ruang mesin"],
+  );
+  assert.equal(bootstrap.rows[0].result.bootstrap, true, "peran pertama harus ditandai bootstrap");
+  assert.equal(await scalar("select count(*)::int as value from public.admin_roles where revoked_at is null"), 1);
+
+  // ── Kasus 2: mengangkat diri sendiri ditolak ───────────────────────────
+  // Sekarang sudah ada satu SUPER_ADMIN, jadi jalan bootstrap tertutup dan
+  // admin kedua tidak bisa mengangkat dirinya sendiri.
+  await assert.rejects(
+    () => asAuthenticated(adminTwo, `select public.admin_grant_role('${adminTwo}', 'SUPER_ADMIN', 'saya mau jadi super admin')`),
+    (error) => error.message.includes("BUTUH_SUPER_ADMIN"),
+    "admin tanpa peran tidak boleh mengangkat dirinya sendiri",
+  );
+  // SUPER_ADMIN yang sudah menjabat pun tidak bisa mengangkat dirinya lagi --
+  // dan yang menolaknya adalah larangan mengangkat diri, bukan sekadar
+  // bentrokan indeks. Urutan itu penting: kalau bentrokan yang menolak lebih
+  // dulu, larangan dua-kunci tidak pernah benar-benar diuji.
+  await assert.rejects(
+    () => asAuthenticated(adminOne, `select public.admin_grant_role('${adminOne}', 'SUPER_ADMIN', 'menambah peran untuk diri sendiri')`),
+    (error) => error.message.includes("SUPER_ADMIN_TIDAK_BOLEH_MENGANGKAT_DIRI"),
+  );
+
+  // ── Kasus 3: alasan kosong ditolak, dan tidak menyisakan apa pun ───────
+  // Ini sekaligus membuktikan kasus 4: barisnya sempat masuk sebelum catatan
+  // ditulis, jadi kalau catatannya gagal dan barisnya tetap ada, berarti
+  // keduanya TIDAK berbagi satu transaksi.
+  const rolesBefore = await scalar("select count(*)::int as value from public.admin_roles");
+  await assert.rejects(
+    () => asAuthenticatedCommitted(adminOne, `select public.admin_grant_role('${adminTwo}', 'OPS', '  ')`),
+    (error) => error.message.includes("ALASAN_WAJIB"),
+    "tindakan tanpa alasan harus ditolak",
+  );
+  assert.equal(
+    await scalar("select count(*)::int as value from public.admin_roles"),
+    rolesBefore,
+    "peran tidak boleh tertinggal ketika catatannya gagal ditulis",
+  );
+
+  // ── Kasus 4: tindakan dan catatannya satu transaksi ────────────────────
+  const logsBefore = await scalar("select count(*)::int as value from public.admin_action_logs");
+  await asAuthenticatedCommitted(
+    adminOne,
+    `select public.admin_grant_role('${adminTwo}', 'OPS', 'menyiapkan operator harian')`,
+  );
+  assert.equal(
+    await scalar("select count(*)::int as value from public.admin_action_logs"),
+    logsBefore + 1,
+    "setiap tindakan tulis menambah tepat satu catatan",
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.admin_action_logs
+      where action = 'ADMIN_ROLE_GRANTED' and actor_user_id = '${adminOne}'
+        and length(btrim(reason)) >= 3
+    `),
+    2,
+  );
+
+  // ── Kasus 5: catatan hanya bisa bertambah ──────────────────────────────
+  // Diuji sebagai `service_role`, bukan sebagai `authenticated`. Peran layanan
+  // memegang seluruh hak atas `public` sejak `0062`, dan seluruh kode sisi
+  // server berjalan sebagai peran itu -- kalau append-only hanya ditegakkan
+  // lewat hak akses, ia tidak menahan siapa pun yang berbahaya.
+  await assert.rejects(
+    () => asServiceRoleCommitted("update public.admin_action_logs set reason = 'diubah'"),
+    (error) => error.message.includes("CATATAN_TIDAK_BISA_DIUBAH"),
+    "catatan tindakan tidak boleh bisa diubah",
+  );
+  await assert.rejects(
+    () => asServiceRoleCommitted("delete from public.admin_action_logs"),
+    (error) => error.message.includes("CATATAN_TIDAK_BISA_DIUBAH"),
+    "catatan tindakan tidak boleh bisa dihapus",
+  );
+
+  // ── SUPER_ADMIN terakhir ───────────────────────────────────────────────
+  await assert.rejects(
+    () => asAuthenticated(adminOne, `select public.admin_revoke_role('${adminOne}', 'SUPER_ADMIN', 'saya mundur')`),
+    (error) => error.message.includes("SUPER_ADMIN_TERAKHIR"),
+    "SUPER_ADMIN terakhir tidak boleh mencabut perannya sendiri",
+  );
+  // Setelah ada yang kedua, pencabutan menjadi sah.
+  await asAuthenticatedCommitted(
+    adminOne,
+    `select public.admin_grant_role('${adminTwo}', 'SUPER_ADMIN', 'penerbit kedua untuk aturan dua kunci')`,
+  );
+  await asAuthenticatedCommitted(
+    adminTwo,
+    `select public.admin_revoke_role('${adminOne}', 'SUPER_ADMIN', 'rotasi peran terjadwal')`,
+  );
+  assert.equal(await scalar("select private.active_super_admin_count() as value"), 1);
+  // Dan yang tersisa kembali terkunci.
+  await assert.rejects(
+    () => asAuthenticated(adminTwo, `select public.admin_revoke_role('${adminTwo}', 'SUPER_ADMIN', 'yang terakhir mundur juga')`),
+    (error) => error.message.includes("SUPER_ADMIN_TERAKHIR"),
+  );
+
+  // ── Membekukan akun: asimetri yang disengaja ───────────────────────────
+  // adminOne kini hanya OPS-kah? Tidak: perannya dicabut seluruhnya, jadi ia
+  // dipakai untuk membuktikan bahwa admin tanpa peran tidak bisa apa-apa.
+  await assert.rejects(
+    () => asAuthenticated(adminOne, `select public.admin_set_business_status('${frozenBusiness}', 'suspended', 'uji tanpa peran')`),
+    (error) => error.message.includes("BUTUH_PERAN_OPS"),
+    "admin tanpa peran tidak boleh membekukan akun",
+  );
+
+  await asAuthenticatedCommitted(
+    adminTwo, `select public.admin_grant_role('${adminOne}', 'OPS', 'operator harian')`,
+  );
+
+  await asAuthenticatedCommitted(
+    adminOne,
+    `select public.admin_set_business_status('${frozenBusiness}', 'suspended', 'dugaan pelanggaran syarat dan ketentuan')`,
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.businesses
+                  where id = '${frozenBusiness}' and status = 'suspended'
+                    and status_reason is not null and status_changed_by = '${adminOne}'`),
+    1,
+    "pembekuan harus menyimpan alasan dan pelakunya",
+  );
+  // OPS boleh menghentikan, hanya SUPER_ADMIN yang boleh mengembalikan.
+  await assert.rejects(
+    () => asAuthenticated(adminOne, `select public.admin_set_business_status('${frozenBusiness}', 'active', 'sudah diperiksa')`),
+    (error) => error.message.includes("BUKA_BEKUAN_BUTUH_SUPER_ADMIN"),
+  );
+  await asAuthenticatedCommitted(
+    adminTwo,
+    `select public.admin_set_business_status('${frozenBusiness}', 'active', 'laporan tidak terbukti')`,
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.businesses where id = '${frozenBusiness}' and status = 'active'`),
+    1,
+  );
+  // Status di luar dua itu tidak boleh disentuh dari rute admin.
+  await assert.rejects(
+    () => asAuthenticated(adminTwo, `select public.admin_set_business_status('${frozenBusiness}', 'archived', 'coba arsipkan')`),
+    (error) => error.message.includes("STATUS_TIDAK_DIIZINKAN"),
+  );
+
+  // ── Mode Dukungan: tiketnya terlihat oleh yang dibuka catatannya ───────
+  const session = await asAuthenticatedCommitted(
+    adminTwo,
+    `select public.start_support_session('${ownedBusiness}', 'pemilik melapor laporan bulan lalu kosong') as result`,
+  );
+  const sessionId = session.rows[0].result.sessionId;
+  assert.ok(sessionId, "sesi dukungan harus mengembalikan idnya");
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.support_sessions
+                  where id = '${sessionId}'
+                    and expires_at between started_at + interval '29 minutes' and started_at + interval '31 minutes'`),
+    1,
+    "tiket dukungan berumur 30 menit",
+  );
+
+  const seenByOwner = await asAuthenticated(
+    plainOwner,
+    `select count(*)::int as value from public.support_sessions where id = '${sessionId}'`,
+  );
+  assert.equal(Number(seenByOwner.rows[0].value), 1, "pemilik usaha harus melihat siapa membuka catatannya");
+
+  const seenByStranger = await asAuthenticated(
+    "b0000000-0000-4000-8000-000000000001",
+    `select count(*)::int as value from public.support_sessions where id = '${sessionId}'`,
+  );
+  assert.equal(Number(seenByStranger.rows[0].value), 0, "tiket dukungan tidak boleh bocor ke usaha lain");
+
+  // Tiket tidak bisa diperpanjang, bahkan oleh peran layanan.
+  await assert.rejects(
+    () => asServiceRoleCommitted(`update public.support_sessions set expires_at = now() + interval '10 hours'`),
+    (error) => error.message.includes("CATATAN_TIDAK_BISA_DIUBAH"),
+    "tiket 30 menit yang bisa diperpanjang bukan tiket",
+  );
+
+  // ── Sakelar fitur: penyimpangan per akun menang atas global ────────────
+  assert.equal(await scalar("select (public.feature_flag_enabled('capture_voice'))::int as value"), 1);
+  assert.equal(await scalar("select (public.feature_flag_enabled('capture_camera'))::int as value"), 0);
+  assert.equal(await scalar("select (public.feature_flag_enabled('tidak_ada_sakelar_ini'))::int as value"), 0);
+  await asServiceRoleCommitted(`
+    insert into public.feature_flag_overrides (flag_key, business_id, enabled)
+    values ('capture_voice', '${ownedBusiness}', false)
+  `);
+  assert.equal(
+    await scalar(`select (public.feature_flag_enabled('capture_voice', '${ownedBusiness}'))::int as value`),
+    0,
+    "penyimpangan per akun harus menang atas nilai global",
+  );
+  await asServiceRoleCommitted(`delete from public.feature_flag_overrides where business_id = '${ownedBusiness}'`);
+
+  // ── Sakelar hanya berubah lewat jalur yang beralasan ───────────────────
+  // adminOne memegang OPS, adminTwo memegang SUPER_ADMIN.
+  await asAuthenticatedCommitted(
+    adminOne,
+    `select public.admin_set_feature_flag('capture_voice', false, 'jalur suara bermasalah, dimatikan sementara')`,
+  );
+  assert.equal(await scalar("select (public.feature_flag_enabled('capture_voice'))::int as value"), 0);
+  // Mematikan boleh oleh OPS; menyalakan kembali tidak.
+  await assert.rejects(
+    () => asAuthenticated(adminOne, `select public.admin_set_feature_flag('capture_voice', true, 'sudah beres')`),
+    (error) => error.message.includes("MENYALAKAN_BUTUH_SUPER_ADMIN"),
+    "menyalakan kembali harus keputusan yang disengaja",
+  );
+  await asAuthenticatedCommitted(
+    adminTwo,
+    `select public.admin_set_feature_flag('capture_voice', true, 'penyebabnya sudah diperbaiki dan diuji')`,
+  );
+  assert.equal(await scalar("select (public.feature_flag_enabled('capture_voice'))::int as value"), 1);
+  await assert.rejects(
+    () => asAuthenticated(adminTwo, `select public.admin_set_feature_flag('sakelar_karangan', false, 'coba sakelar yang tidak ada')`),
+    (error) => error.message.includes("SAKELAR_TIDAK_DIKENAL"),
+  );
+
+  // Penyimpangan per akun, lalu dicabut kembali.
+  await asAuthenticatedCommitted(
+    adminTwo,
+    `select public.admin_set_feature_flag_for_business('capture_camera', '${ownedBusiness}', true, 'uji coba terbatas jalur foto nota')`,
+  );
+  const flagsForOwner = await asAuthenticated(plainOwner, "select public.my_feature_flags() as value");
+  assert.equal(
+    flagsForOwner.rows[0].value.capture_camera,
+    true,
+    "pemilik yang diikutkan uji coba harus melihat sakelarnya menyala",
+  );
+  assert.equal(
+    flagsForOwner.rows[0].value.capture_voice,
+    true,
+    "sakelar tanpa penyimpangan mengikuti nilai global",
+  );
+  const flagsForStranger = await asAuthenticated(
+    "b0000000-0000-4000-8000-000000000001",
+    "select public.my_feature_flags() as value",
+  );
+  assert.equal(
+    flagsForStranger.rows[0].value.capture_camera,
+    false,
+    "penyimpangan satu akun tidak boleh bocor ke akun lain",
+  );
+  await asAuthenticatedCommitted(
+    adminTwo,
+    `select public.admin_set_feature_flag_for_business('capture_camera', '${ownedBusiness}', null, 'uji coba selesai, kembali ke nilai global')`,
+  );
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.feature_flag_overrides where business_id = '${ownedBusiness}'`),
+    0,
+    "penyimpangan harus bisa dicabut, bukan hanya dibalik",
+  );
+
+  // ── Bukan admin tidak bisa apa pun ─────────────────────────────────────
+  await assert.rejects(
+    () => asAuthenticated(plainOwner, `select public.admin_grant_role('${plainOwner}', 'OPS', 'saya mau jadi admin')`),
+    (error) => error.message.includes("BUKAN_ADMIN"),
+  );
+  await assert.rejects(
+    () => asAuthenticated(plainOwner, `select public.start_support_session('${ownedBusiness}', 'membuka catatan sendiri lewat pintu admin')`),
+    (error) => error.message.includes("BUKAN_ADMIN"),
+  );
+  await assert.rejects(
+    () => asAuthenticated(plainOwner, `select public.admin_set_feature_flag('capture_camera', true, 'saya mau coba kamera')`),
+    (error) => error.message.includes("BUKAN_ADMIN"),
+    "pemilik usaha tidak boleh menyalakan sakelarnya sendiri",
+  );
+  const logsForOwner = await asAuthenticated(
+    plainOwner,
+    "select count(*)::int as value from public.admin_action_logs",
+  );
+  assert.equal(Number(logsForOwner.rows[0].value), 0, "catatan tindakan admin tidak terlihat oleh pemilik usaha");
+
+  // ── Metrik Ruang Mesin: terbuka bagi admin, tertutup bagi pemilik ──────
+  const health = await asAuthenticated(adminTwo, "select public.admin_health_row() as value");
+  assert.equal(health.rows[0].value.length, 6, "baris kesehatan harus enam lampu");
+  const lamps = new Map(health.rows[0].value.map((lamp) => [lamp.key, lamp]));
+  assert.equal(lamps.get("llm_amount_violation").value, 0, "belum ada nominal model yang ditimpa");
+  assert.equal(lamps.get("llm_amount_violation").tone, "ok");
+  // Tidak ada penjadwal di proyek ini; lampunya harus mengaku belum terukur,
+  // bukan menyala hijau untuk pekerjaan yang tidak pernah dijadwalkan.
+  assert.equal(lamps.get("daily_job").measurable, false);
+  // Satu sakelar sedang dimatikan (`capture_camera`), dan itu keputusan yang
+  // disengaja -- kuning, bukan merah.
+  assert.equal(lamps.get("flags_off").tone, "warn");
+
+  await assert.rejects(
+    () => asAuthenticated(plainOwner, "select public.admin_health_row()"),
+    (error) => error.message.includes("BUKAN_ADMIN"),
+    "baris kesehatan tidak boleh terbaca pemilik usaha",
+  );
+  await assert.rejects(
+    () => asAuthenticated(plainOwner, "select public.admin_ai_quality(7)"),
+    (error) => error.message.includes("BUKAN_ADMIN"),
+  );
+  await assert.rejects(
+    () => asAuthenticated(plainOwner, "select public.admin_cost_row(7)"),
+    (error) => error.message.includes("BUKAN_ADMIN"),
+  );
+
+  // Invarian v1.1 #11: sapu seluruh respons metrik, tidak boleh ada rupiah
+  // per akun maupun potongan catatan yang bocor lewat kunci apa pun.
+  for (const call of ["public.admin_ai_quality(30)", "public.admin_cost_row(30)", "public.admin_health_row()"]) {
+    const result = await asAuthenticated(adminTwo, `select ${call} as value`);
+    const body = JSON.stringify(result.rows[0].value).toLowerCase();
+    // Kata "nominal" sengaja TIDAK ada di daftar ini: ia kata Indonesia yang
+    // sah di label lampu. Yang disapu adalah nama kolom isi catatan, dan --
+    // yang lebih tajam -- setiap penyebutan usaha sama sekali. Metrik yang
+    // mengelompokkan per usaha adalah bentuk kebocoran yang paling mudah
+    // masuk dengan niat baik.
+    for (const forbidden of ["amountidr", "ocrsummary", "excerpt", "transcription", "business"]) {
+      assert.ok(!body.includes(forbidden), `${call} membocorkan "${forbidden}"`);
+    }
+  }
+
+  // ── Menandai akun demo, dan akibatnya pada angka ───────────────────────
+  await assert.rejects(
+    () => asAuthenticated(adminOne, `select public.admin_set_demo_account('${frozenBusiness}', true, 'dimsum-3-bulan', 'akun untuk pertunjukan')`),
+    (error) => error.message.includes("BUTUH_SUPER_ADMIN"),
+    "menandai demo mengeluarkan usaha dari seluruh angka; OPS tidak cukup",
+  );
+  await asAuthenticatedCommitted(
+    adminTwo,
+    `select public.admin_set_demo_account('${frozenBusiness}', true, 'dimsum-3-bulan', 'akun peraga untuk dry-run')`,
+  );
+  assert.equal(await scalar(`select (private.is_demo_business('${frozenBusiness}'))::int as value`), 1);
+  const demoList = await asAuthenticated(adminTwo, "select public.admin_demo_accounts() as value");
+  assert.equal(demoList.rows[0].value.length, 1, "daftar demo harus memuat usaha yang barusan ditandai");
+  assert.equal(demoList.rows[0].value[0].fixture_key, "dimsum-3-bulan");
+
+  await assert.rejects(
+    () => asAuthenticated(adminTwo, `select public.admin_set_demo_account('${frozenBusiness}', true, 'x', 'fixture terlalu pendek')`),
+    (error) => error.message.includes("FIXTURE_WAJIB"),
+  );
+  await asAuthenticatedCommitted(
+    adminTwo,
+    `select public.admin_set_demo_account('${frozenBusiness}', false, null, 'kembali menjadi akun biasa')`,
+  );
+  assert.equal(await scalar(`select (private.is_demo_business('${frozenBusiness}'))::int as value`), 0);
+  assert.equal(
+    await scalar("select count(*)::int as value from public.admin_action_logs where action like 'DEMO_ACCOUNT_%'"),
+    2,
+    "menandai dan melepas tanda sama-sama tercatat",
+  );
+
+  // ── Setiap metrik yang tampil punya definisinya ────────────────────────
+  assert.equal(
+    await scalar("select count(*)::int as value from public.metric_definitions where measurable = false"),
+    4,
+    "metrik tanpa sumber harus terdaftar sebagai belum terukur, bukan hilang dari daftar",
+  );
+}
+
 async function verifyFreshDatabase() {
   await resetManagedTestSchemas();
   await applyMigrations("fresh database");
@@ -3615,14 +3989,42 @@ async function verifyFreshDatabase() {
   assert.equal(await scalar("select count(*)::int as value from storage.buckets where id = 'documents' and public = false"), 1);
   assert.equal(await scalar("select count(*)::int as value from public.readiness_rule_sets where version = 'wp03-baseline-v1'"), 1);
 
-  await applyMigrations("idempotency replay");
+  // Memasang ulang seluruh migrasi harus tidak mengubah apa pun. Migrasi
+  // ditulis idempoten justru supaya pemasangan yang setengah jalan bisa
+  // diulang dengan aman.
+  //
+  // Skema dasar TIDAK idempoten, dan itu disengaja. Ia salinan `pg_dump`, yang
+  // menulis `create table` dan `create function` polos -- bukan `if not
+  // exists`. Membuatnya idempoten berarti menyunting hasil dump dengan tangan,
+  // dan berkas yang setengah disunting lebih berbahaya daripada berkas yang
+  // jujur menolak dipasang dua kali. Ia dipakai satu kali ke basis data
+  // kosong; penjaga di kepala berkasnya berhenti dengan pesan yang jelas kalau
+  // dipanggil ke basis data yang sudah terisi.
+  if (process.env.BASELINE === "1") {
+    await assert.rejects(
+      client.query(migrations[0].sql),
+      (error) => error.message.includes("BASELINE_SCHEMA_ALREADY_APPLIED"),
+      "skema dasar harus menolak dipasang ke basis data yang sudah terisi",
+    );
+    await client.query("rollback");
+  } else {
+    await replayMigrations();
+  }
   assert.equal(await scalar("select count(*)::int as value from storage.buckets"), 3);
   assert.equal(
     await scalar("select count(*)::int as value from storage.buckets where id = 'captures' and public = false"),
     1,
   );
   assert.equal(await scalar("select count(*)::int as value from public.readiness_rule_sets where version = 'wp03-baseline-v1'"), 1);
-  assert.equal(await scalar("select count(*)::int as value from public.migration_verification_results"), 4);
+  // Empat baris ini catatan hasil backfill `0011`: berapa profil lama yang
+  // dipindahkan menjadi usaha, dan apakah jumlahnya cocok. Ia riwayat sebuah
+  // peristiwa, bukan bagian dari definisi skema -- di pemasangan baru tidak
+  // pernah ada yang di-backfill, jadi nol adalah jawaban yang benar. Tabelnya
+  // tetap ikut, karena produksi sudah memuat catatannya.
+  assert.equal(
+    await scalar("select count(*)::int as value from public.migration_verification_results"),
+    process.env.BASELINE === "1" ? 0 : 4,
+  );
   assert.equal(
     await scalar(`
       select count(*)::int as value
@@ -3663,7 +4065,7 @@ async function verifyFreshDatabase() {
       select count(*)::int as value from public.business_members
       where business_id = '${constraintBusiness}'
         and user_id = '90000000-0000-4000-8000-000000000001'
-        and role = 'owner' and status = 'active'
+        and status = 'active'
     `),
     1,
     "provisioning must also create the owner membership row",
@@ -3733,6 +4135,7 @@ async function verifyFreshDatabase() {
   `, "P0001");
 
   await verifyRlsIsolation();
+  await verifyRuangMesinFoundation();
   await verifyAccountingJournal();
   // Skenario Tahap B menambah transaksi pada usaha B, sedangkan pemeriksaan
   // consent menghitung transaksi usaha yang sama. Ia dijalankan lebih dulu.
@@ -3826,7 +4229,7 @@ async function verifyLegacyBackfill() {
   }
 
   assert.equal(await scalar("select count(*)::int as value from public.businesses"), 1);
-  assert.equal(await scalar("select count(*)::int as value from public.business_members where role = 'owner' and status = 'active'"), 1);
+  assert.equal(await scalar("select count(*)::int as value from public.business_members where status = 'active'"), 1);
   assert.equal(await scalar("select count(*)::int as value from public.transactions where business_id is not null and amount_idr = 150000 and direction = 'income'"), 1);
   assert.equal(await scalar("select count(*)::int as value from public.document_versions"), 1);
   assert.equal(await scalar("select count(*)::int as value from public.readiness_score_snapshots"), 1);
@@ -3853,7 +4256,9 @@ async function verifyLegacyBackfill() {
   ];
   for (const query of verificationQueries) assert.equal(await scalar(query), 0);
 
-  await applyMigrations("legacy idempotency replay");
+  // Batas ulang-pasang yang sama seperti pada basis data bersih: rantai
+  // migrasi sudah satu arah sejak `0063`.
+  await replayMigrations();
   assert.equal(await scalar("select count(*)::int as value from public.businesses"), 1);
   assert.equal(await scalar("select count(*)::int as value from public.business_members"), 1);
   assert.equal(await scalar("select count(*)::int as value from public.document_versions"), 1);
@@ -3862,9 +4267,18 @@ async function verifyLegacyBackfill() {
 
 try {
   await verifyFreshDatabase();
-  await verifyLegacyBackfill();
-  await resetManagedTestSchemas();
-  await applyMigrations("final reproducible schema");
+  // Backfill data lama adalah skenario JALUR MIGRASI, bukan skenario skema.
+  // Ia menyemai basis data berisi profil model lama, memasang migrasi di
+  // atasnya, lalu membuktikan setiap profil menjadi satu usaha. Skema dasar
+  // tidak punya urusan di sana: ia hanya dipasang ke basis data kosong, di
+  // mana tidak ada apa pun yang perlu dipindahkan. Menjalankannya di sini
+  // hanya akan membuktikan bahwa `create table` gagal di atas tabel yang sudah
+  // ada -- pertanyaan yang tidak ada yang bertanya.
+  if (process.env.BASELINE !== "1") {
+    await verifyLegacyBackfill();
+    await resetManagedTestSchemas();
+    await applyMigrations("final reproducible schema");
+  }
   console.log("Database migrations passed: fresh apply/replay, constraints, cross-account RLS, private document versioning, private storage, capture lifecycle, ledger history, SAK EMKM double-entry posting and reversal, opening balances, depreciation, inventory counts, balance sheet and cash flow, evidence-based readiness missions, consent-scoped verified profiles, legacy backfill, and verification queries.");
 } finally {
   await client.end();

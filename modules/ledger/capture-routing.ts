@@ -43,7 +43,19 @@ export function clientTranscriptMinConfidence(
   return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : defaultClientTranscriptMinConfidence;
 }
 
-export type CapturePath = "TEXT_ONLY" | "WHISPER";
+/**
+ * Tiga jalur, satu kartu konfirmasi.
+ *
+ *   TEXT_ONLY  transkrip peramban sudah cukup; audio tidak pernah diunggah
+ *   WHISPER    audio dikirim untuk ditranskripsikan
+ *   OCR        foto nota dibaca menjadi teks
+ *
+ * `OCR` tidak pernah dipilih oleh `chooseCapturePath`. Router memilih antara
+ * transkrip dan audio; foto tidak punya keduanya, dan jalurnya sudah pasti
+ * sejak sebelum apa pun dibaca. Ia ada di tipe ini karena yang berikutnya
+ * terjadi -- parser, kategori, gating, kartu konfirmasi -- sama persis.
+ */
+export type CapturePath = "TEXT_ONLY" | "WHISPER" | "OCR";
 
 export type ClientTranscript = {
   text: string;

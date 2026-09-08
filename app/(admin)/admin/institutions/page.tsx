@@ -61,7 +61,7 @@ export default function AdminInstitutionsPage() {
 
       if (instData && instData.length > 0) {
         instData.forEach((item: Record<string, unknown>) => {
-          const name = String(item.name ?? "Institusi");
+          const name = String(item.name ?? "Lembaga");
           existingNames.add(name.toLowerCase().trim());
           list.push({
             id: `institution:${String(item.id)}`,
@@ -76,7 +76,7 @@ export default function AdminInstitutionsPage() {
 
       if (profileData && profileData.length > 0) {
         profileData.forEach((p: Record<string, unknown>, idx: number) => {
-          const pName = String(p.nama_institusi ?? p.name ?? `Institusi Terdaftar #${idx + 1}`);
+          const pName = String(p.nama_institusi ?? p.name ?? `Lembaga Terdaftar #${idx + 1}`);
           const normalized = pName.toLowerCase().trim();
           if (!existingNames.has(normalized)) {
             existingNames.add(normalized);
@@ -167,7 +167,7 @@ export default function AdminInstitutionsPage() {
           programsCount: progs,
           active: true,
         });
-        if (!result.id) throw new Error("Institusi belum tersimpan.");
+        if (!result.id) throw new Error("Lembaga belum tersimpan.");
 
         const newObj: Institution = {
           id: `institution:${result.id}`,
@@ -211,7 +211,7 @@ export default function AdminInstitutionsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <div>
-          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#1b2a3a]">Data institusi</h1>
+          <h1 className="font-headline text-2xl md:text-3xl font-extrabold text-[#1b2a3a]">Data lembaga</h1>
           <p className="text-sm text-slate-500 mt-1">Kelola data bank, fintech, dan lembaga pemerintah penyedia program KUR</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -227,7 +227,7 @@ export default function AdminInstitutionsPage() {
             className="bg-[#0b5f86] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#0f73a3] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
           >
             <Plus size={16} />
-            Tambah Institusi
+            Tambah Lembaga
           </button>
         </div>
       </div>
@@ -235,11 +235,11 @@ export default function AdminInstitutionsPage() {
       {/* Grid List */}
       {loading ? (
         <div className="bg-white rounded-2xl p-8 border border-slate-200/60 text-center text-xs text-slate-400 font-medium">
-          Memuat data institusi...
+          Memuat data lembaga...
         </div>
       ) : institutions.length === 0 ? (
         <div className="bg-white rounded-2xl p-8 border border-slate-200/60 text-center text-xs text-slate-400 font-medium">
-          Belum ada data institusi terdaftar. Klik &quot;Tambah Institusi&quot; untuk menambahkan.
+          Belum ada data lembaga terdaftar. Klik &quot;Tambah Lembaga&quot; untuk menambahkan.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -312,14 +312,14 @@ export default function AdminInstitutionsPage() {
       <Modal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
-        title={editingInst ? "Edit Data Institusi" : "Tambah Institusi Baru"}
+        title={editingInst ? "Edit Data Lembaga" : "Tambah Lembaga Baru"}
         subtitle="Kelola bank, fintech, dan penyedia program KUR"
         icon={<Building2 size={22} />}
         maxWidth="max-w-md"
       >
         <form onSubmit={handleSaveForm} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">Nama Institusi / Bank *</label>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Nama Lembaga / Bank *</label>
             <input
               type="text"
               required
@@ -368,7 +368,7 @@ export default function AdminInstitutionsPage() {
               disabled={saving}
               className="flex-1 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
             >
-              {saving ? "Menyimpan..." : "Simpan Institusi"}
+              {saving ? "Menyimpan..." : "Simpan Lembaga"}
             </button>
           </div>
         </form>

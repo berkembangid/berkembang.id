@@ -21,7 +21,7 @@ export const captureStatusSchema = z.enum([
   "cancelled",
 ]);
 
-export const captureInputMethodSchema = z.enum(["voice", "manual"]);
+export const captureInputMethodSchema = z.enum(["voice", "manual", "camera"]);
 export const transactionTypeSchema = z.enum(["income", "expense"]);
 export const categoryCodeSchema = z.enum([
   "sales",
@@ -97,6 +97,22 @@ const audioMimeTypeSchema = z.enum([
 ]);
 
 /**
+ * Foto nota: JPEG atau PNG saja.
+ *
+ * PDF sengaja tidak diterima di sini. Nota yang difoto pemilik warung tidak
+ * pernah berbentuk PDF, dan menerimanya berarti menambah satu jalur pembacaan
+ * yang tidak dipakai siapa pun -- sementara pesan penolakannya bisa jauh lebih
+ * menolong daripada kegagalan diam-diam.
+ */
+const receiptImageMimeTypeSchema = z.enum(["image/jpeg", "image/png"]);
+
+/**
+ * Batasnya dua megabyte, dan itu SESUDAH pengecilan di klien ke sisi terpanjang
+ * 1600 piksel. Yang lebih besar hampir pasti belum lewat pengecilan.
+ */
+export const maxReceiptImageBytes = 2 * 1024 * 1024;
+
+/**
  * Transkrip yang dihasilkan peramban. Sepenuhnya opsional, dan tidak pernah
  * dipercaya apa adanya: server tetap menjalankan parser-nya sendiri atas teks
  * ini, dan `confidence` hanya menentukan apakah audio masih perlu dikirim.
@@ -128,7 +144,7 @@ export const createCaptureRequestSchema = z
     clientHints: clientHintsSchema.optional(),
     file: z
       .object({
-        mimeType: audioMimeTypeSchema,
+        mimeType: z.union([audioMimeTypeSchema, receiptImageMimeTypeSchema]),
         size: z.number().int().positive().max(10 * 1024 * 1024),
         checksumSha256: z.string().regex(/^[a-fA-F0-9]{64}$/).optional(),
       })
@@ -143,6 +159,24 @@ export const createCaptureRequestSchema = z
         message: "Butuh audio atau transkrip.",
         path: ["file"],
       });
+    }
+    // Kamera tidak punya jalur cadangan. Tidak ada transkrip peramban untuk
+    // foto, jadi tanpa berkas gambar memang tidak ada yang bisa dibaca.
+    if (value.inputMethod === "camera") {
+      const mimeType = value.file?.mimeType;
+      if (!mimeType || !receiptImageMimeTypeSchema.safeParse(mimeType).success) {
+        context.addIssue({
+          code: "custom",
+          message: "Fotonya belum ada. Kirim foto notanya ya.",
+          path: ["file"],
+        });
+      } else if ((value.file?.size ?? 0) > maxReceiptImageBytes) {
+        context.addIssue({
+          code: "custom",
+          message: "Fotonya terlalu besar. Foto ulang dari aplikasi ya.",
+          path: ["file", "size"],
+        });
+      }
     }
     if (value.inputMethod === "manual" && !value.sourceText) {
       context.addIssue({

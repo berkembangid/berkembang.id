@@ -18,10 +18,8 @@ import { useState } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Plus, X } from "lucide-react";
 import {
   AccountingClientError,
-  correctOpeningBalancesClient,
   saveOpeningBalancesClient,
 } from "@/modules/accounting/accounting-client";
-import type { OpeningBalanceAnswers } from "@/modules/accounting/period";
 import {
   assetCategories,
   assetCategoryLabels,
@@ -31,12 +29,59 @@ import {
   type LenderType,
 } from "@/modules/accounting/period-schema";
 import { InlineMoneyInput, MoneyInput } from "@/components/warung/MoneyInput";
+import {
+  defaultUsefulLifeMonths,
+  inventoryKindHelpers,
+  inventoryKindLabels,
+  inventoryKinds,
+  type InventoryKind,
+} from "@/modules/accounting/period-schema";
 import { formatIdr } from "@/modules/accounting/warung";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifySuccess } from "@/lib/notify";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
+
+type InventoryItemRow = { name: string; amount: number | null };
+type InventoryGroup = { items: InventoryItemRow[]; other: number | null };
+
+/** Sama dengan batas di skema dan di `save_opening_balances`. */
+const MAX_INVENTORY_ITEMS = 20;
 
 type ReceivableRow = { name: string; amount: number | null };
 type PayableRow = { name: string; amount: number | null; lenderType: LenderType; installment: number | null };
-type AssetRow = { name: string; cost: number | null; acquiredOn: string; category: AssetCategory };
+type AssetRow = {
+  name: string;
+  cost: number | null;
+  acquiredOn: string;
+  category: AssetCategory;
+  /** Umur ekonomis dalam TAHUN. Bulan adalah satuan pembukuan, bukan satuan orang. */
+  years: string;
+  salvage: number | null;
+};
+
+/**
+ * Menjelaskan penyusutan dengan angka pemiliknya sendiri.
+ *
+ * Menyebut « metode garis lurus » tidak menolong siapa pun yang belum pernah
+ * belajar akuntansi. Yang menolong adalah melihat hitungannya berjalan:
+ * berapa yang menyusut, dari angka mana, dibagi berapa lama, dan berapa yang
+ * tersisa di ujungnya. Ketika angkanya bergerak mengikuti isian, metodenya
+ * terjelaskan sendiri tanpa perlu disebut namanya.
+ */
+function depreciationNote(row: AssetRow): string | null {
+  const cost = row.cost ?? 0;
+  const salvage = row.salvage ?? 0;
+  const months = (Number(row.years) || 0) * 12;
+  if (cost <= 0 || months <= 0) return null;
+  if (salvage >= cost) return "Perkiraan harga jual nanti harus lebih kecil dari harga belinya.";
+  const monthly = Math.trunc((cost - salvage) / months);
+  return (
+    `Nilainya turun sekitar ${formatIdr(monthly)} tiap bulan: ` +
+    `${formatIdr(cost)} dikurangi perkiraan harga jual nanti ${formatIdr(salvage)}, ` +
+    `dibagi ${months} bulan. Setelah ${row.years} tahun, nilainya berhenti di ${formatIdr(salvage)} — ` +
+    `tidak pernah menjadi nol selama Anda masih memperkirakan alatnya laku.`
+  );
+}
 
 const inputClass =
   "min-h-11 w-full rounded-xl border border-[#d5dfe9] bg-white px-3 text-sm font-medium text-[#1b2a3a] outline-none focus:border-[#0b5f86]";
@@ -50,56 +95,70 @@ function amount(value: number | null) {
 export function OpeningBalanceWizard({
   onDone,
   onSkip,
-  answers,
-  monthsRecorded = 0,
 }: {
   onDone: () => void;
   onSkip?: () => void;
   /** Jawaban lama; kehadirannya yang menentukan wizard jadi layar koreksi. */
-  answers?: OpeningBalanceAnswers | null;
-  monthsRecorded?: number;
 }) {
-  const editing = Boolean(answers);
+  const { confirm } = useConfirm();
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [reason, setReason] = useState("");
 
-  const [startDate, setStartDate] = useState(answers?.startDate ?? jakartaDate());
-  const [cash, setCash] = useState<number | null>(answers?.cashIdr ?? null);
-  const [bank, setBank] = useState<number | null>(answers?.bankIdr ?? null);
-  const [inventory, setInventory] = useState<number | null>(answers?.inventoryIdr ?? null);
-  const [receivables, setReceivables] = useState<ReceivableRow[]>(
-    answers?.receivables.map((row) => ({ name: row.name, amount: row.amountIdr })) ?? [],
-  );
-  const [payables, setPayables] = useState<PayableRow[]>(
-    answers?.payables.map((row) => ({
-      name: row.name,
-      amount: row.amountIdr,
-      lenderType: row.lenderType,
-      installment: row.monthlyInstallmentIdr,
-    })) ?? [],
-  );
-  const [assets, setAssets] = useState<AssetRow[]>(
-    answers?.assets.map((row) => ({
-      name: row.name,
-      cost: row.costIdr,
-      acquiredOn: row.acquiredOn,
-      category: row.category,
-    })) ?? [],
-  );
+  // Selalu kosong: kondisi awal diisi sekali, jadi tidak ada jawaban lama yang
+  // perlu dimuat kembali. Salah ketik diperbaiki lewat catat transaksi, bukan
+  // dengan membuka kembali layar ini.
+  const [startDate, setStartDate] = useState(jakartaDate());
+  const [cash, setCash] = useState<number | null>(null);
+  const [bank, setBank] = useState<number | null>(null);
+  // Tiga jenis persediaan, bukan satu. Bagi usaha yang mengolah, bahan yang
+  // belum disentuh dan barang yang tinggal dijual punya arti yang sama sekali
+  // berbeda -- yang pertama modal yang belum bekerja, yang terakhir uang yang
+  // tinggal diambil. Satu angka gabungan menyembunyikan perbedaan itu.
+  const [inventory, setInventory] = useState<Record<InventoryKind, InventoryGroup>>({
+    bahan_baku: { items: [], other: null },
+    setengah_jadi: { items: [], other: null },
+    barang_jadi: { items: [], other: null },
+  });
+  const kindTotal = (kind: InventoryKind) =>
+    inventory[kind].items.reduce((sum, item) => sum + amount(item.amount), 0) + amount(inventory[kind].other);
+  const inventoryTotal = inventoryKinds.reduce((sum, kind) => sum + kindTotal(kind), 0);
 
-  // Di mode koreksi, "sekarang" adalah hari pemilik mulai mencatat, bukan hari
-  // ini. Menyebutnya "sekarang" akan membuat jawabannya salah.
-  const whenLabel = editing ? `waktu itu (${answers?.startDate})` : "sekarang";
+  function editKind(kind: InventoryKind, change: (group: InventoryGroup) => InventoryGroup) {
+    setInventory((current) => ({ ...current, [kind]: change(current[kind]) }));
+  }
+  const [receivables, setReceivables] = useState<ReceivableRow[]>([]);
+  const [payables, setPayables] = useState<PayableRow[]>([]);
+  const [assets, setAssets] = useState<AssetRow[]>([]);
+
+  const whenLabel = "sekarang";
 
   const receivableTotal = receivables.reduce((sum, row) => sum + amount(row.amount), 0);
   const payableTotal = payables.reduce((sum, row) => sum + amount(row.amount), 0);
   const assetTotal = assets.reduce((sum, row) => sum + amount(row.cost), 0);
-  const ownedTotal = amount(cash) + amount(bank) + receivableTotal + amount(inventory) + assetTotal;
+  const ownedTotal = amount(cash) + amount(bank) + receivableTotal + inventoryTotal + assetTotal;
   const netWorth = ownedTotal - payableTotal;
 
+  /**
+   * Satu-satunya tindakan di aplikasi ini yang benar-benar tidak bisa diulang.
+   *
+   * Kondisi awal diisi sekali seumur usaha; tidak ada layar yang membukanya
+   * kembali, dan operasi koreksinya sudah ditutup sejak `0064`. Tombolnya
+   * sendiri hanya berbunyi "Mulai" -- kata yang terdengar seperti awal sebuah
+   * proses, bukan seperti akhir dari satu-satunya kesempatan mengisinya.
+   *
+   * Jadi yang ditanyakan bukan "Anda yakin?" melainkan angka yang barusan
+   * disusun, supaya yang dibaca terakhir kali adalah isinya, bukan peringatan.
+   */
   const submit = async () => {
+    const yes = await confirm({
+      title: "Simpan kondisi awal usaha?",
+      description: `Milik usaha ${formatIdr(ownedTotal)}, masih harus dibayar ${formatIdr(payableTotal)}, jadi modal usaha ${formatIdr(netWorth)} per ${startDate}. Kondisi awal hanya diisi sekali. Kalau nanti ada yang keliru, perbaikannya lewat catat pemasukan atau pengeluaran biasa -- layar ini tidak terbuka lagi.`,
+      confirmLabel: "Ya, simpan",
+      cancelLabel: "Periksa lagi",
+    });
+    if (!yes) return;
+
     setBusy(true);
     setError("");
     try {
@@ -107,7 +166,19 @@ export function OpeningBalanceWizard({
         startDate,
         cashIdr: amount(cash),
         bankIdr: amount(bank),
-        inventoryIdr: amount(inventory),
+        // Hanya yang benar-benar diisi yang dikirim; totalnya dijumlahkan di
+        // basis data, bukan di sini.
+        // Kategori yang seluruhnya kosong tidak dikirim; totalnya dijumlahkan
+        // di basis data dari barang ditambah sisanya, bukan di sini.
+        inventory: inventoryKinds
+          .filter((kind) => kindTotal(kind) > 0)
+          .map((kind) => ({
+            kind,
+            items: inventory[kind].items
+              .filter((item) => item.name.trim() !== "" && amount(item.amount) > 0)
+              .map((item) => ({ name: item.name.trim(), amountIdr: amount(item.amount) })),
+            otherAmountIdr: amount(inventory[kind].other),
+          })),
         receivables: receivables
           .filter((row) => row.name.trim() && amount(row.amount) > 0)
           .map((row) => ({ name: row.name.trim(), amountIdr: amount(row.amount) })),
@@ -126,14 +197,17 @@ export function OpeningBalanceWizard({
             costIdr: amount(row.cost),
             acquiredOn: row.acquiredOn || startDate,
             category: row.category,
+            // Pemilik menjawab dalam tahun; pembukuan menghitung dalam bulan.
+            usefulLifeMonths: (Number(row.years) || defaultUsefulLifeMonths[row.category] / 12) * 12,
+            salvageValueIdr: amount(row.salvage),
           })),
         notes: null,
       };
-      if (editing) {
-        await correctOpeningBalancesClient({ ...payload, reason: reason.trim() });
-      } else {
-        await saveOpeningBalancesClient(payload);
-      }
+      await saveOpeningBalancesClient(payload);
+      notifySuccess("Kondisi awal usaha tersimpan", {
+        description: `Modal usaha Anda mulai dihitung dari ${formatIdr(netWorth)} per ${startDate}.`,
+        duration: 7000,
+      });
       onDone();
     } catch (cause) {
       setError(
@@ -147,9 +221,7 @@ export function OpeningBalanceWizard({
   const steps = [
     {
       title: `Uang di laci ${whenLabel} berapa?`,
-      helper: editing
-        ? "Uang tunai yang ada di tempat usaha pada hari Anda mulai mencatat."
-        : "Hitung uang tunai yang benar-benar ada di tempat usaha hari ini.",
+      helper: "Hitung uang tunai yang benar-benar ada di tempat usaha hari ini.",
       body: (
         <MoneyInput
           label="Uang tunai"
@@ -299,15 +371,90 @@ export function OpeningBalanceWizard({
       ),
     },
     {
-      title: `Stok bahan ${whenLabel} kira-kira senilai berapa?`,
-      helper: "Perkiraan kasar sudah cukup. Nanti bisa diperbarui setiap akhir bulan.",
+      title: `Stok barang ${whenLabel} kira-kira senilai berapa?`,
+      helper: "Perkiraan kasar sudah cukup. Kosongkan yang tidak ada di usaha Anda.",
       body: (
-        <MoneyInput
-          label="Perkiraan nilai bahan yang ada"
-          value={inventory}
-          onChange={setInventory}
-          helper="Isi nilai rupiahnya, bukan jumlah barang. Perkiraan kasar sudah cukup."
-        />
+        <div className="space-y-5">
+          {inventoryKinds.map((kind) => (
+            <div key={kind} className="rounded-xl border border-[#e3e9f0] p-3">
+              <p className="text-xs font-bold text-[#1b2a3a]">{inventoryKindLabels[kind]}</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-[#6e859e]">{inventoryKindHelpers[kind]}</p>
+
+              {inventory[kind].items.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {inventory[kind].items.map((item, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        value={item.name}
+                        onChange={(event) =>
+                          editKind(kind, (group) => ({
+                            ...group,
+                            items: group.items.map((row, i) => (i === index ? { ...row, name: event.target.value } : row)),
+                          }))
+                        }
+                        placeholder="Nama barang"
+                        className={inputClass}
+                      />
+                      <div className="w-36 shrink-0">
+                        <InlineMoneyInput
+                          ariaLabel={`Nilai ${inventoryKindLabels[kind]} baris ${index + 1}`}
+                          value={item.amount}
+                          onChange={(value) =>
+                            editKind(kind, (group) => ({
+                              ...group,
+                              items: group.items.map((row, i) => (i === index ? { ...row, amount: value } : row)),
+                            }))
+                          }
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Hapus barang"
+                        onClick={() => editKind(kind, (group) => ({ ...group, items: group.items.filter((_, i) => i !== index) }))}
+                        className="min-h-11 shrink-0 rounded-xl px-2 text-[#b4304a]"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {inventory[kind].items.length < MAX_INVENTORY_ITEMS && (
+                <button
+                  type="button"
+                  onClick={() => editKind(kind, (group) => ({ ...group, items: [...group.items, { name: "", amount: null }] }))}
+                  className="mt-2 min-h-10 text-[11px] font-bold text-[#0b5f86]"
+                >
+                  + Sebutkan barangnya
+                </button>
+              )}
+
+              <div className="mt-3">
+                <MoneyInput
+                  label={inventory[kind].items.length > 0 ? "Sisanya (digabung)" : "Perkiraan nilainya"}
+                  value={inventory[kind].other}
+                  onChange={(value) => editKind(kind, (group) => ({ ...group, other: value }))}
+                  helper={
+                    inventory[kind].items.length > 0
+                      ? "Nilai barang lain yang tidak disebutkan satu per satu."
+                      : "Kalau stoknya banyak, cukup isi totalnya. Sebutkan barangnya hanya bila perlu."
+                  }
+                  compact
+                />
+              </div>
+
+              {kindTotal(kind) > 0 && (
+                <p className="mt-2 text-[11px] font-bold text-[#1b2a3a]">
+                  Jumlah {inventoryKindLabels[kind].toLowerCase()}: {formatIdr(kindTotal(kind))}
+                </p>
+              )}
+            </div>
+          ))}
+          <p className="rounded-xl border border-[#e3e9f0] bg-[#f8fafc] p-3 text-xs font-bold text-[#1b2a3a]">
+            Jumlah stok barang: {formatIdr(inventoryTotal)}
+          </p>
+        </div>
       ),
     },
     {
@@ -363,11 +510,25 @@ export function OpeningBalanceWizard({
               </div>
               <select
                 value={row.category}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const category = event.target.value as AssetCategory;
                   setAssets((rows) =>
-                    rows.map((item, i) => (i === index ? { ...item, category: event.target.value as AssetCategory } : item)),
-                  )
-                }
+                    rows.map((item, i) =>
+                      i === index
+                        ? {
+                            ...item,
+                            category,
+                            // Umur bawaan ikut berubah selama pemilik belum
+                            // menggantinya sendiri; kalau sudah, angkanya
+                            // miliknya dan tidak boleh ditimpa diam-diam.
+                            years: item.years === String(defaultUsefulLifeMonths[item.category] / 12)
+                              ? String(defaultUsefulLifeMonths[category] / 12)
+                              : item.years,
+                          }
+                        : item,
+                    ),
+                  );
+                }}
                 className={inputClass}
               >
                 {assetCategories.map((category) => (
@@ -376,12 +537,63 @@ export function OpeningBalanceWizard({
                   </option>
                 ))}
               </select>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className={labelClass}>
+                  Masih bisa dipakai berapa lama?
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <input
+                      inputMode="numeric"
+                      value={row.years}
+                      onChange={(event) =>
+                        setAssets((rows) =>
+                          rows.map((item, i) => (i === index ? { ...item, years: event.target.value.replace(/\D/g, "").slice(0, 2) } : item)),
+                        )
+                      }
+                      className={`${inputClass} w-20`}
+                      aria-label="Umur ekonomis dalam tahun"
+                    />
+                    <span className="text-xs font-bold text-[#6e859e]">tahun</span>
+                  </div>
+                  <span className={helperClass}>
+                    Perkiraan saja. Bawaannya {defaultUsefulLifeMonths[row.category] / 12} tahun untuk{" "}
+                    {assetCategoryLabels[row.category].split(" (")[0].toLowerCase()}.
+                  </span>
+                </label>
+                <label className={labelClass}>
+                  Kalau nanti dijual, kira-kira laku berapa?
+                  <div className="mt-1.5">
+                    <InlineMoneyInput
+                      ariaLabel="Perkiraan harga jual setelah tidak dipakai"
+                      value={row.salvage}
+                      onChange={(value) =>
+                        setAssets((rows) => rows.map((item, i) => (i === index ? { ...item, salvage: value } : item)))
+                      }
+                    />
+                  </div>
+                  <span className={helperClass}>
+                    Boleh dikosongkan kalau nanti dianggap sudah tidak laku sama sekali.
+                  </span>
+                </label>
+              </div>
+
+              {/*
+                Metode penyusutannya dijelaskan dengan angka pemiliknya sendiri,
+                bukan dengan namanya. « Garis lurus » tidak berarti apa-apa bagi
+                pemilik warung; « turun Rp 25.000 tiap bulan, karena ... »
+                langsung terbaca, dan angkanya bisa ia cocokkan sendiri.
+              */}
+              {depreciationNote(row) && (
+                <p className="rounded-xl border border-[#dbe8f0] bg-[#f2f8fb] p-3 text-[11px] leading-relaxed text-[#0b5f86]">
+                  {depreciationNote(row)}
+                </p>
+              )}
             </div>
           ))}
           <button
             type="button"
             onClick={() =>
-              setAssets((rows) => [...rows, { name: "", cost: null, acquiredOn: startDate, category: "peralatan" }])
+              setAssets((rows) => [...rows, { name: "", cost: null, acquiredOn: startDate, category: "peralatan", years: String(defaultUsefulLifeMonths.peralatan / 12), salvage: null }])
             }
             className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#addcf4] bg-[#eef8fd] px-3 text-xs font-bold text-[#0b5f86]"
           >
@@ -399,7 +611,7 @@ export function OpeningBalanceWizard({
     <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_8px_30px_rgba(27,42,58,.04)]">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] font-bold uppercase tracking-wide text-[#0b5f86]">
-          {editing ? "Perbaiki kondisi awal usaha" : "Kondisi awal usaha"} ·{" "}
+          Kondisi awal usaha ·{" "}
           {Math.min(step + 1, steps.length)} dari {steps.length}
         </p>
         {onSkip && !isSummary && (
@@ -419,9 +631,7 @@ export function OpeningBalanceWizard({
       {isSummary ? (
         <div className="mt-5 space-y-4">
           <h2 className="text-base font-bold text-[#1b2a3a]">
-            {editing
-              ? `Milik saya bersih jadi ${formatIdr(netWorth)}`
-              : `Modal usaha Anda saat ini ${formatIdr(netWorth)}`}
+            Modal usaha Anda saat ini {formatIdr(netWorth)}
           </h2>
           <p className="text-xs leading-relaxed text-[#6e859e]">
             Angka ini adalah semua yang usaha punya ({formatIdr(ownedTotal)}) dikurangi yang masih harus dibayar (
@@ -431,21 +641,6 @@ export function OpeningBalanceWizard({
               : ""}
           </p>
 
-          {editing && answers && netWorth !== answers.netWorthIdr && (
-            <p className="text-xs font-semibold leading-relaxed text-[#1b2a3a]">
-              Sebelumnya {formatIdr(answers.netWorthIdr)}, sekarang {formatIdr(netWorth)}.
-            </p>
-          )}
-
-          {editing && (
-            <div className="rounded-xl border border-[#f0d49a] bg-[#fdf7ec] p-3 text-[11px] leading-relaxed text-[#8a6320]">
-              Angka ini dipakai sejak {answers?.startDate}.
-              {monthsRecorded > 0
-                ? ` Kalau diubah, untung ${monthsRecorded} bulan yang sudah lewat ikut dihitung ulang — termasuk berkas yang sudah Anda unduh untuk bank.`
-                : " Kalau diubah, untung bulan-bulan yang sudah lewat ikut dihitung ulang."}{" "}
-              Catatan harian Anda tidak ada yang hilang.
-            </div>
-          )}
           <label className={labelClass}>
             Mulai mencatat sejak
             <input
@@ -456,25 +651,10 @@ export function OpeningBalanceWizard({
               className={`${inputClass} mt-1.5`}
             />
             <span className={helperClass}>
-              {editing
-                ? "Boleh dimundurkan kalau ternyata Anda mulai lebih awal. Tidak bisa dimajukan, karena catatan harian Anda sesudah tanggal ini sudah ada."
-                : "Catatan sebelum tanggal ini tidak bisa dimasukkan lagi, karena sudah terhitung di angka di atas."}
+              Catatan sebelum tanggal ini tidak bisa dimasukkan lagi, karena sudah terhitung di angka di atas.
             </span>
           </label>
 
-          {editing && (
-            <label className={labelClass}>
-              Kenapa diperbarui?
-              <textarea
-                required
-                minLength={3}
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                placeholder="Contoh: uang di laci waktu itu salah hitung"
-                className={`${inputClass} mt-1.5 min-h-20 py-2`}
-              />
-            </label>
-          )}
           {error && (
             <p role="alert" className="rounded-xl border border-[#f3c6cf] bg-[#fdf1f3] p-3 text-xs font-semibold text-[#b4304a]">
               {error}
@@ -490,12 +670,12 @@ export function OpeningBalanceWizard({
             </button>
             <button
               type="button"
-              disabled={busy || (editing && reason.trim().length < 3)}
+              disabled={busy}
               onClick={() => void submit()}
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-60"
             >
               {busy ? <LoaderCircle className="animate-spin" size={15} /> : <CheckCircle2 size={15} />}
-              {busy ? "Menyimpan..." : editing ? "Ya, perbarui" : "Mulai"}
+              {busy ? "Menyimpan..." : "Mulai"}
             </button>
           </div>
         </div>

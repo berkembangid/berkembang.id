@@ -13,6 +13,7 @@ import {
 import {
   createCaptureRequestSchema,
   idempotencyKeySchema,
+  maxReceiptImageBytes,
   type CreateCaptureRequest,
 } from "@/modules/ledger/capture-schema";
 import {
@@ -23,9 +24,11 @@ import {
   clientServerDivergence,
   clientTranscriptMinConfidence,
   draftReturnedEvent,
+  type CapturePath,
 } from "@/modules/ledger/capture-routing";
 import { parseUtterance, type KeywordEntry } from "@/modules/nominal-parser";
 import { categoryKeywordsForSector, sectorForCurrentUser } from "@/modules/ledger/category-keywords";
+import { featureFlagEnabled } from "@/modules/platform/feature-flags";
 
 type AuthenticatedUser = { id: string };
 
@@ -34,9 +37,14 @@ export type CreateCaptureRouteDependencies = {
   createCapture: (
     input: CreateCaptureRequest,
     idempotencyKey: string,
-    capturePath?: "TEXT_ONLY" | "WHISPER",
+    capturePath?: CapturePath,
   ) => Promise<CreatedCapture>;
   createUploadSession: (path: string) => Promise<CaptureUploadSession>;
+  /**
+   * Sakelar `capture_camera`. Fitur baru: gagal baca berarti tertutup.
+   * Opsional supaya uji jalur suara tidak perlu tahu soal kamera sama sekali.
+   */
+  cameraEnabled?: () => Promise<boolean>;
   minConfidence?: number;
   now?: Date;
   /** Disuntik uji; produksi membacanya dari `category_templates`. */
@@ -47,6 +55,7 @@ const defaultDependencies: CreateCaptureRouteDependencies = {
   authenticate: getAuthenticatedUser,
   createCapture: createCaptureRecord,
   createUploadSession: createCaptureUploadSession,
+  cameraEnabled: () => featureFlagEnabled("capture_camera"),
 };
 
 /**
@@ -87,12 +96,17 @@ export async function handleCreateCaptureRequest(
       body.file !== null
     ) {
       const file = body.file as { mimeType?: unknown; size?: unknown };
-      if (typeof file.size === "number" && file.size > maxVoiceAudioBytes) {
+      const isImage =
+        typeof file.mimeType === "string" && ["image/jpeg", "image/png"].includes(file.mimeType);
+      const limit = isImage ? maxReceiptImageBytes : maxVoiceAudioBytes;
+      if (typeof file.size === "number" && file.size > limit) {
         return captureErrorResponse(new CaptureOperationError("FILE_TOO_LARGE"));
       }
       if (
         typeof file.mimeType === "string" &&
-        !["audio/webm", "audio/mp4", "audio/ogg", "audio/mpeg"].includes(file.mimeType)
+        !["audio/webm", "audio/mp4", "audio/ogg", "audio/mpeg", "image/jpeg", "image/png"].includes(
+          file.mimeType,
+        )
       ) {
         return captureErrorResponse(new CaptureOperationError("UNSUPPORTED_MEDIA_TYPE"));
       }
@@ -128,6 +142,49 @@ export async function handleCreateCaptureRequest(
       } catch {
         keywords = [];
       }
+    }
+
+    // Foto nota tidak melewati router jalur. Router memilih antara transkrip
+    // peramban dan audio; foto tidak punya keduanya, dan jalurnya sudah pasti
+    // OCR sejak sebelum apa pun dibaca.
+    //
+    // Yang TIDAK boleh berbeda dari jalur audio adalah bentuk jawabannya.
+    // Foto perlu tempat untuk diunggah persis seperti rekaman; tanpa sesi
+    // unggah, capture-nya lahir dengan `storagePath` yang tidak akan pernah
+    // terisi, dan pekerja OCR menunggu berkas yang tidak pernah datang.
+    if (input.inputMethod === "camera") {
+      const cameraEnabled = dependencies.cameraEnabled ?? (() => featureFlagEnabled("capture_camera"));
+      if (!(await cameraEnabled())) {
+        return captureErrorResponse(new CaptureOperationError("CAPTURE_PATH_DISABLED"));
+      }
+      const capture = await dependencies.createCapture(input, idempotencyKey.data, "OCR");
+      const upload =
+        capture.status === "draft" && capture.storagePath
+          ? await dependencies.createUploadSession(capture.storagePath)
+          : null;
+
+      console.info(
+        JSON.stringify(
+          captureSubmittedEvent({ path: "OCR", hasTranscript: false, hasAudio: false }),
+        ),
+      );
+
+      return Response.json(
+        {
+          data: {
+            capture,
+            upload,
+            path: "OCR" as const,
+            // Draf lahir setelah fotonya dibaca, bukan sekarang. Mengembalikan
+            // daftar kosong -- bukan menghilangkan bidangnya -- membuat klien
+            // memakai satu bentuk jawaban untuk ketiga jalur.
+            drafts: [],
+            questions: [],
+            processingMs: Date.now() - startedAt,
+          },
+        },
+        { status: capture.idempotent ? 200 : 201 },
+      );
     }
 
     const routing = chooseCapturePath({

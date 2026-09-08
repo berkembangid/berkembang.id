@@ -12,6 +12,112 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      admin_action_logs: {
+        Row: {
+          id: string
+          actor_user_id: string
+          acting_role: string
+          action: string
+          target_type: string | null
+          target_id: string | null
+          business_id: string | null
+          reason: string
+          metadata: Json
+          occurred_at: string
+        }
+        Insert: {
+          id?: string
+          actor_user_id: string
+          acting_role: string
+          action: string
+          target_type?: string | null
+          target_id?: string | null
+          business_id?: string | null
+          reason: string
+          metadata?: Json
+          occurred_at?: string
+        }
+        Update: {
+          id?: string
+          actor_user_id?: string
+          acting_role?: string
+          action?: string
+          target_type?: string | null
+          target_id?: string | null
+          business_id?: string | null
+          reason?: string
+          metadata?: Json
+          occurred_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_action_logs_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_action_logs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      admin_roles: {
+        Row: {
+          id: string
+          user_id: string
+          role: string
+          granted_by: string | null
+          granted_at: string
+          revoked_by: string | null
+          revoked_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          role: string
+          granted_by?: string | null
+          granted_at?: string
+          revoked_by?: string | null
+          revoked_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          role?: string
+          granted_by?: string | null
+          granted_at?: string
+          revoked_by?: string | null
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_roles_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_roles_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       ai_feedback: {
         Row: {
           id: string
@@ -350,9 +456,7 @@ export type Database = {
           business_id: string
           profile_id: string | null
           user_id: string | null
-          role: string
           status: string
-          invited_by: string | null
           joined_at: string | null
           created_at: string
           updated_at: string
@@ -362,9 +466,7 @@ export type Database = {
           business_id: string
           profile_id?: string | null
           user_id?: string | null
-          role?: string
           status?: string
-          invited_by?: string | null
           joined_at?: string | null
           created_at?: string
           updated_at?: string
@@ -374,9 +476,7 @@ export type Database = {
           business_id?: string
           profile_id?: string | null
           user_id?: string | null
-          role?: string
           status?: string
-          invited_by?: string | null
           joined_at?: string | null
           created_at?: string
           updated_at?: string
@@ -387,13 +487,6 @@ export type Database = {
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "business_members_invited_by_fkey"
-            columns: ["invited_by"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -512,6 +605,9 @@ export type Database = {
           status: string
           created_at: string
           updated_at: string
+          status_reason: string | null
+          status_changed_by: string | null
+          status_changed_at: string | null
         }
         Insert: {
           id?: string
@@ -526,6 +622,9 @@ export type Database = {
           status?: string
           created_at?: string
           updated_at?: string
+          status_reason?: string | null
+          status_changed_by?: string | null
+          status_changed_at?: string | null
         }
         Update: {
           id?: string
@@ -540,6 +639,9 @@ export type Database = {
           status?: string
           created_at?: string
           updated_at?: string
+          status_reason?: string | null
+          status_changed_by?: string | null
+          status_changed_at?: string | null
         }
         Relationships: [
           {
@@ -547,6 +649,13 @@ export type Database = {
             columns: ["legacy_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "businesses_status_changed_by_fkey"
+            columns: ["status_changed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           }
         ]
@@ -646,6 +755,69 @@ export type Database = {
           created_at?: string
         }
         Relationships: []
+      }
+      config_versions: {
+        Row: {
+          id: string
+          domain: string
+          version: number
+          status: string
+          payload: Json
+          change_note: string | null
+          gate_report: Json
+          created_by: string
+          created_at: string
+          published_by: string | null
+          published_at: string | null
+          emergency: boolean
+          emergency_reason: string | null
+        }
+        Insert: {
+          id?: string
+          domain: string
+          version: number
+          status?: string
+          payload?: Json
+          change_note?: string | null
+          gate_report?: Json
+          created_by: string
+          created_at?: string
+          published_by?: string | null
+          published_at?: string | null
+          emergency?: boolean
+          emergency_reason?: string | null
+        }
+        Update: {
+          id?: string
+          domain?: string
+          version?: number
+          status?: string
+          payload?: Json
+          change_note?: string | null
+          gate_report?: Json
+          created_by?: string
+          created_at?: string
+          published_by?: string | null
+          published_at?: string | null
+          emergency?: boolean
+          emergency_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "config_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "config_versions_published_by_fkey"
+            columns: ["published_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       consent_grants: {
         Row: {
@@ -868,6 +1040,45 @@ export type Database = {
           {
             foreignKeyName: "daily_closings_closed_by_fkey"
             columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      demo_accounts: {
+        Row: {
+          business_id: string
+          fixture_key: string
+          note: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          business_id: string
+          fixture_key: string
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          business_id?: string
+          fixture_key?: string
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demo_accounts_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demo_accounts_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -1850,6 +2061,84 @@ export type Database = {
           }
         ]
       }
+      feature_flag_overrides: {
+        Row: {
+          flag_key: string
+          business_id: string
+          enabled: boolean
+          set_by: string | null
+          set_at: string
+        }
+        Insert: {
+          flag_key: string
+          business_id: string
+          enabled: boolean
+          set_by?: string | null
+          set_at?: string
+        }
+        Update: {
+          flag_key?: string
+          business_id?: string
+          enabled?: boolean
+          set_by?: string | null
+          set_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_flag_overrides_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_flag_overrides_flag_key_fkey"
+            columns: ["flag_key"]
+            isOneToOne: false
+            referencedRelation: "feature_flags"
+            referencedColumns: ["flag_key"]
+          },
+          {
+            foreignKeyName: "feature_flag_overrides_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      feature_flags: {
+        Row: {
+          flag_key: string
+          description: string
+          enabled: boolean
+          updated_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          flag_key: string
+          description: string
+          enabled?: boolean
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          flag_key?: string
+          description?: string
+          enabled?: boolean
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_flags_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       fixed_assets: {
         Row: {
           id: string
@@ -2583,6 +2872,36 @@ export type Database = {
           }
         ]
       }
+      metric_definitions: {
+        Row: {
+          metric_key: string
+          title: string
+          formula_text: string
+          source_note: string
+          unit: string
+          measurable: boolean
+          updated_at: string
+        }
+        Insert: {
+          metric_key: string
+          title: string
+          formula_text: string
+          source_note: string
+          unit?: string
+          measurable?: boolean
+          updated_at?: string
+        }
+        Update: {
+          metric_key?: string
+          title?: string
+          formula_text?: string
+          source_note?: string
+          unit?: string
+          measurable?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       migration_verification_results: {
         Row: {
           id: string
@@ -2782,6 +3101,7 @@ export type Database = {
           corrected_at: string | null
           correction_count: number
           last_reason: string | null
+          inventory_details: Json
         }
         Insert: {
           id?: string
@@ -2805,6 +3125,7 @@ export type Database = {
           corrected_at?: string | null
           correction_count?: number
           last_reason?: string | null
+          inventory_details?: Json
         }
         Update: {
           id?: string
@@ -2828,6 +3149,7 @@ export type Database = {
           corrected_at?: string | null
           correction_count?: number
           last_reason?: string | null
+          inventory_details?: Json
         }
         Relationships: [
           {
@@ -2852,6 +3174,30 @@ export type Database = {
             referencedColumns: ["id"]
           }
         ]
+      }
+      ops_daily_rollups: {
+        Row: {
+          metric_date: string
+          metric_key: string
+          dims: Json
+          value: number
+          computed_at: string
+        }
+        Insert: {
+          metric_date: string
+          metric_key: string
+          dims?: Json
+          value: number
+          computed_at?: string
+        }
+        Update: {
+          metric_date?: string
+          metric_key?: string
+          dims?: Json
+          value?: number
+          computed_at?: string
+        }
+        Relationships: []
       }
       platform_admins: {
         Row: {
@@ -3549,6 +3895,89 @@ export type Database = {
           }
         ]
       }
+      saved_views: {
+        Row: {
+          id: string
+          owner_admin_id: string
+          name: string
+          entity: string
+          filters: Json
+          columns: Json
+          shared: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          owner_admin_id: string
+          name: string
+          entity?: string
+          filters?: Json
+          columns?: Json
+          shared?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          owner_admin_id?: string
+          name?: string
+          entity?: string
+          filters?: Json
+          columns?: Json
+          shared?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_views_owner_admin_id_fkey"
+            columns: ["owner_admin_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      support_sessions: {
+        Row: {
+          id: string
+          admin_user_id: string
+          business_id: string
+          reason: string
+          started_at: string
+          expires_at: string
+        }
+        Insert: {
+          id?: string
+          admin_user_id: string
+          business_id: string
+          reason: string
+          started_at?: string
+          expires_at: string
+        }
+        Update: {
+          id?: string
+          admin_user_id?: string
+          business_id?: string
+          reason?: string
+          started_at?: string
+          expires_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_sessions_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_sessions_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       tax_estimates: {
         Row: {
           id: string
@@ -3635,6 +4064,9 @@ export type Database = {
           confirmed_at: string | null
           cancelled_at: string | null
           capture_path: string | null
+          amount_overrides: number
+          amount_drops: number
+          ocr_summary: Json | null
         }
         Insert: {
           id?: string
@@ -3661,6 +4093,9 @@ export type Database = {
           confirmed_at?: string | null
           cancelled_at?: string | null
           capture_path?: string | null
+          amount_overrides?: number
+          amount_drops?: number
+          ocr_summary?: Json | null
         }
         Update: {
           id?: string
@@ -3687,6 +4122,9 @@ export type Database = {
           confirmed_at?: string | null
           cancelled_at?: string | null
           capture_path?: string | null
+          amount_overrides?: number
+          amount_drops?: number
+          ocr_summary?: Json | null
         }
         Relationships: [
           {
@@ -4068,6 +4506,76 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_ai_quality: {
+        Args: {
+          p_days?: number
+        }
+        Returns: Json
+      }
+      admin_cost_row: {
+        Args: {
+          p_days?: number
+        }
+        Returns: Json
+      }
+      admin_demo_accounts: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      admin_grant_role: {
+        Args: {
+          p_user_id: string
+          p_role: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      admin_health_row: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      admin_revoke_role: {
+        Args: {
+          p_user_id: string
+          p_role: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      admin_set_business_status: {
+        Args: {
+          p_business_id: string
+          p_status: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      admin_set_demo_account: {
+        Args: {
+          p_business_id: string
+          p_is_demo: boolean
+          p_fixture_key: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      admin_set_feature_flag: {
+        Args: {
+          p_flag_key: string
+          p_enabled: boolean
+          p_reason: string
+        }
+        Returns: Json
+      }
+      admin_set_feature_flag_for_business: {
+        Args: {
+          p_flag_key: string
+          p_business_id: string
+          p_enabled: boolean
+          p_reason: string
+        }
+        Returns: Json
+      }
       archive_document: {
         Args: {
           p_document_id: string
@@ -4143,6 +4651,7 @@ export type Database = {
           p_latency_ms: number
           p_prompt_tokens?: number
           p_completion_tokens?: number
+          p_guard?: Json
         }
         Returns: Json
       }
@@ -4318,6 +4827,13 @@ export type Database = {
           p_latency_ms: number
         }
         Returns: Json
+      }
+      feature_flag_enabled: {
+        Args: {
+          p_flag_key: string
+          p_business_id?: string
+        }
+        Returns: boolean
       }
       fn_balance_sheet: {
         Args: {
@@ -4520,6 +5036,10 @@ export type Database = {
         }
         Returns: Json
       }
+      my_feature_flags: {
+        Args: Record<string, never>
+        Returns: Json
+      }
       program_dashboard: {
         Args: {
           p_program_id: string
@@ -4657,7 +5177,7 @@ export type Database = {
           p_bank_idr?: number
           p_receivables?: Json
           p_payables?: Json
-          p_inventory_idr?: number
+          p_inventory_details?: Json
           p_assets?: Json
           p_notes?: string
         }
@@ -4691,6 +5211,13 @@ export type Database = {
           p_emkm_category_subtype?: string
           p_counterparty_id?: string
           p_interest_amount_idr?: number
+        }
+        Returns: Json
+      }
+      start_support_session: {
+        Args: {
+          p_business_id: string
+          p_reason: string
         }
         Returns: Json
       }

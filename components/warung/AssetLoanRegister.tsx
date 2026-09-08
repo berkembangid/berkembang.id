@@ -20,18 +20,14 @@ import {
   disposeFixedAssetClient,
   getFixedAssetsClient,
   getLoansClient,
-  updateFixedAssetClient,
-  updateLoanClient,
 } from "@/modules/accounting/accounting-client";
 import type { FixedAssetView, LoanView } from "@/modules/accounting/period";
 import {
-  assetCategories,
-  assetCategoryLabels,
   lenderTypeLabels,
-  type AssetCategory,
   type LenderType,
 } from "@/modules/accounting/period-schema";
 import { InlineMoneyInput } from "@/components/warung/MoneyInput";
+import { notifyFailure, notifySuccess } from "@/lib/notify";
 import { formatIdr } from "@/modules/accounting/warung";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
 
@@ -52,16 +48,23 @@ export function depreciationEndsOn(asset: FixedAssetView): string {
 export function AssetLoanRegister({
   onBack,
   onChanged,
-  onEditOpening,
 }: {
   onBack: () => void;
   onChanged: () => void;
-  onEditOpening: () => void;
 }) {
   const [assets, setAssets] = useState<FixedAssetView[]>([]);
   const [loans, setLoans] = useState<LoanView[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  /**
+   * Hanya kegagalan MEMUAT yang masih memakai panel di tempatnya.
+   *
+   * Bedanya bukan selera: kegagalan memuat adalah keadaan yang bertahan --
+   * daftarnya memang kosong selama itu belum beres, dan toast yang menghilang
+   * setelah beberapa detik akan meninggalkan layar kosong tanpa penjelasan.
+   * Hasil sebuah tindakan justru sebaliknya: layarnya sudah berubah, dan yang
+   * dibutuhkan hanya kabar sekilas.
+   */
+  const [loadError, setLoadError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,11 +72,9 @@ export function AssetLoanRegister({
       const [assetResult, loanResult] = await Promise.all([getFixedAssetsClient(), getLoansClient()]);
       setAssets(assetResult.fixedAssets);
       setLoans(loanResult.loans);
+      setLoadError("");
     } catch (cause) {
-      setMessage({
-        tone: "error",
-        text: cause instanceof AccountingClientError ? cause.message : "Daftar belum dapat dimuat.",
-      });
+      setLoadError(cause instanceof AccountingClientError ? cause.message : "Daftar belum dapat dimuat.");
     } finally {
       setLoading(false);
     }
@@ -103,9 +104,9 @@ export function AssetLoanRegister({
         <ArrowLeft size={14} /> Kembali ke kondisi usaha
       </button>
 
-      {message && (
-        <FeedbackBanner tone={message.tone === "error" ? "error" : "success"} live>
-          {message.text}
+      {loadError && (
+        <FeedbackBanner tone="error" live>
+          {loadError}
         </FeedbackBanner>
       )}
 
@@ -147,12 +148,11 @@ export function AssetLoanRegister({
                   <AssetRow
                     key={asset.id}
                     asset={asset}
-                    onEditOpening={onEditOpening}
-                    onSaved={(text) => {
-                      setMessage({ tone: "success", text });
+                    onSaved={(title, detail) => {
+                      notifySuccess(title, { description: detail, duration: 7000 });
                       void refresh();
                     }}
-                    onFailed={(text) => setMessage({ tone: "error", text })}
+                    onFailed={(text) => notifyFailure(text)}
                   />
                 ))}
               </ul>
@@ -172,15 +172,7 @@ export function AssetLoanRegister({
             ) : (
               <ul className="mt-3 divide-y divide-[#eef2f6]">
                 {loans.map((loan) => (
-                  <LoanRow
-                    key={loan.id}
-                    loan={loan}
-                    onSaved={(text) => {
-                      setMessage({ tone: "success", text });
-                      void refresh();
-                    }}
-                    onFailed={(text) => setMessage({ tone: "error", text })}
-                  />
+                  <LoanRow key={loan.id} loan={loan} />
                 ))}
               </ul>
             )}
@@ -193,39 +185,17 @@ export function AssetLoanRegister({
 
 function AssetRow({
   asset,
-  onEditOpening,
   onSaved,
   onFailed,
 }: {
   asset: FixedAssetView;
-  onEditOpening: () => void;
-  onSaved: (text: string) => void;
+  onSaved: (title: string, detail?: string) => void;
   onFailed: (text: string) => void;
 }) {
-  const [mode, setMode] = useState<"view" | "edit" | "dispose">("view");
+  const [mode, setMode] = useState<"view" | "dispose">("view");
   const [busy, setBusy] = useState(false);
-  const [name, setName] = useState(asset.name);
-  const [category, setCategory] = useState<AssetCategory>(asset.category as AssetCategory);
-  const [life, setLife] = useState(String(asset.usefulLifeMonths));
   const [disposedOn, setDisposedOn] = useState(jakartaDate());
   const [proceeds, setProceeds] = useState<number | null>(null);
-
-  const save = async () => {
-    setBusy(true);
-    try {
-      await updateFixedAssetClient(asset.id, {
-        name: name.trim(),
-        category,
-        usefulLifeMonths: Number(life) || asset.usefulLifeMonths,
-      });
-      onSaved(`${name.trim()} diperbarui.`);
-      setMode("view");
-    } catch (cause) {
-      onFailed(cause instanceof AccountingClientError ? cause.message : "Perubahan belum tersimpan.");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const dispose = async () => {
     setBusy(true);
@@ -235,11 +205,12 @@ function AssetRow({
         proceedsIdr: proceeds ?? 0,
       });
       onSaved(
+        `${asset.name} sudah tidak dipakai lagi`,
         result.resultIdr === 0
-          ? `${asset.name} sudah tidak dihitung lagi sebagai milik usaha.`
+          ? "Nilainya berhenti turun sejak tanggal itu."
           : result.resultIdr > 0
-            ? `${asset.name} laku ${formatIdr(result.proceedsIdr)}, lebih tinggi ${formatIdr(result.resultIdr)} dari sisa nilainya. Selisihnya masuk sebagai pemasukan lain.`
-            : `${asset.name} laku ${formatIdr(result.proceedsIdr)}, kurang ${formatIdr(-result.resultIdr)} dari sisa nilainya. Selisihnya jadi biaya bulan ini.`,
+            ? `Laku ${formatIdr(result.proceedsIdr)}, lebih tinggi ${formatIdr(result.resultIdr)} dari sisa nilainya. Selisihnya masuk sebagai pemasukan lain.`
+            : `Laku ${formatIdr(result.proceedsIdr)}, kurang ${formatIdr(-result.resultIdr)} dari sisa nilainya. Selisihnya jadi biaya bulan ini.`,
       );
       setMode("view");
     } catch (cause) {
@@ -277,13 +248,6 @@ function AssetRow({
           <div className="flex shrink-0 gap-1">
             <button
               type="button"
-              onClick={() => setMode("edit")}
-              className="min-h-10 rounded-lg px-2 text-[11px] font-bold text-[#0b5f86]"
-            >
-              Ubah
-            </button>
-            <button
-              type="button"
               onClick={() => setMode("dispose")}
               className="min-h-10 rounded-lg px-2 text-[11px] font-bold text-[#6e859e]"
             >
@@ -292,68 +256,6 @@ function AssetRow({
           </div>
         )}
       </div>
-
-      {mode === "edit" && (
-        <div className="mt-3 space-y-3 rounded-xl border border-[#e3e9f0] p-3">
-          {asset.fromOpeningBalance && (
-            <FeedbackBanner tone="info">
-              Harga alat ini bagian dari kondisi awal usaha, jadi diubahnya dari sana supaya angkanya ikut betul
-              semua.{" "}
-              <button type="button" onClick={onEditOpening} className="font-bold underline">
-                Buka kondisi awal usaha
-              </button>
-            </FeedbackBanner>
-          )}
-          <label className={labelClass}>
-            Nama alat
-            <input value={name} onChange={(event) => setName(event.target.value)} className={`${fieldClass} mt-1.5`} />
-          </label>
-          <label className={labelClass}>
-            Kelompok
-            <select
-              value={category}
-              onChange={(event) => setCategory(event.target.value as AssetCategory)}
-              className={`${fieldClass} mt-1.5`}
-            >
-              {assetCategories.map((item) => (
-                <option key={item} value={item}>
-                  {assetCategoryLabels[item]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={labelClass}>
-            Dipakai berapa bulan lagi
-            <input
-              inputMode="numeric"
-              value={life}
-              onChange={(event) => setLife(event.target.value.replace(/\D/g, ""))}
-              className={`${fieldClass} mt-1.5`}
-            />
-            <span className="mt-1 block text-[11px] leading-relaxed text-[#6e859e]">
-              Kalau diubah, nilai yang turun tiap bulan ikut dihitung ulang, termasuk untuk bulan-bulan yang sudah
-              lewat.
-            </span>
-          </label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setMode("view")}
-              className="min-h-11 rounded-xl border border-[#d5dfe9] px-4 text-xs font-bold text-[#1b2a3a]"
-            >
-              Batal
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void save()}
-              className="min-h-11 flex-1 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-50"
-            >
-              {busy ? "Menyimpan..." : "Simpan"}
-            </button>
-          </div>
-        </div>
-      )}
 
       {mode === "dispose" && (
         <div className="mt-3 space-y-3 rounded-xl border border-[#e3e9f0] p-3">
@@ -403,35 +305,15 @@ function AssetRow({
   );
 }
 
-function LoanRow({
-  loan,
-  onSaved,
-  onFailed,
-}: {
-  loan: LoanView;
-  onSaved: (text: string) => void;
-  onFailed: (text: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [name, setName] = useState(loan.lenderName);
-  const [installment, setInstallment] = useState<number | null>(loan.monthlyInstallmentIdr);
-
-  const save = async () => {
-    setBusy(true);
-    try {
-      await updateLoanClient(loan.id, {
-        lenderName: name.trim(),
-        monthlyInstallmentIdr: installment,
-      });
-      onSaved(`Pinjaman ${name.trim()} diperbarui.`);
-      setEditing(false);
-    } catch (cause) {
-      onFailed(cause instanceof AccountingClientError ? cause.message : "Perubahan belum tersimpan.");
-    } finally {
-      setBusy(false);
-    }
-  };
+/**
+ * Pinjaman hanya dibaca, tidak pernah disunting di sini.
+ *
+ * Sisa pinjaman adalah hasil pembayaran, bukan angka yang diketik. Mengubahnya
+ * langsung akan membuat sisa utang dan riwayat cicilan bercerita hal yang
+ * berbeda. Perubahannya masuk lewat catat transaksi, seperti pembayaran mana
+ * pun.
+ */
+function LoanRow({ loan }: { loan: LoanView }) {
 
   return (
     <li className="py-3">
@@ -454,51 +336,7 @@ function LoanRow({
             </p>
           )}
         </div>
-        {!editing && (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="min-h-10 shrink-0 rounded-lg px-2 text-[11px] font-bold text-[#0b5f86]"
-          >
-            Ubah
-          </button>
-        )}
       </div>
-
-      {editing && (
-        <div className="mt-3 space-y-3 rounded-xl border border-[#e3e9f0] p-3">
-          <label className={labelClass}>
-            Nama pemberi pinjaman
-            <input value={name} onChange={(event) => setName(event.target.value)} className={`${fieldClass} mt-1.5`} />
-          </label>
-          <label className={labelClass}>
-            Cicilan per bulan
-            <div className="mt-1.5">
-              <InlineMoneyInput ariaLabel="Cicilan per bulan" value={installment} onChange={setInstallment} />
-            </div>
-          </label>
-          <p className="text-[11px] leading-relaxed text-[#6e859e]">
-            Sisa pinjaman tidak diisi di sini — ia berkurang sendiri setiap Anda mencatat pembayaran cicilan.
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              className="min-h-11 rounded-xl border border-[#d5dfe9] px-4 text-xs font-bold text-[#1b2a3a]"
-            >
-              Batal
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void save()}
-              className="min-h-11 flex-1 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-50"
-            >
-              {busy ? "Menyimpan..." : "Simpan"}
-            </button>
-          </div>
-        </div>
-      )}
     </li>
   );
 }

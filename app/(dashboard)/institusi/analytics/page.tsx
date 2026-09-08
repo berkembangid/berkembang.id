@@ -67,7 +67,7 @@ export default async function DashboardAnalyticsPage() {
       <MetricCard label="Tingkat persetujuan" value={data.conversion} helper="Persetujuan dibanding permintaan" icon={Percent} tone="attention" />
     </section>
     <DashboardPanel>
-      <PanelHeader title="Permintaan akses per minggu" description="Jumlah permintaan yang dibuat institusi dalam tujuh minggu terakhir." />
+      <PanelHeader title="Permintaan akses per minggu" description="Jumlah permintaan yang dibuat lembaga dalam tujuh minggu terakhir." />
       <div className="p-5"><ComparisonBarChart data={data.weeklyRequests} primaryLabel="Permintaan akses" /></div>
     </DashboardPanel>
     <p className="text-xs text-slate-500">Akses profil tercatat: {data.accessCount} kali. Angka ini menghitung pembukaan atau pemeriksaan yang diizinkan.</p>

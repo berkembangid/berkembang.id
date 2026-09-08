@@ -24,7 +24,7 @@ import { listDocuments } from "@/modules/documents/document-client";
 import { assuranceText } from "@/modules/documents/cabinet-shelves";
 import { documentTypeLabels, type DocumentType } from "@/modules/documents/document-schema";
 
-/** Izin yang ditampilkan, dalam urutan yang ditanyakan institusi. */
+/** Izin yang ditampilkan, dalam urutan yang ditanyakan lembaga. */
 const shownTypes: DocumentType[] = ["nib", "pirt", "halal"];
 
 type Row = {
@@ -76,7 +76,7 @@ export function LegalitySummary() {
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <label className="block text-xs font-bold text-[#4a6280]">Ringkasan legalitas</label>
-        <Link href="/umkm/upload" className="text-[11px] font-bold text-[#0b5f86]">
+        <Link href="/umkm/profil/dokumen" className="text-[11px] font-bold text-[#0b5f86]">
           Kelola dokumen
         </Link>
       </div>
@@ -90,7 +90,7 @@ export function LegalitySummary() {
           {rows.map((row) => (
             <li key={row.docType}>
               <Link
-                href="/umkm/upload"
+                href="/umkm/profil/dokumen"
                 className="flex items-center gap-3 rounded-xl border border-[#e3e9f0] bg-white px-3 py-2.5 transition-colors hover:bg-[#f7f9fb]"
               >
                 <FileText

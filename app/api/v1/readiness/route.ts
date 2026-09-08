@@ -4,7 +4,7 @@ import { getReadinessLevel } from "@/modules/readiness/level-repository";
 
 /**
  * Tingkat Kesiapan — satu-satunya sumber untuk Beranda, halaman Kesiapan, dan
- * nanti dossier institusi.
+ * nanti dossier lembaga.
  *
  * Tidak ada layar yang boleh menghitung ulang bagian mana pun dari respons ini.
  * Sebelumnya kesiapan dihitung di beberapa tempat sekaligus, dan hasilnya tiga

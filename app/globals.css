@@ -1,5 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Hanken+Grotesk:wght@600;700;800&family=JetBrains+Mono:wght@500&display=swap");
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /* ===================================
    BERKEMBANG.ID — Design System v4.0
@@ -80,6 +81,109 @@
   --readiness-green-light: #86efac;
   --readiness-green-dark: #166534;
 }
+
+/* ===== Jembatan token shadcn/ui =====
+   Komponen di `components/ui/` ditulis dengan kosakata token shadcn
+   (--popover, --border, --ring, --radius) sedangkan sistem desain ini memakai
+   kosakata Material (--surface, --outline, --on-surface). Tanpa jembatan ini
+   setiap utilitas seperti `bg-popover` tidak menghasilkan apa pun -- dan itulah
+   sebabnya komponen shadcn yang sudah terpasang belum pernah terlihat benar.
+
+   Yang dijembatani hanya token yang benar-benar dipakai toast dan dialog.
+   Menyalin seluruh palet shadcn akan melahirkan sistem warna kedua yang
+   berdampingan dengan yang sudah ada, dan sejak itu setiap warna punya dua
+   sumber kebenaran. */
+:root {
+  --radius: 14px;
+
+  --foreground: var(--on-surface);
+  --card: var(--surface-container-lowest);
+  --card-foreground: var(--on-surface);
+  --popover: var(--surface-container-lowest);
+  --popover-foreground: var(--on-surface);
+  --primary-foreground: var(--on-primary);
+  --secondary-foreground: var(--on-secondary-fixed);
+  --destructive: var(--error);
+  --destructive-foreground: var(--on-error);
+
+  /* Netral yang tidak punya padanan di palet Material di atas. Nilainya
+     diambil dari cangkang UMKM supaya toast dan dialog tidak terlihat seperti
+     tempelan dari aplikasi lain. */
+  --muted: #f2f5f9;
+  --muted-foreground: #5f7185;
+  --accent: #eef8fd;
+  --accent-foreground: #0b5f86;
+  --border: #dde4ee;
+  --input: #d5dfe9;
+  --ring: #7cc8ec;
+
+  /* Nada pesan. Merah disediakan untuk kegagalan sistem saja; hal yang masih
+     bisa dibetulkan pemilik memakai kuning, bukan merah. */
+  --tone-success: #0b7a55;
+  --tone-success-surface: #edfbf5;
+  --tone-warning: #8a5a00;
+  --tone-warning-surface: #fff6e2;
+  --tone-info: #0b5f86;
+  --tone-info-surface: #eef8fd;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ===== Toast =====
+   Kelas ini dirujuk `components/ui/sonner.tsx` lewat `toastOptions.classNames`
+   dan sebelumnya tidak pernah didefinisikan. */
+.cn-toast {
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--popover);
+  box-shadow: 0 18px 44px rgb(17 27 38 / 0.16);
+  color: var(--popover-foreground);
+  font-family: "Inter", system-ui, sans-serif;
+}
+.cn-toast [data-title] { font-size: 13px; font-weight: 700; line-height: 1.35; }
+.cn-toast [data-description] { margin-top: 3px; font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.cn-toast [data-icon] { align-self: flex-start; margin-top: 1px; }
+.cn-toast [data-button] {
+  min-height: 32px;
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.cn-toast[data-type="success"] { border-color: color-mix(in srgb, var(--tone-success) 26%, transparent); }
+.cn-toast[data-type="success"] [data-icon] { color: var(--tone-success); }
+.cn-toast[data-type="warning"] { border-color: color-mix(in srgb, var(--tone-warning) 30%, transparent); }
+.cn-toast[data-type="warning"] [data-icon] { color: var(--tone-warning); }
+.cn-toast[data-type="info"] [data-icon] { color: var(--tone-info); }
+.cn-toast[data-type="error"] { border-color: color-mix(in srgb, var(--destructive) 30%, transparent); }
+.cn-toast[data-type="error"] [data-icon] { color: var(--destructive); }
 
 /* ===== Base Styles ===== */
 *,
@@ -448,6 +552,13 @@ input[type="range"]::-moz-range-thumb {
 .auth-form-card input:not([type="checkbox"]):not([type="radio"]),.auth-form-card select { min-height:48px; border-color:#d8dce5!important; border-radius:16px!important; background:#fff; }
 .auth-form-card input:not([type="checkbox"]):not([type="radio"]):focus,.auth-form-card select:focus { border-color:#02a8d0!important; box-shadow:0 0 0 3px rgb(2 168 208/.13); outline:none; }
 .auth-form-card button { min-height:44px; }
+/* Kolom isian formulir autentikasi. Dulu hidup di dalam `style jsx` halaman pendaftaran, jadi terkurung di sana: halaman lupa kata sandi yang memakai kelas yang sama tampil tanpa gaya sama sekali. Sebuah primitif yang dipakai lebih dari satu layar tidak boleh tinggal di dalam salah satunya. */
+.field-input { width:100%; min-height:48px; border:1px solid #cbd5e1; border-radius:12px; padding:0 14px 0 40px; font-size:14px; outline:none; }
+.field-input.has-toggle { padding-right:48px; }
+.field-input:focus { border-color:#001b85; box-shadow:0 0 0 3px rgb(0 27 133/.1); }
+/* Tautan di dalam kalimat, bukan tombol tindakan. Aturan tinggi minimum di atas ditulis untuk tombol yang ditekan; pada tautan sebaris ia menghasilkan kotak 44 px berisi teks 16 px -- dua puluh delapan piksel kosong yang terbaca sebagai kesalahan tata letak, bukan sebagai ruang. WCAG 2.5.8 memang mengecualikan target yang berada di dalam kalimat. */
+.auth-form-card button.auth-inline-link { min-height:0; display:inline; padding:0; border:0; background:none; color:#001b85; font-weight:700; text-decoration:underline; text-underline-offset:2px; }
+.auth-form-card button.auth-inline-link:hover { color:#08299f; }
 .auth-form-card button:focus-visible,.auth-back-link:focus-visible,.auth-logo:focus-visible { outline:3px solid #02a8d0; outline-offset:3px; }
 .auth-form-footnote { width:min(100%,540px); margin-top:24px; margin-bottom:auto; color:#9298a7; font-size:.68rem; text-align:center; }
 .auth-back-link { margin-top:auto; }

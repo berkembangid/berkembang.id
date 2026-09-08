@@ -222,7 +222,7 @@ export function detectUserGaps(
       desc: g.desc || g.description || "Perlu perbaikan berkas untuk menaikkan skor.",
       why: g.why || "Bank memverifikasi kelengkapan berkas untuk validasi kelayakan usaha.",
       fix: g.fix || "Lengkapi data dan dokumen terkait.",
-      linkHref: g.linkHref || "/umkm/upload",
+      linkHref: g.linkHref || "/umkm/profil/dokumen",
       });
     });
   }
@@ -243,7 +243,7 @@ export function detectUserGaps(
       desc: "Surat Izin Usaha Perdagangan atau NIB OSS belum terdeteksi dalam arsip dokumen usahamu.",
       why: "Lembaga keuangan dan bank mewajibkan NIB sebagai bukti bahwa usahamu beroperasi secara legal.",
       fix: "Daftarkan NIB melalui sistem OSS di oss.go.id secara gratis lalu unggah dokumennya.",
-      linkHref: "/umkm/upload",
+      linkHref: "/umkm/profil/dokumen",
     });
   }
 
@@ -259,7 +259,7 @@ export function detectUserGaps(
       desc: "Foto KTP pemilik usaha belum terunggah untuk verifikasi identitas pemohon pinjaman.",
       why: "Verifikasi identitas KTP adalah syarat mutlak pembukaan rekening pinjaman dan pencocokan data.",
       fix: "Foto e-KTP dengan jelas dan unggah di menu Upload Dokumen.",
-      linkHref: "/umkm/upload",
+      linkHref: "/umkm/profil/dokumen",
     });
   }
 
@@ -275,7 +275,7 @@ export function detectUserGaps(
       desc: "Dokumen NPWP belum terdeteksi dalam arsip berkas usaha.",
       why: "Pihak analis bank membutuhkan NPWP untuk verifikasi kepatuhan perpajakan dan histori usaha.",
       fix: "Unggah kartu NPWP fisik atau kartu e-NPWP dari DJP Online.",
-      linkHref: "/umkm/upload",
+      linkHref: "/umkm/profil/dokumen",
     });
   }
 
@@ -307,7 +307,7 @@ export function detectUserGaps(
       desc: "Rekap laporan keuangan atau catatan pembukuan 3 bulan terakhir belum diunggah.",
       why: "Dokumen laporan keuangan menjadi dasar analisis rasio keuntungan dan perputaran modal kerja.",
       fix: "Unduh laporan arus kas dari platform atau unggah laporan keuangan mandiri.",
-      linkHref: "/umkm/upload",
+      linkHref: "/umkm/profil/dokumen",
     });
   }
 
@@ -323,7 +323,7 @@ export function detectUserGaps(
       desc: "Mutasi koran bank 3 bulan terakhir belum diunggah ke portal.",
       why: "Pihak analis bank memvalidasi arus kas masuk dan keluar dari mutasi asli rekening bank.",
       fix: "Unduh e-Statement PDF dari mobile banking dan unggah di menu Upload Dokumen.",
-      linkHref: "/umkm/upload",
+      linkHref: "/umkm/profil/dokumen",
     });
   }
 

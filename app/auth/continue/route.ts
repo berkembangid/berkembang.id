@@ -17,9 +17,14 @@ export async function GET(request: Request) {
     const role = await getEffectivePortalRole(supabase, user.id);
     if (role) {
       if (role === "umkm") {
+        // Pemilik usaha yang belum pernah mencatat apa pun diantar ke Profil,
+        // bukan ke layar catat. Hal pertama yang harus dikerjakan adalah
+        // melengkapi profil, dokumen, dan kondisi awal; mencatat transaksi
+        // sebelum titik mulainya diketahui menghasilkan laporan yang berdiri
+        // di atas angka yang tidak pernah ditetapkan.
         const transaction = await supabase.from("transactions").select("id").eq("user_id", user.id).limit(1).maybeSingle();
         if (!transaction.error && !transaction.data) {
-          return NextResponse.redirect(new URL("/umkm/catat?onboarding=1", request.url));
+          return NextResponse.redirect(new URL("/umkm/profil?onboarding=1", request.url));
         }
       }
       return NextResponse.redirect(new URL(portalPathForRole(role), request.url));

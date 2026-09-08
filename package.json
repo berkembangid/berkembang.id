@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "db:test": "node scripts/verify-database-migrations.mjs",
+    "db:baseline": "node scripts/build-baseline-schema.mjs",
+    "db:baseline:verify": "node scripts/verify-baseline-schema.mjs",
     "lint:terms": "node scripts/lint-forbidden-terms.mjs",
     "report:sample": "node scripts/render-sample-statement.mjs",
     "db:types": "node scripts/generate-database-types.mjs",

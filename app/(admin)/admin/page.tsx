@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 export default function AdminPage() {
   const [stats, setStats] = useState([
     { label: "Total UMKM Terdaftar", value: "0", delta: "Realtime Data", Icon: Users, color: "#0ea5e9", bg: "bg-[#0ea5e9]/10" },
-    { label: "Institusi Aktif", value: "0", delta: "Realtime Data", Icon: BarChart2, color: "#10b981", bg: "bg-[#10b981]/10" },
+    { label: "Lembaga Aktif", value: "0", delta: "Realtime Data", Icon: BarChart2, color: "#10b981", bg: "bg-[#10b981]/10" },
     { label: "Rata-rata Score", value: "0", delta: "Realtime Data", Icon: Handshake, color: "#8b5cf6", bg: "bg-[#8b5cf6]/10" },
     { label: "Transaksi Terproses", value: "0", delta: "Realtime Data", Icon: RefreshCw, color: "#0b5f86", bg: "bg-[#0b5f86]/10" },
   ]);
@@ -47,7 +47,7 @@ export default function AdminPage() {
 
         setStats([
           { label: "Total UMKM Terdaftar", value: (umkmCount || 0).toLocaleString("id-ID"), delta: "Data Terintegrasi", Icon: Users, color: "#0ea5e9", bg: "bg-[#0ea5e9]/10" },
-          { label: "Institusi Aktif", value: (instCount || 0).toString(), delta: "Program Aktif", Icon: BarChart2, color: "#10b981", bg: "bg-[#10b981]/10" },
+          { label: "Lembaga Aktif", value: (instCount || 0).toString(), delta: "Program Aktif", Icon: BarChart2, color: "#10b981", bg: "bg-[#10b981]/10" },
           { label: "Rata-rata Score", value: avgScore > 0 ? avgScore.toString() : "-", delta: "Platform Average", Icon: Handshake, color: "#8b5cf6", bg: "bg-[#8b5cf6]/10" },
           { label: "Transaksi Terproses", value: (txCount || 0).toLocaleString("id-ID"), delta: "Total Log Transaksi", Icon: RefreshCw, color: "#0b5f86", bg: "bg-[#0b5f86]/10" },
         ]);

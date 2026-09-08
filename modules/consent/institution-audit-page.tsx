@@ -34,7 +34,7 @@ export default function InstitutionAuditPage() {
   }, [selectedId]);
 
   return <DashboardPage>
-    <PageHeader title="Log audit organisasi" description="Setiap tatapan tercatat: siapa membuka apa, kapan. Terlihat oleh admin institusi dan pemilik data." icon={ScrollText} />
+    <PageHeader title="Log audit organisasi" description="Setiap tatapan tercatat: siapa membuka apa, kapan. Terlihat oleh admin lembaga dan pemilik data." icon={ScrollText} />
     {message && <FeedbackBanner tone="attention" live>{message}</FeedbackBanner>}
     {logs.length === 0
       ? <EmptyState icon={ScrollText} title="Belum ada aktivitas tercatat" description="Pembukaan dossier, PDF, daftar kandidat, dan halaman organisasi akan muncul di sini." />

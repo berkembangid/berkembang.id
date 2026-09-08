@@ -3,27 +3,45 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart2, Building2, FileCheck, Handshake, History, LayoutDashboard, LogOut, Menu, ShieldCheck, Sliders, Sparkles, Users, X } from "lucide-react";
+import { BarChart2, BookOpen, Building2, FileCheck, Gauge, Handshake, History, LayoutDashboard, LogOut, Menu, MonitorPlay, ShieldCheck, Sliders, Sparkles, ToggleLeft, Users, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFailure } from "@/lib/notify";
 import styles from "../dashboard-shell.module.css";
 
 type NavGroup = { category: string; items: { href: string; label: string; Icon: LucideIcon }[] };
 
 const NAV_GROUPS: NavGroup[] = [
-  { category: "Utama", items: [{ href: "/admin", label: "Ringkasan", Icon: LayoutDashboard }, { href: "/admin/analytics", label: "Analitik", Icon: BarChart2 }] },
-  { category: "Data utama", items: [{ href: "/admin/umkm", label: "UMKM", Icon: Users }, { href: "/admin/institutions", label: "Institusi", Icon: Building2 }, { href: "/admin/mitra", label: "Mitra komunitas", Icon: Handshake }] },
-  { category: "Sistem & akses", items: [{ href: "/admin/profile-access", label: "Permintaan akses", Icon: FileCheck }, { href: "/admin/rules", label: "Aturan sistem", Icon: Sliders }, { href: "/admin/admins", label: "Kelola admin", Icon: ShieldCheck }, { href: "/admin/audit", label: "Riwayat audit", Icon: History }] },
+  { category: "Utama", items: [{ href: "/admin", label: "Ringkasan", Icon: LayoutDashboard }, { href: "/admin/analytics", label: "Analitik", Icon: BarChart2 }, { href: "/admin/mesin", label: "Ruang Mesin", Icon: Gauge }] },
+  { category: "Data utama", items: [{ href: "/admin/umkm", label: "UMKM", Icon: Users }, { href: "/admin/institutions", label: "Lembaga", Icon: Building2 }, { href: "/admin/mitra", label: "Mitra komunitas", Icon: Handshake }] },
+  { category: "Sistem & akses", items: [{ href: "/admin/profile-access", label: "Permintaan akses", Icon: FileCheck }, { href: "/admin/rules", label: "Aturan sistem", Icon: Sliders }, { href: "/admin/flags", label: "Sakelar fitur", Icon: ToggleLeft }, { href: "/admin/demo", label: "Akun demo", Icon: MonitorPlay }, { href: "/admin/admins", label: "Kelola admin", Icon: ShieldCheck }, { href: "/admin/audit", label: "Riwayat audit", Icon: History }] },
+  // Terakhir, sama seperti "Panduan" di menu UMKM: yang dicari orang ketika
+  // ia belum tahu harus ke mana, bukan yang dipakai setiap hari.
+  { category: "Bantuan", items: [{ href: "/admin/panduan", label: "Panduan", Icon: BookOpen }] },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { confirm } = useConfirm();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const allItems = NAV_GROUPS.flatMap((group) => group.items);
   const activeLabel = allItems.find((item) => item.href === "/admin" ? pathname === item.href : pathname.startsWith(item.href))?.label ?? "Admin";
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    const yes = await confirm({
+      title: "Keluar dari akun?",
+      description: "Anda perlu masuk lagi untuk membuka portal ini.",
+      confirmLabel: "Keluar",
+      cancelLabel: "Tetap di sini",
+      tone: "danger",
+    });
+    if (!yes) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      notifyFailure("Belum berhasil keluar. Coba sekali lagi.");
+      return;
+    }
     window.location.href = "/auth/login";
   }
 

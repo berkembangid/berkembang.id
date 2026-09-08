@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { UserPlus, ShieldCheck, Mail, Lock, User, Trash2, RefreshCw, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { UserPlus, ShieldCheck, Mail, Lock, User, Trash2, RefreshCw, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/Modal";
 import { runAdminOperation } from "@/modules/admin/operations";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFailure, notifySuccess, notifyWarning } from "@/lib/notify";
 
 interface AdminUser {
   id: string;
@@ -15,11 +17,11 @@ interface AdminUser {
 }
 
 export default function AdminUsersPage() {
+  const { confirm } = useConfirm();
   const [adminList, setAdminList] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
   // Form states
@@ -73,7 +75,6 @@ export default function AdminUsersPage() {
     if (!adminEmail.trim() || !adminPassword || !adminName.trim()) return;
 
     setSaving(true);
-    setSuccessMsg("");
     setErrorMsg("");
 
     try {
@@ -96,12 +97,12 @@ export default function AdminUsersPage() {
       };
 
       setAdminList([newAdminObj, ...adminList]);
-      setSuccessMsg(`Akun Admin ${adminName.trim()} berhasil dibuat!`);
+      notifySuccess(`Akun admin ${adminName.trim()} dibuat`);
       setShowAddModal(false);
       setAdminName("");
       setAdminEmail("");
       setAdminPassword("");
-      setTimeout(() => setSuccessMsg(""), 4000);
+
     } catch (err: unknown) {
       console.error("Error creating admin account:", err);
       setErrorMsg(err instanceof Error ? err.message : "Gagal membuat akun admin.");
@@ -112,20 +113,31 @@ export default function AdminUsersPage() {
 
   const handleDeleteAdmin = async (id: string, email: string) => {
     if (adminList.length <= 1) {
-      alert("Tidak dapat menghapus akun admin utama.");
+      notifyWarning("Akun admin terakhir tidak dapat dihapus.", {
+        description: "Tanpa satu pun admin aktif, tidak ada yang bisa membuat admin baru.",
+      });
       return;
     }
 
-    if (!confirm(`Apakah Anda yakin ingin menghapus akun admin (${email})?`)) return;
+    const yes = await confirm({
+      title: "Hapus akun admin ini?",
+      description: `${email} akan kehilangan seluruh akses administrasi seketika. Riwayat tindakannya tetap tersimpan di catatan audit.`,
+      confirmLabel: "Hapus akses",
+      cancelLabel: "Batal",
+      tone: "danger",
+    });
+    if (!yes) return;
 
     try {
       await runAdminOperation({ action: "deactivate_admin", profileId: id });
 
       setAdminList(adminList.filter((a) => a.id !== id));
-      setSuccessMsg(`Akun Admin (${email}) berhasil dihapus.`);
-      setTimeout(() => setSuccessMsg(""), 3000);
+      notifySuccess(`Akses ${email} dicabut`);
     } catch (err: unknown) {
+      // Kegagalan di sini dulu hanya sampai ke konsol: layarnya diam, dan
+      // admin yang menekannya percaya aksesnya sudah dicabut padahal belum.
       console.error("Error deleting admin:", err);
+      notifyFailure(err instanceof Error ? err.message : "Akses belum dapat dicabut. Coba lagi.");
     }
   };
 
@@ -161,13 +173,6 @@ export default function AdminUsersPage() {
           </button>
         </div>
       </div>
-
-      {successMsg && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold flex items-center gap-2 animate-fade-in">
-          <CheckCircle2 size={16} />
-          {successMsg}
-        </div>
-      )}
 
       {/* Admin List Cards */}
       {loading ? (

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart2, Bell, Bookmark, Building2, Clock3, FolderOpen, LayoutGrid, LogOut, Menu, ScrollText, Settings2, Sparkles, TrendingUp, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFailure } from "@/lib/notify";
 import { InstitutionProvider, useInstitution } from "@/modules/institution/institution-context";
 import styles from "../dashboard-shell.module.css";
 
@@ -40,7 +42,7 @@ function SidebarShell({ pathname, mobileOpen, setMobileOpen, unread, contextName
     <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ""}`}>
       <div className={styles.brand}><Link href="/institusi" className="flex items-center gap-3"><span className={styles.brandMark}><Sparkles size={17} /></span><span>berkembang.id</span></Link><button type="button" aria-label="Tutup menu" onClick={() => setMobileOpen(false)} className="ml-auto grid size-9 place-items-center rounded-lg text-[#6e859e] md:hidden"><X size={17} /></button></div>
       <div className={styles.context}><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#eef8fd] text-[#0f73a3]"><Building2 size={17} /></span><div className="min-w-0"><p className={styles.contextTitle}>{contextName}</p><InstitutionSwitcher /></div></div></div>
-      <nav aria-label="Menu portal institusi" className={styles.group}>
+      <nav aria-label="Menu portal lembaga" className={styles.group}>
         <p className={styles.groupLabel}>Ruang kerja</p>
         {NAV_ITEMS.map((item) => {
           const active = item.href === "/institusi" ? pathname === item.href : pathname.startsWith(item.href);
@@ -53,6 +55,7 @@ function SidebarShell({ pathname, mobileOpen, setMobileOpen, unread, contextName
 }
 
 function LayoutInner({ children }: { children: React.ReactNode }) {
+  const { confirm } = useConfirm();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unread, setUnread] = useState(0);
@@ -60,7 +63,19 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const activeLabel = NAV_ITEMS.find((item) => item.href === "/institusi" ? pathname === item.href : pathname.startsWith(item.href))?.label ?? "Portal institusi";
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    const yes = await confirm({
+      title: "Keluar dari akun?",
+      description: "Anda perlu masuk lagi untuk membuka portal ini.",
+      confirmLabel: "Keluar",
+      cancelLabel: "Tetap di sini",
+      tone: "danger",
+    });
+    if (!yes) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      notifyFailure("Belum berhasil keluar. Coba sekali lagi.");
+      return;
+    }
     window.location.href = "/auth/login";
   }
 
@@ -76,9 +91,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div data-world="institusi" className={styles.portal}>
-      <SidebarShell pathname={pathname} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} unread={unread} contextName={selected?.name ?? "Akun institusi"} handleSignOut={handleSignOut} />
+      <SidebarShell pathname={pathname} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} unread={unread} contextName={selected?.name ?? "Akun lembaga"} handleSignOut={handleSignOut} />
       <div className={styles.main}>
-        <header className={styles.topbar}><div className="flex items-center gap-3"><button type="button" onClick={() => setMobileOpen(true)} aria-label="Buka menu" className={styles.menuButton}><Menu size={19} /></button><div><p className="hidden text-[9px] font-bold uppercase tracking-[.12em] text-[#9fb0c2] sm:block">Portal institusi</p><p className={styles.pageLabel}>{activeLabel}</p></div></div><span className={styles.portalBadge}>Akses berizin</span></header>
+        <header className={styles.topbar}><div className="flex items-center gap-3"><button type="button" onClick={() => setMobileOpen(true)} aria-label="Buka menu" className={styles.menuButton}><Menu size={19} /></button><div><p className="hidden text-[9px] font-bold uppercase tracking-[.12em] text-[#9fb0c2] sm:block">Portal lembaga</p><p className={styles.pageLabel}>{activeLabel}</p></div></div><span className={styles.portalBadge}>Akses berizin</span></header>
         {children}
       </div>
     </div>

@@ -213,7 +213,7 @@ function PageChrome({ data, watermark }: { data: StatementDocumentData; watermar
     <>
       {watermark && (
         <View style={styles.watermarkBand} fixed>
-          <Text style={styles.watermarkLine}>Akses institusi: {watermark.institutionName}</Text>
+          <Text style={styles.watermarkLine}>Akses lembaga: {watermark.institutionName}</Text>
           <Text style={styles.watermarkLine}>
             Dibuka oleh {watermark.memberLabel} · {longDate(watermark.downloadedAt.slice(0, 10))}
           </Text>
@@ -632,7 +632,7 @@ function StatementDocument({ data, watermark }: { data: StatementDocumentData; w
     <Document
       title={watermark ? `Dossier ${data.businessName} untuk ${watermark.institutionName}` : `Laporan Keuangan ${data.businessName}`}
       author="BERKEMBANG.ID"
-      subject={watermark ? "Dossier SAK EMKM untuk institusi" : "Laporan keuangan SAK EMKM"}
+      subject={watermark ? "Dossier SAK EMKM untuk lembaga" : "Laporan keuangan SAK EMKM"}
       creator="BERKEMBANG.ID"
       producer="BERKEMBANG.ID"
     >

@@ -67,6 +67,18 @@ const expectedMigrations = [
   "0059_dossier_api_keys.sql",
   "0060_owner_consent_authority.sql",
   "0061_portal_readiness_single_source.sql",
+  "0062_grants_for_tables_added_after_0013.sql",
+  "0063_satu_akun_satu_akses.sql",
+  "0064_kondisi_awal_sekali_isi.sql",
+  "0065_rincian_persediaan_awal.sql",
+  "0066_rincian_barang_persediaan.sql",
+  "0067_nilai_sisa_alat_usaha.sql",
+  "0068_jalur_ocr_kamera.sql",
+  "0069_ruang_mesin_fondasi.sql",
+  "0070_sakelar_fitur_dua_arah.sql",
+  "0071_jejak_nominal_dan_nota.sql",
+  "0072_metrik_ruang_mesin.sql",
+  "0073_daftar_akun_demo.sql",
 ];
 
 describe("WP-03 migration contract", () => {
@@ -75,8 +87,18 @@ describe("WP-03 migration contract", () => {
     expect(actual).toEqual(expectedMigrations);
   });
 
+  // Satu-satunya migrasi yang boleh membuang sesuatu, dan alasannya tertulis
+  // di sini supaya izin itu harus diminta -- bukan didapat diam-diam.
+  //
+  // `0063` membuang kolom `business_members.role` beserta dua fungsi peran.
+  // Yang hilang bukan data siapa pun: kolom itu selalu berisi 'owner' untuk
+  // satu-satunya baris yang pernah ada, dan empat tingkat kewenangannya tidak
+  // pernah punya satu layar pun untuk mengisinya.
+  const migrasiBolehMembuang = new Set(["0063_satu_akun_satu_akses.sql"]);
+
   it("contains every core table and no destructive DDL", () => {
     const sql = expectedMigrations
+      .filter((name) => !migrasiBolehMembuang.has(name))
       .map((name) => readFileSync(join(migrationDirectory, name), "utf8"))
       .join("\n")
       .toLowerCase();
@@ -415,7 +437,7 @@ describe("WP-06 private-document contract", () => {
     ];
     const routes = routeFiles.map((file) => readFileSync(file, "utf8")).join("\n");
     const page = readFileSync(
-      join(process.cwd(), "app", "(umkm)", "umkm", "upload", "page.tsx"),
+      join(process.cwd(), "app", "(umkm)", "umkm", "profil", "dokumen", "page.tsx"),
       "utf8",
     );
     const consentDialog = readFileSync(

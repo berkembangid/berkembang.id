@@ -1,18 +1,38 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ShieldCheck, Lock, FileText, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ShieldCheck } from "lucide-react";
+import TermsDocumentView from "./terms-document";
+import {
+  TERMS_EFFECTIVE_DATE,
+  TERMS_VERSION,
+  termsDocumentFor,
+} from "@/modules/legal/terms";
 
 export const metadata = {
   title: "Syarat & Ketentuan | Berkembang.id",
-  description: "Syarat dan Ketentuan serta Kebijakan Perlindungan Privasi Data Pengguna Berkembang.id",
+  description:
+    "Syarat dan Ketentuan penggunaan Berkembang.id untuk pengguna UMKM serta untuk lembaga dan investor, beserta kebijakan perlindungan data pribadi.",
 };
 
-export default function TermsPage() {
+/**
+ * `?pihak=lembaga` membuka langsung dokumen lembaga.
+ *
+ * Dibaca di sini, bukan di komponen kliennya, supaya dokumen yang benar sudah
+ * ada di HTML pertama: sebuah halaman hukum yang menampilkan perjanjian keliru
+ * selama sesaat lebih buruk daripada memuat sedikit lebih lambat.
+ */
+export default async function TermsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const party = (await searchParams).pihak;
+  const audience = termsDocumentFor(typeof party === "string" ? party : null).id;
+
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800">
-      {/* Header */}
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-20">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4">
           <Link href="/" className="flex items-center gap-2">
             <Image
               src="/logo/logo berkembang.webp"
@@ -24,109 +44,33 @@ export default function TermsPage() {
           </Link>
           <Link
             href="/auth/register"
-            className="text-xs font-bold text-[#001b85] hover:text-[#08299f] flex items-center gap-1"
+            className="flex items-center gap-1 text-xs font-bold text-[#001b85] hover:text-[#08299f]"
           >
             <ArrowLeft size={14} /> Kembali ke Pendaftaran
           </Link>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-10 space-y-8">
+      <main className="mx-auto max-w-4xl space-y-8 px-4 py-10">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-[#001b85] text-xs font-bold mb-3">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-[#001b85]">
             <ShieldCheck size={14} /> Perlindungan Privasi &amp; Data
           </div>
-          <h1 className="text-2xl md:text-3xl font-black text-[#141a34]">
+          <h1 className="text-2xl font-black text-[#141a34] md:text-3xl">
             Syarat &amp; Ketentuan Layanan
           </h1>
-          <p className="text-xs md:text-sm text-slate-500 mt-1">
-            Terakhir diperbarui: September 2026 · Berlaku untuk seluruh pengguna platform Berkembang.id
+          <p className="mt-1 text-xs text-slate-500 md:text-sm">
+            Versi {TERMS_VERSION} · Berlaku sejak {TERMS_EFFECTIVE_DATE} · Diatur oleh hukum
+            Negara Republik Indonesia
           </p>
         </div>
 
-        {/* Highlight Commitment Box */}
-        <div className="bg-gradient-to-r from-[#001b85] to-[#02a8d0] text-white p-6 rounded-2xl shadow-md space-y-3">
-          <div className="flex items-center gap-2 font-bold text-sm text-cyan-200">
-            <Lock size={18} /> KOMITMEN PERLINDUNGAN PRIVASI DATA PENGGUNA
-          </div>
-          <p className="text-sm md:text-base leading-relaxed font-medium text-white/95">
-            “Data yang dikumpulkan akan digunakan semata-mata untuk mendukung operasional, pengembangan, dan peningkatan layanan website. Kami tidak menjual, menyewakan, atau memperdagangkan data pengguna kepada pihak ketiga.”
-          </p>
-        </div>
+        <TermsDocumentView audience={audience} />
 
-        {/* Terms Sections */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 space-y-6 text-sm text-slate-700 leading-relaxed shadow-sm">
-          <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-[#001b85]" /> 1. Pengumpulan dan Penggunaan Data
-            </h2>
-            <p>
-              Platform Berkembang.id mengumpulkan informasi profil usaha, pencatatan transaksi keuangan, dan dokumen pendukung yang Anda berikan secara sukarela. Informasi ini semata-mata diolah untuk:
-            </p>
-            <ul className="list-disc list-inside space-y-1 text-slate-600 pl-2">
-              <li>Menghitung tingkat kesiapan usaha dan menyarankan satu langkah berikutnya, seluruhnya dari catatan dan dokumen yang Anda masukkan sendiri.</li>
-              <li>Memfasilitasi pembuatan laporan arus kas, pembukuan, serta visualisasi data keuangan.</li>
-              <li>Mendukung operasional, evaluasi teknis, dan peningkatan kualitas fitur layanan website.</li>
-            </ul>
-          </section>
-
-          <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-[#001b85]" /> 2. Larangan Komersialisasi &amp; Penjualan Data
-            </h2>
-            <p>
-              Kami menjamin bahwa data pribadi dan data transaksi bisnis Anda tidak akan pernah dijual, disewakan, dibagikan tanpa izin, atau diperdagangkan kepada pihak ketiga manapun untuk tujuan periklanan atau komersial di luar ekosistem resmi platform.
-            </p>
-          </section>
-
-          <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-[#001b85]" /> 3. Keamanan Informasi
-            </h2>
-            <p>
-              Kami menerapkan standar keamanan enkripsi berlapis dan protokol otentikasi ketat untuk menjaga integritas dan kerahasiaan data Anda dari akses yang tidak sah.
-            </p>
-          </section>
-
-          <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-[#001b85]" /> 4. Hak dan Kendali Pengguna
-            </h2>
-            <p>
-              Pengguna berhak memperbarui, mengubah, maupun menghapus data usaha dan dokumen yang tersimpan di dalam akunnya melalui halaman Profil. Selain itu:
-            </p>
-            <ul className="list-disc list-inside space-y-1 text-slate-600 pl-2">
-              <li><strong>Membawa pergi seluruh data.</strong> Tombol &ldquo;Unduh semua data saya&rdquo; di halaman Profil menghasilkan satu berkas berisi profil, seluruh catatan uang dalam bentuk tabel, serta daftar dan berkas dokumen Anda.</li>
-              <li><strong>Menghentikan akun.</strong> Permintaan penghapusan mencabut setiap izin akses institusi seketika itu juga. Data Anda dihapus setelah masa tenggang 30 hari, dan selama tenggang itu Anda dapat membatalkannya sendiri tanpa menghubungi siapa pun.</li>
-              <li><strong>Memutuskan siapa yang boleh melihat.</strong> Institusi hanya dapat membuka data usaha Anda setelah Anda menyetujuinya, untuk bagian yang Anda setujui saja, dan Anda dapat mencabut izin itu kapan saja.</li>
-            </ul>
-          </section>
-
-          <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-[#001b85]" /> 5. Batas Tingkat Kesiapan
-            </h2>
-            <p>
-              Tingkat kesiapan menggambarkan kelengkapan dan kebiasaan pencatatan usaha Anda, dihitung otomatis dengan aturan terbuka yang dapat Anda baca sendiri di halaman &ldquo;Cara kami menghitung&rdquo;. Ia <strong>bukan penilaian resmi</strong>, bukan penilaian kelayakan pembiayaan, dan bukan jaminan memperoleh pendanaan. Keputusan pembiayaan sepenuhnya mengikuti penilaian dan kebijakan masing-masing institusi.
-            </p>
-          </section>
-
-          <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-[#001b85]" /> 6. Peran Kecerdasan Buatan
-            </h2>
-            <p>
-              Ketika Anda mencatat dengan berbicara atau mengetik, nominal dibaca oleh pengurai tetap di dalam aplikasi &mdash; <strong>bukan oleh AI</strong>. AI hanya membantu menebak jenis transaksinya, dan hasil tebakannya selalu Anda periksa sebelum tersimpan. Pembacaan otomatis atas dokumen juga wajib Anda konfirmasi, dan bukan merupakan verifikasi keaslian dokumen.
-            </p>
-          </section>
-        </div>
-
-        {/* Back button */}
-        <div className="text-center pt-4">
+        <div className="pt-4 text-center">
           <Link
             href="/auth/register"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#001b85] text-white font-bold text-sm hover:bg-[#08299f] transition-all shadow-md"
+            className="inline-flex items-center gap-2 rounded-full bg-[#001b85] px-6 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-[#08299f]"
           >
             <ArrowLeft size={16} /> Kembali &amp; Lanjutkan Pendaftaran
           </Link>

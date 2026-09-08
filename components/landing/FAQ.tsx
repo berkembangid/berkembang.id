@@ -15,11 +15,11 @@ const questions = [
   },
   {
     question: "Siapa yang dapat melihat data usaha saya?",
-    answer: "Anda tetap memegang kendali. Informasi untuk pendamping atau institusi hanya dibagikan melalui alur persetujuan yang jelas.",
+    answer: "Anda tetap memegang kendali. Informasi untuk pendamping atau lembaga hanya dibagikan melalui alur persetujuan yang jelas.",
   },
   {
     question: "Apakah tingkat kesiapan menjamin pembiayaan?",
-    answer: "Tidak. Tingkat kesiapan menggambarkan kelengkapan catatan dan dokumen usaha Anda, dan aturannya terbuka untuk Anda baca. Keputusan pembiayaan tetap mengikuti penilaian dan kebijakan masing-masing institusi.",
+    answer: "Tidak. Tingkat kesiapan menggambarkan kelengkapan catatan dan dokumen usaha Anda, dan aturannya terbuka untuk Anda baca. Keputusan pembiayaan tetap mengikuti penilaian dan kebijakan masing-masing lembaga.",
   },
 ];
 

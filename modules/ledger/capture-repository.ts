@@ -1,3 +1,4 @@
+import type { CapturePath } from "@/modules/ledger/capture-routing";
 import "server-only";
 
 import { z } from "zod";
@@ -53,13 +54,26 @@ export type ScheduledCapture = z.infer<typeof scheduledCaptureSchema>;
 export type ConfirmedCapture = z.infer<typeof confirmedCaptureSchema>;
 export type CancelledCapture = z.infer<typeof cancelledCaptureSchema>;
 
+/**
+ * Dari baris mana angkanya diambil, dan apa saingannya.
+ *
+ * Hanya jalur foto nota yang mengisinya. Ia keterangan, bukan sumber angka:
+ * nominal draf sudah lahir dari parser sebelum apa pun ini disimpan.
+ */
+export type CaptureOcrSummary = {
+  excerpt: string | null;
+  ambiguous: boolean;
+  candidates: number[];
+};
+
 export type CaptureView = {
   id: string;
   businessId: string;
-  inputMethod: "voice" | "manual";
+  inputMethod: "voice" | "manual" | "camera";
   status: z.infer<typeof captureStatusSchema>;
   transcription: string | null;
   draft: TransactionDraftItem[];
+  ocrSummary: CaptureOcrSummary | null;
   failure: { code: string; message: string } | null;
   createdAt: string;
   updatedAt: string;
@@ -94,7 +108,7 @@ function parseRpcResult<T>(schema: z.ZodType<T>, value: Json | null): T {
 export async function createCaptureRecord(
   input: CreateCaptureRequest,
   idempotencyKey: string,
-  capturePath?: "TEXT_ONLY" | "WHISPER",
+  capturePath?: CapturePath,
 ): Promise<CreatedCapture> {
   const client = await createServerSupabaseClient();
   const args: Database["public"]["Functions"]["create_transaction_capture"]["Args"] = {
@@ -152,12 +166,30 @@ export async function scheduleCaptureProcessing(captureId: string): Promise<Sche
   return parseRpcResult(scheduledCaptureSchema, data);
 }
 
+/**
+ * Membaca jejak pembacaan nota dari kolom jsonb.
+ *
+ * Tidak memakai skema Zod yang melempar: kalau bentuknya tidak terduga, yang
+ * benar adalah kehilangan keterangannya, bukan kehilangan seluruh capture-nya.
+ * Angka nominal draf tidak pernah datang dari sini.
+ */
+function readOcrSummary(value: unknown): CaptureOcrSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const excerpt = typeof record.excerpt === "string" ? record.excerpt : null;
+  const candidates = Array.isArray(record.candidates)
+    ? record.candidates.filter((item): item is number => typeof item === "number")
+    : [];
+  if (!excerpt && candidates.length === 0) return null;
+  return { excerpt, ambiguous: record.ambiguous === true, candidates };
+}
+
 export async function getCaptureView(captureId: string): Promise<CaptureView> {
   const client = await createServerSupabaseClient();
   const { data, error } = await client
     .from("transaction_captures")
     .select(
-      "id,business_id,input_method,status,transcription,draft_payload,failure_code,failure_message,created_at,updated_at,confirmed_at,cancelled_at",
+      "id,business_id,input_method,status,transcription,draft_payload,ocr_summary,failure_code,failure_message,created_at,updated_at,confirmed_at,cancelled_at",
     )
     .eq("id", captureId)
     .maybeSingle();
@@ -187,6 +219,10 @@ export async function getCaptureView(captureId: string): Promise<CaptureView> {
     status: status.data,
     transcription: data.transcription,
     draft,
+    // Jejak pembacaan nota. Bentuknya diperiksa longgar dengan sengaja: ia
+    // keterangan untuk kartu konfirmasi, dan kartu yang kehilangan
+    // keterangannya masih berguna -- kartu yang gagal dirender tidak.
+    ocrSummary: readOcrSummary(data.ocr_summary),
     failure:
       data.failure_code && data.failure_message
         ? { code: data.failure_code, message: data.failure_message }

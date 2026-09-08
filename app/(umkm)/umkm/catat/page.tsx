@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Mic, RefreshCw, Trash2, Edit2, Check, X,
-  Sparkles, Type, Square, Volume2, PenLine, RotateCcw, AlertCircle, CheckCircle2,
+  Sparkles, Type, Square, Volume2, PenLine, RotateCcw, AlertCircle, CheckCircle2, Camera,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -25,10 +25,21 @@ import { InlineMoneyInput } from "@/components/warung/MoneyInput";
 import { categoryLabel, normalizeCategory, sectorFromAnswer } from "@/modules/accounting/templates";
 import { pilotSector, type AccountingSector } from "@/modules/accounting/coa";
 import { DashboardPage, PageHeader } from "@/components/dashboard";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyInfo, notifySuccess, notifyWarning } from "@/lib/notify";
 import { EvidencePrompt, type EvidenceTarget } from "@/components/warung/EvidencePrompt";
 import { nudgeCopy, nudgeLevelForBatch, type NudgeLevel } from "@/modules/ledger/evidence-nudge";
+import { compressImageFile } from "@/modules/documents/image-compression";
+import { attachDocumentTo, uploadEvidencePhoto } from "@/modules/documents/evidence-client";
 
 // ───────── TYPES ─────────
+/**
+ * Tiga cara mencatat, dan tiap-tiapnya bisa dimatikan dari Ruang Mesin.
+ * Ketik tidak punya sakelar dan memang tidak boleh punya: ia jaring pengaman
+ * ketika dua lainnya mati.
+ */
+type InputMode = "voice" | "camera" | "text";
+
 type Step = "ready" | "recording" | "uploading" | "processing" | "needs_review" | "saving" | "success" | "failed";
 
 interface ExtractedItem {
@@ -144,8 +155,19 @@ function parseQuantity(value: string) {
 export default function CatatPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("ready");
-  const [inputMode, setInputMode] = useState<"voice" | "text">("voice");
+  const [inputMode, setInputMode] = useState<InputMode>("voice");
+  // Sakelar dibaca sekali di awal. Nilai awalnya menganggap suara menyala dan
+  // kamera mati -- kalau pembacaannya gagal, yang hilang hanya tombol yang
+  // memang baru, dan cara mencatat yang sudah dipakai orang tidak ikut hilang.
+  const [flags, setFlags] = useState({ voice: true, camera: false });
+  // Jejak pembacaan nota, dan foto yang dipakai. Fotonya disimpan di ref
+  // supaya bisa ditempelkan sebagai bukti setelah transaksinya lahir --
+  // menempelkannya lebih awal berarti menempel ke sesuatu yang belum ada.
+  const [ocrSummary, setOcrSummary] = useState<CaptureClientView["ocrSummary"]>(null);
+  const receiptPhotoRef = useRef<File | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [typedText, setTypedText] = useState("");
+  const { confirm } = useConfirm();
   const [items, setItems] = useState<ExtractedItem[]>([]);
   const [transcription, setTranscription] = useState("");
   const [editableCaption, setEditableCaption] = useState("");
@@ -175,7 +197,6 @@ export default function CatatPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editFields, setEditFields] = useState<{ item: string; qty: string; nominal: number }>({ item: "", qty: "", nominal: 0 });
   const [saving, setSaving] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
   // Transaksi yang baru tersimpan. Satu nota belanja sering memuat beberapa
   // barang yang tercatat sebagai beberapa transaksi, jadi fotonya menempel
   // ke semuanya, bukan ke salah satu yang ditebak dari urutan.
@@ -201,6 +222,7 @@ export default function CatatPage() {
   const applyCapture = useCallback((capture: CaptureClientView) => {
     if (capture.transcription) applyCaption(capture.transcription);
     setItems(formatDraftItems(capture.draft));
+    setOcrSummary(capture.ocrSummary);
     setIsEditingCaption(false);
   }, [applyCaption]);
 
@@ -445,6 +467,130 @@ export default function CatatPage() {
     [processText]
   );
 
+  /**
+   * Galat tampil sebagai toast, bukan kotak merah mengambang bikinan sendiri.
+   *
+   * Salinannya tetap disimpan di state karena langkah "gagal" menampilkannya
+   * di badan layar -- di sana pesannya memang harus tinggal, bukan lewat.
+   * Syaratnya persis sama dengan kotak lama yang digantikannya.
+   *
+   * Nadanya kuning: hampir semua yang sampai ke sini bisa diperbaiki pemilik
+   * sendiri (mikrofon belum diizinkan, tulisan belum bisa dibaca), dan warna
+   * merah disediakan untuk saat sistemnya yang benar-benar gagal.
+   */
+  useEffect(() => {
+    if (!errorMessage || step === "failed") return;
+    notifyWarning(errorMessage, { id: "catat-galat" });
+  }, [errorMessage, step]);
+
+  /**
+   * Sakelar fitur, dan apa yang terjadi ketika salah satunya dimatikan.
+   *
+   * `my_feature_flags()` menjawab seluruh sakelar untuk usaha ini sekaligus,
+   * penyimpangan per akun sudah diperhitungkan -- klien tidak perlu tahu id
+   * usahanya sendiri.
+   *
+   * Yang penting justru baris terakhirnya: kalau jalur suara dimatikan
+   * sementara layar ini terbuka pada mode suara, layarnya PINDAH sendiri ke
+   * mode ketik. Tanpa itu, pemilik menekan tombol mikrofon dan menerima galat
+   * dari server untuk sesuatu yang memang sengaja dimatikan.
+   */
+  useEffect(() => {
+    const timer = window.setTimeout(async () => {
+      const { data, error } = await supabase.rpc("my_feature_flags");
+      if (error || !data || typeof data !== "object") return;
+      const map = data as Record<string, boolean>;
+      const next = { voice: map.capture_voice !== false, camera: map.capture_camera === true };
+      setFlags(next);
+      setInputMode((current) => {
+        if (current === "voice" && !next.voice) return "text";
+        if (current === "camera" && !next.camera) return "text";
+        return current;
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  // ── Foto nota ───────────────────────────────────────────────────
+  /**
+   * Foto nota menumpang seluruh alur suara, dan itu memang maksudnya.
+   *
+   * Bedanya hanya tiga: berkasnya gambar, jalurnya OCR, dan fotonya dikecilkan
+   * lebih dulu di sini. Pengecilan bukan penghematan tempat -- server menolak
+   * apa pun di atas 2 MB, dan foto ponsel hari ini datang pada 3-5 MB. Yang
+   * dikirim tanpa dikecilkan tidak pernah sempat dibaca.
+   *
+   * Sesudah ini tidak ada apa pun yang khusus kamera: draf yang lahir masuk ke
+   * kartu konfirmasi yang sama, dengan nominal yang tetap datang dari parser,
+   * bukan dari model.
+   */
+  const processPhotoWithAI = useCallback(async (file: File) => {
+    setStep("uploading");
+    setErrorMessage("");
+    let createdCaptureId: string | null = null;
+    let processingScheduled = false;
+    try {
+      const compressed = await compressImageFile(file);
+      const photo = compressed.file;
+      receiptPhotoRef.current = photo;
+      const mimeType = photo.type === "image/png" ? "image/png" : "image/jpeg";
+
+      const created = await createCapture(
+        { inputMethod: "camera", file: { mimeType, size: photo.size } },
+        `capture:${crypto.randomUUID()}`,
+      );
+      createdCaptureId = created.capture.id;
+      setCaptureId(created.capture.id);
+      localStorage.setItem(ACTIVE_CAPTURE_STORAGE_KEY, created.capture.id);
+
+      if (!created.upload) {
+        throw new CaptureClientError(
+          "UPLOAD_SESSION_UNAVAILABLE",
+          "Tempat menyimpan foto belum siap. Silakan coba lagi.",
+          true,
+        );
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from(created.upload.bucket)
+        .uploadToSignedUrl(created.upload.path, created.upload.token, photo, {
+          contentType: mimeType,
+          upsert: false,
+        });
+      if (uploadError) {
+        throw new CaptureClientError(
+          "PHOTO_UPLOAD_FAILED",
+          "Foto belum berhasil diunggah. Silakan coba lagi.",
+          true,
+        );
+      }
+
+      setStep("processing");
+      await processCapture(created.capture.id);
+      processingScheduled = true;
+      await pollCapture(created.capture.id);
+    } catch (error) {
+      if (createdCaptureId && !processingScheduled) {
+        try { await cancelCapture(createdCaptureId); } catch {}
+        localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
+        setCaptureId(null);
+      }
+      setErrorMessage(
+        captureErrorMessage(error, "Foto notanya belum dapat dibaca. Coba potret ulang atau tulis transaksinya."),
+      );
+      setStep("failed");
+    }
+  }, [pollCapture]);
+
+  const handlePhotoSelected = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (file) void processPhotoWithAI(file);
+    },
+    [processPhotoWithAI],
+  );
+
   // ── Save ────────────────────────────────────────────────────────
   const handleConfirmSave = async () => {
     setSaving(true);
@@ -458,7 +604,12 @@ export default function CatatPage() {
       localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
       setCaptureId(null);
 
-    setToastMessage("✓ Catatan berhasil disimpan.");
+    notifySuccess(
+        saved.transactionIds.length > 1
+          ? `${saved.transactionIds.length} catatan tersimpan`
+          : "Catatan tersimpan",
+        { description: "Sudah masuk buku kas dan ikut dihitung di laporan bulan ini." },
+      );
       setStep("success");
       setSavedTargets(
         saved.transactionIds.map((id) => ({ targetType: "transaction" as const, targetId: id })),
@@ -472,6 +623,32 @@ export default function CatatPage() {
           item.category.emkmCategoryCode === 4 && item.category.emkmCategorySubtype === "4b",
       }))));
       setSavedIsAsset(items.some((item) => item.category.emkmCategoryCode === 8));
+
+      // Foto notanya menempel sendiri sebagai bukti. Ini satu-satunya jalur
+      // di mana pemilik TIDAK perlu diminta memotret ulang: notanya sudah di
+      // tangan kita, dan meminta foto kedua untuk kertas yang sama adalah
+      // pekerjaan yang tidak menghasilkan apa pun.
+      //
+      // Kegagalannya sengaja tidak menggagalkan penyimpanan. Transaksinya
+      // sudah tercatat dan seimbang; bukti yang belum menempel bisa
+      // ditempelkan belakangan lewat "Tambah bukti" di layar Laporan.
+      const photo = receiptPhotoRef.current;
+      if (photo && saved.transactionIds.length > 0) {
+        receiptPhotoRef.current = null;
+        void (async () => {
+          try {
+            const evidence = await uploadEvidencePhoto(photo);
+            await Promise.all(
+              saved.transactionIds.map((id) => attachDocumentTo(evidence.documentId, "transaction", id)),
+            );
+            notifySuccess("Foto notanya ikut tersimpan sebagai bukti");
+          } catch {
+            notifyWarning("Catatannya tersimpan, tetapi fotonya belum menempel.", {
+              description: "Anda bisa menempelkannya lewat tombol bukti di layar Laporan.",
+            });
+          }
+        })();
+      }
       setItems([]);
       setTranscription("");
       setEditableCaption("");
@@ -479,7 +656,6 @@ export default function CatatPage() {
       // Tidak langsung dialihkan ke laporan. Ajakan memotret nota hanya berguna
       // selagi notanya masih di tangan; sedetik kemudian pemilik sudah pindah
       // layar dan notanya masuk laci. Yang memutuskan pindah adalah pemilik.
-      setTimeout(() => setToastMessage(""), 1200);
       if (saved.transactionIds.length === 0) router.push("/umkm/laporan");
     } catch (error) {
       setErrorMessage(captureErrorMessage(error, "Catatan belum tersimpan. Silakan periksa kembali."));
@@ -489,7 +665,23 @@ export default function CatatPage() {
     }
   };
 
+  /**
+   * "Mulai ulang" duduk tepat di sebelah "Simpan", dan yang dibuangnya adalah
+   * hasil bicara atau mengetik yang barusan dikerjakan pemilik. Selama masih
+   * ada draf di layar, pertanyaannya wajar; kalau draf memang kosong, tidak
+   * ada yang perlu ditanyakan.
+   */
   const handleStartOver = async () => {
+    if (items.length > 0) {
+      const yes = await confirm({
+        title: "Buang draf ini?",
+        description: `${items.length} baris yang belum disimpan akan hilang, dan Anda mulai lagi dari awal.`,
+        confirmLabel: "Buang, mulai ulang",
+        cancelLabel: "Kembali ke draf",
+        tone: "danger",
+      });
+      if (!yes) return;
+    }
     if (captureId) {
       try { await cancelCapture(captureId); } catch {}
     }
@@ -500,10 +692,37 @@ export default function CatatPage() {
     setTranscription("");
     setEditableCaption("");
     setErrorMessage("");
+    setOcrSummary(null);
+    receiptPhotoRef.current = null;
   };
 
   // ── Item editing ────────────────────────────────────────────────
-  const handleDeleteItem = useCallback((id: number) => setItems((prev) => prev.filter((i) => i.id !== id)), []);
+  /**
+   * Menghapus satu baris draf tidak perlu dialog: dialog untuk hal sekecil ini
+   * lebih mengganggu daripada kekeliruannya. Yang dibutuhkan jalan pulang --
+   * dan urutan baris dijaga lewat `id`, supaya yang dikembalikan muncul lagi
+   * di tempatnya semula, bukan di paling bawah.
+   */
+  const handleDeleteItem = useCallback(
+    (id: number) => {
+      const removed = items.find((item) => item.id === id);
+      if (!removed) return;
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      notifyInfo(`"${removed.item}" dihapus dari draf`, {
+        duration: 6000,
+        action: {
+          label: "Urungkan",
+          onClick: () =>
+            setItems((prev) =>
+              prev.some((item) => item.id === id)
+                ? prev
+                : [...prev, removed].sort((left, right) => left.id - right.id),
+            ),
+        },
+      });
+    },
+    [items],
+  );
 
   // Kategori menentukan arah uang, jadi tanda + / - ikut berubah saat dipilih.
   const updateItemCategory = useCallback((id: number, category: CategorySelection) => {
@@ -522,6 +741,28 @@ export default function CatatPage() {
         };
       }),
     );
+  }, []);
+
+  const availableModes = useMemo<InputMode[]>(
+    () => [
+      ...(flags.voice ? (["voice"] as const) : []),
+      ...(flags.camera ? (["camera"] as const) : []),
+      "text" as const,
+    ],
+    [flags],
+  );
+
+  /**
+   * Memilih salah satu kandidat nominal dari nota.
+   *
+   * Hanya berlaku untuk baris pertama, dan itu benar: satu foto selalu
+   * menghasilkan satu draf (lihat `enforceReceiptAmount`), jadi tidak pernah
+   * ada baris kedua yang bisa salah sasaran.
+   */
+  const chooseCandidateAmount = useCallback((amount: number) => {
+    setItems((prev) => (prev.length === 0 ? prev : [{ ...prev[0], nominal: amount }, ...prev.slice(1)]));
+    setOcrSummary((current) => (current ? { ...current, ambiguous: false } : current));
+    notifyInfo(`Nominal disetel ke Rp${amount.toLocaleString("id-ID")}`);
   }, []);
 
   const startEditing = useCallback((item: ExtractedItem) => {
@@ -561,22 +802,6 @@ export default function CatatPage() {
   // ────────────────────────────────────────────────────────────────
   return (
     <>
-      {toastMessage && (
-        <div role="status" aria-live="polite" className="fixed left-1/2 top-4 z-50 flex -translate-x-1/2 items-center gap-2 rounded-xl bg-[#0b7a55] px-4 py-2.5 text-xs font-bold text-white shadow-lg animate-fade-in">
-          {toastMessage}
-        </div>
-      )}
-
-      {errorMessage && step !== "failed" && (
-        <div
-          role="alert"
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex max-w-[calc(100%-2rem)] items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700 shadow-lg"
-        >
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>{errorMessage}</span>
-        </div>
-      )}
-
       <DashboardPage width="compact">
         <PageHeader title="Catat transaksi" description="Ceritakan atau tulis transaksi dengan bahasa sehari-hari. Anda selalu dapat memeriksa hasilnya sebelum disimpan." icon={Mic} />
 
@@ -584,17 +809,24 @@ export default function CatatPage() {
         {step === "ready" && (
           <div className="space-y-6">
             {/* Mode Tabs */}
-            <div className="flex bg-[#eef8fd] p-1.5 rounded-2xl max-w-sm mx-auto">
-              {(["voice", "text"] as const).map((mode) => (
+            {/*
+              Mode yang mati tidak ditampilkan sebagai tombol nonaktif,
+              melainkan tidak ada sama sekali. Tombol kelabu mengundang
+              pertanyaan "kenapa saya tidak boleh"; ketiadaannya tidak.
+            */}
+            <div className="flex bg-[#eef8fd] p-1.5 rounded-2xl max-w-md mx-auto">
+              {availableModes.map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setInputMode(mode)}
-                  className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-xl transition-all cursor-pointer ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl transition-all cursor-pointer ${
                     inputMode === mode ? "bg-[#0b5f86] text-white shadow-sm" : "text-[#4a6280] hover:text-[#0b5f86]"
                   }`}
                 >
-                  {mode === "voice" ? <><Mic size={16} /> Gunakan suara</> : <><Type size={16} /> Tulis transaksi</>}
+                  {mode === "voice" ? <><Mic size={16} /> Suara</>
+                    : mode === "camera" ? <><Camera size={16} /> Foto nota</>
+                    : <><Type size={16} /> Tulis</>}
                 </button>
               ))}
             </div>
@@ -619,6 +851,40 @@ export default function CatatPage() {
                   <Mic size={40} className="group-hover:scale-110 transition-transform" />
                 </button>
                 <p className="text-[11px] text-[#6e859e] font-medium">Tekan tombol mikrofon, bicara, lalu tekan lagi untuk selesai</p>
+              </div>
+            )}
+
+            {/* Camera Box */}
+            {inputMode === "camera" && (
+              <div className="bg-white rounded-3xl p-8 border border-[#e3e9f0] shadow-card text-center space-y-6 animate-fade-in">
+                <div className="w-16 h-16 rounded-2xl bg-[#eef8fd] flex items-center justify-center mx-auto text-[#0b5f86]">
+                  <Camera size={32} />
+                </div>
+                <div>
+                  <h2 className="font-headline text-xl font-bold text-[#1b2a3a]">Potret nota belanjanya</h2>
+                  <p className="text-xs text-[#4a6280] mt-1 max-w-md mx-auto">
+                    Letakkan nota di tempat terang, pastikan angka totalnya terbaca. Anda tetap memeriksa hasilnya sebelum disimpan.
+                  </p>
+                </div>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  capture="environment"
+                  onChange={handlePhotoSelected}
+                  className="sr-only"
+                  aria-label="Ambil foto nota"
+                />
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#0b5f86] to-[#0ea5e9] text-white flex items-center justify-center mx-auto shadow-xl hover:scale-105 transition-transform cursor-pointer group"
+                >
+                  <Camera size={40} className="group-hover:scale-110 transition-transform" />
+                </button>
+                <p className="text-[11px] text-[#6e859e] font-medium">
+                  Fotonya ikut tersimpan sebagai bukti transaksi ini
+                </p>
               </div>
             )}
 
@@ -784,6 +1050,50 @@ export default function CatatPage() {
         {/* ── PREVIEW ────────────────────────────────────────────── */}
         {step === "needs_review" && (
           <div className="space-y-5 animate-fade-in">
+            {/*
+              Dari baris mana angkanya diambil.
+              Tanpa ini pemilik melihat satu nominal muncul entah dari mana,
+              dan ketika angkanya meleset satu-satunya cara memeriksanya adalah
+              membaca ulang notanya sendiri -- persis pekerjaan yang hendak
+              dihilangkan fitur ini.
+            */}
+            {ocrSummary && (
+              <div className="rounded-2xl border border-[#addcf4] bg-[#eef8fd] p-4 space-y-2">
+                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#0b5f86]">
+                  <Camera size={13} /> Dibaca dari nota
+                </p>
+                {ocrSummary.excerpt && (
+                  <p className="rounded-xl bg-white px-3 py-2 font-mono text-xs text-[#1b2a3a]">
+                    {ocrSummary.excerpt}
+                  </p>
+                )}
+                {ocrSummary.ambiguous && ocrSummary.candidates.length > 1 && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] leading-relaxed text-[#34496a]">
+                      Ada dua angka yang sama-sama mungkin. Pilih yang benar-benar dibayar:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {ocrSummary.candidates.map((amount) => (
+                        <button
+                          key={amount}
+                          type="button"
+                          onClick={() => chooseCandidateAmount(amount)}
+                          className="min-h-11 rounded-xl border border-[#0b5f86] bg-white px-4 text-xs font-bold tabular-nums text-[#0b5f86] hover:bg-[#d6eefa]"
+                        >
+                          Rp{amount.toLocaleString("id-ID")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {!ocrSummary.ambiguous && ocrSummary.candidates.length === 0 && (
+                  <p className="text-[11px] leading-relaxed text-[#34496a]">
+                    Angkanya belum terbaca dari foto. Isi nominalnya sendiri di bawah, atau potret ulang notanya.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Editable Caption Box */}
             <div className="bg-[#eef8fd] rounded-2xl p-4 border border-[#bac3ff] space-y-2">
               <div className="flex items-center justify-between">

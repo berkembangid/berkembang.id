@@ -1,33 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ArrowDownLeft, ArrowUpRight, Bell, CheckCircle2, FileText, Home,
-  LogOut, Map, Mic, Sparkles, Upload, User, X,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useConfirm } from "@/components/ui/confirm";
+import { notifyFailure, notifyInfo } from "@/lib/notify";
+import UmkmHeader, { type TransactionNotice } from "./umkm-header";
+import { NAVIGATION, isActivePath } from "./umkm-navigation";
 import styles from "./umkm-shell.module.css";
-
-type NavItem = { label: string; href: string; Icon: LucideIcon; matches?: string[] };
-type TransactionNotice = {
-  id: string; direction: string | null; type: string | null; amount_idr: number | null;
-  nominal: number | null; item: string; transaction_date: string | null;
-  tanggal: string | null; user_id: string | null;
-};
-
-const NAVIGATION: NavItem[] = [
-  { label: "Beranda", href: "/umkm", Icon: Home },
-  { label: "Catat", href: "/umkm/catat", Icon: Mic },
-  { label: "Laporan", href: "/umkm/laporan", Icon: FileText },
-  { label: "Perjalanan", href: "/umkm/roadmap", Icon: Map, matches: ["/umkm/roadmap", "/umkm/score", "/umkm/gaps"] },
-  { label: "Dokumen", href: "/umkm/upload", Icon: Upload },
-  { label: "Profil", href: "/umkm/profil", Icon: User },
-  { label: "Panduan", href: "/umkm/ai-copilot", Icon: Sparkles },
-];
 
 /**
  * Mencatat dengan suara adalah alasan aplikasi ini dibuka.
@@ -42,72 +25,143 @@ const MOBILE_VOICE = NAVIGATION.find((item) => item.label === "Catat")!;
 const MOBILE_LEFT = NAVIGATION.filter((item) => ["Beranda", "Laporan"].includes(item.label));
 const MOBILE_RIGHT = NAVIGATION.filter((item) => ["Perjalanan", "Profil"].includes(item.label));
 
-function isActivePath(pathname: string, item: NavItem) {
-  if (item.href === "/umkm") return pathname === "/umkm";
-  return (item.matches ?? [item.href]).some((path) => pathname.startsWith(path));
+/**
+ * Batas waktu "sudah dilihat" disimpan di peramban, bukan di basis data.
+ *
+ * Menyimpannya di server berarti satu tabel, satu kebijakan RLS, dan satu
+ * permintaan tulis setiap kali lonceng dibuka — untuk sebuah lencana. Yang
+ * hilang bila pemilik berpindah perangkat hanyalah angka kecil di sudut
+ * lonceng, dan pemberitahuannya sendiri tetap utuh di `/umkm/notifikasi`.
+ */
+const SEEN_KEY = "berkembang:notices-seen";
+
+function readSeenAt(): string | null {
+  try {
+    return window.localStorage.getItem(SEEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
-function noticeDirection(notice: TransactionNotice) {
-  return notice.direction ?? (notice.type === "masuk" ? "income" : "expense");
+function writeSeenAt(value: string) {
+  try {
+    window.localStorage.setItem(SEEN_KEY, value);
+  } catch {
+    // Peramban dengan penyimpanan situs dimatikan tetap boleh memakai
+    // aplikasinya; yang hilang hanya ingatan soal lencana.
+  }
 }
 
 export default function UMKMLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<TransactionNotice[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { confirm } = useConfirm();
+  const [notices, setNotices] = useState<TransactionNotice[]>([]);
+  const [seenAt, setSeenAt] = useState<string | null>(null);
   const [userName, setUserName] = useState("Pengguna");
   const [businessName, setBusinessName] = useState("");
   const currentUserId = useRef<string | null>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    // Ditunda satu tick, pola yang sama dengan pemuatan lain di aplikasi ini:
+    // penyimpanan peramban tidak ada di server, jadi pembacaannya harus
+    // terjadi setelah render pertama terpasang.
+    const timer = window.setTimeout(() => {
+      // Batas awal ditetapkan pada kunjungan pertama, bukan pada awal waktu.
+      // Tanpa ini, pemilik yang sudah punya delapan transaksi lama akan
+      // disambut lencana berisi delapan "baru" yang sudah lama dibacanya.
+      const stored = readSeenAt();
+      if (stored) {
+        setSeenAt(stored);
+        return;
+      }
+      const now = new Date().toISOString();
+      writeSeenAt(now);
+      setSeenAt(now);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       currentUserId.current = user.id;
+
       const [profile, transactionResult] = await Promise.all([
         supabase.from("profiles").select("name,nama_usaha").eq("auth_user_id", user.id).maybeSingle(),
-        supabase.from("transactions").select("id,direction,type,amount_idr,nominal,item,transaction_date,tanggal,user_id").neq("ledger_status", "cancelled").order("created_at", { ascending: false }).limit(8),
+        supabase
+          .from("transactions")
+          .select("id,direction,type,amount_idr,nominal,item,transaction_date,tanggal,created_at,user_id")
+          .neq("ledger_status", "cancelled")
+          .order("created_at", { ascending: false })
+          .limit(8),
       ]);
+
       setUserName(profile.data?.name ?? user.user_metadata?.nama_pemilik ?? user.email?.split("@")[0] ?? "Pengguna");
       setBusinessName(profile.data?.nama_usaha ?? user.user_metadata?.nama_usaha ?? "");
-      setNotifications((transactionResult.data ?? []) as TransactionNotice[]);
+      setNotices((transactionResult.data ?? []) as TransactionNotice[]);
+
+      // Penyaringan dilakukan di server. Sebelumnya setiap penyisipan pada
+      // seluruh tabel dikirim ke setiap peramban yang terbuka, lalu dibuang
+      // lagi di sini — pekerjaan jaringan untuk data yang memang tidak boleh
+      // dilihat, dan bergantung pada penyaring di sisi klien untuk kebenaran.
+      channel = supabase
+        .channel(`umkm-transaction-notices-${user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "transactions", filter: `user_id=eq.${user.id}` },
+          (payload) => setNotices((previous) => [payload.new as TransactionNotice, ...previous].slice(0, 8)),
+        )
+        .subscribe();
     }
+
     void load();
-    const channel = supabase.channel("umkm-transaction-notices").on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "transactions" },
-      (payload) => {
-        if (payload.new?.user_id !== currentUserId.current) return;
-        setNotifications((previous) => [payload.new as TransactionNotice, ...previous].slice(0, 8));
-        setUnreadCount((previous) => previous + 1);
-      },
-    ).subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => {
+      if (channel) void supabase.removeChannel(channel);
+    };
   }, []);
 
-  useEffect(() => {
-    if (!showNotifications) return;
-    const previousFocus = document.activeElement as HTMLElement | null;
-    closeButtonRef.current?.focus();
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") { setShowNotifications(false); return; }
-      if (event.key !== "Tab" || !dialogRef.current) return;
-      const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>('button,[href],[tabindex]:not([tabindex="-1"])')].filter((element) => !element.hasAttribute("disabled"));
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => { document.removeEventListener("keydown", handleKeyDown); previousFocus?.focus(); };
-  }, [showNotifications]);
+  // Jumlah yang belum dibaca diturunkan dari data, bukan dihitung sendiri.
+  // Penghitung terpisah akan menyimpang begitu ada satu jalur yang lupa
+  // menaikkannya — dan jalur itu selalu ada.
+  const unread = useMemo(
+    () => (seenAt ? notices.filter((notice) => (notice.created_at ?? "") > seenAt).length : 0),
+    [notices, seenAt],
+  );
 
-  async function signOut() { await supabase.auth.signOut(); window.location.href = "/auth/login"; }
-  function openNotifications() { setShowNotifications(true); setUnreadCount(0); }
+  const markNoticesSeen = useCallback(() => {
+    const now = new Date().toISOString();
+    writeSeenAt(now);
+    setSeenAt(now);
+  }, []);
+
+  /**
+   * Keluar ditanyakan lebih dulu.
+   *
+   * Tombolnya duduk bersebelahan dengan tautan profil di menu samping dan di
+   * dalam menu akun; salah tekan berarti kehilangan draf catatan yang belum
+   * dikonfirmasi dan harus masuk lagi lewat surel atau Google.
+   */
+  const signOut = useCallback(async () => {
+    const yes = await confirm({
+      title: "Keluar dari akun?",
+      description: "Catatan yang sudah dikonfirmasi tetap tersimpan. Draf yang belum dikonfirmasi akan hilang, dan Anda perlu masuk lagi untuk membukanya.",
+      confirmLabel: "Keluar",
+      cancelLabel: "Tetap di sini",
+      tone: "danger",
+    });
+    if (!yes) return;
+
+    notifyInfo("Sedang keluar…");
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      notifyFailure("Belum berhasil keluar. Coba sekali lagi.");
+      return;
+    }
+    window.location.href = "/auth/login";
+  }, [confirm]);
 
   return (
     <div className={styles.shell}>
@@ -147,35 +201,14 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       </aside>
 
       <div className={styles.content}>
-        <header className={styles.desktopHeader}>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9fb0c2]">Ruang usaha</p>
-            <p className="mt-1 text-sm font-semibold text-[#1b2a3a]">{NAVIGATION.find((item) => isActivePath(pathname, item))?.label ?? "Dashboard"}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href="/umkm/ai-copilot" aria-label="Buka panduan usaha" className={`${styles.iconButton} border border-[#e3e9f0] text-[#4a6280]`}><Sparkles size={16} /></Link>
-            <NotificationButton count={unreadCount} onClick={openNotifications} />
-            <Link href="/umkm/profil" className="ml-1 grid h-9 w-9 place-items-center rounded-full bg-[#d6eefa] text-[10px] font-extrabold text-[#0b5f86]">{userName.slice(0, 2).toUpperCase()}</Link>
-          </div>
-        </header>
-
-        <header className={`${styles.mobileHeader} ${pathname === "/umkm" ? "" : styles.mobileHeaderLight}`}>
-          <Link href="/umkm" className={styles.mobileBrand} aria-label="Berkembang.id">
-            <Image
-              src="/logo/logo berkembang.webp"
-              alt="Berkembang.id"
-              width={130}
-              height={32}
-              priority
-              className={`h-7 w-auto object-contain ${pathname === "/umkm" ? "brightness-0 invert" : ""}`}
-            />
-          </Link>
-          <div className={styles.mobileActions}>
-            <Link href="/umkm/ai-copilot" aria-label="Buka panduan usaha" className={styles.iconButton}><Sparkles size={17} /></Link>
-            <Link href="/umkm/upload" aria-label="Buka dokumen usaha" className={styles.iconButton}><Upload size={17} /></Link>
-            <NotificationButton count={unreadCount} onClick={openNotifications} compact />
-          </div>
-        </header>
+        <UmkmHeader
+          userName={userName}
+          businessName={businessName}
+          notices={notices}
+          unread={unread}
+          onNoticesSeen={markNoticesSeen}
+          onSignOut={() => void signOut()}
+        />
         {children}
       </div>
 
@@ -202,29 +235,6 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
           return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`${styles.bottomLink} ${active ? styles.bottomLinkActive : ""}`}><item.Icon size={19} strokeWidth={active ? 2.5 : 2} /><span>{item.label}</span></Link>;
         })}
       </nav>
-
-      {showNotifications && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center bg-[#111b26]/35 p-4 pt-20 md:justify-end md:pt-20" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowNotifications(false); }}>
-          <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="notification-title" className={`${styles.notificationPanel} p-4 md:mr-6`}>
-            <div className="flex items-center justify-between border-b border-[#eef2f6] pb-3">
-              <div><h2 id="notification-title" className="text-sm font-bold text-[#1b2a3a]">Pemberitahuan terbaru</h2><p className="mt-0.5 text-[10px] text-[#6e859e]">Berdasarkan catatan usaha Anda</p></div>
-              <button ref={closeButtonRef} onClick={() => setShowNotifications(false)} aria-label="Tutup pemberitahuan" className="grid h-10 w-10 place-items-center rounded-xl text-[#6e859e] hover:bg-[#f3f6f9]"><X size={17} /></button>
-            </div>
-            <div className="mt-3 max-h-80 space-y-2 overflow-y-auto" aria-live="polite">
-              {notifications.length === 0 ? <div className="py-8 text-center"><CheckCircle2 className="mx-auto text-[#0fa974]" /><p className="mt-2 text-xs font-bold text-[#34496a]">Belum ada pemberitahuan</p></div> : notifications.map((notice) => {
-                const income = noticeDirection(notice) === "income";
-                const value = Number(notice.amount_idr ?? notice.nominal ?? 0);
-                return <div key={notice.id} className="flex items-center gap-3 rounded-xl border border-[#eef2f6] bg-[#f8fafc] p-3"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${income ? "bg-[#edfbf5] text-[#0b7a55]" : "bg-[#f3f6f9] text-[#4a6280]"}`}>{income ? <ArrowDownLeft size={15} /> : <ArrowUpRight size={15} />}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-[#1b2a3a]">{income ? "+" : "−"}Rp{value.toLocaleString("id-ID")}</p><p className="truncate text-[10px] text-[#6e859e]">{notice.item}</p></div></div>;
-              })}
-            </div>
-            <Link href="/umkm/laporan" onClick={() => setShowNotifications(false)} className="mt-3 flex min-h-11 items-center justify-center rounded-xl bg-[#0b5f86] text-xs font-bold text-white">Buka laporan</Link>
-          </div>
-        </div>
-      )}
     </div>
   );
-}
-
-function NotificationButton({ count, onClick, compact = false }: { count: number; onClick: () => void; compact?: boolean }) {
-  return <button onClick={onClick} aria-label={count ? `Buka pemberitahuan, ${count} baru` : "Buka pemberitahuan"} className={`${styles.iconButton} ${compact ? "" : "border border-[#e3e9f0] text-[#4a6280]"}`}><Bell size={17} />{count > 0 && <span aria-hidden className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-[#f5c453] px-1 text-[8px] font-black text-[#5c3700]">{count > 9 ? "9+" : count}</span>}</button>;
 }

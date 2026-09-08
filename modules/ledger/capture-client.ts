@@ -1,3 +1,4 @@
+import type { CapturePath } from "@/modules/ledger/capture-routing";
 import type {
   CaptureInputMethod,
   CaptureStatus,
@@ -12,6 +13,7 @@ export type CaptureClientView = {
   status: CaptureStatus;
   transcription: string | null;
   draft: TransactionDraftItem[];
+  ocrSummary: { excerpt: string | null; ambiguous: boolean; candidates: number[] } | null;
   failure: { code: string; message: string } | null;
   createdAt: string;
   updatedAt: string;
@@ -99,7 +101,7 @@ export async function createCapture(
       idempotent: boolean;
     };
     upload: CaptureClientUpload | null;
-    path?: "TEXT_ONLY" | "WHISPER";
+    path?: CapturePath;
     drafts?: unknown[];
     questions?: unknown[];
     processingMs?: number;

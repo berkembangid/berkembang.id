@@ -2,11 +2,8 @@ import type { EmkmCategoryInput } from "@/modules/accounting/accounting-schema";
 import type {
   FixedAssetDisposalInput,
   FixedAssetInput,
-  FixedAssetUpdateInput,
   InventoryCountInput,
   LoanInput,
-  LoanUpdateInput,
-  OpeningBalanceCorrectionInput,
   OpeningBalancesInput,
 } from "@/modules/accounting/period-schema";
 import type { BalanceSheetView, CashFlowView } from "@/modules/accounting/balance-sheet";
@@ -176,28 +173,9 @@ export const getOpeningBalanceAnswersClient = () =>
     cache: "no-store",
   });
 
-export const correctOpeningBalancesClient = (input: OpeningBalanceCorrectionInput) =>
-  requestData<{ startDate: string; equityIdr: number; depreciationMonthsRecomputed: number }>(
-    "/api/v1/opening-balances",
-    { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) },
-  );
-
-export const updateFixedAssetClient = (assetId: string, input: FixedAssetUpdateInput) =>
-  requestData<{ fixedAssetId: string; usefulLifeMonths: number }>(`/api/v1/fixed-assets/${assetId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-
 export const disposeFixedAssetClient = (assetId: string, input: FixedAssetDisposalInput) =>
   requestData<{ fixedAssetId: string; bookValueIdr: number; proceedsIdr: number; resultIdr: number }>(
     `/api/v1/fixed-assets/${assetId}/dispose`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) },
   );
 
-export const updateLoanClient = (loanId: string, input: LoanUpdateInput) =>
-  requestData<{ loanId: string; lenderName: string }>(`/api/v1/loans/${loanId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });

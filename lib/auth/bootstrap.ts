@@ -42,16 +42,42 @@ export async function bootstrapAccountFromSignupMetadata(
   const existingRole = await getEffectivePortalRole(admin, user.id);
   if (existingRole) return existingRole;
 
-  const accountType = user.user_metadata?.signup_account_type;
+  // Kunci metadata ini pernah bernama `role` sebelum berganti menjadi
+  // `signup_account_type`, dan tidak ada yang membaca nama lamanya. Akibatnya
+  // enam belas akun -- setiap orang yang mendaftar sebelum penggantian nama --
+  // tidak pernah bisa dibuatkan profilnya lagi. Mereka memasukkan kata sandi
+  // yang benar, dipantulkan kembali ke halaman masuk, dan tidak diberi tahu
+  // apa pun.
+  //
+  // Nama lama tetap dibaca. Sebuah kunci yang berganti nama tidak membatalkan
+  // pendaftaran yang sudah terjadi.
+  const metadataRecord = user.user_metadata ?? {};
+  const accountType = metadataRecord.signup_account_type ?? metadataRecord.role;
+
+  // Akun admin tidak punya usaha dan tidak seharusnya punya. Sebelumnya ia
+  // jatuh ke galat yang sama dengan pendaftar yang metadatanya rusak, dan
+  // layarnya menyuruh pengelola platform "hubungi pengelola" -- kalimat yang
+  // tidak menunjuk ke mana pun ketika yang membacanya adalah pengelola itu
+  // sendiri.
+  //
+  // Yang dibedakan hanya PESANNYA, bukan aksesnya. Metadata pendaftaran
+  // dikendalikan pendaftar sendiri, jadi ia tidak pernah boleh memberikan
+  // status admin; itu hanya ditulis ke `platform_admins` oleh admin lain.
+  // Siapa pun boleh menulis "admin" pada metadatanya dan yang ia dapat tetap
+  // penolakan -- penolakan yang menjelaskan dirinya.
+  if (accountType === "admin") {
+    throw new Error("ADMIN_ACCESS_NOT_GRANTED");
+  }
+
   if (accountType !== "umkm" && accountType !== "institution") {
     throw new Error("ONBOARDING_METADATA_MISSING");
   }
 
-  const metadata = user.user_metadata ?? {};
+  const metadata = metadataRecord;
   const email = textValue(user.email, "", 320) || null;
   const ownerName = textValue(metadata.nama_pemilik ?? metadata.name, "Pemilik Usaha");
   const businessName = textValue(metadata.nama_usaha, ownerName || "Usaha Baru");
-  const institutionName = textValue(metadata.nama_institusi ?? metadata.name, "Institusi Baru");
+  const institutionName = textValue(metadata.nama_institusi ?? metadata.name, "Lembaga Baru");
   const contactName = textValue(metadata.nama_contact ?? metadata.name, institutionName);
   const location = textValue(metadata.lokasi);
   // Jawaban langkah tiga pendaftaran. Tanpa ini, pertanyaan yang sudah dijawab

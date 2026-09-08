@@ -9,7 +9,7 @@ import {
 /**
  * Meminta dan membatalkan penghapusan akun.
  *
- * Permintaan mencabut setiap izin akses institusi seketika; datanya sendiri
+ * Permintaan mencabut setiap izin akses lembaga seketika; datanya sendiri
  * baru dihapus setelah masa tenggang. Keduanya diputuskan basis data lewat
  * `request_account_deletion`, bukan di sini.
  */

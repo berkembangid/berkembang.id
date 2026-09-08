@@ -9,12 +9,13 @@
  *
  * Penghapusan dikonfirmasi dua langkah — bukan untuk mempersulit, tapi karena
  * tombol yang menghapus seluruh pembukuan usaha dalam satu ketukan akan ditekan
- * seseorang secara tidak sengaja. Yang berhenti seketika adalah akses institusi;
+ * seseorang secara tidak sengaja. Yang berhenti seketika adalah akses lembaga;
  * datanya menunggu 30 hari supaya kesalahan masih bisa dibatalkan sendiri.
  */
 
 import { useState } from "react";
 import { AlertCircle, Download, LoaderCircle, Trash2 } from "lucide-react";
+import { dismissNotice, notifyBusy, notifyFailure, notifySuccess } from "@/lib/notify";
 
 type Stage = "idle" | "confirming" | "working" | "scheduled" | "failed";
 
@@ -27,6 +28,9 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
   async function exportData() {
     setExporting(true);
     setProblem("");
+    // Berkasnya berisi seluruh catatan usaha dan bisa memakan waktu; tanpa
+    // kabar apa pun, tombol yang tampak diam mengundang tekanan kedua.
+    const progress = notifyBusy("Menyiapkan berkas data Anda...");
     try {
       const response = await fetch("/api/v1/account/export", { method: "POST" });
       if (!response.ok) throw new Error("gagal");
@@ -37,8 +41,13 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
       link.download = `data-usaha-${new Date().toISOString().slice(0, 10)}.zip`;
       link.click();
       URL.revokeObjectURL(url);
+      notifySuccess("Berkas data Anda selesai diunduh", {
+        id: progress,
+        description: "Berisi profil, catatan uang, dan dokumen yang pernah diunggah.",
+      });
     } catch {
-      setProblem("Berkasnya belum berhasil dibuat. Coba lagi sebentar lagi.");
+      dismissNotice(progress);
+      notifyFailure("Berkasnya belum berhasil dibuat. Coba lagi sebentar lagi.");
     } finally {
       setExporting(false);
     }
@@ -57,9 +66,13 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
       if (!response.ok) throw new Error("gagal");
       setScheduled(payload.data?.scheduledFor ?? "");
       setStage("scheduled");
+      notifySuccess("Penghapusan akun dijadwalkan", {
+        description: "Izin akses lembaga dicabut sekarang juga. Anda masih bisa membatalkannya sebelum tanggal penghapusan.",
+        duration: 8000,
+      });
     } catch {
       setStage("failed");
-      setProblem("Permintaan belum terkirim. Coba lagi sebentar lagi.");
+      notifyFailure("Permintaan belum terkirim. Coba lagi sebentar lagi.");
     }
   }
 
@@ -69,9 +82,12 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
       await fetch("/api/v1/account/deletion", { method: "DELETE" });
       setScheduled("");
       setStage("idle");
+      notifySuccess("Penghapusan dibatalkan", {
+        description: "Akun Anda aman. Izin akses lembaga perlu diberikan ulang bila memang diinginkan.",
+      });
     } catch {
       setStage("failed");
-      setProblem("Pembatalan belum terkirim. Coba lagi sebentar lagi.");
+      notifyFailure("Pembatalan belum terkirim. Coba lagi sebentar lagi.");
     }
   }
 
@@ -110,7 +126,7 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
         <div className="rounded-xl border border-[#f0d9a8] bg-[#fdf8ee] px-3.5 py-3">
           <p className="text-xs font-bold text-[#8a6412]">Akun dijadwalkan dihapus</p>
           <p className="mt-1 text-[11px] leading-relaxed text-[#8a6412]">
-            Izin akses institusi sudah dicabut sekarang juga. Data Anda dihapus pada{" "}
+            Izin akses lembaga sudah dicabut sekarang juga. Data Anda dihapus pada{" "}
             <strong>{scheduledText || "30 hari lagi"}</strong>. Sebelum tanggal itu Anda masih bisa
             membatalkannya sendiri, dan semuanya kembali seperti semula — kecuali izin akses, yang
             perlu Anda berikan ulang bila memang diinginkan.
@@ -127,7 +143,7 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
         <div className="rounded-xl border border-[#e3e9f0] bg-white px-3.5 py-3">
           <p className="text-xs font-bold text-[#1b2a3a]">Yakin mau menghapus akun?</p>
           <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-[#4a6280]">
-            <li>· Izin akses institusi dicabut sekarang juga.</li>
+            <li>· Izin akses lembaga dicabut sekarang juga.</li>
             <li>· Data Anda dihapus 30 hari lagi.</li>
             <li>· Sebelum tanggal itu Anda bisa membatalkannya sendiri.</li>
           </ul>

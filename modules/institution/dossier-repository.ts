@@ -76,8 +76,8 @@ export async function resolveInstitutionContext(
     businessId: dossier.business_id,
     businessName: businessResult.data?.name ?? "Usaha",
     institutionId: dossier.institution_id,
-    institutionName: institutionResult.data?.name ?? "Institusi",
-    memberLabel: memberResult.data ? `anggota (${memberResult.data.role})` : "anggota institusi",
+    institutionName: institutionResult.data?.name ?? "Lembaga",
+    memberLabel: memberResult.data ? `anggota (${memberResult.data.role})` : "anggota lembaga",
     scopes: (grant.scopes ?? []) as ConsentScope[],
     downloadAllowed: Boolean(grant.download_allowed),
     expiresAt: dossier.expires_at,
@@ -98,7 +98,7 @@ type LiveNumbers = {
 /**
  * Angka live dari fungsi SQL yang SAMA dengan layar UMKM (fn_income_statement,
  * fn_balance_sheet, fn_cash_flow, fn_notes_data, fn_indicator_monthly).
- * Service role dipakai karena pembaca adalah institusi, bukan pemilik —
+ * Service role dipakai karena pembaca adalah lembaga, bukan pemilik —
  * tetapi barisnya dibatasi business_id dossier yang sudah disetujui.
  */
 async function liveNumbers(businessId: string, businessName: string): Promise<LiveNumbers> {

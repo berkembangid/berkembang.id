@@ -8,9 +8,8 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, LoaderCircle, Tags } from "lucide-react";
+import { LoaderCircle, Tags } from "lucide-react";
 import {
-  AccountingClientError,
   getNeedsReclassClient,
   reclassTransactionClient,
 } from "@/modules/accounting/accounting-client";
@@ -21,13 +20,13 @@ import {
   type EmkmCategoryCode,
 } from "@/modules/accounting/templates";
 import { formatIdr } from "@/modules/accounting/warung";
+import { notifyFromError, notifySuccess } from "@/lib/notify";
 
 export function ReclassCard() {
   const [transactions, setTransactions] = useState<NeedsReclassView[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -48,7 +47,6 @@ export function ReclassCard() {
 
   const apply = async (transactionId: string, categoryCode: EmkmCategoryCode, subtype: string | null) => {
     setBusyId(transactionId);
-    setMessage("");
     try {
       await reclassTransactionClient(transactionId, {
         emkmCategoryCode: categoryCode,
@@ -56,11 +54,12 @@ export function ReclassCard() {
       });
       setTransactions((current) => current.filter((item) => item.transactionId !== transactionId));
       setOpenId(null);
-      setMessage("Kategori tersimpan.");
+      // Barisnya langsung hilang dari daftar begitu tersimpan, jadi kabarnya
+      // memang cukup sekilas -- tidak ada apa pun di layar yang menunggu
+      // dibaca ulang.
+      notifySuccess("Kategori tersimpan");
     } catch (cause) {
-      setMessage(
-        cause instanceof AccountingClientError ? cause.message : "Kategori belum tersimpan. Coba lagi.",
-      );
+      notifyFromError(cause, "Kategori belum tersimpan. Coba lagi.");
     } finally {
       setBusyId(null);
     }
@@ -94,12 +93,6 @@ export function ReclassCard() {
           </button>
         </div>
       </div>
-
-      {message && (
-        <p role="status" className="mt-3 flex items-center gap-1.5 text-xs font-bold text-[#5c3700]">
-          <CheckCircle2 size={13} /> {message}
-        </p>
-      )}
 
       {expanded && (
         <ul className="mt-4 space-y-2">

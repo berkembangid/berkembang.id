@@ -55,7 +55,7 @@ export type ReportIssueView = {
 
 export const reportKindLabels: Record<ReportIssueView["reportKind"], string> = {
   pdf_sak_emkm: "Laporan keuangan",
-  snapshot_dossier: "Ringkasan untuk institusi",
+  snapshot_dossier: "Ringkasan untuk lembaga",
 };
 
 /** Rentang periode dalam bahasa pemilik, bukan dua tanggal mentah. */

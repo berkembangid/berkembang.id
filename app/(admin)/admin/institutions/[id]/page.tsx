@@ -78,7 +78,7 @@ export default function InstitutionDetailPage() {
       }
     } catch (err: unknown) {
       console.error("Error fetching detail:", err);
-      setErrorMsg("Gagal memuat detail data institusi.");
+      setErrorMsg("Gagal memuat detail data lembaga.");
     } finally {
       setLoading(false);
     }
@@ -100,7 +100,7 @@ export default function InstitutionDetailPage() {
       setLocation(data.lokasi || "");
       setActive(true);
     } else {
-      setErrorMsg("Data institusi tidak ditemukan di database.");
+      setErrorMsg("Data lembaga tidak ditemukan di database.");
     }
   }
 
@@ -136,7 +136,7 @@ export default function InstitutionDetailPage() {
         location: location.trim(),
       });
 
-      setSuccessMsg("Data institusi berhasil diperbarui!");
+      setSuccessMsg("Data lembaga berhasil diperbarui!");
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err: unknown) {
       console.error("Error saving institution:", err);
@@ -178,7 +178,7 @@ export default function InstitutionDetailPage() {
           className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-[#0b5f86] transition-colors bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm cursor-pointer"
         >
           <ArrowLeft size={16} />
-          Kembali ke Daftar Institusi
+          Kembali ke Daftar Lembaga
         </button>
         <span className="text-xs text-slate-400 font-mono">ID: {idParam}</span>
       </div>
@@ -190,17 +190,17 @@ export default function InstitutionDetailPage() {
           </div>
           <div>
             <h1 className="font-headline text-xl md:text-2xl font-extrabold text-[#1b2a3a]">
-              Detail & Edit Institusi
+              Detail & Edit Lembaga
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Sesuaikan data dan preferensi program institusi terdaftar
+              Sesuaikan data dan preferensi program lembaga terdaftar
             </p>
           </div>
         </div>
 
         {loading ? (
           <div className="py-12 text-center text-xs text-slate-400 font-medium">
-            Memuat data institusi dari database...
+            Memuat data lembaga dari database...
           </div>
         ) : errorMsg && !name ? (
           <div className="py-8 text-center text-xs text-red-500 font-medium">
@@ -223,7 +223,7 @@ export default function InstitutionDetailPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1.5">
-                  Nama Institusi / Lembaga *
+                  Nama Lembaga *
                 </label>
                 <input
                   type="text"
@@ -281,7 +281,7 @@ export default function InstitutionDetailPage() {
                 >
                   <span className="flex items-center gap-1.5">
                     {active ? <Shield size={14} /> : <ShieldAlert size={14} />}
-                    {active ? "Institusi Aktif" : "Institusi Nonaktif"}
+                    {active ? "Lembaga Aktif" : "Lembaga Nonaktif"}
                   </span>
                   <span className="text-[10px] uppercase tracking-wider underline">Ubah</span>
                 </button>
@@ -310,7 +310,7 @@ export default function InstitutionDetailPage() {
                       type="email"
                       value={contactEmail}
                       onChange={(e) => setContactEmail(e.target.value)}
-                      placeholder="email@institusi.com"
+                      placeholder="email@lembaga.com"
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
                     />
                   </div>

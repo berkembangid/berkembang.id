@@ -56,26 +56,91 @@ export const openingPayableSchema = z.object({
 });
 
 /** Pertanyaan 6: alat usaha yang sudah dimiliki. */
-export const openingAssetSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  costIdr: positiveAmountSchema,
-  acquiredOn: pastDateSchema.optional(),
-  category: z.enum(assetCategories).optional(),
-  usefulLifeMonths: z.number().int().min(1).max(600).optional(),
-});
+export const openingAssetSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    costIdr: positiveAmountSchema,
+    acquiredOn: pastDateSchema.optional(),
+    category: z.enum(assetCategories).optional(),
+    usefulLifeMonths: z.number().int().min(1).max(600).optional(),
+    /** Perkiraan harga jual setelah umur ekonomisnya habis. Tidak pernah ikut menyusut. */
+    salvageValueIdr: amountSchema.optional(),
+  })
+  .superRefine((asset, context) => {
+    // Nilai sisa sebesar harga belinya berarti alat itu tidak pernah menyusut
+    // sama sekali -- hampir selalu salah ketik. Dicegat di layar dengan
+    // kalimat yang menjelaskan, bukan di basis data dengan kode galat.
+    if (asset.salvageValueIdr !== undefined && asset.salvageValueIdr >= asset.costIdr) {
+      context.addIssue({
+        code: "custom",
+        path: ["salvageValueIdr"],
+        message: "Perkiraan harga jual nanti harus lebih kecil dari harga belinya.",
+      });
+    }
+  });
 
 /**
  * Bentuk dasar jawaban wizard. Dipisahkan dari aturan tambahannya supaya
  * skema koreksi bisa memperluasnya -- skema yang sudah memakai `superRefine`
  * tidak bisa di-`extend`.
  */
+/**
+ * Tiga jenis persediaan, dan urutannya bukan kebetulan.
+ *
+ * Ia mengikuti perjalanan barang di dalam usaha: bahan yang belum disentuh,
+ * barang yang sedang dikerjakan, lalu barang yang tinggal dijual. Bagi usaha
+ * yang mengolah, ketiganya punya arti yang sama sekali berbeda -- yang pertama
+ * modal yang belum bekerja, yang terakhir uang yang tinggal diambil.
+ */
+export const inventoryKinds = ["bahan_baku", "setengah_jadi", "barang_jadi"] as const;
+export type InventoryKind = (typeof inventoryKinds)[number];
+
+export const inventoryKindLabels: Record<InventoryKind, string> = {
+  bahan_baku: "Bahan baku",
+  setengah_jadi: "Barang setengah jadi",
+  barang_jadi: "Barang jadi",
+};
+
+export const inventoryKindHelpers: Record<InventoryKind, string> = {
+  bahan_baku: "Bahan yang belum diolah sama sekali. Tepung, kain, kayu, kemasan kosong.",
+  setengah_jadi: "Barang yang sedang dikerjakan dan belum siap dijual.",
+  barang_jadi: "Barang yang tinggal dijual, termasuk yang sudah dipajang.",
+};
+
+export const openingInventoryItemSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  amountIdr: amountSchema,
+});
+
+/**
+ * Merinci barang tidak pernah wajib.
+ *
+ * Layar kondisi awal diisi sekali, saat pendaftaran, oleh orang yang belum
+ * melihat satu pun manfaat aplikasinya. Setiap baris yang diwajibkan adalah
+ * kesempatan untuk berhenti -- dan layar itu sendiri berjanji « perkiraan
+ * kasar sudah cukup ».
+ *
+ * Karena itu `items` boleh kosong dan `otherAmountIdr` selalu ada. Punya lima
+ * barang: sebut semuanya. Punya dua ratus: sebut yang terbesar, sisanya satu
+ * angka. Tidak mau merinci: isi sisanya saja. Bebannya ditentukan pemiliknya,
+ * bukan oleh berapa banyak barang yang ia punya.
+ *
+ * Batas dua puluh baris disengaja: cukup untuk berguna, cukup rendah untuk
+ * mencegah orang membangun katalog barang di dalam formulir sekali isi.
+ */
+export const openingInventorySchema = z.object({
+  kind: z.enum(inventoryKinds),
+  items: z.array(openingInventoryItemSchema).max(20).default([]),
+  otherAmountIdr: amountSchema.default(0),
+});
+
 export const openingBalancesBaseSchema = z.object({
   startDate: pastDateSchema,
   cashIdr: amountSchema.default(0),
   bankIdr: amountSchema.default(0),
   receivables: z.array(openingReceivableSchema).max(50).default([]),
   payables: z.array(openingPayableSchema).max(50).default([]),
-  inventoryIdr: amountSchema.default(0),
+  inventory: z.array(openingInventorySchema).max(3).default([]),
   assets: z.array(openingAssetSchema).max(50).default([]),
   notes: z.string().trim().max(500).nullable().optional(),
 });
@@ -96,13 +161,6 @@ function assetsNotAfterStart(
 }
 
 export const openingBalancesInputSchema = openingBalancesBaseSchema.superRefine(assetsNotAfterStart);
-
-/** Alasan wajib, sama seperti setiap koreksi lain di sistem ini. */
-export const correctionReasonSchema = z.string().trim().min(3).max(240);
-
-export const openingBalanceCorrectionSchema = openingBalancesBaseSchema
-  .extend({ reason: correctionReasonSchema })
-  .superRefine(assetsNotAfterStart);
 
 export const fixedAssetInputSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -168,7 +226,6 @@ export const loanUpdateSchema = z.object({
   annualRate: z.number().min(0).max(200).nullable().optional(),
 });
 
-export type OpeningBalanceCorrectionInput = z.infer<typeof openingBalanceCorrectionSchema>;
 export type FixedAssetUpdateInput = z.infer<typeof fixedAssetUpdateSchema>;
 export type FixedAssetDisposalInput = z.infer<typeof fixedAssetDisposalSchema>;
 export type LoanUpdateInput = z.infer<typeof loanUpdateSchema>;

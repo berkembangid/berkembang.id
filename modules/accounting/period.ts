@@ -27,7 +27,6 @@ import type {
   LenderType,
   LoanInput,
   LoanUpdateInput,
-  OpeningBalanceCorrectionInput,
   OpeningBalancesInput,
 } from "@/modules/accounting/period-schema";
 
@@ -117,7 +116,7 @@ export async function saveOpeningBalances(input: OpeningBalancesInput) {
     p_bank_idr: input.bankIdr,
     p_receivables: input.receivables,
     p_payables: input.payables,
-    p_inventory_idr: input.inventoryIdr,
+    p_inventory_details: input.inventory,
     p_assets: input.assets,
     p_notes: input.notes ?? undefined,
   });
@@ -504,6 +503,8 @@ export type OpeningBalanceAnswers = {
   cashIdr: number;
   bankIdr: number;
   inventoryIdr: number;
+  /** Rincian yang dijumlahkan menjadi `inventoryIdr`. */
+  inventory: Array<{ kind: string; amountIdr: number }>;
   receivables: Array<{ name: string; amountIdr: number }>;
   payables: Array<{
     name: string;
@@ -531,7 +532,7 @@ export async function getOpeningBalanceAnswers(userId: string): Promise<OpeningB
   const { data: opening, error } = await client
     .from("opening_balances")
     .select(
-      "id,start_date,cash_idr,bank_idr,inventory_idr,receivable_details,payable_details,notes,correction_count,last_reason",
+      "id,start_date,cash_idr,bank_idr,inventory_idr,inventory_details,receivable_details,payable_details,notes,correction_count,last_reason",
     )
     .eq("business_id", businessId)
     .maybeSingle();
@@ -552,6 +553,9 @@ export async function getOpeningBalanceAnswers(userId: string): Promise<OpeningB
   const receivableDetails = Array.isArray(opening.receivable_details)
     ? (opening.receivable_details as Array<Record<string, unknown>>)
     : [];
+  const inventoryDetails = Array.isArray(opening.inventory_details)
+    ? (opening.inventory_details as Array<Record<string, unknown>>)
+    : [];
 
   const sheet = await getBalanceSheet(userId, jakartaDate());
 
@@ -560,6 +564,10 @@ export async function getOpeningBalanceAnswers(userId: string): Promise<OpeningB
     cashIdr: Number(opening.cash_idr),
     bankIdr: Number(opening.bank_idr),
     inventoryIdr: Number(opening.inventory_idr),
+    inventory: inventoryDetails.map((row) => ({
+      kind: String(row.kind ?? "bahan_baku"),
+      amountIdr: Number(row.amountIdr ?? 0),
+    })),
     receivables: receivableDetails.map((row) => ({
       name: String(row.name ?? ""),
       amountIdr: Number(row.amountIdr ?? 0),
@@ -587,32 +595,7 @@ export async function getOpeningBalanceAnswers(userId: string): Promise<OpeningB
   };
 }
 
-const correctionResultSchema = z.object({
-  openingBalanceId: z.uuid(),
-  startDate: z.string(),
-  journalEntryId: z.uuid().nullable(),
-  equityIdr: z.number(),
-  negativeEquity: z.boolean(),
-  depreciationMonthsRecomputed: z.number(),
-});
 
-export async function correctOpeningBalances(input: OpeningBalanceCorrectionInput) {
-  const client = await createServerSupabaseClient();
-  const { data, error } = await client.rpc("correct_opening_balances", {
-    p_reason: input.reason,
-    p_start_date: input.startDate,
-    p_cash_idr: input.cashIdr,
-    p_bank_idr: input.bankIdr,
-    p_receivables: input.receivables,
-    p_payables: input.payables,
-    p_inventory_idr: input.inventoryIdr,
-    p_assets: input.assets,
-    p_notes: input.notes ?? undefined,
-  });
-  const operationError = rpcError(error);
-  if (operationError) throw operationError;
-  return correctionResultSchema.parse(data);
-}
 
 export async function updateFixedAsset(assetId: string, input: FixedAssetUpdateInput) {
   const client = await createServerSupabaseClient();

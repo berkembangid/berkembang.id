@@ -102,7 +102,7 @@ export function useInstitution() {
   return useContext(InstitutionContext);
 }
 
-/** Header institusi terpilih untuk request API yang sadar multi-tenant. */
+/** Header lembaga terpilih untuk request API yang sadar multi-tenant. */
 export function institutionHeaders(selectedId: string | null): Record<string, string> {
   return selectedId ? { "X-Institution-Id": selectedId } : {};
 }

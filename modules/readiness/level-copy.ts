@@ -146,7 +146,7 @@ export function componentCopy(component: EvaluatedComponent): ComponentCopy {
         hint: done
           ? "Dokumen wajib sektormu sudah ada dan sudah kamu cek."
           : "Lengkapi izin yang belum ada — NIB gratis dan bisa diurus sendiri.",
-        action: done ? null : { label: "Unggah", href: "/umkm/upload" },
+        action: done ? null : { label: "Unggah", href: "/umkm/profil/dokumen" },
       };
     case "C2":
       return {

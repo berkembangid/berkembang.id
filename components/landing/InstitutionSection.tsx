@@ -14,7 +14,7 @@ export function InstitutionSection() {
         <div className="institution-shell">
           <div className="relative z-10 max-w-xl">
             <div className="inline-flex size-11 items-center justify-center rounded-2xl bg-[#2efed0]/15 text-[#7fffe4]"><Building2 size={21} /></div>
-            <p className="eyebrow is-light mt-7">Untuk institusi dan pendamping</p>
+            <p className="eyebrow is-light mt-7">Untuk lembaga dan pendamping</p>
             <h2 className="section-title mt-4 !text-white">Pendampingan lebih tepat dimulai dari data yang lebih jelas.</h2>
             <p className="mt-6 text-base leading-7 text-white/60">Pantau perkembangan kelompok, temukan hambatan lebih awal, dan arahkan program sesuai kondisi setiap usaha.</p>
             <ul className="mt-8 space-y-3 text-sm text-white/75">
@@ -24,7 +24,7 @@ export function InstitutionSection() {
             </ul>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link href="/institusi" className="button-hero-primary focus-ring">Lihat portal institusi <ArrowRight size={16} /></Link>
-              <a href="mailto:halo@berkembang.id" className="button-hero-secondary focus-ring">Diskusikan kebutuhan institusi</a>
+              <a href="mailto:halo@berkembang.id" className="button-hero-secondary focus-ring">Diskusikan kebutuhan lembaga</a>
             </div>
           </div>
 
@@ -40,7 +40,7 @@ function InstitutionPreview() {
     <div className="institution-preview" role="img" aria-label="Pratinjau portal institusi Berkembang.id">
       <div className="flex items-center justify-between border-b border-[#e8eaf0] px-4 py-3 sm:px-5">
         <div className="flex items-center gap-2"><span className="size-2 rounded-full bg-[#ff6b6b]" /><span className="size-2 rounded-full bg-[#ffd166]" /><span className="size-2 rounded-full bg-[#2dd4a8]" /></div>
-        <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#8a91a3]">Portal institusi</span>
+        <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#8a91a3]">Portal lembaga</span>
       </div>
       <div className="p-4 sm:p-5">
         <div className="flex items-start justify-between"><div><p className="text-[9px] font-medium text-[#8a91a3]">Ringkasan kelompok</p><p className="mt-1 text-sm font-bold text-[#141a34]">Perkembangan UMKM</p></div><span className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[#e0e3eb] px-2 text-[9px] font-semibold text-[#5c6475]">Semua wilayah <ChevronDown aria-hidden="true" size={10} /></span></div>

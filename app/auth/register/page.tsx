@@ -2,9 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, Building, CalendarDays, CheckCircle2, Eye, EyeOff, FileText, Lock, Mail, MapPin, Phone, Store, User, X } from "lucide-react";
+import { AlertCircle, Building, CalendarDays, CheckCircle2, Eye, EyeOff, Lock, Mail, MapPin, Phone, Store, User, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
+import GoogleButton from "@/components/auth/GoogleButton";
+import OtpInput from "@/components/auth/OtpInput";
+import { authErrorMessage, isCompleteOtp, OTP_LENGTH } from "@/modules/auth/otp";
+import { TERMS_DOCUMENTS, TERMS_HIGHLIGHTS } from "@/modules/legal/terms";
 
 type Role = "umkm" | "institution";
 const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
@@ -51,6 +55,7 @@ export default function RegisterPage() {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [error, setError] = useState("");
+  const [code, setCode] = useState("");
   const [account, setAccount] = useState({ contactName: "", email: "", password: "" });
   const [business, setBusiness] = useState({ name: "", sector: "Kuliner", city: "" });
   const [detail, setDetail] = useState({ form: "perorangan", startYear: "", headcount: "", address: "", phone: "", channels: [] as string[] });
@@ -74,9 +79,14 @@ export default function RegisterPage() {
     return () => document.removeEventListener("keydown", handleDialogKey);
   }, [showTerms]);
 
-  // Institusi tidak punya cara berjualan; langkahnya memang dua, dan
+  // Lembaga tidak punya cara berjualan; langkahnya memang dua, dan
   // menampilkan "dari 3" kepada mereka menjanjikan tahap yang tidak pernah ada.
-  const totalSteps = role === "umkm" ? 3 : 2;
+  // Verifikasi surel adalah langkah terakhir bagi keduanya, dan ikut dihitung:
+  // langkah yang tidak muncul di penunjuk terasa seperti hambatan yang tidak
+  // dijanjikan.
+  const detailSteps = role === "umkm" ? 3 : 2;
+  const verifyStep = detailSteps + 1;
+  const totalSteps = verifyStep;
 
   function changeRole(nextRole: Role) { setRole(nextRole); setStep(1); setError(""); }
   function toggleChannel(value: string) {
@@ -91,10 +101,11 @@ export default function RegisterPage() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setError("");
+    if (step === verifyStep) { void verifyEmail(); return; }
     if (step === 1) { continueToBusiness(); return; }
     if (step === 2) {
       if (role === "umkm" && (!business.name.trim() || !business.city.trim())) { setError("Isi nama usaha dan kota atau kabupaten usaha."); return; }
-      if (role === "institution" && (!institution.name.trim() || !institution.city.trim())) { setError("Isi nama institusi dan kota atau kabupaten."); return; }
+      if (role === "institution" && (!institution.name.trim() || !institution.city.trim())) { setError("Isi nama lembaga dan kota atau kabupaten."); return; }
       if (role === "umkm") { setStep(3); return; }
     }
     if (role === "umkm" && step === 3) {
@@ -113,29 +124,65 @@ export default function RegisterPage() {
         if (signUpError.message.includes("Password")) throw new Error("Kata sandi minimal 8 karakter.");
         throw signUpError;
       }
-      if (data.session) {
-        const response = await fetch("/api/auth/bootstrap", { method: "POST" });
-        if (!response.ok && response.status !== 409) throw new Error("Akun dibuat, tetapi data usaha belum dapat disiapkan. Silakan masuk kembali.");
-        window.location.href = role === "umkm" ? "/umkm/catat?onboarding=1" : "/auth/continue";
-        return;
-      }
-      window.location.href = "/auth/login?registered=1";
+      // Sesi hanya ada bila proyek masih mengonfirmasi surel secara otomatis.
+      // Selama itu masih menyala, verifikasi tidak akan pernah diminta, jadi
+      // jalur lama dipertahankan alih-alih menahan orang di layar kode yang
+      // tidak akan pernah menerima apa pun.
+      if (data.session) { await finishSignup(); return; }
+      setStep(verifyStep);
+      setLoading(false);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Pendaftaran belum berhasil. Silakan coba lagi."); setLoading(false); }
   }
 
+  /** Dipanggil setelah sesi ada -- lewat kode, atau lewat konfirmasi otomatis. */
+  async function finishSignup() {
+    const response = await fetch("/api/auth/bootstrap", { method: "POST" });
+    if (!response.ok && response.status !== 409) {
+      setError("Akun dibuat, tetapi data usaha belum dapat disiapkan. Silakan masuk kembali.");
+      setLoading(false);
+      return;
+    }
+    window.location.href = role === "umkm" ? "/umkm/profil?onboarding=1" : "/auth/continue";
+  }
+
+  async function verifyEmail() {
+    setError("");
+    setLoading(true);
+    const { error: verifyError } = await supabase.auth.verifyOtp({ email: account.email.trim(), token: code, type: "signup" });
+    if (verifyError) {
+      setError(authErrorMessage(verifyError.message, "Kode belum dapat diperiksa. Coba lagi."));
+      setLoading(false);
+      return;
+    }
+    await finishSignup();
+  }
+
+  async function resendCode() {
+    setError("");
+    const { error: resendError } = await supabase.auth.resend({ type: "signup", email: account.email.trim() });
+    if (resendError) setError(authErrorMessage(resendError.message, "Kode belum dapat dikirim ulang. Coba lagi sebentar lagi."));
+  }
+
   return <>
-    <header className="mb-5"><h1 className="text-xl font-bold text-[#141a34]">Buat akun Berkembang.id</h1><p className="mt-1 text-xs text-[#687086]">Langkah {step} dari {totalSteps} · {step === 1 ? "Buat akun" : step === 3 ? "Cara usaha Anda berjalan" : role === "umkm" ? "Kenalkan usaha Anda" : "Kenalkan institusi Anda"}</p><div className="mt-3 flex gap-1.5" aria-label={`Langkah ${step} dari ${totalSteps}`}>{Array.from({ length: totalSteps }, (_value, index) => index + 1).map((number) => <span key={number} className={`h-1.5 rounded-full ${number <= step ? "w-8 bg-cyan-500" : "w-4 bg-slate-200"}`} />)}</div></header>
-    {step === 1 && <div className="mb-5 flex gap-1 rounded-full border border-slate-200 bg-slate-50 p-1">{(["umkm","institution"] as Role[]).map((item) => <button key={item} type="button" onClick={() => changeRole(item)} className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full text-xs font-bold ${role === item ? "bg-white text-blue-900 shadow-sm" : "text-slate-500"}`}>{item === "umkm" ? <Store size={14} /> : <Building size={14} />}{item === "umkm" ? "Pemilik UMKM" : "Institusi"}</button>)}</div>}
+    <header className="mb-5"><h1 className="text-xl font-bold text-[#141a34]">Buat akun Berkembang.id</h1><p className="mt-1 text-xs text-[#687086]">Langkah {step} dari {totalSteps} · {step === verifyStep ? "Verifikasi email" : step === 1 ? "Buat akun" : step === 3 ? "Cara usaha Anda berjalan" : role === "umkm" ? "Kenalkan usaha Anda" : "Kenalkan lembaga Anda"}</p><div className="mt-3 flex gap-1.5" aria-label={`Langkah ${step} dari ${totalSteps}`}>{Array.from({ length: totalSteps }, (_value, index) => index + 1).map((number) => <span key={number} className={`h-1.5 rounded-full ${number <= step ? "w-8 bg-cyan-500" : "w-4 bg-slate-200"}`} />)}</div></header>
+    {step === 1 && <div className="mb-5 flex gap-1 rounded-full border border-slate-200 bg-slate-50 p-1">{(["umkm","institution"] as Role[]).map((item) => <button key={item} type="button" onClick={() => changeRole(item)} className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full text-xs font-bold ${role === item ? "bg-white text-blue-900 shadow-sm" : "text-slate-500"}`}>{item === "umkm" ? <Store size={14} /> : <Building size={14} />}{item === "umkm" ? "Pemilik UMKM" : "Lembaga"}</button>)}</div>}
+    {/*
+      Investor hanya satu dari enam jenis yang mendaftar lewat pintu ini.
+      Menamai tabnya "Calon Investor" akan membuat petugas bank, dinas,
+      yayasan, dan universitas menyimpulkan pintu ini bukan untuk mereka.
+      Menyebut mereka di kalimat ini menarik perhatian investor tanpa
+      menutup pintu bagi lima jenis lainnya.
+    */}
+    {step === 1 && role === "institution" && <p className="mb-5 -mt-3 text-xs leading-relaxed text-slate-500">Untuk bank, koperasi, investor, dinas, yayasan, dan perguruan tinggi yang mendampingi UMKM.</p>}
     {error && <div role="alert" aria-live="assertive" className="mb-4 flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700"><AlertCircle size={16} className="shrink-0" />{error}</div>}
     <form onSubmit={submit} className="space-y-4">
       {step === 1 && <>
         <Field label={role === "umkm" ? "Nama pemilik" : "Nama kontak"} id="register-name" icon={<User size={17} />}><input id="register-name" value={account.contactName} onChange={(event) => setAccount({ ...account, contactName: event.target.value })} className="field-input" placeholder="Nama lengkap" autoComplete="name" required /></Field>
         <Field label="Email" id="register-email" icon={<Mail size={17} />}><input id="register-email" type="email" value={account.email} onChange={(event) => setAccount({ ...account, email: event.target.value })} className="field-input" placeholder="email@contoh.com" autoComplete="email" required /></Field>
         <Field label="Kata sandi" id="register-password" icon={<Lock size={17} />}><input id="register-password" type={showPassword ? "text" : "password"} value={account.password} onChange={(event) => setAccount({ ...account, password: event.target.value })} className="field-input has-toggle" placeholder="Minimal 8 karakter" autoComplete="new-password" minLength={8} required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"} className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-slate-500">{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></Field>
-        <div className="rounded-xl border border-slate-200 p-3 text-xs leading-relaxed text-slate-600">
-          <label htmlFor="agree-terms" className="flex items-start gap-3"><input id="agree-terms" type="checkbox" checked={agreeTerms} onChange={(event) => setAgreeTerms(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0" /><span>Saya sudah membaca dan menyetujui syarat penggunaan serta kebijakan privasi.</span></label>
-          <button type="button" onClick={() => setShowTerms(true)} className="mt-2 ml-8 inline-flex min-h-9 items-center gap-1.5 text-xs font-bold text-blue-900 underline"><FileText size={14} /> Baca syarat dan privasi</button>
-        </div>
+        <div className="flex items-center gap-3 py-1"><span className="h-px flex-1 bg-slate-200" /><span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">atau</span><span className="h-px flex-1 bg-slate-200" /></div>
+        <GoogleButton label="Daftar dengan Google" />
+        <div className="flex items-start gap-3 rounded-xl border border-slate-200 p-3 text-xs leading-relaxed text-slate-600"><input id="agree-terms" type="checkbox" checked={agreeTerms} onChange={(event) => setAgreeTerms(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0" /><p><label htmlFor="agree-terms">Saya sudah membaca dan menyetujui </label><button type="button" onClick={() => setShowTerms(true)} className="auth-inline-link">syarat penggunaan serta kebijakan privasi</button><label htmlFor="agree-terms"> bagi {role === "umkm" ? "pemilik usaha" : "lembaga"}.</label></p></div>
       </>}
       {step === 2 && role === "umkm" && <>
         <Field label="Nama usaha" id="business-name" icon={<Store size={17} />}><input id="business-name" value={business.name} onChange={(event) => setBusiness({ ...business, name: event.target.value })} className="field-input" placeholder="Contoh: Warung Ibu Sari" required /></Field>
@@ -144,7 +191,7 @@ export default function RegisterPage() {
       </>}
       {step === 2 && role === "institution" && <>
         <Field label="Nama institusi" id="institution-name" icon={<Building size={17} />}><input id="institution-name" value={institution.name} onChange={(event) => setInstitution({ ...institution, name: event.target.value })} className="field-input" placeholder="Nama lembaga" required /></Field>
-        <fieldset><legend className="mb-2 text-xs font-bold text-slate-700">Jenis institusi</legend><div className="flex flex-wrap gap-2">{INSTITUTION_TYPES.map((type) => <button key={type} type="button" onClick={() => setInstitution({ ...institution, type })} aria-pressed={institution.type === type} className={`min-h-10 rounded-full border px-3 text-xs font-semibold ${institution.type === type ? "border-blue-900 bg-blue-900 text-white" : "border-slate-300 text-slate-600"}`}>{type}</button>)}</div></fieldset>
+        <fieldset><legend className="mb-2 text-xs font-bold text-slate-700">Jenis lembaga</legend><div className="flex flex-wrap gap-2">{INSTITUTION_TYPES.map((type) => <button key={type} type="button" onClick={() => setInstitution({ ...institution, type })} aria-pressed={institution.type === type} className={`min-h-10 rounded-full border px-3 text-xs font-semibold ${institution.type === type ? "border-blue-900 bg-blue-900 text-white" : "border-slate-300 text-slate-600"}`}>{type}</button>)}</div></fieldset>
         <div><label className="mb-1.5 block text-xs font-bold text-slate-700">Kota atau kabupaten</label><CitySelect value={institution.city} onChange={(city) => setInstitution({ ...institution, city })} placeholder="Pilih lokasi" required /></div>
       </>}
       {step === 3 && role === "umkm" && <>
@@ -156,11 +203,14 @@ export default function RegisterPage() {
         <fieldset><legend className="mb-2 text-xs font-bold text-slate-700">Pembeli datang dari mana</legend><div className="flex flex-wrap gap-2">{CHANNELS.map((option) => <button key={option.value} type="button" onClick={() => toggleChannel(option.value)} aria-pressed={detail.channels.includes(option.value)} className={`min-h-10 rounded-full border px-3 text-xs font-semibold ${detail.channels.includes(option.value) ? "border-blue-900 bg-blue-900 text-white" : "border-slate-300 text-slate-600"}`}>{option.label}</button>)}</div><p className="mt-1.5 text-[11px] text-slate-500">Boleh lebih dari satu.</p></fieldset>
         <fieldset><legend className="mb-2 text-xs font-bold text-slate-700">Berapa orang yang bekerja <span className="font-normal text-slate-400">(opsional)</span></legend><div className="flex flex-wrap gap-2">{HEADCOUNTS.map((option) => <button key={option.value} type="button" onClick={() => setDetail({ ...detail, headcount: detail.headcount === option.value ? "" : option.value })} aria-pressed={detail.headcount === option.value} className={`min-h-10 rounded-full border px-3 text-xs font-semibold ${detail.headcount === option.value ? "border-blue-900 bg-blue-900 text-white" : "border-slate-300 text-slate-600"}`}>{option.label}</button>)}</div></fieldset>
       </>}
-      <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row">{step > 1 && <button type="button" onClick={() => { setStep(step - 1); setError(""); }} className="min-h-12 w-full rounded-full border border-slate-300 px-5 text-xs font-bold text-slate-600 sm:w-auto">Kembali</button>}<button type="submit" disabled={loading} className="min-h-12 flex-1 rounded-full bg-[#001b85] px-5 text-sm font-bold text-white disabled:opacity-50">{loading ? "Menyiapkan akun..." : step === 1 ? "Lanjut" : step === 2 && role === "umkm" ? "Lanjut" : role === "umkm" ? "Buat akun dan catat transaksi pertama" : "Buat akun institusi"}</button></div>
+      {step === verifyStep && <div className="space-y-4">
+        <p className="text-xs leading-relaxed text-slate-600">Kami mengirim kode {OTP_LENGTH} angka ke <strong className="text-slate-800">{account.email.trim()}</strong>. Masukkan kode itu untuk memastikan alamatnya benar milik Anda. Periksa juga folder spam.</p>
+        <OtpInput value={code} onChange={setCode} onResend={resendCode} disabled={loading} />
+      </div>}
+      <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row">{step > 1 && step !== verifyStep && <button type="button" onClick={() => { setStep(step - 1); setError(""); }} className="min-h-12 w-full rounded-full border border-slate-300 px-5 text-xs font-bold text-slate-600 sm:w-auto">Kembali</button>}<button type="submit" disabled={loading || (step === verifyStep && !isCompleteOtp(code))} className="min-h-12 flex-1 rounded-full bg-[#001b85] px-5 text-sm font-bold text-white disabled:opacity-50">{loading ? "Menyiapkan akun..." : step === verifyStep ? "Verifikasi dan masuk" : step === 1 ? "Lanjut" : step === 2 && role === "umkm" ? "Lanjut" : role === "umkm" ? "Buat akun dan catat transaksi pertama" : "Buat akun lembaga"}</button></div>
     </form>
     <p className="mt-5 text-center text-xs text-slate-600">Sudah punya akun? <Link href="/auth/login" className="font-bold text-blue-900">Masuk</Link></p>
-    {showTerms && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowTerms(false); }}><section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="terms-title" className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-center justify-between"><h2 id="terms-title" className="font-bold text-slate-900">Syarat dan privasi singkat</h2><button ref={closeRef} type="button" onClick={() => setShowTerms(false)} aria-label="Tutup" className="flex h-11 w-11 items-center justify-center rounded-xl hover:bg-slate-100"><X size={18} /></button></div><ul className="mt-4 space-y-3 text-xs leading-relaxed text-slate-600"><li><strong className="text-slate-800">Catatan Anda dipakai untuk Anda.</strong> Data usaha diolah untuk menyusun pembukuan, menghitung tingkat kesiapan, dan menyarankan langkah berikutnya. Kami tidak menjual atau memperdagangkannya.</li><li><strong className="text-slate-800">Dokumen bersifat privat.</strong> KTP dan berkas usaha tidak pernah dibagikan. Institusi hanya bisa melihat bagian yang Anda setujui, dan izin itu bisa Anda cabut kapan saja.</li><li><strong className="text-slate-800">Angka datang dari Anda, bukan dari AI.</strong> Nominal dibaca pengurai tetap di aplikasi; AI hanya menebak jenis transaksinya, dan tebakannya selalu Anda periksa dulu.</li><li><strong className="text-slate-800">Tingkat kesiapan bukan penilaian kelayakan.</strong> Ia menggambarkan kelengkapan catatan, bukan janji pembiayaan. Aturannya terbuka dan bisa Anda baca.</li><li><strong className="text-slate-800">Anda boleh berhenti dan membawa data Anda.</strong> Seluruh isi akun bisa diunduh kapan saja, dan penghapusan akun mencabut akses institusi seketika.</li></ul><Link href="/terms" target="_blank" className="mt-4 inline-block text-xs font-bold text-blue-900 underline">Baca versi lengkap</Link><button type="button" onClick={() => { setAgreeTerms(true); setShowTerms(false); }} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-900 text-xs font-bold text-white"><CheckCircle2 size={16} /> Saya mengerti</button></section></div>}
-    <style jsx>{`.field-input{width:100%;min-height:48px;border:1px solid #cbd5e1;border-radius:12px;padding:0 14px 0 40px;font-size:14px;outline:none}.field-input.has-toggle{padding-right:48px}.field-input:focus{border-color:#001b85;box-shadow:0 0 0 3px rgba(0,27,133,.1)}`}</style>
+    {showTerms && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowTerms(false); }}><section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="terms-title" className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between p-5 pb-3"><h2 id="terms-title" className="font-bold text-slate-900">{TERMS_DOCUMENTS.find((document) => document.id === role)?.summaryTitle}</h2><button ref={closeRef} type="button" onClick={() => setShowTerms(false)} aria-label="Tutup" className="flex h-11 w-11 items-center justify-center rounded-xl hover:bg-slate-100"><X size={18} /></button></div><div className="min-h-0 flex-1 overflow-y-auto px-5"><p className="text-xs text-slate-500">Pemilik usaha dan lembaga terikat pada perjanjian yang berbeda. Ringkasan berikut merupakan bagian dari perjanjian bagi {role === "umkm" ? "pemilik usaha" : "lembaga"}.</p><ul className="mt-4 space-y-3 pb-5 text-xs leading-relaxed text-slate-600">{TERMS_HIGHLIGHTS[role].map((highlight) => <li key={highlight.title}><strong className="text-slate-800">{highlight.title}</strong> {highlight.body}</li>)}</ul></div><div className="border-t border-slate-100 p-5"><Link href={role === "umkm" ? "/terms" : "/terms?pihak=lembaga"} target="_blank" className="inline-block text-xs font-bold text-blue-900 underline">Baca versi lengkap</Link><button type="button" onClick={() => { setAgreeTerms(true); setShowTerms(false); }} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-900 text-xs font-bold text-white"><CheckCircle2 size={16} /> Saya mengerti</button></div></section></div>}
   </>;
 }
 

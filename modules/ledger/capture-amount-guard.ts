@@ -16,6 +16,7 @@
  * perilakunya dapat diuji tanpa penyedia AI.
  */
 
+import { rankReceiptCandidates } from "@/modules/ledger/receipt-candidate-ranker";
 import { parseUtterance } from "@/modules/nominal-parser";
 import type { TransactionDraftItem } from "@/modules/ledger/capture-schema";
 
@@ -70,4 +71,51 @@ export function enforceParserAmounts(
   // Ucapan menyebut lebih banyak nominal daripada draf yang dikembalikan model:
   // yang hilang tidak dikarang di sini, tetapi tidak juga disembunyikan.
   return { items: kept.length > 0 ? kept : [...items], overridden, dropped };
+}
+
+/**
+ * Nominal untuk jalur kamera: satu struk menjadi SATU transaksi.
+ *
+ * `enforceParserAmounts` mencocokkan draf ke-n dengan nominal ke-n dari
+ * teksnya. Itu benar untuk ucapan -- urutan bicara dan urutan draf berasal
+ * dari kalimat yang sama. Pada struk itu justru salah: nominal pertama yang
+ * terbaca adalah harga barang pertama, bukan yang dibayar.
+ *
+ * Jadi struk memakai aturan sendiri. Yang dipakai adalah kandidat teratas dari
+ * `rankReceiptCandidates`, dan hasilnya selalu satu baris draf -- itemisasi
+ * per baris struk memang belum dikerjakan, dan menyodorkan sepuluh draf dari
+ * satu foto akan membuat pemilik memeriksa sepuluh hal untuk satu belanja.
+ *
+ * Kalau tidak ada kandidat, atau dua teratas terlalu rapat untuk dipilih
+ * sendiri, nominalnya dikosongkan. Gating yang akan bertanya; menebak di sini
+ * berarti mencatat angka yang tidak pernah dilihat siapa pun.
+ */
+export function enforceReceiptAmount(
+  items: readonly TransactionDraftItem[],
+  ocrText: string | null | undefined,
+): AmountGuardResult & { excerpt: string | null; ambiguous: boolean; candidates: number[] } {
+  const text = (ocrText ?? "").trim();
+  const ranking = text === "" ? { candidates: [], ambiguous: false } : rankReceiptCandidates(text);
+  const base = items[0];
+
+  if (ranking.candidates.length === 0 || ranking.ambiguous || !base) {
+    return {
+      items: base ? [{ ...base, amountIdr: 0 }] : [],
+      overridden: 0,
+      dropped: Math.max(items.length - 1, 0),
+      excerpt: ranking.candidates[0]?.excerpt ?? null,
+      ambiguous: ranking.ambiguous,
+      candidates: ranking.candidates.map((candidate) => candidate.amountIdr),
+    };
+  }
+
+  const chosen = ranking.candidates[0];
+  return {
+    items: [{ ...base, amountIdr: chosen.amountIdr }],
+    overridden: base.amountIdr === chosen.amountIdr ? 0 : 1,
+    dropped: Math.max(items.length - 1, 0),
+    excerpt: chosen.excerpt,
+    ambiguous: false,
+    candidates: ranking.candidates.map((candidate) => candidate.amountIdr),
+  };
 }
