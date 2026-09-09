@@ -71,10 +71,29 @@ export default function LoginForm({ bounceReason }: { bounceReason: string | nul
     setLoading(true);
 
     const inputEmail = email.trim();
+    let loginEmail = inputEmail;
+
+    if (!inputEmail.includes("@")) {
+      try {
+        const res = await fetch("/api/auth/resolve-identifier", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: inputEmail }),
+        });
+        if (res.ok) {
+          const body = await res.json();
+          if (body.email) loginEmail = body.email;
+        } else {
+          loginEmail = `${inputEmail.toLowerCase()}@lembaga.berkembang.id`;
+        }
+      } catch {
+        loginEmail = `${inputEmail.toLowerCase()}@lembaga.berkembang.id`;
+      }
+    }
 
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: inputEmail,
+        email: loginEmail,
         password,
       });
 
@@ -161,15 +180,16 @@ export default function LoginForm({ bounceReason }: { bounceReason: string | nul
 
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
-          <label htmlFor="login-email" className="block text-xs font-bold text-[#444655] mb-1.5">Email</label>
+          <label htmlFor="login-email" className="block text-xs font-bold text-[#444655] mb-1.5">Email / Username</label>
           <div className="relative">
             <input
               id="login-email"
-              type="email"
+              type="text"
+              autoCapitalize="none"
               value={email}
               disabled={loading}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@contoh.com"
+              placeholder="email@contoh.com atau username"
               className="w-full px-4 py-3 pl-10 rounded-2xl border border-[#d8dce5] text-sm transition-colors disabled:bg-slate-50 disabled:text-slate-400"
               required
             />

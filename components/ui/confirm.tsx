@@ -160,11 +160,12 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 {pending.options.cancelLabel ?? "Batal"}
               </Button>
               <Button
-                variant={tone === "danger" ? "destructive" : "default"}
+                variant={tone === "danger" ? "default" : "default"}
                 disabled={reasonTooShort}
                 className={cn(
-                  "min-h-11 flex-1 rounded-xl text-sm font-bold sm:flex-none sm:px-5",
-                  tone === "danger" && "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  "min-h-11 flex-1 rounded-xl text-sm font-bold sm:flex-none sm:px-5 transition-all duration-150 cursor-pointer",
+                  tone === "danger" &&
+                    "!bg-red-600 !text-white hover:!bg-red-700 active:!bg-red-800 active:scale-[0.98] focus-visible:ring-red-400 shadow-sm shadow-red-200"
                 )}
                 onClick={() => {
                   setTouched(true)

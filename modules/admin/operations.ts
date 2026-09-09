@@ -2,6 +2,14 @@ export type AdminOperation =
   | { action: "create_admin"; email: string; password: string; name: string }
   | { action: "deactivate_admin"; profileId: string }
   | {
+      action: "create_institution_account";
+      name: string;
+      type: string;
+      username: string;
+      password: string;
+      email?: string;
+    }
+  | {
       action: "save_institution";
       source: "institutions" | "profiles";
       id?: string;

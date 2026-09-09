@@ -134,10 +134,17 @@ export default function AdminUsersPage() {
       setAdminList(adminList.filter((a) => a.id !== id));
       notifySuccess(`Akses ${email} dicabut`);
     } catch (err: unknown) {
-      // Kegagalan di sini dulu hanya sampai ke konsol: layarnya diam, dan
-      // admin yang menekannya percaya aksesnya sudah dicabut padahal belum.
       console.error("Error deleting admin:", err);
-      notifyFailure(err instanceof Error ? err.message : "Akses belum dapat dicabut. Coba lagi.");
+      const raw = err instanceof Error ? err.message : "";
+      if (raw.includes("SUPABASE_ADMIN_ENV_MISSING")) {
+        notifyFailure("Gagal mencabut akses: Variabel SUPABASE_SERVICE_ROLE_KEY belum terpasang di environment server.");
+      } else if (raw.includes("CANNOT_DEACTIVATE_SELF")) {
+        notifyWarning("Anda tidak dapat menghapus akun admin Anda sendiri.");
+      } else if (raw.includes("CANNOT_DEACTIVATE_LAST_ADMIN")) {
+        notifyWarning("Akun admin terakhir tidak dapat dihapus.");
+      } else {
+        notifyFailure(raw || "Akses belum dapat dicabut. Coba lagi.");
+      }
     }
   };
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Building2, Plus, Edit, Trash2, Shield, ShieldAlert, X, RefreshCw } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Shield, ShieldAlert, X, RefreshCw, Eye, EyeOff, User, Lock, Mail } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/Modal";
 import { runAdminOperation } from "@/modules/admin/operations";
@@ -43,6 +43,10 @@ export default function AdminInstitutionsPage() {
   // Form states
   const [instName, setInstName] = useState("");
   const [instType, setInstType] = useState("Bank BUMN");
+  const [instUsername, setInstUsername] = useState("");
+  const [instPassword, setInstPassword] = useState("");
+  const [instEmail, setInstEmail] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [instPrograms, setInstPrograms] = useState("1");
 
   useEffect(() => {
@@ -198,52 +202,70 @@ export default function AdminInstitutionsPage() {
 
   const handleSaveForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!instName) return;
+    if (!instName.trim()) return;
     setSaving(true);
-
-    const progs = Number(instPrograms) || 1;
 
     try {
       if (editingInst) {
+        const progs = Number(instPrograms) || 1;
         const target = parseInstitutionListId(editingInst.id);
         await runAdminOperation({
           action: "save_institution",
           source: target.source,
           id: target.id,
-          name: instName,
+          name: instName.trim(),
           type: instType,
           programsCount: progs,
           active: editingInst.active,
         });
 
-        setInstitutions(institutions.map(i => i.id === editingInst.id ? { ...i, name: instName, type: instType, programs: progs } : i));
+        setInstitutions(
+          institutions.map((i) =>
+            i.id === editingInst.id ? { ...i, name: instName.trim(), type: instType, programs: progs } : i
+          )
+        );
+        notifySuccess("Data lembaga berhasil diperbarui");
       } else {
+        if (!instUsername.trim() || !instPassword) {
+          throw new Error("Username dan Password wajib diisi.");
+        }
+        if (instPassword.length < 8) {
+          throw new Error("Password minimal 8 karakter.");
+        }
+
         const result = await runAdminOperation({
-          action: "save_institution",
-          source: "institutions",
-          name: instName,
+          action: "create_institution_account",
+          name: instName.trim(),
           type: instType,
-          programsCount: progs,
-          active: true,
+          username: instUsername.trim(),
+          password: instPassword,
+          email: instEmail.trim() || undefined,
         });
-        if (!result.id) throw new Error("Lembaga belum tersimpan.");
+
+        if (!result.id) throw new Error("Akun lembaga belum tersimpan.");
 
         const newObj: Institution = {
           id: `institution:${result.id}`,
-          name: instName,
+          name: instName.trim(),
           type: instType,
-          programs: progs,
-          active: true
-          , verificationStatus: "verified"
+          programs: 1,
+          active: true,
+          verificationStatus: "verified",
+          contact: instUsername.trim(),
         };
-        setInstitutions([...institutions, newObj]);
+        setInstitutions([newObj, ...institutions]);
+        notifySuccess(`Akun lembaga ${instName.trim()} berhasil dibuat dan terverifikasi`);
       }
 
       setShowModal(false);
       setEditingInst(null);
       setInstName("");
+      setInstUsername("");
+      setInstPassword("");
+      setInstEmail("");
     } catch (err) {
       console.error("Error saving institution:", err);
+      notifyFromError(err, "Gagal menyimpan lembaga");
     } finally {
       setSaving(false);
     }
@@ -253,6 +275,10 @@ export default function AdminInstitutionsPage() {
     setEditingInst(null);
     setInstName("");
     setInstType("Bank BUMN");
+    setInstUsername("");
+    setInstPassword("");
+    setInstEmail("");
+    setShowPassword(false);
     setInstPrograms("1");
     setShowModal(true);
   };
@@ -367,41 +393,49 @@ export default function AdminInstitutionsPage() {
         </div>
       )}
 
-      {/* Add Institution Modal */}
+      {/* Add / Edit Institution Modal */}
       <Modal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         title={editingInst ? "Edit Data Lembaga" : "Tambah Lembaga Baru"}
-        subtitle="Kelola bank, fintech, dan penyedia program KUR"
+        subtitle={
+          editingInst
+            ? "Perbarui informasi lembaga"
+            : "Buat akun login lembaga baru (otomatis aktif & terverifikasi)"
+        }
         icon={<Building2 size={22} />}
         maxWidth="max-w-md"
       >
         <form onSubmit={handleSaveForm} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">Nama Lembaga / Bank *</label>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Nama Institusi *</label>
             <input
               type="text"
               required
               value={instName}
               onChange={(e) => setInstName(e.target.value)}
-              placeholder="Contoh: Bank BNI KUR"
+              placeholder="Contoh: Bank BNI Prioritas / LPDB"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1">Jenis Lembaga</label>
-              <select
-                value={instType}
-                onChange={(e) => setInstType(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
-              >
-                <option value="Bank BUMN">Bank BUMN</option>
-                <option value="Bank Swasta">Bank Swasta</option>
-                <option value="Pemerintah">Pemerintah / BUMD</option>
-                <option value="Fintech">Fintech / P2P</option>
-              </select>
-            </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Jenis Lembaga *</label>
+            <select
+              value={instType}
+              onChange={(e) => setInstType(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
+            >
+              <option value="Bank BUMN">Bank BUMN</option>
+              <option value="Bank Swasta">Bank Swasta</option>
+              <option value="Pemerintah / BUMD">Pemerintah / BUMD</option>
+              <option value="Fintech / P2P">Fintech / P2P</option>
+              <option value="Koperasi">Koperasi</option>
+              <option value="NGO / Yayasan">NGO / Yayasan</option>
+            </select>
+          </div>
+
+          {editingInst ? (
             <div>
               <label className="block text-xs font-bold text-slate-600 mb-1">Jumlah Program</label>
               <input
@@ -412,7 +446,66 @@ export default function AdminInstitutionsPage() {
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
               />
             </div>
-          </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Username Akun *</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    autoCapitalize="none"
+                    value={instUsername}
+                    onChange={(e) => setInstUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ""))}
+                    placeholder="Contoh: bni_prioritas"
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium font-mono"
+                  />
+                  <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Gunakan huruf kecil, angka, titik, atau underscore untuk login lembaga.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Password *</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    minLength={8}
+                    value={instPassword}
+                    onChange={(e) => setInstPassword(e.target.value)}
+                    placeholder="Minimal 8 karakter"
+                    className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
+                  />
+                  <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">
+                  Email Lembaga <span className="text-slate-400 font-normal">(Opsional)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={instEmail}
+                    onChange={(e) => setInstEmail(e.target.value)}
+                    placeholder="kontak@lembaga.co.id"
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
+                  />
+                  <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Jika dikosongkan, akun login menggunakan username di atas.</p>
+              </div>
+            </>
+          )}
 
           <div className="pt-3 flex gap-3">
             <button
@@ -427,7 +520,7 @@ export default function AdminInstitutionsPage() {
               disabled={saving}
               className="flex-1 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
             >
-              {saving ? "Menyimpan..." : "Simpan Lembaga"}
+              {saving ? "Menyimpan..." : editingInst ? "Simpan Perubahan" : "Buat Akun Lembaga"}
             </button>
           </div>
         </form>

@@ -1,5 +1,5 @@
 import {
-  BarChart2, BookOpen, Building2, FileCheck, Gauge, Handshake, History, LayoutDashboard,
+  BarChart2, BookOpen, Briefcase, Building2, FileCheck, Gauge, History, LayoutDashboard,
   MonitorPlay, ShieldCheck, Sliders, ToggleLeft, Users,
 } from "lucide-react";
 import type { PortalRoute } from "@/components/shell/portal-navigation";
@@ -39,12 +39,12 @@ export const ADMIN_ROUTES: readonly PortalRoute[] = [
     Icon: Building2,
   },
 
-  { match: "/admin/mitra", title: "Mitra komunitas", Icon: Handshake },
+  { match: "/admin/investor", title: "Daftar Investor & Offtaker", hint: "Mitra pendanaan dan penyerapan hasil UMKM", Icon: Briefcase },
   {
-    match: "/admin/mitra/",
-    title: "Detail mitra",
-    parent: { href: "/admin/mitra", label: "Mitra komunitas" },
-    Icon: Handshake,
+    match: "/admin/investor/",
+    title: "Detail Investor / Offtaker",
+    parent: { href: "/admin/investor", label: "Daftar Investor & Offtaker" },
+    Icon: Briefcase,
   },
 
   {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Search, Plus, Check, X, ShieldAlert, AlertCircle, RefreshCw, Store } from "lucide-react";
+import { Search, Plus, Check, X, ShieldAlert, AlertCircle, RefreshCw, Store, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/Modal";
 import CitySelect from "@/components/CitySelect";
@@ -45,6 +45,10 @@ export default function AdminUMKMPage() {
   const [umkmList, setUmkmList] = useState<UMKMProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [editScore, setEditScore] = useState<{ id: string; score: number; oldScore: number } | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -58,33 +62,53 @@ export default function AdminUMKMPage() {
   const [newScore, setNewScore] = useState("50");
 
   useEffect(() => {
-    fetchUMKMFromSupabase();
-  }, []);
+    fetchUMKMFromAPI(page, search);
+  }, [page, search]);
 
-  async function fetchUMKMFromSupabase() {
+  async function fetchUMKMFromAPI(targetPage = 1, searchQuery = "") {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const params = new URLSearchParams({
+        page: String(targetPage),
+        pageSize: String(pageSize),
+      });
+      if (searchQuery.trim()) {
+        params.set("search", searchQuery.trim());
+      }
+
+      const res = await fetch(`/api/admin/umkm?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        setUmkmList(json.items || []);
+        setTotalCount(json.total || 0);
+        setTotalPages(json.totalPages || 1);
+        return;
+      }
+
+      // Fallback to client Supabase query if API is unavailable
+      const { data, count, error } = await supabase
         .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .select("*", { count: "exact" })
+        .or("role.eq.umkm,role.is.null,nama_usaha.not.is.null")
+        .neq("role", "admin")
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .range((targetPage - 1) * pageSize, targetPage * pageSize - 1);
 
       if (error) {
         console.error("Error fetching profiles:", error.message);
       }
 
       if (data && data.length > 0) {
-        // Filter profiles that have a nama_usaha OR role 'umkm' OR null role
-        const umkmRows = (data as ProfileRow[]).filter((p) => p.role === "umkm" || p.nama_usaha || !p.role);
-
         const now = new Date();
-        const mapped: UMKMProfile[] = umkmRows.map((p, idx: number) => {
+        const mapped: UMKMProfile[] = data.map((p, idx: number) => {
           const createdDate = p.created_at ? new Date(p.created_at) : now;
           const ageDays = Math.max(1, Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)));
           const konsistensiVal = Number(p.konsistensi_days) > 0 ? Number(p.konsistensi_days) : ageDays;
 
           const businessName = p.nama_usaha || p.name || `Usaha UMKM #${idx + 1}`;
-          const ownerName = p.name && p.name !== businessName ? p.name : (p.email ? p.email.split("@")[0] : "Pemilik Usaha");
+          const ownerName =
+            p.nama_pemilik ||
+            (p.name && p.name !== businessName ? p.name : p.email ? p.email.split("@")[0] : "Pemilik Usaha");
 
           return {
             id: p.id || String(idx + 1),
@@ -94,12 +118,16 @@ export default function AdminUMKMPage() {
             lokasi: p.lokasi || "Depok",
             score: Number(p.readiness_score) || 50,
             konsistensi: konsistensiVal,
-            status: p.status || "active"
+            status: p.status || "active",
           };
         });
         setUmkmList(mapped);
+        setTotalCount(count ?? mapped.length);
+        setTotalPages(Math.ceil((count ?? mapped.length) / pageSize) || 1);
       } else {
         setUmkmList([]);
+        setTotalCount(0);
+        setTotalPages(1);
       }
     } catch (err) {
       console.warn("Failed to fetch UMKM profiles:", err);
@@ -180,6 +208,7 @@ export default function AdminUMKMPage() {
       };
 
       setUmkmList([newEntry, ...umkmList]);
+      setTotalCount((c) => c + 1);
       setShowAddModal(false);
       setNewName("");
       setNewUsaha("");
@@ -190,13 +219,7 @@ export default function AdminUMKMPage() {
     }
   };
 
-  const filtered = umkmList.filter(
-    (u) =>
-      u.usaha.toLowerCase().includes(search.toLowerCase()) ||
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.sektor.toLowerCase().includes(search.toLowerCase()) ||
-      u.lokasi.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = umkmList;
 
   return (
     <div className="space-y-8 animate-fade-in-up">
@@ -207,7 +230,7 @@ export default function AdminUMKMPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={fetchUMKMFromSupabase}
+            onClick={() => fetchUMKMFromAPI(page, search)}
             className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
             title="Refresh Data"
           >
@@ -230,7 +253,10 @@ export default function AdminUMKMPage() {
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               placeholder="Cari nama usaha, pemilik, atau sektor..."
               className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200/80 text-sm focus:border-[#0b5f86] focus:outline-none"
             />
@@ -302,6 +328,34 @@ export default function AdminUMKMPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Bar */}
+        <div className="p-4 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 bg-slate-50/50">
+          <div>
+            Menampilkan <span className="font-bold text-[#1b2a3a]">{umkmList.length}</span> dari <span className="font-bold text-[#1b2a3a]">{totalCount}</span> data UMKM
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || loading}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer font-medium transition-colors"
+            >
+              <ChevronLeft size={14} />
+              Sebelumnya
+            </button>
+            <span className="px-2 font-medium">
+              Halaman {page} dari {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || loading}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer font-medium transition-colors"
+            >
+              Selanjutnya
+              <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
       </div>
 

@@ -12,6 +12,19 @@ const operationSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("create_admin"), email: z.email(), password: z.string().min(8).max(128), name: shortText }),
   z.object({ action: z.literal("deactivate_admin"), profileId: uuid }),
   z.object({
+    action: z.literal("create_institution_account"),
+    name: shortText,
+    type: shortText,
+    username: z
+      .string()
+      .trim()
+      .min(3)
+      .max(64)
+      .regex(/^[a-zA-Z0-9_.-]+$/, "Username hanya boleh huruf, angka, titik, strip, dan underscore"),
+    password: z.string().min(8).max(128),
+    email: z.union([z.literal(""), z.string().trim().email()]).optional(),
+  }),
+  z.object({
     action: z.literal("save_institution"),
     source: z.enum(["institutions", "profiles"]),
     id: uuid.optional(),
@@ -176,6 +189,105 @@ export async function POST(request: Request) {
         await writeAudit(admin, user.id, user.email ?? null, "CREATE_ADMIN_ACCOUNT", "platform_admin", newUserId, { email: operation.email });
         break;
       }
+      case "create_institution_account": {
+        const cleanUsername = operation.username.toLowerCase().trim().replace(/[^a-z0-9_.-]/g, "");
+        const authEmail =
+          operation.email && operation.email.trim()
+            ? operation.email.trim().toLowerCase()
+            : `${cleanUsername}@lembaga.berkembang.id`;
+
+        // Check if username or email is already taken in profiles
+        const existingProfile = await admin
+          .from("profiles")
+          .select("id")
+          .or(`email.eq.${authEmail},nama_contact.eq.${cleanUsername}`)
+          .limit(1)
+          .maybeSingle();
+
+        if (existingProfile.data) {
+          throw new Error("USERNAME_OR_EMAIL_TAKEN");
+        }
+
+        const created = await admin.auth.admin.createUser({
+          email: authEmail,
+          password: operation.password,
+          email_confirm: true,
+          user_metadata: {
+            name: operation.name,
+            username: cleanUsername,
+            role: "institution",
+            nama_institusi: operation.name,
+            jenis_institusi: operation.type,
+          },
+        });
+
+        if (created.error || !created.data.user) {
+          throw new Error(`INSTITUTION_AUTH_CREATE_FAILED: ${created.error?.message || "User creation failed"}`);
+        }
+
+        const newUserId = created.data.user.id;
+
+        try {
+          // 1. Create institution record (auto-verified and active)
+          const instInsert = await admin
+            .from("institutions")
+            .insert({
+              name: operation.name,
+              type: operation.type,
+              programs_count: 1,
+              active: true,
+              status: "active",
+              verification_status: "verified",
+              verified_by: user.id,
+              verified_at: new Date().toISOString(),
+              contact_name: cleanUsername,
+              contact_email: operation.email && operation.email.trim() ? operation.email.trim().toLowerCase() : null,
+            })
+            .select("id")
+            .single();
+          ensureNoError(instInsert.error, "INSTITUTION_RECORD_CREATE_FAILED");
+          if (!instInsert.data) throw new Error("INSTITUTION_RECORD_CREATE_FAILED");
+          const newInstId = instInsert.data.id;
+
+          // 2. Create profile record
+          const profileInsert = await admin.from("profiles").upsert({
+            id: newUserId,
+            auth_user_id: newUserId,
+            email: authEmail,
+            name: operation.name,
+            role: "institution",
+            nama_institusi: operation.name,
+            jenis_institusi: operation.type,
+            nama_contact: cleanUsername,
+            status: "active",
+          });
+          ensureNoError(profileInsert.error, "INSTITUTION_PROFILE_CREATE_FAILED");
+
+          // 3. Create membership linking auth user to institution as admin
+          const memberInsert = await admin.from("institution_members").insert({
+            institution_id: newInstId,
+            profile_id: newUserId,
+            user_id: newUserId,
+            role: "admin",
+            status: "active",
+            invited_by: user.id,
+            joined_at: new Date().toISOString(),
+          });
+          ensureNoError(memberInsert.error, "INSTITUTION_MEMBERSHIP_CREATE_FAILED");
+
+          resultId = newInstId;
+          await writeAudit(admin, user.id, user.email ?? null, "CREATE_INSTITUTION_ACCOUNT", "institution", newInstId, {
+            name: operation.name,
+            type: operation.type,
+            username: cleanUsername,
+            email: authEmail,
+          });
+        } catch (error) {
+          await admin.auth.admin.deleteUser(newUserId).catch(() => null);
+          throw error;
+        }
+        break;
+      }
       case "deactivate_admin": {
         const authority = await admin
           .from("platform_admins")
@@ -275,8 +387,20 @@ export async function POST(request: Request) {
       case "deactivate_institution": {
         if (operation.source === "institutions") {
           ensureNoError((await admin.from("institutions").update({ active: false, status: "archived" }).eq("id", operation.id)).error, "INSTITUTION_DEACTIVATE_FAILED");
+          const members = await admin.from("institution_members").select("user_id, profile_id").eq("institution_id", operation.id);
+          if (members.data && members.data.length > 0) {
+            await admin.from("institution_members").update({ status: "inactive" }).eq("institution_id", operation.id);
+            for (const m of members.data) {
+              const uId = m.user_id || m.profile_id;
+              if (uId) {
+                await admin.auth.admin.updateUserById(uId, { ban_duration: "876000h" }).catch(() => null);
+                await admin.from("profiles").update({ status: "inactive" }).eq("id", uId);
+              }
+            }
+          }
         } else {
           ensureNoError((await admin.from("profiles").update({ status: "inactive" }).eq("id", operation.id)).error, "INSTITUTION_PROFILE_DEACTIVATE_FAILED");
+          await admin.auth.admin.updateUserById(operation.id, { ban_duration: "876000h" }).catch(() => null);
         }
         await writeAudit(admin, user.id, user.email ?? null, "DEACTIVATE_INSTITUTION", operation.source, operation.id, {});
         break;

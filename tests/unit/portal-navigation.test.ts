@@ -24,7 +24,7 @@ describe("judul layar portal", () => {
     for (const [daftar, detail] of [
       ["/admin/umkm", "/admin/umkm/1"],
       ["/admin/institutions", "/admin/institutions/1"],
-      ["/admin/mitra", "/admin/mitra/1"],
+      ["/admin/investor", "/admin/investor/1"],
     ]) {
       const kiri = resolvePortalHeading(daftar, ADMIN_ROUTES, "x");
       const kanan = resolvePortalHeading(detail, ADMIN_ROUTES, "x");
@@ -63,7 +63,7 @@ describe("judul layar portal", () => {
     // memakai judul cadangan, dan headernya berhenti memberi tahu apa pun.
     const layar = [
       "/admin", "/admin/analytics", "/admin/mesin", "/admin/umkm", "/admin/institutions",
-      "/admin/mitra", "/admin/profile-access", "/admin/rules", "/admin/flags",
+      "/admin/investor", "/admin/profile-access", "/admin/rules", "/admin/flags",
       "/admin/demo", "/admin/admins", "/admin/audit", "/admin/panduan",
     ];
     for (const path of layar) {
