@@ -28,6 +28,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  if (pathname === "/admin/login") {
+    return <>{children}</>;
+  }
+
   async function handleSignOut() {
     const yes = await confirm({
       title: "Keluar dari akun?",

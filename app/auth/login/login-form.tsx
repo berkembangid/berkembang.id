@@ -6,20 +6,11 @@ import { Eye, EyeOff, Lock, Mail, AlertCircle, LogIn } from "lucide-react";
 import GoogleButton from "@/components/auth/GoogleButton";
 import { supabase } from "@/lib/supabase";
 
-type Portal = "umkm" | "institution" | "admin";
+type Portal = "umkm" | "institution" | "investor";
 
 /**
- * Tiga pintu masuk, tiga kalimat yang berbeda.
- *
- * Sebelumnya tab ini hanya mengganti warna: memilih "Admin" tetap disambut
- * "Lanjutkan pencatatan dan lihat perkembangan usaha Anda", dan di bawah
- * formulir tetap ditawari mendaftar akun UMKM. Tab yang tidak mengubah apa pun
- * membuat orang mengira ia salah pilih, lalu mencoba pintu yang lain.
- *
- * Yang TIDAK dilakukan tab ini: menentukan akan masuk ke mana. Tujuan
- * ditentukan peran yang benar-benar dipegang akunnya, bukan tombol yang
- * ditekan sebelum masuk -- tombol yang menentukan hak adalah tombol yang bisa
- * ditekan siapa saja.
+ * Tiga pintu masuk homepage: UMKM, Lembaga, dan Investor / Offtaker.
+ * Pintu masuk Admin dipisahkan secara mandiri di /admin/login.
  */
 const PORTAL_COPY: Record<Portal, { tab: string; subtitle: string; footer: React.ReactNode }> = {
   umkm: {
@@ -34,18 +25,23 @@ const PORTAL_COPY: Record<Portal, { tab: string; subtitle: string; footer: React
   },
   institution: {
     tab: "Lembaga",
-    subtitle: "Buka portal lembaga dan tinjau usaha yang sudah memberi izin.",
+    subtitle: "Buka portal lembaga resmi dan tinjau seluruh data UMKM tanpa batas.",
     footer: (
       <>
-        Lembaga belum terdaftar?{" "}
-        <Link href="/auth/register" className="text-[#001b85] font-bold hover:underline">Daftar Gratis</Link>
+        Lembaga didaftarkan khusus melalui admin. Hubungi{" "}
+        <a href="mailto:support@berkembang.id" className="text-[#001b85] font-bold hover:underline">support@berkembang.id</a>
       </>
     ),
   },
-  admin: {
-    tab: "Admin",
-    subtitle: "Masuk ke Ruang Mesin: kesehatan sistem, sakelar fitur, dan riwayat tindakan.",
-    footer: <>Akses admin diberikan oleh admin lain, bukan lewat pendaftaran.</>,
+  investor: {
+    tab: "Investor / Offtaker",
+    subtitle: "Temukan potensi UMKM terverifikasi dan ajukan kemitraan usaha.",
+    footer: (
+      <>
+        Belum punya akun Investor?{" "}
+        <Link href="/auth/register" className="text-[#001b85] font-bold hover:underline">Daftar Sekarang</Link>
+      </>
+    ),
   },
 };
 
@@ -237,6 +233,13 @@ export default function LoginForm({ bounceReason }: { bounceReason: string | nul
       <GoogleButton label="Masuk dengan Google" />
 
       <p className="text-xs text-center text-[#444655] mt-4">{PORTAL_COPY[role].footer}</p>
+
+      <p className="text-[11px] text-center text-slate-400 mt-6 pt-4 border-t border-slate-100">
+        Khusus administrator platform?{" "}
+        <Link href="/admin/login" className="text-slate-600 font-semibold hover:underline">
+          Masuk ke Portal Admin
+        </Link>
+      </p>
     </>
   );
 }

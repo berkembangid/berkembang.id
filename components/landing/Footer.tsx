@@ -23,7 +23,7 @@ const columns = [
     links: [
       ["FAQ", "#faq"],
       ["Syarat & Ketentuan", "/terms"],
-      ["Hubungi kami", "mailto:halo@berkembang.id"],
+      ["Bantuan (support@berkembang.id)", "mailto:support@berkembang.id"],
     ],
   },
 ];

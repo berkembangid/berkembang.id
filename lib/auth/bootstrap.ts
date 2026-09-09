@@ -69,15 +69,26 @@ export async function bootstrapAccountFromSignupMetadata(
     throw new Error("ADMIN_ACCESS_NOT_GRANTED");
   }
 
-  if (accountType !== "umkm" && accountType !== "institution") {
+  if (accountType === "institution") {
+    // Akun lembaga resmi tidak boleh mendaftar sendiri secara publik, harus dibuat oleh Admin.
+    // Jika ada akun lama yang sudah punya institusi/membership, itu sudah ditangani di check existingRole di atas.
+    throw new Error("INSTITUTION_SELF_SIGNUP_NOT_ALLOWED");
+  }
+
+  if (accountType !== "umkm" && accountType !== "investor") {
     throw new Error("ONBOARDING_METADATA_MISSING");
   }
 
+  const isInvestor = accountType === "investor";
   const metadata = metadataRecord;
   const email = textValue(user.email, "", 320) || null;
   const ownerName = textValue(metadata.nama_pemilik ?? metadata.name, "Pemilik Usaha");
   const businessName = textValue(metadata.nama_usaha, ownerName || "Usaha Baru");
-  const institutionName = textValue(metadata.nama_institusi ?? metadata.name, "Lembaga Baru");
+  const investorCompanyName = textValue(
+    metadata.nama_perusahaan ?? metadata.nama_institusi ?? metadata.name,
+    "Investor / Offtaker"
+  );
+  const institutionName = isInvestor ? investorCompanyName : textValue(metadata.nama_institusi ?? metadata.name, "Lembaga Baru");
   const contactName = textValue(metadata.nama_contact ?? metadata.name, institutionName);
   const location = textValue(metadata.lokasi);
   // Jawaban langkah tiga pendaftaran. Tanpa ini, pertanyaan yang sudah dijawab
@@ -165,13 +176,13 @@ export async function bootstrapAccountFromSignupMetadata(
       .insert({
         legacy_profile_id: user.id,
         name: institutionName,
-        type: textValue(metadata.jenis_institusi, "other"),
+        type: isInvestor ? textValue(metadata.jenis_investor, "Investor / Offtaker") : textValue(metadata.jenis_institusi, "other"),
         contact_name: contactName,
         contact_email: email,
         location: location || null,
-        active: false,
-        status: "pending",
-        verification_status: "pending",
+        active: isInvestor ? true : false,
+        status: isInvestor ? "active" : "pending",
+        verification_status: isInvestor ? "verified" : "pending",
       })
       .select("id")
       .single();

@@ -13,13 +13,15 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  const isAdminLogin = pathname === "/admin/login";
+
   const isProtectedPath =
-    pathname.startsWith("/umkm") ||
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/institusi");
+    (pathname.startsWith("/umkm") ||
+    (pathname.startsWith("/admin") && !isAdminLogin) ||
+    pathname.startsWith("/institusi"));
 
   const isAuthPath =
-    pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register");
+    pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register") || isAdminLogin;
 
   // Fast-path: Skip Supabase auth check completely for public pages (e.g. landing page '/')
   if (!isProtectedPath && !isAuthPath) {
