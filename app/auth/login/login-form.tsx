@@ -236,7 +236,7 @@ export default function LoginForm({ bounceReason }: { bounceReason: string | nul
 
       <p className="text-[11px] text-center text-slate-400 mt-6 pt-4 border-t border-slate-100">
         Khusus administrator platform?{" "}
-        <Link href="/admin/login" className="text-slate-600 font-semibold hover:underline">
+        <Link href="/auth/login/admin" className="text-slate-600 font-semibold hover:underline">
           Masuk ke Portal Admin
         </Link>
       </p>
