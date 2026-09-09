@@ -3175,6 +3175,45 @@ export type Database = {
           }
         ]
       }
+      password_reset_tokens: {
+        Row: {
+          id: string
+          user_id: string
+          email: string
+          token_hash: string
+          reset_session_token: string | null
+          attempts: number
+          max_attempts: number
+          expires_at: string
+          used_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          email: string
+          token_hash: string
+          reset_session_token?: string | null
+          attempts?: number
+          max_attempts?: number
+          expires_at: string
+          used_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          email?: string
+          token_hash?: string
+          reset_session_token?: string | null
+          attempts?: number
+          max_attempts?: number
+          expires_at?: string
+          used_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       ops_daily_rollups: {
         Row: {
           metric_date: string

@@ -4,8 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import OtpInput from "@/components/auth/OtpInput";
-import { supabase } from "@/lib/supabase";
-import { authErrorMessage, isCompleteOtp, OTP_LENGTH } from "@/modules/auth/otp";
+import { isCompleteOtp, OTP_LENGTH } from "@/modules/auth/otp";
 
 type Stage = "email" | "kode" | "sandi" | "selesai";
 
@@ -29,55 +28,83 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
 
+  const [resetSessionToken, setResetSessionToken] = useState("");
+
   async function sendCode(silent = false) {
     setError("");
     if (!silent) setLoading(true);
-    const { error: sendError } = await supabase.auth.resetPasswordForEmail(email.trim());
-    if (sendError) {
-      setError(authErrorMessage(sendError.message, "Kode belum dapat dikirim. Coba lagi sebentar lagi."));
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Kode belum dapat dikirim. Coba lagi sebentar lagi.");
+        setLoading(false);
+        return false;
+      }
+      setNote(data.message || `Kode ${OTP_LENGTH} angka dikirim ke ${email.trim()}. Periksa juga folder spam.`);
+      setStage("kode");
+      setLoading(false);
+      return true;
+    } catch {
+      setError("Gagal terhubung ke server. Periksa koneksi internet Anda.");
       setLoading(false);
       return false;
     }
-    setNote(`Kode ${OTP_LENGTH} angka dikirim ke ${email.trim()}. Periksa juga folder spam.`);
-    setStage("kode");
-    setLoading(false);
-    return true;
   }
 
   async function verifyCode() {
     setError("");
     setLoading(true);
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: code,
-      type: "recovery",
-    });
-    if (verifyError) {
-      setError(authErrorMessage(verifyError.message, "Kode belum dapat diperiksa. Coba lagi."));
+    try {
+      const res = await fetch("/api/auth/verify-reset-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), code: code.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Kode belum dapat diperiksa. Coba lagi.");
+        setLoading(false);
+        return;
+      }
+      setResetSessionToken(data.resetSessionToken);
+      setNote("");
+      setStage("sandi");
       setLoading(false);
-      return;
+    } catch {
+      setError("Gagal memverifikasi kode. Periksa koneksi internet Anda.");
+      setLoading(false);
     }
-    // Sesi pemulihan sudah aktif; kata sandi baru ditulis pada langkah berikut.
-    setNote("");
-    setStage("sandi");
-    setLoading(false);
   }
 
   async function savePassword() {
     setError("");
     setLoading(true);
-    const { error: updateError } = await supabase.auth.updateUser({ password });
-    if (updateError) {
-      setError(authErrorMessage(updateError.message, "Kata sandi belum tersimpan. Coba lagi."));
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resetSessionToken,
+          password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Kata sandi belum tersimpan. Coba lagi.");
+        setLoading(false);
+        return;
+      }
+      setStage("selesai");
       setLoading(false);
-      return;
+    } catch {
+      setError("Gagal memperbarui kata sandi. Periksa koneksi internet Anda.");
+      setLoading(false);
     }
-    // Sesi dari kode pemulihan sengaja tidak dipakai untuk masuk: kata sandi
-    // baru harus dibuktikan sekali, supaya orang tahu yang tersimpan memang
-    // yang ia ingat.
-    await supabase.auth.signOut();
-    setStage("selesai");
-    setLoading(false);
   }
 
   function submit(event: React.FormEvent) {
