@@ -74,6 +74,7 @@ export type InstitutionPortalSupplement = {
           p_sort?: string;
           p_limit?: number;
           p_offset?: number;
+          p_search?: string | null;
         };
         Returns: import("@/types/database.generated").Json;
       };

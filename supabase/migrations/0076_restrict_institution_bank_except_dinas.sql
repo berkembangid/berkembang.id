@@ -1,6 +1,9 @@
 -- Migration: 0076_restrict_institution_bank_except_dinas.sql
 -- Description: Institusi & Bank dibatasi (mirip offtaker, hanya opt-in & kode anonim), Dinas memiliki hak akses penuh ke seluruh data UMKM aktif.
 
+-- Drop definisi lama dengan 10 parameter agar tidak terjadi konflik overloading di PostgREST
+drop function if exists public.list_anonymous_business_candidates(uuid, uuid, text, text, text, text, boolean, text, integer, integer);
+
 create or replace function public.list_anonymous_business_candidates(
   p_program_id uuid default null,
   p_institution_id uuid default null,

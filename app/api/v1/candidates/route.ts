@@ -24,6 +24,7 @@ export async function GET(request: Request) {
       sort: url.searchParams.get("sort") ?? "newest",
       limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : 50,
       offset: url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : 0,
+      search: url.searchParams.get("search") || null,
     });
     if (!parsed.success) throw new ConsentOperationError("VALIDATION_FAILED", parsed.error);
     const result = await listAnonymousCandidates(parsed.data);

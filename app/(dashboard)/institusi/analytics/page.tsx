@@ -24,7 +24,7 @@ async function loadAnalytics(): Promise<Analytics> {
     const { data: member } = await client.from("institution_members").select("institution_id").eq("user_id", auth.user.id).eq("status", "active").order("created_at").limit(1).maybeSingle();
     if (!member) return empty;
     const [candidates, requests, grants, accessEvents] = await Promise.all([
-      client.rpc("list_anonymous_business_candidates", {}),
+      client.rpc("list_anonymous_business_candidates", { p_search: null as unknown as undefined }),
       client.from("dossier_requests").select("status,created_at").eq("institution_id", member.institution_id),
       client.from("consent_grants").select("status").eq("institution_id", member.institution_id),
       client.from("dossier_access_events").select("outcome,action,occurred_at").eq("institution_id", member.institution_id),

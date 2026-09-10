@@ -30,6 +30,7 @@ export async function listAnonymousCandidates(filter: Partial<CandidateFilter> =
     p_sort: filter.sort ?? "newest",
     p_limit: filter.limit ?? 50,
     p_offset: filter.offset ?? 0,
+    p_search: filter.search ?? undefined,
   });
   rpcFailure(error);
   if (data && typeof data === "object" && !Array.isArray(data) && "candidates" in data) {

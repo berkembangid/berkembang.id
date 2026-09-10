@@ -53,6 +53,7 @@ export const candidateFilterSchema = z.object({
   sort: z.enum(["newest", "region"]).default("newest"),
   limit: z.number().int().min(1).max(100).default(50),
   offset: z.number().int().min(0).max(10000).default(0),
+  search: z.string().trim().max(100).nullable().optional(),
 });
 
 export type CandidateFilter = z.infer<typeof candidateFilterSchema>;
