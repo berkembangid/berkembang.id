@@ -114,10 +114,13 @@ export default function InstitutionProfilesPage() {
       }
       const blob = await response.blob();
       const uid = response.headers.get("X-Document-Uid") ?? dossier.id.slice(0, 8);
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const filenameMatch = /filename="([^"]+)"/.exec(disposition);
+      const filename = filenameMatch?.[1] ?? `dossier-${dossier.candidateCode}-${uid}.pdf`;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `dossier-${dossier.candidateCode}-${uid}.pdf`;
+      anchor.download = filename;
       anchor.click();
       URL.revokeObjectURL(url);
       notifySuccess(`Berkas tersimpan · No. ${uid}`, {
