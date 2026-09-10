@@ -11,7 +11,8 @@ import { notifySuccess } from "@/lib/notify";
 export default function InstitutionDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const idParam = params?.id as string;
+  const rawIdParam = (params?.id as string) || "";
+  const idParam = decodeURIComponent(rawIdParam);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,12 +36,17 @@ export default function InstitutionDetailPage() {
 
   const [isFromProfiles, setIsFromProfiles] = useState(false);
 
+  const getDatabaseId = (param: string) => {
+    const decoded = decodeURIComponent(param);
+    return decoded.replace(/^(institution:|profile:)/, "").trim();
+  };
+
   async function fetchDetail() {
     setLoading(true);
     setErrorMsg("");
     try {
       const isProfileId = idParam.startsWith("profile:");
-      const databaseId = idParam.replace(/^(institution:|profile:)/, "");
+      const databaseId = getDatabaseId(idParam);
 
       if (!isProfileId) {
         // Fetch from institutions table
@@ -121,7 +127,7 @@ export default function InstitutionDetailPage() {
     const progsNum = Number(programsCount) || 1;
 
     try {
-      const databaseId = idParam.replace(/^(institution:|profile:)/, "");
+      const databaseId = getDatabaseId(idParam);
       await runAdminOperation({
         action: "save_institution",
         source: isFromProfiles ? "profiles" : "institutions",
@@ -150,7 +156,7 @@ export default function InstitutionDetailPage() {
     setEntitlementMsg("");
     setErrorMsg("");
     try {
-      const databaseId = idParam.replace(/^(institution:|profile:)/, "");
+      const databaseId = getDatabaseId(idParam);
       await runAdminOperation({
         action: "set_institution_entitlement",
         id: databaseId,
