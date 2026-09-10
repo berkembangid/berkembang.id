@@ -341,6 +341,7 @@ export async function processQueuedCaptureJob(
         provider: provider.provider,
         attemptNumber: claim.attemptNumber,
         code: failure.code,
+        error: error instanceof Error ? error.message : String(error),
         retry: failed.retry,
       });
       if (!failed.retry) {
