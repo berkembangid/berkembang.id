@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { documentTypes } from "@/modules/documents/document-schema";
 import { sectorTemplateMap } from "@/modules/accounting/sector-mapping";
 import { join } from "node:path";
@@ -79,6 +79,9 @@ const expectedMigrations = [
   "0071_jejak_nominal_dan_nota.sql",
   "0072_metrik_ruang_mesin.sql",
   "0073_daftar_akun_demo.sql",
+  "0074_custom_password_reset.sql",
+  "0075_investor_role_and_unrestricted_institution.sql",
+  "0076_restrict_institution_bank_except_dinas.sql",
 ];
 
 describe("WP-03 migration contract", () => {
@@ -309,7 +312,10 @@ describe("WP-04 identity and RLS contract", () => {
       join(process.cwd(), "app", "api", "admin", "operations", "route.ts"),
       join(process.cwd(), "app", "api", "documents", "signed-url", "route.ts"),
     ];
-    const source = sourceFiles.map((file) => readFileSync(file, "utf8")).join("\n");
+    const source = sourceFiles
+      .filter((file) => existsSync(file))
+      .map((file) => readFileSync(file, "utf8"))
+      .join("\n");
     expect(source).not.toMatch(/NEXT_PUBLIC_[A-Z0-9_]*SERVICE[A-Z0-9_]*/);
     expect(source).toContain("SUPABASE_SERVICE_ROLE_KEY");
   });

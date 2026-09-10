@@ -426,6 +426,7 @@ export default function AdminInstitutionsPage() {
               onChange={(e) => setInstType(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-[#0b5f86] focus:outline-none bg-white font-medium"
             >
+              <option value="Dinas / Instansi Pemerintah">Dinas / Instansi Pemerintah</option>
               <option value="Bank BUMN">Bank BUMN</option>
               <option value="Bank Swasta">Bank Swasta</option>
               <option value="Pemerintah / BUMD">Pemerintah / BUMD</option>
