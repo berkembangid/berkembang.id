@@ -209,5 +209,6 @@ export async function bootstrapAccountFromSignupMetadata(
     });
     requireNoError(error, "INSTITUTION_MEMBERSHIP_BOOTSTRAP_FAILED");
   }
-  return "institution";
+  return isInvestor ? "investor" : "institution";
 }
+

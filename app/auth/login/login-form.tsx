@@ -46,7 +46,9 @@ const PORTAL_COPY: Record<Portal, { tab: string; subtitle: string; footer: React
 };
 
 export default function LoginForm({ bounceReason }: { bounceReason: string | null }) {
-  const [role, setRole] = useState<Portal>("umkm");
+  const [role, setRole] = useState<Portal>(
+    bounceReason === "lembaga_google_prohibited" ? "institution" : "umkm"
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -59,9 +61,11 @@ export default function LoginForm({ bounceReason }: { bounceReason: string | nul
       ? "Akun ini belum punya akses ke portal mana pun. Coba tekan Masuk sekali lagi; kalau masih sama, mintalah admin mengaktifkan akunnya."
       : bounceReason === "authorization_unavailable"
         ? "Data akun sedang tidak bisa dibaca. Coba lagi sebentar lagi."
-        : bounceReason
-          ? "Sesi Anda berakhir. Silakan masuk kembali."
-          : "",
+        : bounceReason === "lembaga_google_prohibited"
+          ? "Akun Lembaga tidak dapat masuk menggunakan Google. Silakan masuk menggunakan Email / Username dan kata sandi."
+          : bounceReason
+            ? "Sesi Anda berakhir. Silakan masuk kembali."
+            : "",
   );
   const [loading, setLoading] = useState(false);
 
@@ -244,15 +248,21 @@ export default function LoginForm({ bounceReason }: { bounceReason: string | nul
         </button>
       </form>
 
-      <div className="my-5 flex items-center gap-3">
-        <span className="h-px flex-1 bg-slate-200" />
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">atau</span>
-        <span className="h-px flex-1 bg-slate-200" />
-      </div>
+      {role !== "institution" && (
+        <>
+          <div className="my-5 flex items-center gap-3">
+            <span className="h-px flex-1 bg-slate-200" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">atau</span>
+            <span className="h-px flex-1 bg-slate-200" />
+          </div>
 
-      <GoogleButton label="Masuk dengan Google" />
+          <GoogleButton label="Masuk dengan Google" />
+        </>
+      )}
 
-      <p className="text-xs text-center text-[#444655] mt-4">{PORTAL_COPY[role].footer}</p>
+      <p className={`text-xs text-center text-[#444655] ${role === "institution" ? "mt-6" : "mt-4"}`}>
+        {PORTAL_COPY[role].footer}
+      </p>
 
       <p className="text-[11px] text-center text-slate-400 mt-6 pt-4 border-t border-slate-100">
         Khusus administrator platform?{" "}

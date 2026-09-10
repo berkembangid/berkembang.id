@@ -15,7 +15,10 @@ export async function GET(request: Request) {
     "get_my_institution_shortlist",
     selected ? { p_institution_id: selected } : undefined,
   );
-  if (error) return NextResponse.json({ error: "SHORTLIST_UNAVAILABLE" }, { status: 503 });
+  if (error) {
+    console.error("[Shortlist API Error]:", error);
+    return NextResponse.json({ error: "SHORTLIST_UNAVAILABLE" }, { status: 503 });
+  }
   return NextResponse.json({ data: Array.isArray(data) ? data : [] });
 }
 

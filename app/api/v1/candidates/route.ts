@@ -29,5 +29,8 @@ export async function GET(request: Request) {
     if (!parsed.success) throw new ConsentOperationError("VALIDATION_FAILED", parsed.error);
     const result = await listAnonymousCandidates(parsed.data);
     return Response.json({ data: result }, { headers: { "Cache-Control": "private, no-store" } });
-  } catch (error) { return consentErrorResponse(error); }
+  } catch (error) {
+    console.error("[Candidates API Error]:", error);
+    return consentErrorResponse(error);
+  }
 }

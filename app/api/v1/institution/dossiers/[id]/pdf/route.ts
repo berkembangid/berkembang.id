@@ -52,8 +52,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       .eq("institution_id", dossier.institutionId)
       .order("created_at", { ascending: false })
       .limit(20);
-    const match = ((dossierIssues ?? []) as unknown as Array<{ document_uid: string; document_id: string | null; dossier_id?: string | null }>)
-      .find((row) => !row.dossier_id || row.dossier_id === dossier.dossierId) ?? existingRow;
+    const url = new URL(request.url);
+    const forceFresh = url.searchParams.get("fresh") === "true" || url.searchParams.get("fresh") === "1";
+    const match = forceFresh
+      ? null
+      : ((dossierIssues ?? []) as unknown as Array<{ document_uid: string; document_id: string | null; dossier_id?: string | null }>)
+          .find((row) => row.dossier_id === dossier.dossierId);
     const documentUid = match?.document_uid ?? buildDocumentUid(printedAt);
     const documentId = match?.document_id ?? crypto.randomUUID();
 
@@ -95,7 +99,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       upsert: true,
     });
     if (!upload.error) {
-      await client.rpc("record_institution_report_issue", {
+      await admin.rpc("record_institution_report_issue" as never, {
         p_business_id: dossier.businessId,
         p_institution_id: dossier.institutionId,
         p_dossier_id: dossier.dossierId,
@@ -109,12 +113,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         p_period_from: document.period.from,
         p_period_to: document.period.to,
         p_formula_version: dossierFormulaVersion(),
-      });
+      } as never);
     }
 
-    await client.rpc("access_verified_business_profile", {
+    await admin.rpc("access_verified_business_profile" as never, {
       p_dossier_id: dossier.dossierId, p_resource_scope: "financial_summary", p_action: "download",
-    });
+    } as never);
 
     return new Response(pdf as BodyInit, {
       status: 200,
@@ -127,6 +131,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       },
     });
   } catch (error) {
+    console.error("[institution/dossiers/[id]/pdf GET ERROR]", error);
     return consentErrorResponse(error);
   }
 }

@@ -7,25 +7,22 @@ import { supabase } from "@/lib/supabase";
 import { authErrorMessage } from "@/modules/auth/otp";
 
 const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
-const INSTITUTION_TYPES = ["Bank / Koperasi", "Lembaga Pemerintah", "Investor", "NGO / Yayasan", "Universitas", "Lainnya"];
+const INVESTOR_TYPES = ["Modal Ventura (VC)", "Angel Investor", "Perusahaan Offtaker / Buyer", "Korporasi", "Koperasi / Agregator", "Lainnya"];
 
 /**
  * Satu pertanyaan yang tidak bisa dijawab akun Google.
  *
- * Pendaftaran lewat surel menitipkan metadata -- pemilik usaha atau lembaga,
- * nama usahanya, kotanya -- dan `bootstrap` memakainya untuk membuatkan usaha
- * beserta profilnya. Akun Google tidak membawa apa pun selain nama dan alamat
- * surel.
+ * Pendaftaran lewat surel menitipkan metadata -- pemilik usaha atau investor,
+ * nama usahanya, kotanya -- dan `bootstrap` memakainya untuk membuatkan profil.
+ * Akun Google tidak membawa apa pun selain nama dan alamat surel.
  *
- * Menebaknya berarti separuh akun lembaga lahir sebagai usaha, dan memperbaiki
- * kesalahan itu jauh lebih mahal daripada menanyakannya sekali. Jadi halaman
- * ini menanyakan yang paling sedikit: siapa Anda, dan dua hal yang tanpa itu
- * tidak ada yang bisa dibuat.
+ * Catatan: Akun Lembaga tidak didaftarkan mandiri maupun lewat Google,
+ * melainkan didaftarkan khusus melalui Admin platform.
  */
 export default function CompleteProfilePage() {
-  const [role, setRole] = useState<"umkm" | "institution">("umkm");
+  const [role, setRole] = useState<"umkm" | "investor">("umkm");
   const [business, setBusiness] = useState({ name: "", sector: "Kuliner", city: "" });
-  const [institution, setInstitution] = useState({ name: "", type: "Bank / Koperasi", city: "" });
+  const [investor, setInvestor] = useState({ companyName: "", type: "Modal Ventura (VC)", city: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -45,8 +42,8 @@ export default function CompleteProfilePage() {
       setError("Isi nama usaha dan kota atau kabupaten usaha.");
       return;
     }
-    if (role === "institution" && (!institution.name.trim() || !institution.city.trim())) {
-      setError("Isi nama lembaga dan kota atau kabupaten.");
+    if (role === "investor" && (!investor.companyName.trim() || !investor.city.trim())) {
+      setError("Isi nama perusahaan / lembaga dan kota atau kabupaten.");
       return;
     }
 
@@ -56,7 +53,7 @@ export default function CompleteProfilePage() {
 
     const metadata = role === "umkm"
       ? { nama_pemilik: displayName, nama_usaha: business.name.trim(), sektor_usaha: business.sector, lokasi: business.city, signup_account_type: "umkm" }
-      : { nama_contact: displayName, nama_institusi: institution.name.trim(), jenis_institusi: institution.type, lokasi: institution.city, signup_account_type: "institution" };
+      : { nama_contact: displayName, nama_perusahaan: investor.companyName.trim(), jenis_institusi: investor.type, lokasi: investor.city, signup_account_type: "investor" };
 
     const { error: updateError } = await supabase.auth.updateUser({ data: metadata });
     if (updateError) {
@@ -67,7 +64,7 @@ export default function CompleteProfilePage() {
 
     const response = await fetch("/api/auth/bootstrap", { method: "POST" });
     if (!response.ok) {
-      setError("Data tersimpan, tetapi usaha belum dapat disiapkan. Coba tekan tombol ini sekali lagi.");
+      setError("Data tersimpan, tetapi akun belum dapat disiapkan. Coba tekan tombol ini sekali lagi.");
       setLoading(false);
       return;
     }
@@ -88,7 +85,7 @@ export default function CompleteProfilePage() {
       )}
 
       <div className="mb-5 flex gap-1 rounded-full border border-slate-200 bg-slate-50 p-1">
-        {([["umkm", "Pemilik UMKM"], ["institution", "Lembaga"]] as const).map(([value, label]) => (
+        {([["umkm", "Pemilik UMKM"], ["investor", "Investor / Offtaker"]] as const).map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -121,18 +118,18 @@ export default function CompleteProfilePage() {
         ) : (
           <>
             <label className="block">
-              <span className="mb-1.5 block text-xs font-bold text-[#141a34]">Nama lembaga</span>
-              <input value={institution.name} onChange={(event) => setInstitution({ ...institution, name: event.target.value })} className="field-input" style={{ paddingLeft: 14 }} placeholder="Contoh: Bank Daerah Sejahtera" required />
+              <span className="mb-1.5 block text-xs font-bold text-[#141a34]">Nama entitas / perusahaan</span>
+              <input value={investor.companyName} onChange={(event) => setInvestor({ ...investor, companyName: event.target.value })} className="field-input" style={{ paddingLeft: 14 }} placeholder="Contoh: PT Investasi Maju Bersama" required />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-xs font-bold text-[#141a34]">Jenis lembaga</span>
-              <select value={institution.type} onChange={(event) => setInstitution({ ...institution, type: event.target.value })} className="field-input" style={{ paddingLeft: 14 }}>
-                {INSTITUTION_TYPES.map((type) => <option key={type}>{type}</option>)}
+              <span className="mb-1.5 block text-xs font-bold text-[#141a34]">Jenis investor</span>
+              <select value={investor.type} onChange={(event) => setInvestor({ ...investor, type: event.target.value })} className="field-input" style={{ paddingLeft: 14 }}>
+                {INVESTOR_TYPES.map((type) => <option key={type}>{type}</option>)}
               </select>
             </label>
             <div>
               <span className="mb-1.5 block text-xs font-bold text-[#141a34]">Kota atau kabupaten</span>
-              <CitySelect value={institution.city} onChange={(city) => setInstitution({ ...institution, city })} />
+              <CitySelect value={investor.city} onChange={(city) => setInvestor({ ...investor, city })} />
             </div>
           </>
         )}
@@ -141,6 +138,10 @@ export default function CompleteProfilePage() {
           {loading ? "Menyiapkan…" : "Mulai pakai Berkembang.id"}
         </button>
       </form>
+
+      <p className="mt-5 text-center text-xs text-slate-400">
+        Mewakili Lembaga mitra resmi? Lembaga didaftarkan khusus oleh admin platform.
+      </p>
     </>
   );
 }

@@ -50,9 +50,31 @@ const styles = StyleSheet.create({
     color: palette.ink,
     lineHeight: 1.45,
   },
+  pageWithWatermark: {
+    paddingTop: 78,
+    paddingBottom: 58,
+    paddingHorizontal: 46,
+    fontSize: 9,
+    fontFamily: "Helvetica",
+    color: palette.ink,
+    lineHeight: 1.45,
+  },
   header: {
     position: "absolute",
     top: 28,
+    left: 46,
+    right: 46,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderBottomWidth: 0.5,
+    borderBottomColor: palette.faint,
+    paddingBottom: 6,
+    fontSize: 7.5,
+    color: palette.muted,
+  },
+  headerWithWatermark: {
+    position: "absolute",
+    top: 70,
     left: 46,
     right: 46,
     flexDirection: "row",
@@ -125,16 +147,55 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 8,
   },
-  watermarkBand: {
+  watermarkContainer: {
     position: "absolute",
-    top: 8,
+    top: 14,
     left: 46,
     right: 46,
+  },
+  watermarkBand: {
     borderWidth: 0.8,
     borderColor: "#0b5f86",
-    padding: 5,
+    padding: 6,
+    backgroundColor: "#f4f9fc",
+    marginBottom: 6,
+  },
+  watermarkRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  watermarkTitle: {
+    fontSize: 7.5,
+    fontFamily: "Helvetica-Bold",
+    color: "#0b5f86",
+  },
+  watermarkDoc: {
     fontSize: 7.2,
     color: "#0b5f86",
+  },
+  watermarkMeta: {
+    fontSize: 7,
+    color: "#0b5f86",
+  },
+  headerUnderWatermark: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderBottomWidth: 0.5,
+    borderBottomColor: palette.faint,
+    paddingBottom: 4,
+    fontSize: 7.5,
+    color: palette.muted,
+  },
+  headerBusiness: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 7.5,
+    color: palette.ink,
+  },
+  headerPeriod: {
+    fontSize: 7.5,
+    color: palette.muted,
   },
   watermarkLine: { marginBottom: 1 },
 });
@@ -211,21 +272,32 @@ function TableHead({ headers, columns }: { headers: string[]; columns: Column[] 
 function PageChrome({ data, watermark }: { data: StatementDocumentData; watermark?: StatementWatermark }) {
   return (
     <>
-      {watermark && (
-        <View style={styles.watermarkBand} fixed>
-          <Text style={styles.watermarkLine}>Akses lembaga: {watermark.institutionName}</Text>
-          <Text style={styles.watermarkLine}>
-            Dibuka oleh {watermark.memberLabel} · {longDate(watermark.downloadedAt.slice(0, 10))}
+      {watermark ? (
+        <View style={styles.watermarkContainer} fixed>
+          <View style={styles.watermarkBand}>
+            <View style={styles.watermarkRow}>
+              <Text style={styles.watermarkTitle}>Akses Lembaga: {watermark.institutionName}</Text>
+              <Text style={styles.watermarkDoc}>No. Dokumen: {watermark.documentUid}</Text>
+            </View>
+            <Text style={styles.watermarkMeta}>
+              Dibuka oleh {watermark.memberLabel} · {longDate(watermark.downloadedAt.slice(0, 10))}
+            </Text>
+          </View>
+          <View style={styles.headerUnderWatermark}>
+            <Text style={styles.headerBusiness}>{data.businessName}</Text>
+            <Text style={styles.headerPeriod}>
+              {longDate(data.period.from)} – {longDate(data.period.to)}
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.header} fixed>
+          <Text>{data.businessName}</Text>
+          <Text>
+            {longDate(data.period.from)} – {longDate(data.period.to)}
           </Text>
-          <Text>No. dokumen {watermark.documentUid}</Text>
         </View>
       )}
-      <View style={styles.header} fixed>
-        <Text>{data.businessName}</Text>
-        <Text>
-          {longDate(data.period.from)} – {longDate(data.period.to)}
-        </Text>
-      </View>
       <View style={styles.footer} fixed>
         <Text>{statementDisclaimer}</Text>
         {watermark && (

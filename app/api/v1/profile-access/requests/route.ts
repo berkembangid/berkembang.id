@@ -26,5 +26,8 @@ export async function POST(request: Request) {
     const idempotencyKey = request.headers.get("Idempotency-Key")?.trim() || crypto.randomUUID();
     const result = await createConsentRequest(parsed.data, idempotencyKey);
     return Response.json({ data: result }, { status: result.idempotent ? 200 : 201 });
-  } catch (error) { return consentErrorResponse(error); }
+  } catch (error) {
+    console.error("[profile-access/requests POST ERROR]", error);
+    return consentErrorResponse(error);
+  }
 }

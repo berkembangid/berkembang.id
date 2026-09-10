@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart2, BookOpen, Briefcase, Building2, FileCheck, Gauge, History, LayoutDashboard, LogOut, MonitorPlay, ShieldCheck, Sliders, Sparkles, ToggleLeft, Users, X } from "lucide-react";
+import { BarChart2, BookOpen, Briefcase, Building2, FileCheck, Gauge, History, LayoutDashboard, LogOut, MonitorPlay, ShieldCheck, Sliders, ToggleLeft, Users, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/components/ui/confirm";
@@ -53,7 +54,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div data-world="institusi" className={styles.portal}>
       {mobileOpen && <button type="button" aria-label="Tutup menu" className={styles.backdrop} onClick={() => setMobileOpen(false)} />}
       <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ""}`}>
-        <div className={styles.brand}><Link href="/admin" className="flex items-center gap-3"><span className={styles.brandMark}><Sparkles size={17} /></span><span>berkembang.id</span></Link><button type="button" aria-label="Tutup menu" onClick={() => setMobileOpen(false)} className="ml-auto grid size-9 place-items-center rounded-lg text-[#6e859e] md:hidden"><X size={17} /></button></div>
+        <div className={styles.brand}>
+          <Link href="/admin" className="flex items-center gap-3" aria-label="Berkembang.id">
+            <Image
+              src="/logo/logo berkembang.webp"
+              alt="Berkembang.id"
+              width={150}
+              height={38}
+              priority
+              className="h-8 w-auto object-contain"
+            />
+          </Link>
+          <button type="button" aria-label="Tutup menu" onClick={() => setMobileOpen(false)} className="ml-auto grid size-9 place-items-center rounded-lg text-[#6e859e] md:hidden">
+            <X size={17} />
+          </button>
+        </div>
         <div className={styles.context}><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#eef8fd] text-[#0f73a3]"><ShieldCheck size={17} /></span><div><p className={styles.contextTitle}>Sesi admin</p><p className={styles.contextMeta}>Kontrol operasional platform</p></div></div></div>
         <nav aria-label="Menu admin" className="flex-1 overflow-y-auto pb-4">
           {NAV_GROUPS.map((group) => <div key={group.category} className={styles.group}><p className={styles.groupLabel}>{group.category}</p>{group.items.map((item) => {

@@ -32,13 +32,16 @@ declare
 begin
   institution_id_value := public.resolve_my_institution_id(p_institution_id);
   
-  -- Periksa jenis institusi: HANYA dinas yang dapat melihat seluruh data UMKM secara terbuka
+  -- Periksa jenis institusi: HANYA dinas / lembaga pemerintah yang dapat melihat seluruh data UMKM secara terbuka
   select coalesce(type, ''), coalesce(name, '')
   into institution_type_value, institution_name_value
   from public.institutions
   where id = institution_id_value;
 
-  if lower(institution_type_value) like '%dinas%' or lower(institution_name_value) like '%dinas%' then
+  if lower(institution_type_value) like '%dinas%' 
+     or lower(institution_name_value) like '%dinas%'
+     or lower(institution_type_value) like '%pemerintah%'
+     or lower(institution_name_value) like '%pemerintah%' then
     is_dinas_bool := true;
   end if;
 

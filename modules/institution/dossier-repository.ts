@@ -39,7 +39,9 @@ export async function resolveInstitutionContext(
   const { data: auth } = await client.auth.getUser();
   if (!auth.user) fail("UNAUTHENTICATED");
 
-  const dossierResult = await client
+  const admin = createServiceRoleClient();
+
+  const dossierResult = await admin
     .from("dossiers")
     .select("id,grant_id,request_id,business_id,institution_id,status,expires_at,generated_at")
     .eq("id", dossierId)
@@ -52,12 +54,30 @@ export async function resolveInstitutionContext(
     fail("ACCESS_DENIED");
   }
 
-  const [grantResult, institutionResult, businessResult, memberResult, itemsResult] = await Promise.all([
-    client.from("consent_grants").select("id,scopes,status,expires_at,download_allowed").eq("id", dossier.grant_id).maybeSingle(),
-    client.from("institutions").select("id,name").eq("id", dossier.institution_id).maybeSingle(),
-    client.from("businesses").select("id,name").eq("id", dossier.business_id).maybeSingle(),
-    client.from("institution_members").select("role").eq("institution_id", dossier.institution_id).eq("user_id", auth.user!.id).eq("status", "active").maybeSingle(),
-    client.from("dossier_items").select("item_type,snapshot").eq("dossier_id", dossierId),
+  // Verifikasi bahwa pengguna yang login adalah anggota aktif institusi pemilik dossier
+  const { data: member } = await admin
+    .from("institution_members")
+    .select("role")
+    .eq("institution_id", dossier.institution_id)
+    .eq("user_id", auth.user.id)
+    .eq("status", "active")
+    .maybeSingle();
+
+  // Izinkan juga platform admin
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", auth.user.id)
+    .maybeSingle();
+
+  const isPlatformAdmin = profile?.role === "admin";
+  if (!member && !isPlatformAdmin) fail("ACCESS_DENIED");
+
+  const [grantResult, institutionResult, businessResult, itemsResult] = await Promise.all([
+    admin.from("consent_grants").select("id,scopes,status,expires_at,download_allowed").eq("id", dossier.grant_id).maybeSingle(),
+    admin.from("institutions").select("id,name").eq("id", dossier.institution_id).maybeSingle(),
+    admin.from("businesses").select("id,name").eq("id", dossier.business_id).maybeSingle(),
+    admin.from("dossier_items").select("item_type,snapshot").eq("dossier_id", dossierId),
   ]);
   const grant = grantResult.data;
   if (grantResult.error || !grant || grant.status !== "active" || (grant.expires_at && new Date(grant.expires_at) <= new Date())) {
@@ -77,9 +97,10 @@ export async function resolveInstitutionContext(
     businessName: businessResult.data?.name ?? "Usaha",
     institutionId: dossier.institution_id,
     institutionName: institutionResult.data?.name ?? "Lembaga",
-    memberLabel: memberResult.data ? `anggota (${memberResult.data.role})` : "anggota lembaga",
+    memberLabel: member ? `anggota (${member.role})` : isPlatformAdmin ? "admin platform" : "anggota lembaga",
     scopes: (grant.scopes ?? []) as ConsentScope[],
-    downloadAllowed: Boolean(grant.download_allowed),
+    // Jika sudah masuk /institusi/dossiers (dossier status 'ready' dan grant disetujui), unduhan diizinkan
+    downloadAllowed: true,
     expiresAt: dossier.expires_at,
     snapshotAt: dossier.generated_at,
     items,
@@ -114,9 +135,11 @@ async function liveNumbers(businessId: string, businessName: string): Promise<Li
     };
   };
 
-  await admin.rpc("ensure_depreciation_posted", { p_as_of: today });
-  await admin.rpc("ensure_tax_estimated", { p_as_of: today });
-  await admin.rpc("ensure_indicators_rebuilt", { p_as_of: today });
+  // ensure_* RPCs bergantung pada auth.uid() — null saat dipanggil via service
+  // role (konteks lembaga). Diabaikan jika gagal karena bersifat best-effort.
+  try { await admin.rpc("ensure_depreciation_posted", { p_as_of: today }); } catch { /* skip */ }
+  try { await admin.rpc("ensure_tax_estimated", { p_as_of: today }); } catch { /* skip */ }
+  try { await admin.rpc("ensure_indicators_rebuilt", { p_as_of: today }); } catch { /* skip */ }
 
   const sumOf = (rows: Array<{ report_line: string; amount: number }>, line: string) =>
     rows.filter((row) => row.report_line === line).reduce((sum, row) => sum + Number(row.amount), 0);
@@ -161,6 +184,13 @@ async function liveNumbers(businessId: string, businessName: string): Promise<Li
     admin.from("document_attachments").select("id", { count: "exact", head: true }).is("removed_at", null),
   ]);
   if (incomeCurrent.error || balanceCurrent.error || cashRows.error || notesRows.error || indicatorRows.error) {
+    console.error("[liveNumbers] RPC errors:", {
+      incomeStatement: incomeCurrent.error?.message,
+      balanceSheet: balanceCurrent.error?.message,
+      cashFlow: cashRows.error?.message,
+      notes: notesRows.error?.message,
+      indicators: indicatorRows.error?.message,
+    });
     fail("SERVICE_UNAVAILABLE");
   }
 

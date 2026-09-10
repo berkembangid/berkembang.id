@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
+import { getAuthenticatedUser } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { ConsentOperationError, consentErrorResponse } from "@/modules/consent/consent-errors";
 import { resolveInstitutionContext } from "@/modules/institution/dossier-repository";
 
@@ -28,12 +29,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       .filter((scope) => dossier.scopes.includes(scope))
       .map((scope) => ({ scope, ...(dossier.items[scope] ?? {}) }));
 
-    const client = await createServerSupabaseClient();
+    const admin = createServiceRoleClient();
     const [issuesResult, stateResult, missionResult] = await Promise.all([
-      client.from("report_issues").select("id,document_uid,report_kind,period_from,period_to,created_at")
+      admin.from("report_issues").select("id,document_uid,report_kind,period_from,period_to,created_at")
         .eq("audience", "institution").eq("institution_id", dossier.institutionId).order("created_at", { ascending: false }).limit(20),
-      client.from("business_readiness_state").select("level,level_since,formula_version,updated_at").eq("business_id", dossier.businessId).maybeSingle(),
-      client.from("business_missions").select("status").eq("business_id", dossier.businessId),
+      admin.from("business_readiness_state").select("level,level_since,formula_version,updated_at").eq("business_id", dossier.businessId).maybeSingle(),
+      admin.from("business_missions").select("status").eq("business_id", dossier.businessId),
     ]);
 
     const missions = (missionResult.data ?? []) as Array<{ status: string }>;

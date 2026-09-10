@@ -29,13 +29,26 @@ type Candidate = {
 const defaultScopes: ConsentScope[] = ["business_identity", "readiness", "financial_summary"];
 
 export default function InstitutionCandidatesPage() {
-  const { selectedId } = useInstitution();
+  const { selectedId, selected: selectedOrg } = useInstitution();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [total, setTotal] = useState(0);
   const [isDinas, setIsDinas] = useState(false);
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [scopes, setScopes] = useState<ConsentScope[]>(defaultScopes);
-  const [purpose, setPurpose] = useState("Menilai kecocokan usaha untuk program pendampingan dan pembiayaan.");
+
+  const isInvestorViewer = Boolean(
+    selectedOrg?.type?.toLowerCase().includes("investor") ||
+    selectedOrg?.type?.toLowerCase().includes("offtaker") ||
+    selectedOrg?.type?.toLowerCase().includes("ventura") ||
+    selectedOrg?.type?.toLowerCase().includes("buyer")
+  );
+
+  const [purpose, setPurpose] = useState(
+    isInvestorViewer
+      ? "Menilai kelayakan kemitraan bisnis, offtaking hasil produksi, atau investasi UMKM."
+      : "Menilai kecocokan usaha untuk program pendampingan dan pembiayaan."
+  );
+
   const [duration, setDuration] = useState(30);
   const [downloadRequested, setDownloadRequested] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -144,10 +157,11 @@ export default function InstitutionCandidatesPage() {
 
     const yes = await confirm({
       title: `Kirim ketertarikan pada ${selected.candidateCode}?`,
-      description: `Yang diminta: ${scopes.map((scope) => consentScopeLabels[scope] ?? scope).join(", ")} selama ${duration} hari${downloadRequested ? ", dengan izin mengunduh" : ""}. Permintaan ini ditinjau admin platform lebih dulu, dan pemilik usahanya melihat persis apa yang Anda minta. Ruang lingkupnya tidak bisa diubah setelah terkirim.`,
+      description: `Yang diminta: ${scopes.map((scope) => consentScopeLabels[scope]?.label ?? scope).join(", ")} selama ${duration} hari${downloadRequested ? ", dengan izin mengunduh" : ""}. Permintaan ini ditinjau admin platform lebih dulu, dan pemilik usahanya melihat persis apa yang Anda minta. Ruang lingkupnya tidak bisa diubah setelah terkirim.`,
       confirmLabel: "Kirim permintaan",
       cancelLabel: "Periksa lagi",
     });
+
     if (!yes) return;
 
     setSending(true);
@@ -172,8 +186,14 @@ export default function InstitutionCandidatesPage() {
 
   return <DashboardPage>
     <PageHeader
-      title="Kandidat pendanaan"
-      description={isDinas ? "Daftar seluruh usaha aktif untuk pembinaan dan penyaluran program Dinas." : "Bandingkan kesiapan data usaha secara anonim. Filter dihitung di server; tanpa skor, tanpa ranking, tanpa rupiah."}
+      title={isInvestorViewer ? "Katalog UMKM & Kemitraan" : "Kandidat pendanaan"}
+      description={
+        isDinas
+          ? "Daftar seluruh usaha aktif untuk pembinaan dan penyaluran program Dinas."
+          : isInvestorViewer
+          ? "Eksplorasi potensi kemitraan usaha, offtaking, dan investasi UMKM terkurasi secara anonim."
+          : "Bandingkan kesiapan data usaha secara anonim. Filter dihitung di server; tanpa skor, tanpa ranking, tanpa rupiah."
+      }
       icon={Building2}
       actions={
         isDinas ? (
@@ -189,6 +209,7 @@ export default function InstitutionCandidatesPage() {
         )
       }
     />
+
     {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
     <div className="mb-5 flex flex-wrap gap-2" aria-label="Saring berdasarkan bidang usaha">{sectors.map((item) => <button key={item} onClick={() => apply({ sector: item })} className={`min-h-10 rounded-full px-4 text-xs font-bold ${sector === item ? "bg-[#0b5f86] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>{item}</button>)}</div>
     <div className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[auto_1fr_1fr_1fr_1fr_auto] md:items-end">

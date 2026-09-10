@@ -27,7 +27,7 @@ export async function getEffectivePortalRole(
       .maybeSingle(),
     client
       .from("institution_members")
-      .select("id")
+      .select("id, institution_id, institutions(type)")
       .eq("user_id", userId)
       .eq("status", "active")
       .limit(1)
@@ -45,9 +45,23 @@ export async function getEffectivePortalRole(
     throw new AuthorizationLookupError();
   }
 
+  let isInvestor = false;
+  if (institutionMember.data) {
+    const inst = institutionMember.data as unknown as { institutions?: { type?: string } | Array<{ type?: string }> };
+    const instType = Array.isArray(inst.institutions)
+      ? inst.institutions[0]?.type || ""
+      : inst.institutions?.type || "";
+    const lowerType = instType.toLowerCase();
+    if (lowerType.includes("investor") || lowerType.includes("offtaker") || lowerType.includes("ventura") || lowerType.includes("buyer")) {
+      isInvestor = true;
+    }
+  }
+
   return resolveEffectivePortalRole({
     hasActivePlatformAdmin: Boolean(platformAdmin.data),
     hasActiveInstitutionMembership: Boolean(institutionMember.data),
     hasActiveBusinessMembership: Boolean(businessMember.data),
+    isInvestor,
   });
 }
+

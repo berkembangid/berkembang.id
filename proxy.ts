@@ -18,7 +18,8 @@ export async function proxy(request: NextRequest) {
   const isProtectedPath =
     (pathname.startsWith("/umkm") ||
     pathname.startsWith("/admin") ||
-    pathname.startsWith("/institusi"));
+    pathname.startsWith("/institusi") ||
+    pathname.startsWith("/investor"));
 
   const isAuthPath =
     pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register");
@@ -117,6 +118,7 @@ export async function proxy(request: NextRequest) {
     const isAccessingUmkm = pathname.startsWith("/umkm");
     const isAccessingAdmin = pathname.startsWith("/admin");
     const isAccessingInstitusi = pathname.startsWith("/institusi");
+    const isAccessingInvestor = pathname.startsWith("/investor");
 
     if (userRole === "admin" && !isAccessingAdmin) {
       const url = request.nextUrl.clone();
@@ -130,6 +132,12 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
+    if (userRole === "investor" && !isAccessingInvestor) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/investor";
+      return NextResponse.redirect(url);
+    }
+
     if (userRole === "umkm" && !isAccessingUmkm) {
       const url = request.nextUrl.clone();
       url.pathname = "/umkm";
@@ -138,6 +146,7 @@ export async function proxy(request: NextRequest) {
   }
 
   return response;
+
 }
 
 export const config = {

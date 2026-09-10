@@ -43,10 +43,17 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(new URL("/auth/login", url.origin));
 
-  // Akun lama yang sudah punya usaha atau keanggotaan lembaga tidak perlu
-  // ditanya apa-apa lagi.
+  // Akun lama yang sudah punya usaha atau keanggotaan lembaga diperiksa.
+  // Akun lembaga resmi tidak diizinkan masuk menggunakan Google OAuth.
   try {
-    if (await getEffectivePortalRole(supabase, user.id)) {
+    const role = await getEffectivePortalRole(supabase, user.id);
+    if (role) {
+      if (role === "institution") {
+        await supabase.auth.signOut();
+        const target = new URL("/auth/login", url.origin);
+        target.searchParams.set("error", "lembaga_google_prohibited");
+        return NextResponse.redirect(target);
+      }
       return NextResponse.redirect(new URL("/auth/continue", url.origin));
     }
   } catch {
