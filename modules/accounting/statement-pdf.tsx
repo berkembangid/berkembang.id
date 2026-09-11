@@ -40,6 +40,41 @@ const palette = {
   warning: "#a33030",
 };
 
+/**
+ * Ukuran kepala dan kaki halaman pada berkas ber-cap lembaga, beserta padding
+ * yang harus melewatinya.
+ *
+ * DIEKSPOR SUPAYA HUBUNGANNYA BISA DIUJI. Kepala dan kaki di react-pdf harus
+ * `position: absolute` agar bisa diulang di tiap halaman (`fixed`), dan
+ * konsekuensinya ia tidak ikut menyisihkan ruang -- yang menyisihkan ruang
+ * hanya padding halaman. Ketika keduanya ditulis sebagai angka lepas di dua
+ * tempat berbeda, tidak ada yang menahan padding tetap lebih besar daripada
+ * kepalanya; itulah yang terjadi di sini, dan judul laporan tercetak menimpa
+ * nama usahanya.
+ *
+ * Kalau Anda menambah satu baris ke kepala atau kaki, naikkan tingginya di
+ * sini juga. Uji di `tests/unit/statement-pdf.test.ts` akan gagal sampai
+ * paddingnya ikut dinaikkan.
+ */
+export const watermarkLayout = {
+  /** Jarak kepala dari tepi atas kertas. */
+  headerTop: 14,
+  /**
+   * Band cap (13,6 border+padding · 10,9 baris lembaga · 2 jarak · 10,2 baris
+   * "dibuka oleh") + 6 jarak ke bawah + 15,4 baris nama usaha dan periode.
+   */
+  headerHeight: 58.1,
+  /** Jarak kaki dari tepi bawah kertas. */
+  footerBottom: 24,
+  /**
+   * 9,9 disclaimer · 9,9 baris POJK · 11,9 nomor dokumen dan halaman ·
+   * 9,9 baris lembaga · 6,5 padding dan garis.
+   */
+  footerHeight: 48.1,
+  pagePaddingTop: 80,
+  pagePaddingBottom: 80,
+} as const;
+
 const styles = StyleSheet.create({
   page: {
     paddingTop: 62,
@@ -50,9 +85,35 @@ const styles = StyleSheet.create({
     color: palette.ink,
     lineHeight: 1.45,
   },
+  /**
+   * Halaman untuk berkas yang dibuka lembaga atau investor.
+   *
+   * Kepala dan kaki halaman di react-pdf harus `position: absolute` supaya
+   * bisa diulang di setiap halaman (`fixed`), dan konsekuensinya: ia TIDAK
+   * ikut menyisihkan ruang. Yang menyisihkan ruang hanya padding halaman ini,
+   * dan padding yang lebih kecil daripada tinggi kepala berarti judul laporan
+   * dicetak menimpa nama usahanya.
+   *
+   * Angkanya dihitung, bukan dikira-kira:
+   *
+   *   KEPALA, dari atas 14        KAKI, dari bawah 24
+   *   band: border+padding  13.6    disclaimer          9.9
+   *   baris lembaga+no dok  10.9    baris POJK          9.9
+   *   jarak dalam band       2      no dok + halaman   11.9
+   *   baris "dibuka oleh"   10.2    baris lembaga       9.9
+   *   jarak band ke bawah    6      padding + garis     6.5
+   *   nama usaha + periode  15.4    ------------------------
+   *   ------------------------      48.1 → tepi atas di 72.1
+   *   58.1 → tepi bawah di 72.1
+   *
+   * Jadi 80 di kedua sisi: lewat 72 dengan sisa ~8pt. Versi tanpa cap lembaga
+   * tetap 62/58 karena kepala dan kakinya memang lebih pendek.
+   *
+   * Angkanya diambil dari `watermarkLayout` supaya tidak ada dua sumber.
+   */
   pageWithWatermark: {
-    paddingTop: 78,
-    paddingBottom: 58,
+    paddingTop: watermarkLayout.pagePaddingTop,
+    paddingBottom: watermarkLayout.pagePaddingBottom,
     paddingHorizontal: 46,
     fontSize: 9,
     fontFamily: "Helvetica",
@@ -72,22 +133,9 @@ const styles = StyleSheet.create({
     fontSize: 7.5,
     color: palette.muted,
   },
-  headerWithWatermark: {
-    position: "absolute",
-    top: 70,
-    left: 46,
-    right: 46,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    borderBottomWidth: 0.5,
-    borderBottomColor: palette.faint,
-    paddingBottom: 6,
-    fontSize: 7.5,
-    color: palette.muted,
-  },
   footer: {
     position: "absolute",
-    bottom: 24,
+    bottom: watermarkLayout.footerBottom,
     left: 46,
     right: 46,
     borderTopWidth: 0.5,
@@ -149,7 +197,7 @@ const styles = StyleSheet.create({
   },
   watermarkContainer: {
     position: "absolute",
-    top: 14,
+    top: watermarkLayout.headerTop,
     left: 46,
     right: 46,
   },
@@ -269,6 +317,19 @@ function TableHead({ headers, columns }: { headers: string[]; columns: Column[] 
   );
 }
 
+/**
+ * Padding halaman ditentukan oleh ada-tidaknya cap lembaga.
+ *
+ * Ditulis sebagai fungsi, bukan diulang di ketujuh `<Page>`: tujuh salinan
+ * berarti halaman kedelapan yang ditambahkan nanti akan memakai padding yang
+ * salah, dan gejalanya hanya muncul pada berkas yang diunduh lembaga atau
+ * investor -- bukan pada yang diunduh pemiliknya sendiri. Cacat yang hanya
+ * terlihat oleh pembaca luar adalah cacat yang paling lama tidak ketahuan.
+ */
+function pageStyle(watermark?: StatementWatermark) {
+  return watermark ? styles.pageWithWatermark : styles.page;
+}
+
 function PageChrome({ data, watermark }: { data: StatementDocumentData; watermark?: StatementWatermark }) {
   return (
     <>
@@ -325,7 +386,7 @@ function BalanceSheetPage({ data, watermark }: { data: StatementDocumentData; wa
     previous ? (previous.lines.find((line) => line.key === key)?.amountIdr ?? 0) : null;
 
   return (
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={pageStyle(watermark)}>
       <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAPORAN POSISI KEUANGAN</Text>
       <Text style={styles.subtitle}>Per {longDate(current.asOf)}</Text>
@@ -370,7 +431,7 @@ function IncomeStatementPage({ data, watermark }: { data: StatementDocumentData;
   };
 
   return (
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={pageStyle(watermark)}>
       <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAPORAN LABA RUGI</Text>
       <Text style={styles.subtitle}>Untuk periode yang berakhir {longDate(current.period.to)}</Text>
@@ -399,7 +460,7 @@ function CashFlowPage({ data, watermark }: { data: StatementDocumentData; waterm
   const flow = data.cashFlow;
   const columns: Column[] = [{ width: "72%" }, { width: "28%", align: "right" }];
   return (
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={pageStyle(watermark)}>
       <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAPORAN ARUS KAS</Text>
       <Text style={styles.subtitle}>
@@ -438,7 +499,7 @@ function NotesPage({ data, watermark }: { data: StatementDocumentData; watermark
   const twoColumns: Column[] = [{ width: "70%" }, { width: "30%", align: "right" }];
 
   return (
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={pageStyle(watermark)}>
       <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>CATATAN ATAS LAPORAN KEUANGAN</Text>
       <Text style={styles.subtitle}>
@@ -607,7 +668,7 @@ function IndicatorPage({ data, watermark }: { data: StatementDocumentData; water
     { width: "8%", align: "right" },
   ];
   return (
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={pageStyle(watermark)}>
       <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAMPIRAN A — INDIKATOR ENAM BULAN</Text>
       <Text style={styles.note}>
@@ -659,7 +720,7 @@ function MethodologyPage({ data, watermark }: { data: StatementDocumentData; wat
   };
 
   return (
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={pageStyle(watermark)}>
       <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAMPIRAN B — METODOLOGI PENCATATAN</Text>
       <Text style={styles.note}>
@@ -708,7 +769,7 @@ function StatementDocument({ data, watermark }: { data: StatementDocumentData; w
       creator="BERKEMBANG.ID"
       producer="BERKEMBANG.ID"
     >
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={pageStyle(watermark)}>
         <PageChrome data={data} watermark={watermark} />
         <View style={styles.cover}>
           <Text style={styles.coverTitle}>{data.businessName}</Text>

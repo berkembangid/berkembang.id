@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { buildBalanceSheet, buildCashFlow } from "@/modules/accounting/balance-sheet";
 import type { StatementDocumentData } from "@/modules/accounting/statement-document";
 import { accountingPolicyNotes, accountingPolicyNotesFor, evidencePolicyNote, statementDisclaimer } from "@/modules/accounting/statement-document";
-import { renderFinancialStatementsPdf, statementFileName } from "@/modules/accounting/statement-pdf";
+import { renderFinancialStatementsPdf, statementFileName, watermarkLayout } from "@/modules/accounting/statement-pdf";
 import type { IncomeStatementView } from "@/modules/accounting/reports";
 import { indicatorFormulaVersion } from "@/modules/accounting/statement-document";
 import { emptyMonth } from "@/modules/accounting/warung";
@@ -185,6 +185,45 @@ describe("financial statement PDF", () => {
     const pdf = await renderFinancialStatementsPdf(documentData());
     // Sampul, Posisi Keuangan, Laba Rugi, Arus Kas, CALK, indikator, metodologi.
     expect(pageCount(pdf)).toBeGreaterThanOrEqual(7);
+  }, 60_000);
+
+  /**
+   * Berkas yang dibuka lembaga dan investor punya kepala dan kaki yang lebih
+   * tinggi: ada band cap akses di atas dan dua baris tambahan di bawah.
+   * Keduanya `position: absolute` supaya bisa diulang di tiap halaman, dan
+   * karena itu TIDAK menyisihkan ruang -- hanya padding halaman yang bisa.
+   *
+   * Ketika paddingnya lebih kecil daripada kepalanya, "LAPORAN POSISI
+   * KEUANGAN" tercetak menimpa nama usahanya. Itu pernah terjadi, dan hanya
+   * terlihat pada berkas yang diunduh pembaca luar -- bukan pada yang diunduh
+   * pemiliknya sendiri.
+   *
+   * Yang dijaga uji ini: paddingnya selalu lebih besar daripada tinggi kepala
+   * dan kaki yang tercatat. Ia TIDAK bisa menangkap tinggi yang lupa
+   * diperbarui setelah ada baris baru ditambahkan; untuk itu satu kali lihat
+   * berkasnya tetap perlu.
+   */
+  it("menyisihkan ruang lebih besar daripada kepala dan kaki berkas ber-cap", () => {
+    const { headerTop, headerHeight, footerBottom, footerHeight } = watermarkLayout;
+    expect(watermarkLayout.pagePaddingTop).toBeGreaterThan(headerTop + headerHeight);
+    expect(watermarkLayout.pagePaddingBottom).toBeGreaterThan(footerBottom + footerHeight);
+  });
+
+  it("memakai padding yang lebih longgar itu hanya untuk berkas ber-cap", async () => {
+    // Berkas milik pemilik sendiri tidak punya band cap, jadi ia tidak boleh
+    // ikut kehilangan ruang isi -- dan satu-satunya cara membedakannya adalah
+    // lewat ada-tidaknya cap, bukan lewat pilihan di tiap halaman.
+    const berCap = await renderFinancialStatementsPdf(documentData(), {
+      institutionName: "Lembaga Testing",
+      memberLabel: "anggota (admin)",
+      downloadedAt: "2026-09-10T02:00:00.000Z",
+      documentUid: "BRK-20260910-KV5FQ67Z",
+    });
+    const text = extractText(berCap);
+    expect(isPdf(berCap)).toBe(true);
+    expect(text).toContain("Akses Lembaga: Lembaga Testing");
+    expect(text).toContain("LAPORAN POSISI KEUANGAN");
+    expect(pageCount(berCap)).toBeGreaterThanOrEqual(7);
   }, 60_000);
 
   it("prints all three SAK EMKM statements plus the cash flow and both appendices", async () => {
