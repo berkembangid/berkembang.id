@@ -76,10 +76,16 @@ describe("rangkaian layar autentikasi", () => {
 
   it("lupa kata sandi memakai kode, bukan tautan", () => {
     const forgot = read("app", "auth", "lupa-sandi", "page.tsx");
-    expect(forgot).toContain("resetPasswordForEmail");
-    expect(forgot).toContain('type: "recovery"');
-    // Sesi pemulihan tidak boleh menjadi jalan masuk diam-diam.
-    expect(forgot).toContain("signOut");
+
+    // Uji ini dulu menuntut `resetPasswordForEmail` -- dan itu BERTENTANGAN
+    // dengan judulnya sendiri: fungsi itu mengirim TAUTAN pemulihan, bukan
+    // kode. `0074_custom_password_reset.sql` menggantinya dengan tiga langkah
+    // berkode, jadi yang basi ujinya, bukan kodenya. Sekarang yang diuji
+    // ketiga langkah itu ada, dan tautan Supabase-nya tidak dipakai lagi.
+    expect(forgot).toContain("/api/auth/forgot-password");
+    expect(forgot).toContain("/api/auth/verify-reset-otp");
+    expect(forgot).toContain("/api/auth/reset-password");
+    expect(forgot).not.toContain("resetPasswordForEmail");
   });
 
   it("akun Google baru ditanya perannya, bukan ditebak", () => {
@@ -87,8 +93,71 @@ describe("rangkaian layar autentikasi", () => {
     expect(callback).toContain("exchangeCodeForSession");
     expect(callback).toContain("/auth/lengkapi");
     const complete = read("app", "auth", "lengkapi", "page.tsx");
-    expect(complete).toContain("signup_account_type");
+    // Kunci metadatanya kini ditulis di satu modul bersama, jadi yang dibaca
+    // di sini tempat ia benar-benar ditulis -- bukan halaman yang memanggilnya.
+    expect(complete).toContain("umkmSignupMetadata");
+    expect(complete).toContain("investorSignupMetadata");
     expect(complete).toContain("/api/auth/bootstrap");
+    const fields = read("modules", "auth", "onboarding-fields.ts");
+    expect(fields).toContain('signup_account_type: "umkm"');
+    expect(fields).toContain('signup_account_type: "investor"');
+  });
+
+  it("masuk berakhir di portalnya, kecuali sekali bagi pemilik yang baru mendaftar", () => {
+    // Aturannya BERUBAH, bukan dibatalkan -- dan bedanya terletak pada apa
+    // yang ditanyakan sebelum membelokkan orang.
+    //
+    //   Dulu   : "apakah ia belum punya transaksi". Keadaan itu tetap kosong
+    //            berhari-hari, jadi pengalihannya terjadi pada SETIAP kali
+    //            masuk dan terbaca seperti kegagalan masuk. Dan bendera
+    //            `onboarding=1` yang dibawanya tidak pernah dibaca apa pun.
+    //   Sekarang: "apakah ia sudah pernah melihat perkenalan". Penanda
+    //            tersimpan (`profiles.onboarding_seen_at`) yang hanya pernah
+    //            berubah sekali, jadi pengalihannya pun sekali.
+    const codeOnly = (source: string) => source
+      .split("\n")
+      .filter((line) => {
+        const trimmed = line.trim();
+        return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
+      })
+      .join("\n");
+
+    const kontinu = codeOnly(read("app", "auth", "continue", "route.ts"));
+    expect(kontinu).toContain("portalPathForRole(role)");
+    // Pengalihannya bergantung pada penanda yang tersimpan, bukan pada keadaan
+    // lain yang kebetulan kosong.
+    expect(kontinu).toContain("onboarding_seen_at");
+    expect(kontinu).toContain('redirect(new URL("/umkm/profil"');
+    // Bendera yang tidak dibaca siapa pun tidak kembali.
+    expect(kontinu).not.toContain("onboarding=1");
+    expect(codeOnly(read("app", "auth", "register", "page.tsx"))).not.toContain("/umkm/profil");
+  });
+
+  it("perkenalan ditandai sekali, dan dilewati sama dengan diselesaikan", () => {
+    // Perkenalan yang muncul lagi karena DILEWATI -- bukan diselesaikan --
+    // menghukum orang karena tidak membacanya. Keduanya memanggil hal yang
+    // sama, dan penandanya set-once di basis data.
+    const tour = read("components", "warung", "WelcomeTour.tsx");
+    expect(tour).toContain("/api/v1/onboarding/seen");
+    // Satu jalan keluar untuk keduanya: tombol Lewati, tanda X, dan tombol
+    // terakhir semuanya memanggil `finish`.
+    expect((tour.match(/void finish\(\)/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    // Dan penandanya tidak disimpan di peramban, yang akan melupakannya
+    // begitu pemilik berganti ponsel.
+    expect(tour).not.toContain("localStorage");
+  });
+
+  it("pemulangan OAuth yang jatuh di halaman depan diteruskan, bukan ditinggalkan", () => {
+    // `site_url` adalah tujuan bawaan Supabase ketika `redirectTo` tidak ada
+    // di daftar izin, dan halaman depan tidak membaca `code`. Tanpa penerusan
+    // ini, sesinya terbentuk diam-diam oleh `detectSessionInUrl` dan orangnya
+    // tertinggal di halaman depan -- sudah masuk, tanpa satu pun petunjuk.
+    const proxy = read("proxy.ts");
+    expect(proxy).toContain('if (pathname === "/") {');
+    expect(proxy).toContain('query.has("code")');
+    // Galat OAuth juga dipantulkan ke `site_url`, jadi ia pun harus diteruskan.
+    expect(proxy).toContain('query.has("error")');
+    expect(proxy).toContain('target.pathname = "/auth/callback"');
   });
 
   it("jeda kirim ulang tidak lebih pendek dari jeda Supabase", () => {

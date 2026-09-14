@@ -136,14 +136,23 @@ export async function getJournal(userId: string, query: JournalQuery): Promise<{
   };
 }
 
+/**
+ * Satu baris neraca saldo: satu nilai, di satu kolom.
+ *
+ * Sebelum `0088` setiap akun memuat akumulasi debit, akumulasi kredit, DAN
+ * saldonya sekaligus -- itu ringkasan buku besar, bukan neraca saldo. Dan
+ * penjumlahan kedua kolomnya tidak membuktikan apa pun, karena setiap entry
+ * jurnal sudah seimbang sendiri sehingga kedua akumulasi selalu sama.
+ */
 export type TrialBalanceRow = {
   accountCode: string;
   accountName: string;
   accountType: string;
   normalBalance: string;
-  totalDebitIdr: number;
-  totalCreditIdr: number;
-  balanceIdr: number;
+  /** Terisi hanya bila saldo akun ini ada di sisi debit; kalau tidak, nol. */
+  debitIdr: number;
+  /** Terisi hanya bila saldo akun ini ada di sisi kredit; kalau tidak, nol. */
+  creditIdr: number;
 };
 
 export async function getTrialBalance(userId: string, asOf: string): Promise<{
@@ -165,12 +174,11 @@ export async function getTrialBalance(userId: string, asOf: string): Promise<{
     accountName: row.account_name,
     accountType: row.account_type,
     normalBalance: row.normal_balance,
-    totalDebitIdr: Number(row.total_debit),
-    totalCreditIdr: Number(row.total_credit),
-    balanceIdr: Number(row.balance),
+    debitIdr: Number(row.debit),
+    creditIdr: Number(row.credit),
   }));
-  const totalDebitIdr = rows.reduce((sum, row) => sum + row.totalDebitIdr, 0);
-  const totalCreditIdr = rows.reduce((sum, row) => sum + row.totalCreditIdr, 0);
+  const totalDebitIdr = rows.reduce((sum, row) => sum + row.debitIdr, 0);
+  const totalCreditIdr = rows.reduce((sum, row) => sum + row.creditIdr, 0);
   return { asOf, rows, totalDebitIdr, totalCreditIdr, balanced: totalDebitIdr === totalCreditIdr };
 }
 

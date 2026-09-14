@@ -82,6 +82,22 @@ const expectedMigrations = [
   "0074_custom_password_reset.sql",
   "0075_investor_role_and_unrestricted_institution.sql",
   "0076_restrict_institution_bank_except_dinas.sql",
+  "0077_add_investor_to_profile_role_check.sql",
+  "0078_allow_all_institution_roles_to_request.sql",
+  "0079_grant_fn_reporting_to_service_role.sql",
+  "0080_kewenangan_dinas_dari_kolom_bukan_nama.sql",
+  "0081_afiliasi_dinas_diberikan_pemilik.sql",
+  "0082_ringkasan_wilayah_dinas.sql",
+  "0083_klik_angka_jadi_daftar.sql",
+  "0084_broadcast_pendampingan.sql",
+  "0085_kewenangan_disetel_admin_bukan_subjeknya.sql",
+  "0086_penyusutan_tanpa_nilai_residu.sql",
+  "0087_aset_tetap_pada_harga_perolehan.sql",
+  "0088_neraca_saldo_satu_kolom.sql",
+  "0089_umur_ekonomis_ditanyakan.sql",
+  "0090_sambutan_umkm_baru.sql",
+  "0091_tawaran_dinas_pembina.sql",
+  "0092_hak_tulis_hanya_yang_disengaja.sql",
 ];
 
 describe("WP-03 migration contract", () => {
@@ -302,7 +318,29 @@ describe("WP-04 identity and RLS contract", () => {
     expect(adminRoute).toContain("operationSchema.safeParse");
     expect(signedUrlRoute).toContain("createDocumentDownloadUrl");
     expect(signedUrlRoute).toContain('Deprecation: "true"');
-    expect(adminPages).not.toMatch(/\.insert\(|\.update\(|\.delete\(|signUp\(/);
+    // Baris yang SELURUHNYA komentar dibuang sebelum dicocokkan.
+    //
+    // Kontraknya tentang kode, bukan tentang prosa. Sebelum ini uji ini gagal
+    // karena sebuah komentar yang menjelaskan tulisan langsung yang baru
+    // DIHAPUS dari halaman detail UMKM -- penjelasan yang justru mencegah orang
+    // mengembalikannya. Uji yang menghukum penjelasan akan membuat orang
+    // menghapus penjelasannya, atau melonggarkan polanya; keduanya lebih buruk
+    // daripada uji yang sedikit lebih pintar.
+    //
+    // Hanya baris penuh yang dibuang, bukan komentar di ekor baris kode: yang
+    // dibuang harus sesempit mungkin supaya polanya tetap menangkap tulisan
+    // yang sungguhan.
+    const adminCode = adminPages
+      .split("\n")
+      .filter((line) => {
+        const trimmed = line.trim();
+        return !trimmed.startsWith("//")
+          && !trimmed.startsWith("*")
+          && !trimmed.startsWith("/*")
+          && !trimmed.startsWith("{/*");
+      })
+      .join("\n");
+    expect(adminCode).not.toMatch(/\.insert\(|\.update\(|\.delete\(|signUp\(/);
   });
 
   it("never exposes the service-role key through a public environment name", () => {

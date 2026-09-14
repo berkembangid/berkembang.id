@@ -5,6 +5,8 @@ import {
   accountingValidationErrorResponse,
 } from "@/modules/accounting/accounting-errors";
 import { journalQuerySchema } from "@/modules/accounting/accounting-schema";
+import { ensurePeriodPosted } from "@/modules/accounting/period";
+import { jakartaDate } from "@/modules/ledger/capture-schema";
 import { getJournal } from "@/modules/accounting/reports";
 
 function optionalNumber(value: string | null) {
@@ -25,6 +27,17 @@ export async function GET(request: Request) {
       offset: optionalNumber(url.searchParams.get("offset")),
     });
     if (!query.success) return accountingValidationErrorResponse(query.error);
+
+    // Penyusutan dan pajak diposting lebih dulu, sebelum angkanya dibaca.
+    //
+    // Tanpa ini, pemilik yang membuka layar ini SEBELUM pernah membuka Laporan
+    // Posisi Keuangan melihatnya tanpa satu baris penyusutan pun -- padahal
+    // alatnya sudah tercatat. Dan ia SEMBUH SENDIRI begitu Posisi Keuangan
+    // dibuka sekali, jadi yang dilihat pemilik bukan angka yang salah,
+    // melainkan angka yang berubah tanpa ia mengubah apa pun.
+    // Rentang jurnal boleh terbuka di ujungnya; kalau `to` tidak diisi, yang
+    // dipastikan adalah hari ini -- bulan yang tertinggal tetap terposting.
+    await ensurePeriodPosted(query.data.to ?? jakartaDate());
 
     return Response.json(
       { data: await getJournal(user.id, query.data) },

@@ -315,7 +315,7 @@ export async function listFixedAssets(userId: string): Promise<FixedAssetView[]>
   const [assets, postings] = await Promise.all([
     client
       .from("fixed_assets")
-      .select("id,name,category,acquired_on,cost_idr,useful_life_months,salvage_value_idr,disposed_on,opening_balance_id,original_cost_idr")
+      .select("id,name,category,acquired_on,cost_idr,useful_life_months,disposed_on,opening_balance_id,original_cost_idr,opening_accumulated_depreciation_idr")
       .eq("business_id", businessId)
       .order("acquired_on", { ascending: false }),
     client.from("depreciation_postings").select("asset_id,amount_idr").eq("business_id", businessId),
@@ -329,7 +329,14 @@ export async function listFixedAssets(userId: string): Promise<FixedAssetView[]>
   }
 
   return (assets.data ?? []).map((row) => {
-    const accumulatedIdr = accumulated.get(row.id) ?? 0;
+    // Akumulasi = bulan sebelum pembukuan mulai + setiap bulan yang diposting.
+    //
+    // Bagian pertama tidak punya baris `depreciation_postings`: ia masuk lewat
+    // jurnal pembuka sebagai kredit 1690. Menghitungnya hanya dari postingan
+    // membuat CALK menyebut akumulasi yang lebih kecil daripada yang ada di
+    // Posisi Keuangan -- dua laporan yang bercerita beda tentang alat yang sama.
+    const accumulatedIdr =
+      Number(row.opening_accumulated_depreciation_idr ?? 0) + (accumulated.get(row.id) ?? 0);
     return {
       id: row.id,
       name: row.name,
@@ -343,7 +350,8 @@ export async function listFixedAssets(userId: string): Promise<FixedAssetView[]>
       fromOpeningBalance: row.opening_balance_id !== null,
       originalCostIdr: Number(row.original_cost_idr ?? row.cost_idr),
       monthlyDepreciationIdr: Math.max(
-        Math.floor((Number(row.cost_idr) - Number(row.salvage_value_idr)) / row.useful_life_months),
+        // SAK EMKM 11.14: seluruh harga perolehan yang disusutkan.
+        Math.floor(Number(row.cost_idr) / row.useful_life_months),
         1,
       ),
     };
@@ -358,7 +366,7 @@ export async function registerFixedAsset(input: FixedAssetInput) {
     p_acquired_on: input.acquiredOn,
     p_category: input.category ?? undefined,
     p_useful_life_months: input.usefulLifeMonths ?? undefined,
-    p_salvage_value_idr: input.salvageValueIdr ?? 0,
+    p_salvage_value_idr: 0,
   });
   const operationError = rpcError(error);
   if (operationError) throw operationError;

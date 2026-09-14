@@ -1,60 +1,106 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Building, Store } from "lucide-react";
+import { AlertCircle, Building, CalendarDays, MapPin, Phone, Store } from "lucide-react";
 import CitySelect from "@/components/CitySelect";
 import { supabase } from "@/lib/supabase";
 import { authErrorMessage } from "@/modules/auth/otp";
-
-const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
-const INVESTOR_TYPES = ["Modal Ventura (VC)", "Angel Investor", "Perusahaan Offtaker / Buyer", "Korporasi", "Koperasi / Agregator", "Lainnya"];
+import {
+  BUSINESS_FORMS, CHANNELS, CURRENT_YEAR, EMPTY_UMKM_DETAIL, HEADCOUNTS, INVESTOR_TYPES, SECTORS,
+  investorError, investorSignupMetadata, umkmDetailError, umkmIdentityError, umkmSignupMetadata,
+} from "@/modules/auth/onboarding-fields";
 
 /**
- * Satu pertanyaan yang tidak bisa dijawab akun Google.
+ * Onboarding untuk akun Google.
+ *
+ * KENAPA LAYAR INI ADA.
  *
  * Pendaftaran lewat surel menitipkan metadata -- pemilik usaha atau investor,
- * nama usahanya, kotanya -- dan `bootstrap` memakainya untuk membuatkan profil.
- * Akun Google tidak membawa apa pun selain nama dan alamat surel.
+ * nama usahanya, kotanya, cara usahanya berjalan -- dan `bootstrap` memakainya
+ * untuk membuatkan profil dan baris usaha. Akun Google tidak membawa apa pun
+ * selain nama dan alamat surel.
  *
- * Catatan: Akun Lembaga tidak didaftarkan mandiri maupun lewat Google,
- * melainkan didaftarkan khusus melalui Admin platform.
+ * KENAPA DUA LANGKAH, DAN BUKAN SATU SEPERTI SEBELUMNYA.
+ *
+ * Sebelumnya layar ini hanya menanyakan tiga hal: nama usaha, bidang, kota.
+ * Padahal pendaftaran lewat surel menanyakan enam hal lagi -- bentuk usaha,
+ * tahun mulai, WhatsApp, alamat, kanal penjualan, jumlah orang. Akibatnya akun
+ * Google lahir separuh terisi, lalu pemiliknya diantar ke halaman Profil untuk
+ * mengisi sisanya, DAN ia tidak pernah tahu mana yang belum diisi.
+ *
+ * Dua jalan masuk yang menghasilkan akun berbeda bukan dua jalan masuk; itu
+ * satu jalan dan satu jalan pintas. Pertanyaannya sekarang persis sama, dan
+ * ditanyakan dari satu tempat: `modules/auth/onboarding-fields.ts`.
+ *
+ * Investor tetap satu langkah, karena pendaftaran surelnya juga satu langkah.
  */
+
 export default function CompleteProfilePage() {
   const [role, setRole] = useState<"umkm" | "investor">("umkm");
+  const [step, setStep] = useState(1);
+  const [ownerName, setOwnerName] = useState("");
   const [business, setBusiness] = useState({ name: "", sector: "Kuliner", city: "" });
-  const [investor, setInvestor] = useState({ companyName: "", type: "Modal Ventura (VC)", city: "" });
+  const [detail, setDetail] = useState(EMPTY_UMKM_DETAIL);
+  const [investor, setInvestor] = useState({ companyName: "", type: INVESTOR_TYPES[0] as string, city: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   // Halaman ini hanya masuk akal dengan sesi. Tanpa penjaga ini, orang yang
   // membukanya langsung akan menekan tombol lalu menerima galat tentang
   // pengguna yang tidak ada -- pesan yang tidak menjelaskan apa pun.
+  //
+  // Nama dari Google diambil sekaligus di sini, bukan saat menyimpan: kalau
+  // diambil saat menyimpan dan panggilannya gagal, nama pemiliknya hilang
+  // padahal sudah ada di tangan sejak layar terbuka.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) window.location.href = "/auth/login";
-    });
+    const timer = window.setTimeout(() => {
+      void supabase.auth.getUser().then(({ data }) => {
+        if (!data.user) {
+          window.location.href = "/auth/login";
+          return;
+        }
+        const meta = data.user.user_metadata ?? {};
+        const displayName = typeof meta.full_name === "string" ? meta.full_name
+          : typeof meta.name === "string" ? meta.name : "";
+        setOwnerName(displayName);
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
+
+  const totalSteps = role === "umkm" ? 2 : 1;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
-    if (role === "umkm" && (!business.name.trim() || !business.city.trim())) {
-      setError("Isi nama usaha dan kota atau kabupaten usaha.");
-      return;
-    }
-    if (role === "investor" && (!investor.companyName.trim() || !investor.city.trim())) {
-      setError("Isi nama perusahaan / lembaga dan kota atau kabupaten.");
+
+    if (role === "investor") {
+      const message = investorError(investor);
+      if (message) { setError(message); return; }
+      await simpan(investorSignupMetadata({ ...investor, contactName: ownerName }));
       return;
     }
 
+    if (step === 1) {
+      const message = umkmIdentityError({ businessName: business.name, city: business.city });
+      if (message) { setError(message); return; }
+      setStep(2);
+      return;
+    }
+
+    const message = umkmDetailError(detail);
+    if (message) { setError(message); return; }
+    await simpan(umkmSignupMetadata({
+      ownerName,
+      businessName: business.name,
+      sector: business.sector,
+      city: business.city,
+      ...detail,
+    }));
+  }
+
+  async function simpan(metadata: Record<string, unknown>) {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    const displayName = typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name : "";
-
-    const metadata = role === "umkm"
-      ? { nama_pemilik: displayName, nama_usaha: business.name.trim(), sektor_usaha: business.sector, lokasi: business.city, signup_account_type: "umkm" }
-      : { nama_contact: displayName, nama_perusahaan: investor.companyName.trim(), jenis_institusi: investor.type, lokasi: investor.city, signup_account_type: "investor" };
-
     const { error: updateError } = await supabase.auth.updateUser({ data: metadata });
     if (updateError) {
       setError(authErrorMessage(updateError.message, "Data belum tersimpan. Coba lagi."));
@@ -68,14 +114,40 @@ export default function CompleteProfilePage() {
       setLoading(false);
       return;
     }
-    window.location.href = role === "umkm" ? "/umkm/profil?onboarding=1" : "/auth/continue";
+    // `/auth/continue` yang memutuskan tujuannya, bukan layar ini. Satu tempat
+    // yang tahu portal mana untuk peran mana.
+    window.location.href = "/auth/continue";
   }
+
+  function toggleChannel(value: string) {
+    setDetail((current) => ({
+      ...current,
+      channels: current.channels.includes(value)
+        ? current.channels.filter((item) => item !== value)
+        : [...current.channels, value],
+    }));
+  }
+
+  const heading = role === "investor" ? "Profil Investor / Offtaker"
+    : step === 1 ? "Kenalkan usaha Anda" : "Cara usaha Anda berjalan";
 
   return (
     <>
-      <h1 className="font-headline mb-2 text-2xl font-bold text-[#141a34]">Satu langkah lagi</h1>
-      <p className="mb-7 text-sm leading-6 text-[#687086]">
-        Akun Google Anda sudah tersambung. Beri tahu kami sedikit tentang Anda supaya aplikasinya bisa disiapkan.
+      <header className="mb-5">
+        <h1 className="font-headline text-xl font-bold text-[#141a34]">Satu langkah lagi</h1>
+        <p className="mt-1 text-xs text-[#687086]">
+          Langkah {step} dari {totalSteps} · {heading}
+        </p>
+        <div className="mt-3 flex gap-1.5" aria-label={`Langkah ${step} dari ${totalSteps}`}>
+          {Array.from({ length: totalSteps }, (_value, index) => index + 1).map((number) => (
+            <span key={number} className={`h-1.5 rounded-full ${number <= step ? "w-8 bg-cyan-500" : "w-4 bg-slate-200"}`} />
+          ))}
+        </div>
+      </header>
+
+      <p className="mb-5 text-sm leading-6 text-[#687086]">
+        Akun Google Anda sudah tersambung. Jawaban di sini yang membuat catatan Anda bisa dibaca pihak
+        lain nanti, dan semuanya bisa diubah kapan saja di halaman Profil.
       </p>
 
       {error && (
@@ -84,21 +156,23 @@ export default function CompleteProfilePage() {
         </div>
       )}
 
-      <div className="mb-5 flex gap-1 rounded-full border border-slate-200 bg-slate-50 p-1">
-        {([["umkm", "Pemilik UMKM"], ["investor", "Investor / Offtaker"]] as const).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => { setRole(value); setError(""); }}
-            className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full text-xs font-bold ${role === value ? "bg-white text-blue-900 shadow-sm" : "text-slate-500"}`}
-          >
-            {value === "umkm" ? <Store size={14} /> : <Building size={14} />}{label}
-          </button>
-        ))}
-      </div>
+      {step === 1 && (
+        <div className="mb-5 flex gap-1 rounded-full border border-slate-200 bg-slate-50 p-1">
+          {([["umkm", "Pemilik UMKM"], ["investor", "Investor / Offtaker"]] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => { setRole(value); setStep(1); setError(""); }}
+              className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full text-xs font-bold ${role === value ? "bg-white text-blue-900 shadow-sm" : "text-slate-500"}`}
+            >
+              {value === "umkm" ? <Store size={14} /> : <Building size={14} />}{label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <form onSubmit={submit} className="space-y-4">
-        {role === "umkm" ? (
+        {role === "umkm" && step === 1 && (
           <>
             <label className="block">
               <span className="mb-1.5 block text-xs font-bold text-[#141a34]">Nama usaha</span>
@@ -112,10 +186,77 @@ export default function CompleteProfilePage() {
             </label>
             <div>
               <span className="mb-1.5 block text-xs font-bold text-[#141a34]">Kota atau kabupaten</span>
-              <CitySelect value={business.city} onChange={(city) => setBusiness({ ...business, city })} />
+              <CitySelect value={business.city} onChange={(city) => setBusiness({ ...business, city })} placeholder="Pilih lokasi usaha" required />
             </div>
           </>
-        ) : (
+        )}
+
+        {role === "umkm" && step === 2 && (
+          <>
+            <fieldset>
+              <legend className="mb-2 text-xs font-bold text-slate-700">Bentuk usaha</legend>
+              <div className="flex flex-wrap gap-2">
+                {BUSINESS_FORMS.map((option) => (
+                  <button key={option.value} type="button" onClick={() => setDetail({ ...detail, businessForm: option.value })} aria-pressed={detail.businessForm === option.value}
+                    className={`min-h-10 rounded-full border px-3 text-xs font-semibold ${detail.businessForm === option.value ? "border-blue-900 bg-blue-900 text-white" : "border-slate-300 text-slate-600"}`}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-slate-500">Menentukan dokumen mana yang nanti diminta.</p>
+            </fieldset>
+
+            <label className="block">
+              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-[#141a34]"><CalendarDays size={14} /> Tahun mulai usaha</span>
+              <input inputMode="numeric" value={detail.startYear}
+                onChange={(event) => setDetail({ ...detail, startYear: event.target.value.replace(/[^0-9]/g, "").slice(0, 4) })}
+                className="field-input" style={{ paddingLeft: 14 }} placeholder={`Contoh: ${CURRENT_YEAR - 3}`} required />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-[#141a34]"><Phone size={14} /> Nomor WhatsApp</span>
+              <input type="tel" value={detail.phone} onChange={(event) => setDetail({ ...detail, phone: event.target.value })}
+                className="field-input" style={{ paddingLeft: 14 }} placeholder="Contoh: 081234567890" autoComplete="tel" required />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-[#141a34]"><MapPin size={14} /> Alamat tempat usaha</span>
+              <input value={detail.address} onChange={(event) => setDetail({ ...detail, address: event.target.value })}
+                className="field-input" style={{ paddingLeft: 14 }} placeholder="Nama jalan, nomor, kelurahan" autoComplete="street-address" required />
+            </label>
+
+            <fieldset>
+              <legend className="mb-2 text-xs font-bold text-slate-700">Pembeli datang dari mana</legend>
+              <div className="flex flex-wrap gap-2">
+                {CHANNELS.map((option) => (
+                  <button key={option.value} type="button" onClick={() => toggleChannel(option.value)} aria-pressed={detail.channels.includes(option.value)}
+                    className={`min-h-10 rounded-full border px-3 text-xs font-semibold ${detail.channels.includes(option.value) ? "border-blue-900 bg-blue-900 text-white" : "border-slate-300 text-slate-600"}`}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-slate-500">Boleh lebih dari satu.</p>
+            </fieldset>
+
+            <fieldset>
+              <legend className="mb-2 text-xs font-bold text-slate-700">
+                Berapa orang yang bekerja <span className="font-normal text-slate-400">(opsional)</span>
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                {HEADCOUNTS.map((option) => (
+                  <button key={option.value} type="button"
+                    onClick={() => setDetail({ ...detail, headcount: detail.headcount === option.value ? "" : option.value })}
+                    aria-pressed={detail.headcount === option.value}
+                    className={`min-h-10 rounded-full border px-3 text-xs font-semibold ${detail.headcount === option.value ? "border-blue-900 bg-blue-900 text-white" : "border-slate-300 text-slate-600"}`}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </>
+        )}
+
+        {role === "investor" && (
           <>
             <label className="block">
               <span className="mb-1.5 block text-xs font-bold text-[#141a34]">Nama entitas / perusahaan</span>
@@ -129,14 +270,23 @@ export default function CompleteProfilePage() {
             </label>
             <div>
               <span className="mb-1.5 block text-xs font-bold text-[#141a34]">Kota atau kabupaten</span>
-              <CitySelect value={investor.city} onChange={(city) => setInvestor({ ...investor, city })} />
+              <CitySelect value={investor.city} onChange={(city) => setInvestor({ ...investor, city })} placeholder="Pilih lokasi" required />
             </div>
           </>
         )}
 
-        <button type="submit" disabled={loading} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-[#001b85] text-sm font-bold text-white disabled:opacity-60">
-          {loading ? "Menyiapkan…" : "Mulai pakai Berkembang.id"}
-        </button>
+        <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row">
+          {step > 1 && (
+            <button type="button" onClick={() => { setStep(step - 1); setError(""); }}
+              className="min-h-12 w-full rounded-full border border-slate-300 px-5 text-xs font-bold text-slate-600 sm:w-auto">
+              Kembali
+            </button>
+          )}
+          <button type="submit" disabled={loading}
+            className="min-h-12 flex-1 rounded-full bg-[#001b85] px-5 text-sm font-bold text-white disabled:opacity-60">
+            {loading ? "Menyiapkan…" : role === "umkm" && step === 1 ? "Lanjut" : "Mulai pakai Berkembang.id"}
+          </button>
+        </div>
       </form>
 
       <p className="mt-5 text-center text-xs text-slate-400">

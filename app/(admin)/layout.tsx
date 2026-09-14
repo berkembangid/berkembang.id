@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart2, BookOpen, Briefcase, Building2, FileCheck, Gauge, History, LayoutDashboard, LogOut, MonitorPlay, ShieldCheck, Sliders, ToggleLeft, Users, X } from "lucide-react";
+import { BarChart2, BookOpen, Briefcase, Building2, FileCheck, Gauge, History, LayoutDashboard, LogOut, Megaphone, MonitorPlay, ShieldCheck, Sliders, ToggleLeft, Users, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/components/ui/confirm";
@@ -18,7 +18,7 @@ type NavGroup = { category: string; items: { href: string; label: string; Icon: 
 const NAV_GROUPS: NavGroup[] = [
   { category: "Utama", items: [{ href: "/admin", label: "Ringkasan", Icon: LayoutDashboard }, { href: "/admin/analytics", label: "Analitik", Icon: BarChart2 }, { href: "/admin/mesin", label: "Ruang Mesin", Icon: Gauge }] },
   { category: "Data utama", items: [{ href: "/admin/umkm", label: "UMKM", Icon: Users }, { href: "/admin/institutions", label: "Lembaga", Icon: Building2 }, { href: "/admin/investor", label: "Investor / Offtaker", Icon: Briefcase }] },
-  { category: "Sistem & akses", items: [{ href: "/admin/profile-access", label: "Permintaan akses", Icon: FileCheck }, { href: "/admin/rules", label: "Aturan sistem", Icon: Sliders }, { href: "/admin/flags", label: "Sakelar fitur", Icon: ToggleLeft }, { href: "/admin/demo", label: "Akun demo", Icon: MonitorPlay }, { href: "/admin/admins", label: "Kelola admin", Icon: ShieldCheck }, { href: "/admin/audit", label: "Riwayat audit", Icon: History }] },
+  { category: "Sistem & akses", items: [{ href: "/admin/profile-access", label: "Permintaan akses", Icon: FileCheck }, { href: "/admin/broadcasts", label: "Tinjauan broadcast", Icon: Megaphone }, { href: "/admin/rules", label: "Aturan sistem", Icon: Sliders }, { href: "/admin/flags", label: "Sakelar fitur", Icon: ToggleLeft }, { href: "/admin/demo", label: "Akun demo", Icon: MonitorPlay }, { href: "/admin/admins", label: "Kelola admin", Icon: ShieldCheck }, { href: "/admin/audit", label: "Riwayat audit", Icon: History }] },
   // Terakhir, sama seperti "Panduan" di menu UMKM: yang dicari orang ketika
   // ia belum tahu harus ke mana, bukan yang dipakai setiap hari.
   { category: "Bantuan", items: [{ href: "/admin/panduan", label: "Panduan", Icon: BookOpen }] },

@@ -184,6 +184,35 @@ grant execute on function public.admin_set_feature_flag(text, boolean, text) to 
 grant execute on function public.admin_set_feature_flag_for_business(text, uuid, boolean, text) to authenticated;
 
 -- Penjaga: tidak ada satu pun peran yang boleh menulis langsung ke tabel
+-- ---------------------------------------------------------------------------
+-- Menegakkan, bukan cuma memeriksa
+-- ---------------------------------------------------------------------------
+-- Penjaga di bawah memeriksa bahwa tabelnya tidak bisa ditulis langsung.
+-- Sampai sekarang ia hanya MEMERIKSA, dan berhasil karena kebetulan: proyek
+-- Supabase yang lama tidak punya `alter default privileges` yang memberi hak
+-- tulis kepada `anon` dan `authenticated` atas setiap tabel baru di `public`.
+--
+-- Proyek Supabase yang BARU punya itu. Pada proyek demo yang baru dibuat ada
+-- 131 hak tulis bawaan seperti itu, sementara di produksi nol -- dan penjaga
+-- ini langsung menolak migrasinya, tepat seperti seharusnya.
+--
+-- Yang salah bukan penjaganya, melainkan bahwa tidak ada yang pernah
+-- mencabutnya. Migrasi yang menyatakan sebuah invarian harus IKUT
+-- MENEGAKKANNYA; kalau ia hanya memeriksa, ia bergantung pada keadaan
+-- lingkungan yang tidak pernah ia atur -- dan lingkungan berikutnya akan
+-- berbeda.
+--
+-- `select` tidak dicabut: tabelnya memang boleh dibaca sesuai kebijakan RLS.
+-- Yang dicabut hanya jalan menulis yang melewati fungsi beralasan.
+--
+-- Catatan tentang dampaknya: RLS sudah menutup penulisan ini walau haknya ada,
+-- karena tidak ada satu pun kebijakan tulis pada tabel-tabel itu. Jadi ini
+-- pertahanan berlapis, bukan lubang yang sedang bocor -- tetapi lapisan yang
+-- diperiksa penjaga harus benar-benar ada, bukan diasumsikan.
+
+revoke insert, update, delete on public.feature_flags, public.feature_flag_overrides
+  from public, anon, authenticated;
+
 -- sakelar. Kalau suatu saat ada yang memberi `grant update`, alasan wajib dan
 -- catatan tindakan bisa dilewati tanpa ada yang menyadarinya.
 do $$

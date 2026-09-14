@@ -450,6 +450,71 @@ export type Database = {
           }
         ]
       }
+      business_dinas_affiliations: {
+        Row: {
+          id: string
+          business_id: string
+          institution_id: string
+          granted_by: string | null
+          granted_at: string
+          revoked_at: string | null
+          revoked_by: string | null
+          copy_version: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          institution_id: string
+          granted_by?: string | null
+          granted_at?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          copy_version?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          institution_id?: string
+          granted_by?: string | null
+          granted_at?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          copy_version?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_dinas_affiliations_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_dinas_affiliations_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_dinas_affiliations_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_dinas_affiliations_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       business_members: {
         Row: {
           id: string
@@ -1133,6 +1198,160 @@ export type Database = {
             columns: ["journal_entry_id"]
             isOneToOne: false
             referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      dinas_broadcast_participants: {
+        Row: {
+          id: string
+          broadcast_id: string
+          business_id: string
+          joined_at: string
+          left_at: string | null
+        }
+        Insert: {
+          id?: string
+          broadcast_id: string
+          business_id: string
+          joined_at?: string
+          left_at?: string | null
+        }
+        Update: {
+          id?: string
+          broadcast_id?: string
+          business_id?: string
+          joined_at?: string
+          left_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dinas_broadcast_participants_broadcast_id_fkey"
+            columns: ["broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "dinas_broadcasts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dinas_broadcast_participants_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      dinas_broadcast_recipients: {
+        Row: {
+          broadcast_id: string
+          business_id: string
+        }
+        Insert: {
+          broadcast_id: string
+          business_id: string
+        }
+        Update: {
+          broadcast_id?: string
+          business_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dinas_broadcast_recipients_broadcast_id_fkey"
+            columns: ["broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "dinas_broadcasts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dinas_broadcast_recipients_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      dinas_broadcasts: {
+        Row: {
+          id: string
+          institution_id: string
+          requested_by: string
+          region: string
+          filter_recording_band: string | null
+          filter_legal_complete: boolean | null
+          message: string
+          event_date: string | null
+          event_place: string | null
+          event_link: string | null
+          audience_estimate: number
+          status: string
+          reviewed_by: string | null
+          reviewed_at: string | null
+          review_reason: string | null
+          delivered_at: string | null
+          delivered_count: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          institution_id: string
+          requested_by: string
+          region: string
+          filter_recording_band?: string | null
+          filter_legal_complete?: boolean | null
+          message: string
+          event_date?: string | null
+          event_place?: string | null
+          event_link?: string | null
+          audience_estimate?: number
+          status?: string
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          review_reason?: string | null
+          delivered_at?: string | null
+          delivered_count?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          institution_id?: string
+          requested_by?: string
+          region?: string
+          filter_recording_band?: string | null
+          filter_legal_complete?: boolean | null
+          message?: string
+          event_date?: string | null
+          event_place?: string | null
+          event_link?: string | null
+          audience_estimate?: number
+          status?: string
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          review_reason?: string | null
+          delivered_at?: string | null
+          delivered_count?: number | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dinas_broadcasts_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dinas_broadcasts_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dinas_broadcasts_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           }
         ]
@@ -2157,6 +2376,7 @@ export type Database = {
           opening_balance_id: string | null
           original_cost_idr: number | null
           original_useful_life_months: number | null
+          opening_accumulated_depreciation_idr: number
         }
         Insert: {
           id?: string
@@ -2175,6 +2395,7 @@ export type Database = {
           opening_balance_id?: string | null
           original_cost_idr?: number | null
           original_useful_life_months?: number | null
+          opening_accumulated_depreciation_idr?: number
         }
         Update: {
           id?: string
@@ -2193,6 +2414,7 @@ export type Database = {
           opening_balance_id?: string | null
           original_cost_idr?: number | null
           original_useful_life_months?: number | null
+          opening_accumulated_depreciation_idr?: number
         }
         Relationships: [
           {
@@ -2307,6 +2529,10 @@ export type Database = {
           plan_note: string | null
           created_at: string
           updated_at: string
+          region_wide_visibility: boolean
+          can_see_affiliated_identity: boolean
+          min_readiness_level: string | null
+          broadcast_quota_monthly: number
         }
         Insert: {
           institution_id: string
@@ -2318,6 +2544,10 @@ export type Database = {
           plan_note?: string | null
           created_at?: string
           updated_at?: string
+          region_wide_visibility?: boolean
+          can_see_affiliated_identity?: boolean
+          min_readiness_level?: string | null
+          broadcast_quota_monthly?: number
         }
         Update: {
           institution_id?: string
@@ -2329,6 +2559,10 @@ export type Database = {
           plan_note?: string | null
           created_at?: string
           updated_at?: string
+          region_wide_visibility?: boolean
+          can_see_affiliated_identity?: boolean
+          min_readiness_level?: string | null
+          broadcast_quota_monthly?: number
         }
         Relationships: [
           {
@@ -3175,6 +3409,30 @@ export type Database = {
           }
         ]
       }
+      ops_daily_rollups: {
+        Row: {
+          metric_date: string
+          metric_key: string
+          dims: Json
+          value: number
+          computed_at: string
+        }
+        Insert: {
+          metric_date: string
+          metric_key: string
+          dims?: Json
+          value: number
+          computed_at?: string
+        }
+        Update: {
+          metric_date?: string
+          metric_key?: string
+          dims?: Json
+          value?: number
+          computed_at?: string
+        }
+        Relationships: []
+      }
       password_reset_tokens: {
         Row: {
           id: string
@@ -3212,31 +3470,15 @@ export type Database = {
           used_at?: string | null
           created_at?: string
         }
-        Relationships: []
-      }
-      ops_daily_rollups: {
-        Row: {
-          metric_date: string
-          metric_key: string
-          dims: Json
-          value: number
-          computed_at: string
-        }
-        Insert: {
-          metric_date: string
-          metric_key: string
-          dims?: Json
-          value: number
-          computed_at?: string
-        }
-        Update: {
-          metric_date?: string
-          metric_key?: string
-          dims?: Json
-          value?: number
-          computed_at?: string
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "password_reset_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       platform_admins: {
         Row: {
@@ -3320,6 +3562,8 @@ export type Database = {
           deletion_requested_at: string | null
           deletion_scheduled_for: string | null
           deletion_reason: string | null
+          onboarding_seen_at: string | null
+          dinas_offer_dismissed_at: string | null
         }
         Insert: {
           id?: string
@@ -3350,6 +3594,8 @@ export type Database = {
           deletion_requested_at?: string | null
           deletion_scheduled_for?: string | null
           deletion_reason?: string | null
+          onboarding_seen_at?: string | null
+          dinas_offer_dismissed_at?: string | null
         }
         Update: {
           id?: string
@@ -3380,6 +3626,8 @@ export type Database = {
           deletion_requested_at?: string | null
           deletion_scheduled_for?: string | null
           deletion_reason?: string | null
+          onboarding_seen_at?: string | null
+          dinas_offer_dismissed_at?: string | null
         }
         Relationships: [
           {
@@ -4288,6 +4536,8 @@ export type Database = {
           interest_amount_idr: number
           needs_reclass: boolean
           journal_entry_id: string | null
+          asset_category: string | null
+          asset_useful_life_months: number | null
         }
         Insert: {
           id?: string
@@ -4329,6 +4579,8 @@ export type Database = {
           interest_amount_idr?: number
           needs_reclass?: boolean
           journal_entry_id?: string | null
+          asset_category?: string | null
+          asset_useful_life_months?: number | null
         }
         Update: {
           id?: string
@@ -4370,6 +4622,8 @@ export type Database = {
           interest_amount_idr?: number
           needs_reclass?: boolean
           journal_entry_id?: string | null
+          asset_category?: string | null
+          asset_useful_life_months?: number | null
         }
         Relationships: [
           {
@@ -4573,6 +4827,24 @@ export type Database = {
         Args: Record<string, never>
         Returns: Json
       }
+      admin_institution_authority: {
+        Args: {
+          p_institution_id: string
+        }
+        Returns: Json
+      }
+      admin_pending_broadcasts: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      admin_review_dinas_broadcast: {
+        Args: {
+          p_broadcast_id: string
+          p_approve: boolean
+          p_reason: string
+        }
+        Returns: Json
+      }
       admin_revoke_role: {
         Args: {
           p_user_id: string
@@ -4612,6 +4884,17 @@ export type Database = {
           p_business_id: string
           p_enabled: boolean
           p_reason: string
+        }
+        Returns: Json
+      }
+      admin_set_institution_authority: {
+        Args: {
+          p_institution_id: string
+          p_region_wide: boolean
+          p_can_see_identity: boolean
+          p_min_level: string
+          p_reason: string
+          p_broadcast_quota?: number
         }
         Returns: Json
       }
@@ -4757,10 +5040,10 @@ export type Database = {
       create_dossier_request: {
         Args: {
           p_business_id: string
-          p_program_id: string
-          p_purpose_code: string
-          p_purpose_description: string
-          p_requested_scopes: string[]
+          p_program_id?: string
+          p_purpose_code?: string
+          p_purpose_description?: string
+          p_requested_scopes?: string[]
           p_required_scopes?: string[]
           p_requested_duration_days?: number
           p_download_requested?: boolean
@@ -4788,6 +5071,8 @@ export type Database = {
           p_emkm_category_subtype?: string
           p_counterparty_id?: string
           p_interest_amount_idr?: number
+          p_asset_category?: string
+          p_asset_useful_life_months?: number
         }
         Returns: Json
       }
@@ -4810,6 +5095,28 @@ export type Database = {
           p_reason: string
         }
         Returns: Json
+      }
+      dinas_broadcast_audience: {
+        Args: {
+          p_recording_band?: string
+          p_legal_complete?: boolean
+        }
+        Returns: Json
+      }
+      dinas_region_drilldown: {
+        Args: {
+          p_recording_band?: string
+          p_legal_complete?: boolean
+        }
+        Returns: Json
+      }
+      dinas_region_summary: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      dismiss_dinas_offer: {
+        Args: Record<string, never>
+        Returns: string
       }
       dispose_fixed_asset: {
         Args: {
@@ -5006,9 +5313,8 @@ export type Database = {
           account_name: string
           account_type: string
           normal_balance: string
-          total_debit: number
-          total_credit: number
-          balance: number
+          debit: number
+          credit: number
         }[]
       }
       fn_warung_monthly: {
@@ -5040,9 +5346,21 @@ export type Database = {
         }
         Returns: Json
       }
+      join_dinas_broadcast: {
+        Args: {
+          p_broadcast_id: string
+        }
+        Returns: Json
+      }
       join_program_by_code: {
         Args: {
           p_join_code: string
+        }
+        Returns: Json
+      }
+      leave_dinas_broadcast: {
+        Args: {
+          p_broadcast_id: string
         }
         Returns: Json
       }
@@ -5058,8 +5376,26 @@ export type Database = {
           p_sort?: string
           p_limit?: number
           p_offset?: number
-          p_search?: string | null
+          p_search?: string
         }
+        Returns: Json
+      }
+      list_dinas_broadcast_participants: {
+        Args: {
+          p_broadcast_id: string
+        }
+        Returns: Json
+      }
+      list_institution_broadcasts: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      list_my_dinas_broadcasts: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      list_my_dinas_options: {
+        Args: Record<string, never>
         Returns: Json
       }
       list_my_institutions: {
@@ -5074,6 +5410,14 @@ export type Database = {
           p_artifact_id?: string
           p_action?: string
         }
+        Returns: Json
+      }
+      mark_umkm_onboarding_seen: {
+        Args: Record<string, never>
+        Returns: string
+      }
+      my_dinas_offer: {
+        Args: Record<string, never>
         Returns: Json
       }
       my_feature_flags: {
@@ -5168,6 +5512,17 @@ export type Database = {
         }
         Returns: Json
       }
+      request_dinas_broadcast: {
+        Args: {
+          p_message: string
+          p_recording_band?: string
+          p_legal_complete?: boolean
+          p_event_date?: string
+          p_event_place?: string
+          p_event_link?: string
+        }
+        Returns: Json
+      }
       resolve_anonymous_candidate_code: {
         Args: {
           p_candidate_code: string
@@ -5200,6 +5555,10 @@ export type Database = {
           p_grant_id: string
           p_reason?: string
         }
+        Returns: Json
+      }
+      revoke_my_dinas_affiliation: {
+        Args: Record<string, never>
         Returns: Json
       }
       save_inventory_count: {
@@ -5235,6 +5594,13 @@ export type Database = {
       schedule_capture_processing: {
         Args: {
           p_capture_id: string
+        }
+        Returns: Json
+      }
+      set_my_dinas_affiliation: {
+        Args: {
+          p_institution_id: string
+          p_copy_version?: string
         }
         Returns: Json
       }

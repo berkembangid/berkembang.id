@@ -260,6 +260,16 @@ function idr(value: number): string {
   return value < 0 ? `(${text})` : text;
 }
 
+/**
+ * Satuan laporan, disebut sekali di kepala tiap laporan.
+ *
+ * Sebelumnya tidak disebut di mana pun: angka di PDF berdiri tanpa satuan,
+ * jadi pembaca luar harus MENDUGA bahwa itu Rupiah. Menempelkan "Rp" pada
+ * setiap sel bukan jawabannya -- itu bukan konvensi penyajian, dan lebar
+ * kolomnya sudah pas.
+ */
+const CURRENCY_NOTE = "Dinyatakan dalam Rupiah";
+
 function longDate(value: string): string {
   const months = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -389,7 +399,7 @@ function BalanceSheetPage({ data, watermark }: { data: StatementDocumentData; wa
     <Page size="A4" style={pageStyle(watermark)}>
       <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAPORAN POSISI KEUANGAN</Text>
-      <Text style={styles.subtitle}>Per {longDate(current.asOf)}</Text>
+      <Text style={styles.subtitle}>Per {longDate(current.asOf)} · {CURRENCY_NOTE}</Text>
       <TableHead
         headers={
           previous
@@ -434,7 +444,9 @@ function IncomeStatementPage({ data, watermark }: { data: StatementDocumentData;
     <Page size="A4" style={pageStyle(watermark)}>
       <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAPORAN LABA RUGI</Text>
-      <Text style={styles.subtitle}>Untuk periode yang berakhir {longDate(current.period.to)}</Text>
+      <Text style={styles.subtitle}>
+        Untuk periode yang berakhir {longDate(current.period.to)} · {CURRENCY_NOTE}
+      </Text>
       <TableHead
         headers={
           previous
@@ -464,7 +476,7 @@ function CashFlowPage({ data, watermark }: { data: StatementDocumentData; waterm
       <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>LAPORAN ARUS KAS</Text>
       <Text style={styles.subtitle}>
-        Untuk periode {longDate(flow.period.from)} sampai {longDate(flow.period.to)}
+        Untuk periode {longDate(flow.period.from)} sampai {longDate(flow.period.to)} · {CURRENCY_NOTE}
       </Text>
       <Text style={styles.note}>
         Disusun dengan metode langsung. Laporan arus kas bukan komponen wajib SAK EMKM; disertakan karena umum
@@ -503,7 +515,7 @@ function NotesPage({ data, watermark }: { data: StatementDocumentData; watermark
       <PageChrome data={data} watermark={watermark} />
       <Text style={styles.title}>CATATAN ATAS LAPORAN KEUANGAN</Text>
       <Text style={styles.subtitle}>
-        Untuk periode {longDate(data.period.from)} sampai {longDate(data.period.to)}
+        Untuk periode {longDate(data.period.from)} sampai {longDate(data.period.to)} · {CURRENCY_NOTE}
       </Text>
 
       <Text style={styles.heading}>1. Umum</Text>
@@ -536,12 +548,25 @@ function NotesPage({ data, watermark }: { data: StatementDocumentData; watermark
       {notes.receivables.length === 0 ? (
         <Text style={styles.paragraph}>Tidak ada piutang usaha pada akhir periode.</Text>
       ) : (
-        notes.receivables.map((item) => (
-          <View key={item.name} style={styles.detailRow} wrap={false}>
-            <Text style={{ width: "70%" }}>{item.name}</Text>
-            <Text style={[{ width: "30%" }, styles.amount]}>{idr(item.amountIdr)}</Text>
+        <>
+          {notes.receivables.map((item) => (
+            <View key={item.name} style={styles.detailRow} wrap={false}>
+              <Text style={{ width: "70%" }}>{item.name}</Text>
+              <Text style={[{ width: "30%" }, styles.amount]}>{idr(item.amountIdr)}</Text>
+            </View>
+          ))}
+          {/*
+            Totalnya disebut, bukan dibiarkan dijumlah pembacanya. Angka inilah
+            yang harus cocok dengan baris Piutang usaha di Posisi Keuangan --
+            dan pembaca yang harus menjumlah sendiri tidak akan memeriksanya.
+          */}
+          <View style={styles.rowSubtotal} wrap={false}>
+            <Text style={{ width: "70%" }}>Jumlah piutang usaha</Text>
+            <Text style={[{ width: "30%" }, styles.amount]}>
+              {idr(notes.receivables.reduce((sum, item) => sum + Number(item.amountIdr), 0))}
+            </Text>
           </View>
-        ))
+        </>
       )}
 
       <Text style={styles.heading}>6. Persediaan</Text>
@@ -558,22 +583,24 @@ function NotesPage({ data, watermark }: { data: StatementDocumentData; watermark
       ) : (
         <>
           <TableHead
-            headers={["Aset", "Perolehan", "Harga", "Akumulasi", "Nilai buku"]}
+            headers={["Aset", "Perolehan", "Umur", "Harga perolehan", "Akumulasi", "Nilai buku"]}
             columns={[
-              { width: "30%" },
-              { width: "20%" },
-              { width: "17%", align: "right" },
+              { width: "24%" },
+              { width: "18%" },
+              { width: "10%", align: "right" },
               { width: "17%", align: "right" },
               { width: "16%", align: "right" },
+              { width: "15%", align: "right" },
             ]}
           />
           {notes.fixedAssets.map((asset) => (
             <View key={`${asset.name}-${asset.acquiredOn}`} style={styles.detailRow} wrap={false}>
-              <Text style={{ width: "30%" }}>{asset.name}</Text>
-              <Text style={{ width: "20%" }}>{longDate(asset.acquiredOn)}</Text>
+              <Text style={{ width: "24%" }}>{asset.name}</Text>
+              <Text style={{ width: "18%" }}>{longDate(asset.acquiredOn)}</Text>
+              <Text style={[{ width: "10%" }, styles.amount]}>{asset.usefulLifeMonths} bln</Text>
               <Text style={[{ width: "17%" }, styles.amount]}>{idr(asset.costIdr)}</Text>
-              <Text style={[{ width: "17%" }, styles.amount]}>{idr(asset.accumulatedIdr)}</Text>
-              <Text style={[{ width: "16%" }, styles.amount]}>{idr(asset.costIdr - asset.accumulatedIdr)}</Text>
+              <Text style={[{ width: "16%" }, styles.amount]}>{idr(asset.accumulatedIdr)}</Text>
+              <Text style={[{ width: "15%" }, styles.amount]}>{idr(asset.costIdr - asset.accumulatedIdr)}</Text>
             </View>
           ))}
         </>

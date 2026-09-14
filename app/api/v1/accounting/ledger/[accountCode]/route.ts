@@ -5,6 +5,7 @@ import {
   accountingValidationErrorResponse,
 } from "@/modules/accounting/accounting-errors";
 import { accountCodeSchema, generalLedgerQuerySchema } from "@/modules/accounting/accounting-schema";
+import { ensurePeriodPosted } from "@/modules/accounting/period";
 import { getGeneralLedger } from "@/modules/accounting/reports";
 
 export async function GET(
@@ -25,6 +26,15 @@ export async function GET(
       to: url.searchParams.get("to") ?? undefined,
     });
     if (!range.success) return accountingValidationErrorResponse(range.error);
+
+    // Penyusutan dan pajak diposting lebih dulu, sebelum angkanya dibaca.
+    //
+    // Tanpa ini, pemilik yang membuka layar ini SEBELUM pernah membuka Laporan
+    // Posisi Keuangan melihatnya tanpa satu baris penyusutan pun -- padahal
+    // alatnya sudah tercatat. Dan ia SEMBUH SENDIRI begitu Posisi Keuangan
+    // dibuka sekali, jadi yang dilihat pemilik bukan angka yang salah,
+    // melainkan angka yang berubah tanpa ia mengubah apa pun.
+    await ensurePeriodPosted(range.data.to);
 
     return Response.json(
       { data: await getGeneralLedger(user.id, code.data, range.data) },

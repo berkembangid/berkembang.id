@@ -1,6 +1,6 @@
 import {
   BarChart2, BookOpen, Briefcase, Building2, FileCheck, Gauge, History, LayoutDashboard,
-  MonitorPlay, ShieldCheck, Sliders, ToggleLeft, Users,
+  Megaphone, MonitorPlay, ShieldCheck, Sliders, ToggleLeft, Users,
 } from "lucide-react";
 import type { PortalRoute } from "@/components/shell/portal-navigation";
 
@@ -29,6 +29,13 @@ export const ADMIN_ROUTES: readonly PortalRoute[] = [
     title: "Detail UMKM",
     parent: { href: "/admin/umkm", label: "Daftar UMKM" },
     Icon: Users,
+  },
+
+  {
+    match: "/admin/broadcasts",
+    title: "Tinjauan broadcast",
+    hint: "Menyetujui berarti langsung mengirim",
+    Icon: Megaphone,
   },
 
   { match: "/admin/institutions", title: "Daftar lembaga", Icon: Building2 },

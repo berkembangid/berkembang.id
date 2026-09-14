@@ -1,0 +1,28 @@
+{
+  "_catatan": [
+    "Satu-satunya tempat yang tahu 'target mana berarti proyek mana'.",
+    "",
+    "Dibaca DUA pemakai dengan pertanyaan berbeda:",
+    "  lib/env/app-mode.ts   -> 'apakah APP_MODE cocok dengan SUPABASE_URL saya?'",
+    "  scripts/supabase-sql  -> '--target demo itu proyek yang mana?'",
+    "",
+    "Dua salinan peta ini berarti dua jawaban, dan yang kedua akan berselisih",
+    "pada perubahan berikutnya -- lalu migrasi yang dimaksudkan untuk demo",
+    "terpasang di produksi, tanpa satu pun galat.",
+    "",
+    "`ref` bukan rahasia: ia ada di dalam setiap alamat Supabase yang dikirim",
+    "peramban. `envFile` hanya dipakai skrip, dan aplikasi mengabaikannya."
+  ],
+  "targets": {
+    "production": {
+      "ref": "ggudmwfhaqoqcguwgdac",
+      "label": "Produksi",
+      "envFile": ".env"
+    },
+    "demo": {
+      "ref": "ridutytfdwshvunodnzo",
+      "label": "Demo",
+      "envFile": ".env.demo"
+    }
+  }
+}

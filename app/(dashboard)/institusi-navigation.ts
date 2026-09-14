@@ -1,5 +1,6 @@
 import {
-  BarChart2, Bell, Bookmark, Clock3, FolderOpen, LayoutGrid, ScrollText, Settings2, TrendingUp,
+  BarChart2, Bell, Bookmark, Clock3, FolderOpen, LayoutGrid, Map, Megaphone, ScrollText, Settings2,
+  TrendingUp,
 } from "lucide-react";
 import type { PortalRoute } from "@/components/shell/portal-navigation";
 
@@ -19,6 +20,18 @@ export const INSTITUSI_ROUTES: readonly PortalRoute[] = [
     title: "Temukan kandidat",
     hint: "Tanpa nama, sampai pemiliknya memberi izin",
     Icon: TrendingUp,
+  },
+  {
+    match: "/institusi/wilayah",
+    title: "Ringkasan wilayah",
+    hint: "Jumlah usaha per keadaan, tanpa nama dan tanpa rupiah",
+    Icon: Map,
+  },
+  {
+    match: "/institusi/broadcast",
+    title: "Broadcast pendampingan",
+    hint: "Nama peserta muncul setelah mereka menekan ikut",
+    Icon: Megaphone,
   },
   {
     match: "/institusi/shortlist",

@@ -97,6 +97,8 @@ function formatDraftItems(items: TransactionDraftItem[]): ExtractedItem[] {
         : {}),
       counterpartyName: it.counterpartyName ?? null,
       interestAmountIdr: it.interestAmountIdr ?? 0,
+      assetCategory: it.assetCategory ?? null,
+      assetUsefulLifeYears: it.assetUsefulLifeMonths ? Math.round(it.assetUsefulLifeMonths / 12) : null,
     },
   }));
 }
@@ -126,6 +128,13 @@ function toDraftItems(items: ExtractedItem[]): TransactionDraftItem[] {
       emkmCategorySubtype: category.subtype as TransactionDraftItem["emkmCategorySubtype"],
       counterpartyName: item.category.counterpartyName,
       interestAmountIdr: item.category.interestAmountIdr || null,
+      // Pemilik menjawab dalam TAHUN; pembukuan menghitung dalam bulan.
+      assetCategory: category.categoryCode === 8
+        ? (item.category.assetCategory as TransactionDraftItem["assetCategory"]) ?? "peralatan"
+        : null,
+      assetUsefulLifeMonths: category.categoryCode === 8
+        ? (item.category.assetUsefulLifeYears ?? 4) * 12
+        : null,
     };
   });
 }

@@ -140,7 +140,8 @@ function rpcArgs(input: LedgerTransactionInput) {
     p_quantity: input.quantity ?? undefined, p_unit: input.unit ?? undefined, p_unit_price_idr: input.unitPriceIdr ?? undefined,
     p_payment_method: input.paymentMethod ?? undefined, p_sales_channel: input.salesChannel ?? undefined, p_counterparty: input.counterparty ?? undefined,
     p_emkm_category_code: input.emkmCategoryCode ?? undefined, p_emkm_category_subtype: input.emkmCategorySubtype ?? undefined,
-    p_counterparty_id: input.counterpartyId ?? undefined, p_interest_amount_idr: input.interestAmountIdr ?? undefined };
+    p_counterparty_id: input.counterpartyId ?? undefined, p_interest_amount_idr: input.interestAmountIdr ?? undefined,
+    p_asset_category: input.assetCategory ?? undefined, p_asset_useful_life_months: input.assetUsefulLifeMonths ?? undefined };
 }
 export async function createLedgerTransaction(input: LedgerTransactionInput, idempotencyKey: string) {
   const client = await createServerSupabaseClient(); const { data, error } = await client.rpc("create_ledger_transaction", { p_idempotency_key: idempotencyKey, ...rpcArgs(input) });

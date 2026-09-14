@@ -13,6 +13,8 @@ import OwnerConsentPanel from "@/modules/consent/owner-consent-panel";
 import { DashboardPage, PageHeader } from "@/components/dashboard";
 import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure, notifySuccess, notifyWarning } from "@/lib/notify";
+import { DinasAffiliationCard } from "@/components/warung/DinasAffiliationCard";
+import { WelcomeTour } from "@/components/warung/WelcomeTour";
 
 /**
  * Pilihan sektor datang dari tabel pemetaan, bukan daftar tersendiri.
@@ -52,6 +54,8 @@ interface ProfileRecord {
   tahun_mulai_usaha?: number | null;
   jumlah_karyawan?: string | null;
   kanal_penjualan?: string[] | null;
+  /** Null berarti pemilik ini baru mendaftar dan belum pernah melihat perkenalan. */
+  onboarding_seen_at?: string | null;
 }
 
 function FormField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -126,6 +130,11 @@ export default function ProfilPage() {
     kanalPenjualan: [] as string[],
   });
 
+  // Null berarti belum dibaca; `true`/`false` baru berarti jawabannya. Tanpa
+  // keadaan ketiga ini, perkenalan berkelip muncul sesaat pada setiap pemilik
+  // sebelum profilnya selesai dibaca.
+  const [showTour, setShowTour] = useState<boolean | null>(null);
+
   useEffect(() => {
     async function loadUserProfile() {
       try {
@@ -151,6 +160,10 @@ export default function ProfilPage() {
           const nib = dbProfile?.nib || user.user_metadata?.nib || "";
           const alamat = dbProfile?.alamat || user.user_metadata?.alamat || "";
           const avatar = dbProfile?.avatar_url || user.user_metadata?.avatar_url || "";
+          // Profil yang gagal dibaca tidak dianggap baru: perkenalan yang
+          // muncul karena bacaan gagal akan muncul pada orang yang sudah
+          // melewatinya.
+          setShowTour(dbProfile ? dbProfile.onboarding_seen_at === null : false);
 
           setForm({
             email: user.email || "",
@@ -295,10 +308,19 @@ export default function ProfilPage() {
 
   return (
     <>
+      {/*
+        Perkenalan dipasang di Profil, bukan di Beranda, karena di sinilah
+        pemilik baru diantar -- dan kartu terakhirnya menjelaskan halaman yang
+        sedang ia lihat. Perkenalan yang menjelaskan layar lain akan dibaca
+        sambil menatap layar yang tidak cocok dengan isinya.
+      */}
+      {showTour === true && (
+        <WelcomeTour ownerName={form.namaPemilik} onClose={() => setShowTour(false)} />
+      )}
       <DashboardPage width="compact">
         <PageHeader
           title="Profil usaha"
-          description="Informasi usaha Anda — lengkapi agar dokumen dan laporan mudah dikenali."
+          description="Informasi usaha Anda — lengkapi agar dokumen dan laporan mudah dikenali. Foto izin boleh diunggah nanti."
           icon={Building2}
           actions={
             <button
@@ -309,6 +331,14 @@ export default function ProfilPage() {
             </button>
           }
         />
+
+        {/*
+          Di atas formulir, bukan di dalamnya. Ini bukan bidang yang ikut
+          tersimpan bersama profil — ia izin tersendiri yang berlaku begitu
+          ditekan, dan menaruhnya di dalam formulir akan membuat orang
+          mengira ia baru berlaku setelah "Simpan profil".
+        */}
+        <DinasAffiliationCard />
 
         <form onSubmit={handleSave} className="space-y-4">
           {/* Identity card */}

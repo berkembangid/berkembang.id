@@ -10,32 +10,16 @@ import OtpInput from "@/components/auth/OtpInput";
 import { authErrorMessage, isCompleteOtp, OTP_LENGTH } from "@/modules/auth/otp";
 import { TERMS_DOCUMENTS, TERMS_HIGHLIGHTS } from "@/modules/legal/terms";
 
+// Pertanyaan onboarding dan kunci metadatanya dipakai bersama dengan
+// `/auth/lengkapi` -- jalur Google. Dua salinan berarti dua jawaban, dan itu
+// sudah pernah terjadi: jenis investor yang dipilih lewat Google terbuang
+// karena kunci metadatanya salah nama di satu sisi saja.
+import {
+  BUSINESS_FORMS, CHANNELS, CURRENT_YEAR, HEADCOUNTS, INVESTOR_TYPES, SECTORS,
+  investorError, investorSignupMetadata, umkmDetailError, umkmIdentityError, umkmSignupMetadata,
+} from "@/modules/auth/onboarding-fields";
+
 type Role = "umkm" | "investor";
-const SECTORS = ["Kuliner", "Fashion", "Pertanian", "Jasa", "Kerajinan", "Teknologi", "Lainnya"];
-
-/**
- * Langkah tiga: kenali cara usahanya berjalan.
- */
-const BUSINESS_FORMS = [
-  { value: "perorangan", label: "Usaha perorangan" },
-  { value: "badan_usaha", label: "Badan usaha (PT/CV/Koperasi)" },
-] as const;
-
-const HEADCOUNTS = [
-  { value: "sendiri", label: "Saya sendiri" },
-  { value: "1-4", label: "1\u20134 orang" },
-  { value: "5-19", label: "5\u201319 orang" },
-] as const;
-
-const CHANNELS = [
-  { value: "warung", label: "Warung / kios" },
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "marketplace", label: "Marketplace" },
-  { value: "media_sosial", label: "Media sosial" },
-] as const;
-
-const CURRENT_YEAR = new Date().getFullYear();
-const INVESTOR_TYPES = ["Modal Ventura (VC)", "Angel Investor", "Perusahaan Offtaker / Buyer", "Korporasi", "Koperasi / Agregator", "Lainnya"];
 
 export default function RegisterPage() {
   const [role, setRole] = useState<Role>("umkm");
@@ -49,7 +33,7 @@ export default function RegisterPage() {
   const [account, setAccount] = useState({ contactName: "", email: "", password: "" });
   const [business, setBusiness] = useState({ name: "", sector: "Kuliner", city: "" });
   const [detail, setDetail] = useState({ form: "perorangan", startYear: "", headcount: "", address: "", phone: "", channels: [] as string[] });
-  const [investor, setInvestor] = useState({ companyName: "", type: "Modal Ventura (VC)", city: "" });
+  const [investor, setInvestor] = useState({ companyName: "", type: INVESTOR_TYPES[0] as string, city: "" });
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
 
@@ -94,41 +78,37 @@ export default function RegisterPage() {
     if (step === verifyStep) { void verifyEmail(); return; }
     if (step === 1) { continueToBusiness(); return; }
     if (step === 2) {
-      if (role === "umkm" && (!business.name.trim() || !business.city.trim())) { setError("Isi nama usaha dan kota atau kabupaten usaha."); return; }
-      if (role === "investor" && (!investor.companyName.trim() || !investor.city.trim())) { setError("Isi nama perusahaan / entitas dan kota atau kabupaten."); return; }
+      const identityError = role === "umkm"
+        ? umkmIdentityError({ businessName: business.name, city: business.city })
+        : investorError(investor);
+      if (identityError) { setError(identityError); return; }
       if (role === "umkm") { setStep(3); return; }
     }
     if (role === "umkm" && step === 3) {
-      const year = Number(detail.startYear);
-      if (!Number.isInteger(year) || year < 1900 || year > CURRENT_YEAR) { setError(`Isi tahun mulai usaha antara 1900 dan ${CURRENT_YEAR}.`); return; }
-      if (!detail.phone.trim()) { setError("Isi nomor WhatsApp yang bisa dihubungi."); return; }
-      if (!detail.address.trim()) { setError("Isi alamat tempat usaha."); return; }
-      if (detail.channels.length === 0) { setError("Pilih minimal satu tempat pembeli menemukan usaha Anda."); return; }
+      const detailError = umkmDetailError(detail);
+      if (detailError) { setError(detailError); return; }
     }
     setLoading(true);
     try {
-      const metadata = role === "umkm" 
-        ? { 
-            nama_pemilik: account.contactName.trim(), 
-            nama_usaha: business.name.trim(), 
-            sektor_usaha: business.sector, 
-            lokasi: business.city, 
-            alamat: detail.address.trim(), 
-            phone: detail.phone.trim(), 
-            bentuk_usaha: detail.form, 
-            tahun_mulai_usaha: Number(detail.startYear), 
-            jumlah_karyawan: detail.headcount || null, 
-            kanal_penjualan: detail.channels, 
-            signup_account_type: "umkm" 
-          } 
-        : { 
-            nama_contact: account.contactName.trim(), 
-            nama_perusahaan: investor.companyName.trim(), 
-            nama_institusi: investor.companyName.trim(), 
-            jenis_investor: investor.type, 
-            lokasi: investor.city, 
-            signup_account_type: "investor" 
-          };
+      const metadata = role === "umkm"
+        ? umkmSignupMetadata({
+            ownerName: account.contactName,
+            businessName: business.name,
+            sector: business.sector,
+            city: business.city,
+            address: detail.address,
+            phone: detail.phone,
+            businessForm: detail.form,
+            startYear: detail.startYear,
+            headcount: detail.headcount,
+            channels: detail.channels,
+          })
+        : investorSignupMetadata({
+            contactName: account.contactName,
+            companyName: investor.companyName,
+            type: investor.type,
+            city: investor.city,
+          });
       const { data, error: signUpError } = await supabase.auth.signUp({ email: account.email.trim(), password: account.password, options: { data: metadata } });
       if (signUpError) {
         if (signUpError.message.includes("already registered")) throw new Error("Email sudah terdaftar. Silakan masuk atau gunakan email lain.");
@@ -153,7 +133,16 @@ export default function RegisterPage() {
       setLoading(false);
       return;
     }
-    window.location.href = role === "umkm" ? "/umkm/profil?onboarding=1" : "/auth/continue";
+    // Satu tempat yang memutuskan tujuan: `/auth/continue`.
+    //
+    // Sebelumnya pemilik usaha dikirim ke `/umkm/profil?onboarding=1`
+    // langsung dari sini. Dua hal salah dengan itu. Pertama, `onboarding=1`
+    // TIDAK PERNAH DIBACA oleh apa pun -- tidak ada satu baris kode yang
+    // memeriksanya, jadi ia bendera yang tidak menyalakan apa-apa dan satu
+    // satunya akibatnya adalah berpindah halaman. Kedua, keputusan "ke mana
+    // sesudah masuk" jadi hidup di dua tempat, dan yang satu tidak tahu
+    // perubahan di yang lain.
+    window.location.href = "/auth/continue";
   }
 
   async function verifyEmail() {

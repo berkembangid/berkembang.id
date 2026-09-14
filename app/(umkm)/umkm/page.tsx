@@ -8,6 +8,8 @@ import { supabase } from "@/lib/supabase";
 import { ReminderStrip } from "@/components/warung/ReminderStrip";
 import { closingPromptText, closingTargetDate } from "@/modules/ledger/closing-day";
 import { ReclassCard } from "@/components/warung/ReclassCard";
+import { BroadcastInvitations } from "@/components/warung/BroadcastInvitations";
+import { DinasOfferCard } from "@/components/warung/DinasOfferCard";
 import type { ReadinessLevelPayload } from "@/modules/readiness/level-repository";
 import styles from "../umkm-dashboard.module.css";
 
@@ -249,6 +251,8 @@ export default function BerandaPage() {
               </div>
             </section>
 
+            <div className={styles.fullWidth}><DinasOfferCard /></div>
+            <div className={styles.fullWidth}><BroadcastInvitations /></div>
             <div className={styles.fullWidth}><ReclassCard /></div>
           </div>
         </div>

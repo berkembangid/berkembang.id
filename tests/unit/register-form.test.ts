@@ -115,7 +115,17 @@ describe("isi syarat menggambarkan produk yang sekarang", () => {
     // Naskah lembaga menyatakannya sendiri: ia berbeda dari, dan tidak
     // menggantikan, ketentuan pengguna UMKM. Sebelum ini lembaga mendaftar
     // lewat halaman yang sama dan menyetujui ringkasan yang bukan miliknya.
-    expect(register).toContain("TERMS_HIGHLIGHTS[role]");
+    //
+    // Uji ini dulu memaku ekspresinya: `TERMS_HIGHLIGHTS[role]`. Ekspresi itu
+    // justru CACAT -- `role` bisa bernilai "investor", sementara
+    // `TERMS_HIGHLIGHTS` hanya berkunci "umkm" dan "institution", jadi
+    // `.map` dipanggil atas `undefined` dan layarnya roboh. Kodenya sudah
+    // dibetulkan menjadi pemetaan investor -> institution, dan ujinya yang
+    // tertinggal. Yang diuji sekarang perilakunya: peran investor memakai
+    // ringkasan lembaga, dan tidak ada peran yang memakai indeks mentah.
+    expect(register).toContain("TERMS_HIGHLIGHTS[");
+    expect(register).toContain('role === "investor" ? "institution" : role');
+    expect(register).not.toContain("TERMS_HIGHLIGHTS[role]");
     expect(terms).toContain("Syarat dan Ketentuan Lembaga & Investor");
     expect(terms).toContain("hanya dapat melihat profil anonim");
   });

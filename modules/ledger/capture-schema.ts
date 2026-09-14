@@ -69,6 +69,11 @@ export const transactionDraftItemSchema = z.object({
   emkmCategorySubtype: emkmCategorySubtypeSchema.nullable().optional(),
   counterpartyName: z.string().trim().min(1).max(120).nullable().optional(),
   interestAmountIdr: z.number().int().nonnegative().max(9_000_000_000_000).nullable().optional(),
+  // Jenis alat dan umur ekonomisnya, untuk pembelian alat usaha. Dijawab
+  // pemilik di layar; AI tidak pernah mengisinya -- ia tidak bisa tahu berapa
+  // lama sebuah gerobak masih akan dipakai.
+  assetCategory: z.enum(["peralatan", "mesin", "kendaraan", "bangunan", "lainnya"]).nullable().optional(),
+  assetUsefulLifeMonths: z.number().int().min(1).max(600).nullable().optional(),
 });
 
 export const transactionDraftItemsSchema = z

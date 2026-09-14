@@ -12,7 +12,6 @@ type Candidate = {
   candidateCode: string;
   businessName?: string | null;
   ownerName?: string | null;
-  contactPhone?: string | null;
   sector: string;
   generalLocation: string;
   readinessLevel: string;
@@ -23,7 +22,12 @@ type Candidate = {
   evidenceAvailability: string[];
   requestStatus?: string | null;
   dossierStatus?: string | null;
-  isDinasViewer?: boolean;
+  /**
+   * Benar hanya bila lembaga ini berhak melihat identitas DAN usaha itu
+   * berafiliasi dengannya (`0080`). Menggantikan `isDinasViewer`, yang dulu
+   * berarti "nama lembaganya memuat kata dinas" -- dan itu bukan kewenangan.
+   */
+  identityVisible?: boolean;
 };
 
 const defaultScopes: ConsentScope[] = ["business_identity", "readiness", "financial_summary"];
@@ -237,12 +241,15 @@ export default function InstitutionCandidatesPage() {
                 <span className="ml-1 text-[11px] text-slate-400 font-mono">({candidate.candidateCode})</span>
               )}
             </p>
-            {isDinas && (candidate.ownerName || candidate.contactPhone) && (
-              <p className="mt-0.5 text-[11px] text-slate-600 font-medium">
-                {candidate.ownerName && <span>Pemilik: {candidate.ownerName}</span>}
-                {candidate.ownerName && candidate.contactPhone && <span> · </span>}
-                {candidate.contactPhone && <span>Kontak: {candidate.contactPhone}</span>}
-              </p>
+            {/*
+              Nama pemilik saja, tanpa kontak. Sejak `0080` nomor telepon
+              tidak pernah keluar dari fungsi kandidat untuk peran apa pun:
+              dinas menghubungi lewat undangan di platform, bukan menelepon.
+              Dengan begitu yang bisa berpindah tangan paling jauh hanya nama
+              tanpa cara menghubunginya.
+            */}
+            {candidate.ownerName && (
+              <p className="mt-0.5 text-[11px] font-medium text-slate-600">Pemilik: {candidate.ownerName}</p>
             )}
           </div>
         </div>

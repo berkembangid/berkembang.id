@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Briefcase, ArrowLeft, Save, Building, Mail, Phone, User, MapPin } from "lucide-react";
 import CitySelect from "@/components/CitySelect";
@@ -22,13 +22,13 @@ export default function InvestorDetailPage() {
   const [location, setLocation] = useState("Jakarta");
   const [status, setStatus] = useState<"active" | "inactive">("active");
 
-  useEffect(() => {
-    if (idParam) {
-      fetchDetail();
-    }
-  }, [idParam]);
-
-  async function fetchDetail() {
+  // Dideklarasikan SEBELUM effect yang memanggilnya, dan dibungkus
+  // `useCallback` supaya bisa masuk daftar kebergantungan. Sebelumnya effect
+  // memanggil `fetchDetail` beberapa baris di atas deklarasinya: deklarasi
+  // fungsi memang terangkat, jadi ia tidak pernah gagal saat dijalankan --
+  // tetapi ia menyembunyikan kebergantungan yang tidak pernah disebut, dan
+  // aturan React Compiler di repo ini memperlakukannya sebagai galat.
+  const fetchDetail = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/investors/${encodeURIComponent(idParam)}`);
@@ -46,7 +46,15 @@ export default function InvestorDetailPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [idParam]);
+
+  // Ditunda satu putaran: `fetchDetail` memanggil `setLoading(true)` di baris
+  // pertamanya, dan itu setState yang berjalan serentak di dalam effect.
+  useEffect(() => {
+    if (!idParam) return;
+    const timer = window.setTimeout(() => void fetchDetail(), 0);
+    return () => window.clearTimeout(timer);
+  }, [idParam, fetchDetail]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

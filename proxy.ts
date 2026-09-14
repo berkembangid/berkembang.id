@@ -13,6 +13,46 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // ── Pemulangan OAuth yang jatuh di halaman depan ──────────────────────────
+  //
+  // DIAGNOSIS, dari keadaan produksi yang sebenarnya:
+  //
+  //   `www.berkembang.id` adalah host yang melayani aplikasi; domain apex
+  //   308-redirect ke sana. Tetapi `site_url` dan `uri_allow_list` di proyek
+  //   Supabase menyebut APEX. Jadi `redirectTo` yang dikirim tombol Google --
+  //   `https://www.berkembang.id/auth/callback` -- tidak cocok dengan daftar
+  //   izin, dan Supabase memantulkan orangnya ke `site_url` sebagai gantinya,
+  //   dengan `?code=` masih menempel. Apex lalu 308 ke www, membawa query-nya.
+  //
+  // Akibatnya adalah bug yang paling sulit dilaporkan orang: halaman depan
+  // adalah komponen server yang tidak memuat klien Supabase sama sekali, jadi
+  // kodenya TIDAK PERNAH ditukar. Orangnya berhenti di halaman depan, belum
+  // masuk, tanpa satu pun petunjuk -- dan menekan tombol masuk lagi hanya
+  // mengulang lingkarannya.
+  //
+  // Penerusan di bawah benar-benar menyelesaikan alurnya, bukan menambalnya:
+  // `?code=` sampai di www, yaitu origin yang sama tempat kuki penanda PKCE
+  // ditulis, jadi `/auth/callback` bisa menukarnya. Ia juga tetap bekerja
+  // untuk sebab lain apa pun yang membuat Supabase jatuh ke `site_url`.
+  //
+  // Daftar izinnya TETAP harus dibetulkan. Selama ia menyebut host yang salah,
+  // setiap tautan di dalam surel juga menunjuk ke alamat yang salah.
+  //
+  // Galat OAuth ikut diteruskan. Orang yang membatalkan di layar Google juga
+  // dipantulkan ke `site_url`, dan tanpa ini ia mendarat di halaman depan
+  // tanpa penjelasan apa pun -- persis kebingungan yang sama.
+  //
+  // Sengaja HANYA halaman depan, dan hanya nama parameter yang memang dipakai
+  // Supabase: `code` terlalu umum untuk dibajak di sembarang alamat.
+  if (pathname === "/") {
+    const query = request.nextUrl.searchParams;
+    if (query.has("code") || query.has("error") || query.has("error_description")) {
+      const target = request.nextUrl.clone();
+      target.pathname = "/auth/callback";
+      return NextResponse.redirect(target);
+    }
+  }
+
   const isAdminLogin = pathname === "/auth/login/admin";
 
   const isProtectedPath =

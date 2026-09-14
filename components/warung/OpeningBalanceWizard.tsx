@@ -56,7 +56,6 @@ type AssetRow = {
   category: AssetCategory;
   /** Umur ekonomis dalam TAHUN. Bulan adalah satuan pembukuan, bukan satuan orang. */
   years: string;
-  salvage: number | null;
 };
 
 /**
@@ -70,16 +69,14 @@ type AssetRow = {
  */
 function depreciationNote(row: AssetRow): string | null {
   const cost = row.cost ?? 0;
-  const salvage = row.salvage ?? 0;
   const months = (Number(row.years) || 0) * 12;
   if (cost <= 0 || months <= 0) return null;
-  if (salvage >= cost) return "Perkiraan harga jual nanti harus lebih kecil dari harga belinya.";
-  const monthly = Math.trunc((cost - salvage) / months);
+  const monthly = Math.trunc(cost / months);
   return (
     `Nilainya turun sekitar ${formatIdr(monthly)} tiap bulan: ` +
-    `${formatIdr(cost)} dikurangi perkiraan harga jual nanti ${formatIdr(salvage)}, ` +
-    `dibagi ${months} bulan. Setelah ${row.years} tahun, nilainya berhenti di ${formatIdr(salvage)} — ` +
-    `tidak pernah menjadi nol selama Anda masih memperkirakan alatnya laku.`
+    `${formatIdr(cost)} dibagi ${months} bulan. ` +
+    `Setelah ${row.years} tahun, nilai alat ini di catatan Anda menjadi nol — ` +
+    `alatnya boleh saja masih dipakai, yang habis hanya nilainya di pembukuan.`
   );
 }
 
@@ -199,7 +196,6 @@ export function OpeningBalanceWizard({
             category: row.category,
             // Pemilik menjawab dalam tahun; pembukuan menghitung dalam bulan.
             usefulLifeMonths: (Number(row.years) || defaultUsefulLifeMonths[row.category] / 12) * 12,
-            salvageValueIdr: amount(row.salvage),
           })),
         notes: null,
       };
@@ -538,7 +534,7 @@ export function OpeningBalanceWizard({
                 ))}
               </select>
 
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div>
                 <label className={labelClass}>
                   Masih bisa dipakai berapa lama?
                   <div className="mt-1.5 flex items-center gap-2">
@@ -560,21 +556,6 @@ export function OpeningBalanceWizard({
                     {assetCategoryLabels[row.category].split(" (")[0].toLowerCase()}.
                   </span>
                 </label>
-                <label className={labelClass}>
-                  Kalau nanti dijual, kira-kira laku berapa?
-                  <div className="mt-1.5">
-                    <InlineMoneyInput
-                      ariaLabel="Perkiraan harga jual setelah tidak dipakai"
-                      value={row.salvage}
-                      onChange={(value) =>
-                        setAssets((rows) => rows.map((item, i) => (i === index ? { ...item, salvage: value } : item)))
-                      }
-                    />
-                  </div>
-                  <span className={helperClass}>
-                    Boleh dikosongkan kalau nanti dianggap sudah tidak laku sama sekali.
-                  </span>
-                </label>
               </div>
 
               {/*
@@ -593,7 +574,7 @@ export function OpeningBalanceWizard({
           <button
             type="button"
             onClick={() =>
-              setAssets((rows) => [...rows, { name: "", cost: null, acquiredOn: startDate, category: "peralatan", years: String(defaultUsefulLifeMonths.peralatan / 12), salvage: null }])
+              setAssets((rows) => [...rows, { name: "", cost: null, acquiredOn: startDate, category: "peralatan", years: String(defaultUsefulLifeMonths.peralatan / 12) }])
             }
             className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#addcf4] bg-[#eef8fd] px-3 text-xs font-bold text-[#0b5f86]"
           >

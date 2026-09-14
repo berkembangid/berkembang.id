@@ -35,8 +35,10 @@ export type BalanceSheetView = {
 
 /** Urutan dan penomoran catatan mengikuti ilustrasi SAK EMKM. */
 const assetOrder = [
-  { key: "BS_KAS", label: "Kas", note: 3 },
-  { key: "BS_GIRO", label: "Giro", note: 4 },
+  // "Giro" adalah istilah bank, bukan bahasa pemilik warung -- dan "Kas"
+  // sendirian tidak memberi tahu kas yang mana. Keduanya disebut tempatnya.
+  { key: "BS_KAS", label: "Kas di Tangan", note: 3 },
+  { key: "BS_GIRO", label: "Kas di Bank", note: 4 },
   { key: "BS_PIUTANG_USAHA", label: "Piutang usaha", note: 5 },
   { key: "BS_PERSEDIAAN", label: "Persediaan", note: 6 },
   { key: "BS_BEBAN_DIBAYAR_DIMUKA", label: "Beban dibayar di muka", note: null },
@@ -66,8 +68,8 @@ export function buildBalanceSheet(asOf: string, rows: readonly BalanceSheetRow[]
   const bankIdr = sumBy(rows, "BS_GIRO");
 
   lines.push(
-    { key: "BS_KAS", label: "Kas", amountIdr: cashIdr, noteNumber: 3, emphasis: "normal", parenthesised: cashIdr < 0 },
-    { key: "BS_GIRO", label: "Giro", amountIdr: bankIdr, noteNumber: 4, emphasis: "normal", parenthesised: bankIdr < 0 },
+    { key: "BS_KAS", label: "Kas di Tangan", amountIdr: cashIdr, noteNumber: 3, emphasis: "normal", parenthesised: cashIdr < 0 },
+    { key: "BS_GIRO", label: "Kas di Bank", amountIdr: bankIdr, noteNumber: 4, emphasis: "normal", parenthesised: bankIdr < 0 },
     {
       key: "BS_KAS_SETARA",
       label: "Jumlah kas dan setara kas",

@@ -115,6 +115,21 @@ interface ConsentGrantItem {
   granted_at: string;
 }
 
+/**
+ * Nama dari hasil embed PostgREST, yang bentuknya tidak satu.
+ *
+ * `institutions(name)` mengembalikan objek untuk relasi many-to-one, tetapi
+ * tipe yang dihasilkan dari skema kadang menyebutnya array, dan barisnya bisa
+ * null bila relasinya kosong. Sebelumnya ketiga kemungkinan itu dilewati dengan
+ * `(r: any)`, yang juga mematikan pemeriksaan atas SELURUH baris -- termasuk
+ * bidang yang tidak ada kaitannya dengan embed.
+ */
+function embeddedName(value: unknown): string {
+  const row = Array.isArray(value) ? value[0] : value;
+  const name = row && typeof row === "object" && "name" in row ? (row as { name: unknown }).name : null;
+  return typeof name === "string" && name.trim().length > 0 ? name : "Lembaga";
+}
+
 export default function UMKMDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -318,9 +333,9 @@ export default function UMKMDetailPage() {
           .order("created_at", { ascending: false });
 
         if (requests) {
-          const mappedReq: AccessRequestItem[] = requests.map((r: any) => ({
+          const mappedReq: AccessRequestItem[] = requests.map((r) => ({
             id: r.id,
-            institution_name: r.institutions?.name || "Lembaga",
+            institution_name: embeddedName(r.institutions),
             purpose_description: r.purpose_description || "-",
             status: r.status,
             requested_scopes: r.requested_scopes || [],
@@ -340,9 +355,9 @@ export default function UMKMDetailPage() {
           .order("granted_at", { ascending: false });
 
         if (grants) {
-          const mappedGrants: ConsentGrantItem[] = grants.map((g: any) => ({
+          const mappedGrants: ConsentGrantItem[] = grants.map((g) => ({
             id: g.id,
-            institution_name: g.institutions?.name || "Lembaga",
+            institution_name: embeddedName(g.institutions),
             status: g.status,
             scopes: g.scopes || [],
             expires_at: g.expires_at,
@@ -359,10 +374,13 @@ export default function UMKMDetailPage() {
     }
   }
 
+  // Ditunda satu putaran, idiom yang dipakai kartu beranda dan panel lain di
+  // repo ini: `fetchDetail` memanggil `setLoading(true)` di baris pertamanya,
+  // dan itu setState yang berjalan serentak di dalam effect.
   useEffect(() => {
-    if (idParam) {
-      void fetchDetail();
-    }
+    if (!idParam) return;
+    const timer = window.setTimeout(() => void fetchDetail(), 0);
+    return () => window.clearTimeout(timer);
   }, [idParam]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -378,10 +396,22 @@ export default function UMKMDetailPage() {
           ? overrideReason.trim() || `Override skor ${oldScore} -> ${score}`
           : "Pembaruan detail UMKM";
 
-      const targetSaveId = profileId || idParam;
+      // SATU panggilan, bukan satu panggilan ditambah dua tulisan langsung.
+      //
+      // Sebelumnya halaman ini memanggil `runAdminOperation` lalu menambahnya
+      // dengan `supabase.from("profiles").update(...)` dan
+      // `supabase.from("businesses").update(...)` dari komponen klien. Tiga hal
+      // yang dilewatinya: pemeriksaan peran di route admin, pemeriksaan Zod,
+      // dan `writeAudit`. Dan karena ketiganya tulisan terpisah, kegagalan di
+      // tengah meninggalkan profil tersimpan dengan usaha yang tidak.
+      //
+      // `id` dikirim hanya bila profilnya memang ada. Usaha tanpa profil lama
+      // ditangani lewat `businessId`; mengirim id usaha sebagai `id` membuat
+      // route memperbarui profil yang tidak pernah ada, tanpa galat apa pun.
       await runAdminOperation({
         action: "save_umkm",
-        id: targetSaveId,
+        id: profileId ?? undefined,
+        businessId: businessId ?? undefined,
         ownerName: ownerName.trim(),
         businessName: businessName.trim(),
         sector: sektor,
@@ -391,35 +421,12 @@ export default function UMKMDetailPage() {
         consistencyDays: konsistensiDays,
         status,
         reason: reasonText,
+        address: alamat.trim(),
+        phone: phone.trim(),
+        nib: nib.trim(),
+        businessForm: bentukUsaha,
+        startYear: tahunMulai ?? "",
       });
-
-      if (profileId) {
-        await supabase
-          .from("profiles")
-          .update({
-            alamat: alamat.trim() || null,
-            phone: phone.trim() || null,
-            nib: nib.trim() || null,
-            bentuk_usaha: bentukUsaha,
-            tahun_mulai_usaha: tahunMulai || null,
-          })
-          .eq("id", profileId);
-      }
-
-      if (businessId) {
-        await supabase
-          .from("businesses")
-          .update({
-            name: businessName.trim(),
-            sector: sektor,
-            location: lokasi.trim(),
-            address: alamat.trim() || null,
-            phone: phone.trim() || null,
-            nib: nib.trim() || null,
-            status: status === "active" ? "active" : "inactive",
-          })
-          .eq("id", businessId);
-      }
 
       setOldScore(score);
       notifySuccess("Data profil UMKM berhasil disimpan.");

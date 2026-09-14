@@ -51,7 +51,10 @@ export type AdminOperation =
     }
   | {
       action: "save_umkm";
+      /** Id PROFIL, dan hanya bila profilnya ada. */
       id?: string;
+      /** Id USAHA, untuk usaha yang tidak punya profil lama. */
+      businessId?: string;
       ownerName: string;
       businessName: string;
       sector: string;
@@ -61,6 +64,12 @@ export type AdminOperation =
       consistencyDays: number;
       status: string;
       reason?: string;
+      address?: string;
+      phone?: string;
+      nib?: string;
+      businessForm?: string;
+      /** Tahun mulai usaha. Kosong dikirim sebagai "", diperiksa di route. */
+      startYear?: number | "";
     }
   | { action: "set_umkm_score"; id: string; score: number; reason: string };
 

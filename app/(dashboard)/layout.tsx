@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import { BarChart2, Bell, Bookmark, Building2, Clock3, FolderOpen, LayoutGrid, LogOut, ScrollText, Settings2, TrendingUp, X } from "lucide-react";
+import { BarChart2, Bell, Bookmark, Building2, Clock3, FolderOpen, LayoutGrid, LogOut, Map, Megaphone, ScrollText, Settings2, TrendingUp, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure } from "@/lib/notify";
@@ -13,8 +13,15 @@ import PortalHeader from "@/components/shell/PortalHeader";
 import { INSTITUSI_ROUTES } from "./institusi-navigation";
 import styles from "../dashboard-shell.module.css";
 
-const NAV_ITEMS = [
+/**
+ * `regionWide` menandai layar yang hanya berarti bagi lembaga berwilayah.
+ * Menu yang menjanjikan layar lalu menjawab 403 lebih buruk daripada menu yang
+ * tidak ada, jadi item itu disaring -- bukan dinonaktifkan.
+ */
+const NAV_ITEMS: readonly { href: string; label: string; Icon: typeof TrendingUp; badge?: boolean; regionWide?: boolean }[] = [
   { href: "/institusi", label: "Temukan", Icon: TrendingUp },
+  { href: "/institusi/wilayah", label: "Ringkasan wilayah", Icon: Map, regionWide: true },
+  { href: "/institusi/broadcast", label: "Broadcast", Icon: Megaphone, regionWide: true },
   { href: "/institusi/shortlist", label: "Shortlist", Icon: Bookmark },
   { href: "/institusi/requests", label: "Permintaan", Icon: Clock3 },
   { href: "/institusi/dossiers", label: "Profil berizin", Icon: FolderOpen },
@@ -37,8 +44,8 @@ function InstitutionSwitcher() {
   </label>;
 }
 
-function SidebarShell({ pathname, mobileOpen, setMobileOpen, unread, contextName, handleSignOut }: {
-  pathname: string; mobileOpen: boolean; setMobileOpen: (open: boolean) => void; unread: number; contextName: string; handleSignOut: () => void;
+function SidebarShell({ pathname, mobileOpen, setMobileOpen, unread, contextName, regionWide, handleSignOut }: {
+  pathname: string; mobileOpen: boolean; setMobileOpen: (open: boolean) => void; unread: number; contextName: string; regionWide: boolean; handleSignOut: () => void;
 }) {
   return <>
     {mobileOpen && <button type="button" aria-label="Tutup menu" className={styles.backdrop} onClick={() => setMobileOpen(false)} />}
@@ -47,9 +54,9 @@ function SidebarShell({ pathname, mobileOpen, setMobileOpen, unread, contextName
       <div className={styles.context}><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#eef8fd] text-[#0f73a3]"><Building2 size={17} /></span><div className="min-w-0"><p className={styles.contextTitle}>{contextName}</p><InstitutionSwitcher /></div></div></div>
       <nav aria-label="Menu portal lembaga" className={styles.group}>
         <p className={styles.groupLabel}>Ruang kerja</p>
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) => !item.regionWide || regionWide).map((item) => {
           const active = item.href === "/institusi" ? pathname === item.href : pathname.startsWith(item.href);
-          return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} aria-current={active ? "page" : undefined} className={`${styles.navLink} ${active ? styles.navActive : ""}`}><item.Icon size={16} /><span>{item.label}</span>{"badge" in item && unread > 0 && <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-black text-white">{unread > 99 ? "99+" : unread}</span>}</Link>;
+          return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} aria-current={active ? "page" : undefined} className={`${styles.navLink} ${active ? styles.navActive : ""}`}><item.Icon size={16} /><span>{item.label}</span>{item.badge && unread > 0 && <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-black text-white">{unread > 99 ? "99+" : unread}</span>}</Link>;
         })}
       </nav>
       <div className={styles.sidebarFooter}><button type="button" onClick={() => void handleSignOut()} className={`${styles.navLink} !m-0 w-full`}><LogOut size={16} /><span>Keluar akun</span></button></div>
@@ -93,7 +100,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div data-world="institusi" className={styles.portal}>
-      <SidebarShell pathname={pathname} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} unread={unread} contextName={selected?.name ?? "Akun lembaga"} handleSignOut={handleSignOut} />
+      <SidebarShell pathname={pathname} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} unread={unread} contextName={selected?.name ?? "Akun lembaga"} regionWide={selected?.regionWide === true} handleSignOut={handleSignOut} />
       <div className={styles.main}>
         <PortalHeader
           routes={INSTITUSI_ROUTES}

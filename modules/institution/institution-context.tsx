@@ -10,6 +10,13 @@ export type InstitutionMembership = {
   verificationStatus: string;
   role: string;
   memberStatus: string;
+  /**
+   * Lembaga berwilayah: dinas yang melihat seluruh kota, bukan hanya yang
+   * mendaftar sukarela. Dipakai menu samping supaya "Ringkasan wilayah" tidak
+   * muncul bagi bank -- menu yang menjanjikan layar lalu menjawab 403 lebih
+   * buruk daripada menu yang tidak ada.
+   */
+  regionWide?: boolean;
 };
 
 type InstitutionContextValue = {

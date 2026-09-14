@@ -18,6 +18,12 @@ const root = process.cwd();
 const register = readFileSync(join(root, "app", "auth", "register", "page.tsx"), "utf8");
 const bootstrap = readFileSync(join(root, "lib", "auth", "bootstrap.ts"), "utf8");
 const profil = readFileSync(join(root, "app", "(umkm)", "umkm", "profil", "page.tsx"), "utf8");
+// Pertanyaannya, pilihan jawabannya, dan kunci metadatanya pindah ke satu
+// modul bersama ketika pendaftaran lewat Google mulai menanyakan hal yang sama.
+// Yang diperiksa di sini adalah pertanyaannya, jadi yang dibaca harus tempat
+// pertanyaan itu benar-benar ditulis -- bukan salah satu halaman pemakainya.
+const fields = readFileSync(join(root, "modules", "auth", "onboarding-fields.ts"), "utf8");
+const complete = readFileSync(join(root, "app", "auth", "lengkapi", "page.tsx"), "utf8");
 
 /** Kolom profil yang kini juga ditanyakan saat mendaftar. */
 const sharedFields = [
@@ -32,7 +38,7 @@ const sharedFields = [
 describe("langkah tiga menanyakan apa yang dipakai Profil", () => {
   it("asks for every field the profile screen keeps", () => {
     for (const field of sharedFields) {
-      expect(register, `pendaftaran tidak menanyakan ${field}`).toContain(field);
+      expect(fields, `pendaftaran tidak menanyakan ${field}`).toContain(field);
       expect(profil, `profil tidak menyimpan ${field}`).toContain(field);
     }
   });
@@ -41,11 +47,11 @@ describe("langkah tiga menanyakan apa yang dipakai Profil", () => {
     // Pilihan yang berbeda antara dua layar menghasilkan nilai yang ditolak
     // CHECK di basis data, dan pemilik hanya melihat pendaftaran gagal.
     for (const value of ["perorangan", "badan_usaha", "sendiri", "1-4", "5-19"]) {
-      expect(register, value).toContain(`"${value}"`);
+      expect(fields, value).toContain(`"${value}"`);
       expect(profil, value).toContain(`"${value}"`);
     }
     for (const channel of ["warung", "whatsapp", "marketplace", "media_sosial"]) {
-      expect(register, channel).toContain(`"${channel}"`);
+      expect(fields, channel).toContain(`"${channel}"`);
       expect(profil, channel).toContain(`"${channel}"`);
     }
   });
@@ -61,8 +67,37 @@ describe("langkah tiga menanyakan apa yang dipakai Profil", () => {
   it("refuses to continue on an answer the database would reject", () => {
     // CHECK `profiles_tahun_mulai_check` menolak tahun di luar 1900–2100.
     // Menangkapnya di layar berarti pemilik membaca kalimat, bukan galat SQL.
-    expect(register).toContain("year < 1900");
-    expect(register).toContain("detail.channels.length === 0");
+    expect(fields).toContain("year < 1900");
+    expect(fields).toContain("answers.channels.length === 0");
+  });
+});
+
+describe("dua jalur mendaftar, satu daftar pertanyaan", () => {
+  it("asks the same questions whether the account came from email or Google", () => {
+    // Ini penjaga cacat yang SUDAH TERJADI, bukan kehati-hatian yang dikarang.
+    //
+    // `/auth/lengkapi` -- jalur Google -- dulu hanya menanyakan tiga hal dari
+    // sembilan, lalu menulis metadatanya sendiri. Salah satu kuncinya berbeda
+    // nama: `jenis_institusi`, sementara `bootstrap` membaca `jenis_investor`.
+    // Akibatnya jenis yang dipilih setiap investor Google terbuang tanpa galat
+    // apa pun, dan setiap pemilik usaha Google lahir dengan profil separuh
+    // terisi tanpa tahu mana yang kurang.
+    //
+    // Dua jalan masuk yang menghasilkan akun berbeda bukan dua jalan masuk;
+    // itu satu jalan dan satu jalan pintas.
+    for (const page of [register, complete]) {
+      expect(page).toContain("@/modules/auth/onboarding-fields");
+      expect(page).toContain("umkmSignupMetadata(");
+      expect(page).toContain("investorSignupMetadata(");
+      // Tidak satu pun halaman menyusun metadatanya sendiri.
+      expect(page).not.toContain("signup_account_type:");
+    }
+  });
+
+  it("keeps the investor metadata key the bootstrap actually reads", () => {
+    expect(fields).toContain("jenis_investor:");
+    expect(fields).not.toContain("jenis_institusi:");
+    expect(bootstrap).toContain("jenis_investor");
   });
 });
 

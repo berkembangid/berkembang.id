@@ -84,6 +84,26 @@ const operationSchema = z.discriminatedUnion("action", [
     consistencyDays: z.number().int().min(0).max(100000),
     status: z.enum(["active", "inactive", "pending", "suspended"]),
     reason: z.string().trim().max(500).optional(),
+    // Bidang di bawah sebelumnya ditulis LANGSUNG dari halaman detail UMKM
+    // dengan `supabase.from("profiles").update(...)` di komponen klien. Itu
+    // melewati pemeriksaan peran di route ini, melewati Zod, dan melewati
+    // `writeAudit` -- tiga hal yang justru alasan route ini ada. Uji kontrak
+    // "keeps privileged writes behind authenticated server routes" menangkapnya
+    // dan gagal berbulan-bulan; yang salah kodenya, bukan ujinya.
+    businessId: uuid.optional(),
+    address: z.string().trim().max(300).optional(),
+    phone: z.string().trim().max(40).optional(),
+    nib: z.string().trim().max(60).optional(),
+    // `profiles.bentuk_usaha` NOT NULL, jadi kosong tetap string kosong.
+    businessForm: z.string().trim().max(80).optional(),
+    // Tulisan langsung dari halaman tidak pernah memeriksa rentangnya, dan
+    // memakai `tahunMulai || null` -- yang mengubah tahun 0 menjadi "tidak
+    // diisi" tanpa memberi tahu siapa pun. Di sini ia diperiksa sebagai tahun,
+    // dan hanya string kosong yang berarti dikosongkan.
+    startYear: z.union([
+      z.literal(""),
+      z.coerce.number().int().min(1900).max(2100),
+    ]).optional(),
   }),
   z.object({ action: z.literal("set_umkm_score"), id: uuid, score: z.number().min(0).max(100), reason: z.string().trim().min(1).max(500) }),
 ]);
@@ -468,6 +488,25 @@ export async function POST(request: Request) {
         break;
       }
       case "save_umkm": {
+        // Kosong berarti "dikosongkan", jadi `null` -- bukan dilewati. Bidang
+        // opsional yang tidak dikirim tetap tidak disentuh.
+        const blankToNull = (value: string | undefined) =>
+          value === undefined ? undefined : (value === "" ? null : value);
+        const optionalProfileFields = {
+          alamat: blankToNull(operation.address),
+          phone: blankToNull(operation.phone),
+          nib: blankToNull(operation.nib),
+          bentuk_usaha: operation.businessForm,
+          tahun_mulai_usaha: operation.startYear === undefined
+            ? undefined
+            : (operation.startYear === "" ? null : operation.startYear),
+        };
+        const optionalBusinessFields = {
+          address: blankToNull(operation.address),
+          phone: blankToNull(operation.phone),
+          nib: blankToNull(operation.nib),
+        };
+
         if (operation.id) {
           ensureNoError((await admin.from("profiles").update({
             name: operation.ownerName,
@@ -479,14 +518,38 @@ export async function POST(request: Request) {
             konsistensi_days: operation.consistencyDays,
             status: operation.status,
             role: "umkm",
+            ...optionalProfileFields,
           }).eq("id", operation.id)).error, "UMKM_UPDATE_FAILED");
-          await admin.from("businesses").update({
+
+          // Usahanya dicari lewat `businessId` bila dikirim, dan lewat
+          // `legacy_profile_id` bila tidak. Sebelum ini hanya jalan kedua yang
+          // dipakai di sini, sehingga usaha yang tidak punya profil lama tidak
+          // pernah ikut tersimpan -- dan halaman detail menambalnya sendiri
+          // dengan tulisan langsung dari klien.
+          const businessUpdate = {
             name: operation.businessName,
             sector: operation.sector,
             location: operation.location,
             status: operation.status === "active" ? "active" : "inactive",
-          }).eq("legacy_profile_id", operation.id);
+            ...optionalBusinessFields,
+          };
+          ensureNoError((operation.businessId
+            ? await admin.from("businesses").update(businessUpdate).eq("id", operation.businessId)
+            : await admin.from("businesses").update(businessUpdate).eq("legacy_profile_id", operation.id)
+          ).error, "UMKM_BUSINESS_UPDATE_FAILED");
           resultId = operation.id;
+        } else if (operation.businessId) {
+          // Usaha tanpa profil lama: satu-satunya yang bisa disimpan adalah
+          // barisnya sendiri. Sebelumnya cabang ini membuat PROFIL BARU, jadi
+          // menyimpan detail usaha yang sudah ada melahirkan UMKM kedua.
+          ensureNoError((await admin.from("businesses").update({
+            name: operation.businessName,
+            sector: operation.sector,
+            location: operation.location,
+            status: operation.status === "active" ? "active" : "inactive",
+            ...optionalBusinessFields,
+          }).eq("id", operation.businessId)).error, "UMKM_BUSINESS_UPDATE_FAILED");
+          resultId = operation.businessId;
         } else {
           const profile = await admin.from("profiles").insert({
             name: operation.ownerName,

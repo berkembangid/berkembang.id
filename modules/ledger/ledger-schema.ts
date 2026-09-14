@@ -42,6 +42,20 @@ export const emkmLedgerFieldsSchema = z.object({
   ]).nullable().optional(),
   counterpartyId: z.uuid().nullable().optional(),
   interestAmountIdr: z.number().int().nonnegative().max(9_000_000_000_000).optional(),
+  /**
+   * Jenis alat dan umur ekonomisnya, untuk pembelian alat usaha (kategori 8).
+   *
+   * Keduanya dulu DITEBAK di basis data: jenisnya dari teks keterangan, dan
+   * umurnya dari nilai bawaan jenis itu. Umur ekonomis adalah satu-satunya
+   * angka yang menentukan beban penyusutan tiap bulan, jadi menebaknya berarti
+   * menebak beban -- dan kondisi awal usaha sudah menanyakan keduanya, jadi
+   * alat yang sama diperlakukan berbeda hanya karena tanggal belinya.
+   *
+   * Tetap opsional: catatan yang masuk lewat suara atau foto nota belum tentu
+   * membawa jawabannya, dan basis data masih punya tebakan sebagai cadangan.
+   */
+  assetCategory: z.enum(["peralatan", "mesin", "kendaraan", "bangunan", "lainnya"]).nullable().optional(),
+  assetUsefulLifeMonths: z.number().int().min(1).max(600).nullable().optional(),
 });
 
 export const ledgerTransactionInputSchema = z.object({
@@ -67,6 +81,18 @@ export const ledgerTransactionInputSchema = z.object({
   }
   if ((value.interestAmountIdr ?? 0) > 0 && value.emkmCategoryCode !== 7) {
     context.addIssue({ code: "custom", path: ["interestAmountIdr"], message: "Bunga hanya berlaku untuk pembayaran cicilan." });
+  }
+  // Umur ekonomis hanya punya arti untuk pembelian alat usaha. Menerimanya
+  // pada catatan lain membuat bidang yang tersimpan tanpa pernah dipakai --
+  // dan bidang yang tidak dipakai siapa pun terbaca seperti jawaban yang
+  // tersimpan, padahal ia hilang.
+  if (value.emkmCategoryCode !== 8) {
+    if (value.assetUsefulLifeMonths != null) {
+      context.addIssue({ code: "custom", path: ["assetUsefulLifeMonths"], message: "Umur ekonomis hanya berlaku untuk pembelian alat usaha." });
+    }
+    if (value.assetCategory != null) {
+      context.addIssue({ code: "custom", path: ["assetCategory"], message: "Jenis alat hanya berlaku untuk pembelian alat usaha." });
+    }
   }
 });
 

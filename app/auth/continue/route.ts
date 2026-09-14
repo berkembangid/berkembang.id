@@ -16,17 +16,41 @@ export async function GET(request: Request) {
   try {
     const role = await getEffectivePortalRole(supabase, user.id);
     if (role) {
+      // Pemilik yang BARU MENDAFTAR diantar ke Profil, sekali.
+      //
+      // Bedanya dengan perilaku yang dicabut hari ini terletak pada apa yang
+      // ditanyakan. Dulu: "apakah ia belum punya transaksi" -- keadaan yang
+      // tetap kosong selama berhari-hari, jadi pengalihannya terjadi pada
+      // SETIAP kali masuk dan terbaca seperti kegagalan masuk. Sekarang:
+      // "apakah ia sudah pernah melihat perkenalan" -- penanda yang tersimpan
+      // dan hanya pernah berubah sekali.
+      //
+      // Gagal ke arah yang aman: kalau kolomnya tidak terbaca, pemilik masuk
+      // ke portalnya seperti biasa. Pengalihan yang muncul karena bacaan
+      // gagal lebih buruk daripada perkenalan yang terlewat.
       if (role === "umkm") {
-        // Pemilik usaha yang belum pernah mencatat apa pun diantar ke Profil,
-        // bukan ke layar catat. Hal pertama yang harus dikerjakan adalah
-        // melengkapi profil, dokumen, dan kondisi awal; mencatat transaksi
-        // sebelum titik mulainya diketahui menghasilkan laporan yang berdiri
-        // di atas angka yang tidak pernah ditetapkan.
-        const transaction = await supabase.from("transactions").select("id").eq("user_id", user.id).limit(1).maybeSingle();
-        if (!transaction.error && !transaction.data) {
-          return NextResponse.redirect(new URL("/umkm/profil?onboarding=1", request.url));
+        const profile = await supabase
+          .from("profiles")
+          .select("onboarding_seen_at")
+          .eq("auth_user_id", user.id)
+          .maybeSingle();
+        if (!profile.error && profile.data && profile.data.onboarding_seen_at === null) {
+          return NextResponse.redirect(new URL("/umkm/profil", request.url));
         }
       }
+
+      // Masuk selalu berakhir di portalnya sendiri, tanpa pengalihan lain.
+      //
+      // Sebelumnya pemilik usaha yang belum punya satu pun transaksi dibelokkan
+      // ke `/umkm/profil?onboarding=1`. Maksudnya baik, akibatnya tidak: ia
+      // berlaku pada SETIAP kali masuk, bukan sekali saat mendaftar, jadi
+      // pemilik yang belum mencatat dibelokkan terus -- dan pengalihan pada
+      // saat masuk terbaca seperti kegagalan masuk, bukan seperti ajakan.
+      //
+      // Jawaban profilnya sekarang dikumpulkan saat onboarding di KEDUA jalur
+      // masuk (surel dan Google), jadi pengalihan ini tidak lagi menambal apa
+      // pun. Ajakan melengkapi profil tetap ada sebagai kartu di Beranda --
+      // di tempat yang bisa ditunda pemiliknya, bukan di jalan masuknya.
       return NextResponse.redirect(new URL(portalPathForRole(role), request.url));
     }
   } catch {

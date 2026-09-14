@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ConfirmProvider } from "@/components/ui/confirm";
+import { DemoEnvironmentBanner } from "@/components/shell/DemoEnvironmentBanner";
+import { isDemoMode } from "@/lib/env/app-mode";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -10,7 +12,23 @@ const inter = Inter({
   display: "swap",
 });
 
+/**
+ * Demo tidak boleh terindeks mesin pencari.
+ *
+ * Bukan soal rahasia -- halamannya tidak memuat data sungguhan. Soalnya orang
+ * yang mencari "berkembang.id" lalu menemukan demo, mendaftar di sana, dan
+ * mengira itu aplikasinya. Ia akan memasukkan catatan usaha sungguhan ke
+ * lingkungan yang datanya bisa dihapus kapan saja.
+ *
+ * Dua domain dengan isi yang sama juga membuat mesin pencari memilih sendiri
+ * mana yang ditampilkan -- dan pilihannya bisa jatuh ke demo.
+ */
+const robots = isDemoMode()
+  ? { index: false, follow: false, nocache: true }
+  : undefined;
+
 export const metadata: Metadata = {
+  ...(robots ? { robots } : {}),
   title: "BERKEMBANG.ID — Catat Lewat Suara, Tumbuh dengan Data",
   description:
     "Platform pendamping UMKM berbasis AI. Catat transaksi dengan suara, pahami kondisi usaha, dan bangun kesiapan untuk tumbuh.",
@@ -53,6 +71,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           bisa dipanggil dari mana saja; `children` tetap dirender di server,
           karena ia diteruskan sebagai prop, bukan diimpor komponen klien.
         */}
+        {/*
+          Spanduk demo di atas segalanya, dan di luar `ConfirmProvider` supaya
+          ia tetap terlihat walau dialog konfirmasi sedang terbuka.
+        */}
+        <DemoEnvironmentBanner />
         <ConfirmProvider>{children}</ConfirmProvider>
         <Toaster
           position="top-center"

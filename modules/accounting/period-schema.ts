@@ -55,29 +55,22 @@ export const openingPayableSchema = z.object({
   monthlyInstallmentIdr: positiveAmountSchema.nullable().optional(),
 });
 
-/** Pertanyaan 6: alat usaha yang sudah dimiliki. */
-export const openingAssetSchema = z
-  .object({
-    name: z.string().trim().min(1).max(120),
-    costIdr: positiveAmountSchema,
-    acquiredOn: pastDateSchema.optional(),
-    category: z.enum(assetCategories).optional(),
-    usefulLifeMonths: z.number().int().min(1).max(600).optional(),
-    /** Perkiraan harga jual setelah umur ekonomisnya habis. Tidak pernah ikut menyusut. */
-    salvageValueIdr: amountSchema.optional(),
-  })
-  .superRefine((asset, context) => {
-    // Nilai sisa sebesar harga belinya berarti alat itu tidak pernah menyusut
-    // sama sekali -- hampir selalu salah ketik. Dicegat di layar dengan
-    // kalimat yang menjelaskan, bukan di basis data dengan kode galat.
-    if (asset.salvageValueIdr !== undefined && asset.salvageValueIdr >= asset.costIdr) {
-      context.addIssue({
-        code: "custom",
-        path: ["salvageValueIdr"],
-        message: "Perkiraan harga jual nanti harus lebih kecil dari harga belinya.",
-      });
-    }
-  });
+/**
+ * Pertanyaan 6: alat usaha yang sudah dimiliki.
+ *
+ * Tidak ada nilai residu di sini, dan itu bukan kelalaian: SAK EMKM 11.14
+ * menyusutkan tanpa memperhitungkannya. Bidangnya pernah ada -- lengkap dengan
+ * `superRefine` yang menolak nilai residu sebesar harga belinya -- dan `0086`
+ * membuangnya beserta pemeriksaan itu, karena keduanya menjaga angka yang
+ * tidak boleh dipakai.
+ */
+export const openingAssetSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  costIdr: positiveAmountSchema,
+  acquiredOn: pastDateSchema.optional(),
+  category: z.enum(assetCategories).optional(),
+  usefulLifeMonths: z.number().int().min(1).max(600).optional(),
+});
 
 /**
  * Bentuk dasar jawaban wizard. Dipisahkan dari aturan tambahannya supaya
@@ -168,7 +161,6 @@ export const fixedAssetInputSchema = z.object({
   acquiredOn: pastDateSchema,
   category: z.enum(assetCategories).optional(),
   usefulLifeMonths: z.number().int().min(1).max(600).optional(),
-  salvageValueIdr: amountSchema.optional(),
 });
 
 export const loanInputSchema = z.object({

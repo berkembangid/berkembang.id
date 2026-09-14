@@ -23,7 +23,31 @@ export type CategorySelection = {
   emkmCategorySubtype: string | null;
   counterpartyName: string | null;
   interestAmountIdr: number;
+  /**
+   * Jenis alat dan umur ekonomisnya, hanya untuk pembelian alat usaha.
+   *
+   * Keduanya dulu ditebak basis data -- jenisnya dari teks keterangan, umurnya
+   * dari nilai bawaan jenis itu. Umur ekonomis satu-satunya angka yang
+   * menentukan beban penyusutan tiap bulan, dan kondisi awal usaha SUDAH
+   * menanyakannya. Alat yang sama tidak boleh diperlakukan berbeda hanya
+   * karena tanggal belinya.
+   */
+  assetCategory: string | null;
+  assetUsefulLifeYears: number | null;
 };
+
+/** Pembelian alat usaha. Satu tempat, supaya layar dan aturannya sepakat. */
+export function isAssetPurchase(categoryCode: number) {
+  return categoryCode === 8;
+}
+
+const ASSET_KINDS = [
+  { value: "peralatan", label: "Peralatan", years: 4 },
+  { value: "mesin", label: "Mesin", years: 8 },
+  { value: "kendaraan", label: "Kendaraan", years: 8 },
+  { value: "bangunan", label: "Bangunan", years: 20 },
+  { value: "lainnya", label: "Lainnya", years: 4 },
+] as const;
 
 export function emptySelection(direction: "income" | "expense"): CategorySelection {
   return {
@@ -31,6 +55,8 @@ export function emptySelection(direction: "income" | "expense"): CategorySelecti
     emkmCategorySubtype: direction === "income" ? null : "5290",
     counterpartyName: null,
     interestAmountIdr: 0,
+    assetCategory: null,
+    assetUsefulLifeYears: null,
   };
 }
 
@@ -70,6 +96,15 @@ export function CategoryChips({
       emkmCategorySubtype: normalizeSubtype(categoryCode, subtype),
       counterpartyName: requiresCounterparty(categoryCode) ? selection.counterpartyName : null,
       interestAmountIdr: supportsInterest(categoryCode) ? selection.interestAmountIdr : 0,
+      // Jawaban alat dibuang begitu kategorinya bukan pembelian alat lagi.
+      // Bidang yang tertinggal dari pilihan sebelumnya tidak akan lolos skema --
+      // dan pemiliknya tidak akan pernah tahu kenapa.
+      assetCategory: isAssetPurchase(categoryCode) ? (selection.assetCategory ?? "peralatan") : null,
+      assetUsefulLifeYears: isAssetPurchase(categoryCode)
+        ? (selection.assetUsefulLifeYears
+            ?? ASSET_KINDS.find((kind) => kind.value === (selection.assetCategory ?? "peralatan"))?.years
+            ?? 4)
+        : null,
     });
   };
 
@@ -149,6 +184,58 @@ export function CategoryChips({
           onChange={(value) => onChange({ ...selection, interestAmountIdr: value ?? 0 })}
           helper="Bagian bunga dipisah dari pokok cicilan. Kosongkan kalau tidak ada bunga."
         />
+      )}
+
+      {/*
+        Pertanyaan yang sama dengan kondisi awal usaha, dan memang harus sama:
+        alat yang dibeli hari ini disusutkan dengan aturan yang sama dengan
+        alat yang sudah dimiliki sejak awal. Umurnya ditanya dalam TAHUN --
+        bulan adalah satuan pembukuan, bukan satuan orang.
+      */}
+      {isAssetPurchase(selection.emkmCategoryCode) && !minimumNotice && (
+        <div className="grid gap-3 rounded-xl border border-[#d8dcff] bg-[#f7f8ff] p-3 sm:grid-cols-2">
+          <label className="block text-[11px] font-bold text-[#4a6280]">
+            Alat jenis apa?
+            <select
+              value={selection.assetCategory ?? "peralatan"}
+              onChange={(event) => {
+                const kind = ASSET_KINDS.find((item) => item.value === event.target.value);
+                onChange({
+                  ...selection,
+                  assetCategory: event.target.value,
+                  // Umurnya ikut berubah mengikuti jenisnya, karena angka
+                  // bawaan yang tertinggal dari jenis lain lebih menyesatkan
+                  // daripada kolom kosong.
+                  assetUsefulLifeYears: kind?.years ?? 4,
+                });
+              }}
+              className="mt-1.5 min-h-11 w-full rounded-xl border border-[#d8dcff] bg-white px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
+            >
+              {ASSET_KINDS.map((kind) => (
+                <option key={kind.value} value={kind.value}>{kind.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-[11px] font-bold text-[#4a6280]">
+            Masih bisa dipakai berapa lama?
+            <span className="mt-1.5 flex items-center gap-2">
+              <input
+                inputMode="numeric"
+                value={selection.assetUsefulLifeYears ?? ""}
+                onChange={(event) => {
+                  const digits = event.target.value.replace(/\D/g, "").slice(0, 2);
+                  onChange({ ...selection, assetUsefulLifeYears: digits ? Number(digits) : null });
+                }}
+                className="min-h-11 w-20 rounded-xl border border-[#d8dcff] bg-white px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
+                aria-label="Umur ekonomis alat dalam tahun"
+              />
+              <span className="text-xs font-bold text-[#6e859e]">tahun</span>
+            </span>
+            <span className="mt-1 block text-[10px] font-normal leading-relaxed text-[#6e859e]">
+              Perkiraan saja. Angka inilah yang menentukan berapa nilai alat ini turun tiap bulan.
+            </span>
+          </label>
+        </div>
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 import { runAdminOperation } from "@/modules/admin/operations";
 import { notifySuccess } from "@/lib/notify";
+import { InstitutionAuthorityPanel } from "@/modules/admin/institution-authority-panel";
 
 export default function InstitutionDetailPage() {
   const params = useParams();
@@ -378,6 +379,17 @@ export default function InstitutionDetailPage() {
               <button type="submit" className="px-6 py-2.5 rounded-xl bg-[#0b5f86] text-white font-bold text-xs hover:bg-[#0f73a3] cursor-pointer">Simpan lisensi</button>
             </div>
           </form>
+        )}
+
+        {/* Kewenangan atas data, terpisah dari lisensi dan kursi -- dan itu
+            bukan kerapian tata letak. Yang satu soal berapa yang dibayar, yang
+            lain soal data pribadi siapa yang terbuka; menaruhnya dalam satu
+            formulir membuat keduanya tersimpan dengan satu tekanan tombol dan
+            satu alasan yang tidak menjelaskan keduanya. */}
+        {!isFromProfiles && getDatabaseId(rawIdParam) && (
+          <div className="mt-4">
+            <InstitutionAuthorityPanel institutionId={getDatabaseId(rawIdParam)} />
+          </div>
         )}
       </div>
     </div>

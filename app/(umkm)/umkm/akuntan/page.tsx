@@ -423,17 +423,20 @@ function LedgerTable({ ledger }: { ledger: GeneralLedgerView }) {
 function TrialBalancePanel({ asOf }: { asOf: string }) {
   const load = useCallback(() => getTrialBalanceClient(asOf), [asOf]);
   const { data, loading, error, reload } = useAsync(load, "Neraca saldo belum dapat dimuat.");
-  const rows = useMemo<TrialBalanceRow[]>(
-    () => (data?.rows ?? []).filter((row) => row.totalDebitIdr !== 0 || row.totalCreditIdr !== 0),
-    [data],
-  );
+  // Tidak ada penyaringan di sini lagi. `fn_trial_balance` sejak `0088` sudah
+  // tidak mengembalikan akun bersaldo nol -- akun yang debit dan kreditnya
+  // sama besar memang tidak punya saldo untuk disajikan.
+  const rows = useMemo<TrialBalanceRow[]>(() => data?.rows ?? [], [data]);
 
   if (loading) return <Loading label="Menghitung neraca saldo..." />;
   if (error || !data) return <Failure message={error || "Neraca saldo belum dapat dimuat."} onRetry={reload} />;
 
   return (
     <DashboardPanel>
-      <PanelHeader title="Neraca Saldo" description={`Posisi seluruh akun per ${data.asOf}.`} />
+      <PanelHeader
+        title="Neraca Saldo"
+        description={`Saldo setiap akun per ${data.asOf}. Satu akun berada di satu sisi saja, dan kedua jumlahnya harus sama.`}
+      />
       <div className="px-4 py-4 md:px-5">
         <div
           className={`mb-3 flex items-center gap-2 rounded-xl border p-3 text-xs font-bold ${
@@ -454,7 +457,6 @@ function TrialBalancePanel({ asOf }: { asOf: string }) {
                 <th className="py-1.5 font-semibold">Akun</th>
                 <th className="py-1.5 text-right font-semibold">Debit</th>
                 <th className="py-1.5 text-right font-semibold">Kredit</th>
-                <th className="py-1.5 text-right font-semibold">Saldo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f6]">
@@ -463,9 +465,17 @@ function TrialBalancePanel({ asOf }: { asOf: string }) {
                   <td className="py-1.5">
                     <span className="font-mono text-[10px] text-[#6e859e]">{row.accountCode}</span> {row.accountName}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums">{idr(row.totalDebitIdr)}</td>
-                  <td className="py-1.5 text-right tabular-nums">{idr(row.totalCreditIdr)}</td>
-                  <td className="py-1.5 text-right tabular-nums">{signedIdr(row.balanceIdr)}</td>
+                  {/*
+                    Sisi yang kosong ditulis "—", bukan "Rp0".
+                    "Rp0" terbaca sebagai saldo nol yang memang dihitung;
+                    yang benar adalah akun ini tidak punya saldo di sisi itu.
+                  */}
+                  <td className="py-1.5 text-right tabular-nums">
+                    {row.debitIdr === 0 ? <span className="text-[#c8d3de]">—</span> : idr(row.debitIdr)}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums">
+                    {row.creditIdr === 0 ? <span className="text-[#c8d3de]">—</span> : idr(row.creditIdr)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -474,7 +484,6 @@ function TrialBalancePanel({ asOf }: { asOf: string }) {
                 <td className="py-1.5">Jumlah</td>
                 <td className="py-1.5 text-right tabular-nums">{idr(data.totalDebitIdr)}</td>
                 <td className="py-1.5 text-right tabular-nums">{idr(data.totalCreditIdr)}</td>
-                <td className="py-1.5" />
               </tr>
             </tfoot>
           </table>
