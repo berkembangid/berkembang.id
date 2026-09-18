@@ -276,8 +276,32 @@ for (const [siapa, tok] of [["anon", ANON], ["pengguna lain", umkm.token]]) {
 
 await fetch(`${URL_BASE}/rest/v1/password_reset_tokens?reset_session_token=eq.${penanda}`, { method: "DELETE", headers: HS });
 await fetch(`${URL_BASE}/rest/v1/admin_roles?user_id=eq.${korban.id}`, { method: "DELETE", headers: HS });
+// Usahanya lebih dulu, lalu profilnya, baru akunnya.
+//
+// Menulis satu baris `profiles` berperan `umkm` membuat trigger
+// `profiles_provision_umkm_business` ikut membuat satu baris `businesses`.
+// Menghapus akun auth TIDAK ikut menghapusnya, dan versi pertama skrip ini
+// hanya menghapus akunnya.
+//
+// Akibatnya tidak terlihat sekali jalan: setiap kali gate ini dijalankan, satu
+// usaha yatim tertinggal -- tanpa profil, tanpa akun, dan tanpa wilayah.
+// Sebelas sudah menumpuk di demo sebelum ketahuan. Usaha berwilayah kosong
+// ikut terhitung di angka platform sementara tidak pernah muncul di ringkasan
+// dinas mana pun, jadi angkanya tidak bisa dijelaskan dari layar mana pun.
+//
+// Gate yang mengotori lingkungan yang dijaganya akan berhenti dipercaya.
 for (const id of dibuat) {
+  await fetch(`${URL_BASE}/rest/v1/businesses?legacy_profile_id=eq.${id}`, { method: "DELETE", headers: HS });
+  await fetch(`${URL_BASE}/rest/v1/profiles?id=eq.${id}`, { method: "DELETE", headers: HS });
   await fetch(`${URL_BASE}/auth/v1/admin/users/${id}`, { method: "DELETE", headers: { apikey: SERVICE, authorization: `Bearer ${SERVICE}` } });
+}
+
+// Penjaga atas pembersihannya sendiri.
+const sisa = await fetch(`${URL_BASE}/rest/v1/businesses?select=id&legacy_profile_id=is.null&limit=5`, { headers: HS });
+const barisSisa = await sisa.json();
+if (Array.isArray(barisSisa) && barisSisa.length > 0) {
+  console.log(`
+  Peringatan: ${barisSisa.length} usaha tanpa pemilik tertinggal di ${DEMO.label}.`);
 }
 
 const bocor = hasil.filter((h) => !h.aman);

@@ -310,6 +310,15 @@ async function bootstrapProfile(userId, email, metadata) {
         legacy_profile_id: userId,
         name: metadata.nama_institusi,
         type: metadata.jenis_institusi,
+        // Portalnya DISEBUT, tidak dibiarkan disimpulkan.
+        //
+        // Sebelum `0095` portal sebuah lembaga diturunkan dari potongan kata
+        // pada `type`. Jenis persona CVC di sini "CVC" -- tidak memuat
+        // "investor", "offtaker", "ventura", maupun "buyer" -- jadi BNI
+        // Ventures selalu mendarat di portal lembaga, dan bagian peragaan
+        // "Portal BNI Ventures: dossier aktif -> unduh PDF ber-watermark ->
+        // revoke" tidak pernah bisa ditunjukkan di portal yang benar.
+        portal_kind: metadata.jenis_institusi === "CVC" ? "investor" : "institution",
         contact_name: metadata.nama_contact,
         contact_email: email,
         location: metadata.lokasi,
@@ -474,7 +483,34 @@ async function seedLedger(client, businessId, startDate, today) {
           annualRate: 12,
         },
       ],
-      p_inventory_idr: 1_200_000,
+      // `p_inventory_details`, BUKAN `p_inventory_idr`.
+      //
+      // `0066` mengubah persediaan awal dari satu angka total menjadi rincian
+      // per barang, dan skrip ini tidak ikut diperbarui. Akibatnya seed demo
+      // berhenti di tengah dengan pesan dari PostgREST:
+      //
+      //   Could not find the function public.save_opening_balances(
+      //     p_assets, p_bank_idr, p_cash_idr, p_inventory_idr, ...)
+      //
+      // Lima akun sudah terbuat sebelum baris itu, jadi kegagalannya
+      // meninggalkan demo setengah terisi -- keadaan yang paling
+      // membingungkan untuk dibereskan. Tanda tangan RPC adalah kontrak, dan
+      // skrip yang memanggilnya ikut berubah ketika kontraknya berubah.
+      p_inventory_details: [
+        {
+          kind: "barang_jadi",
+          items: [
+            { name: "Nasi kotak siap jual", amountIdr: 700_000 },
+            { name: "Lauk matang", amountIdr: 300_000 },
+          ],
+          otherAmountIdr: 0,
+        },
+        {
+          kind: "bahan_baku",
+          items: [{ name: "Beras dan bumbu", amountIdr: 200_000 }],
+          otherAmountIdr: 0,
+        },
+      ],
       p_assets: [
         { name: "Kulkas dua pintu", costIdr: 4_500_000, acquiredOn: assetDate, category: "mesin" },
         { name: "Etalase kaca", costIdr: 2_000_000, acquiredOn: assetDate, category: "peralatan" },
