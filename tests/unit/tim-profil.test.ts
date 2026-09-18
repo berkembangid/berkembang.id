@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   alamatProfil,
   anggotaTim,
+  daftarTerisi,
   inisial,
+  keahlianTerisi,
+  pendidikanTerisi,
+  pengalamanTerisi,
+  rentang,
   tautanKontak,
   terisi,
 } from "@/modules/tim/tim";
@@ -11,8 +16,7 @@ import {
 /**
  * Profil tim yang dituju QR di kartu nama.
  *
- * Yang dijaga di sini bukan tampilan, melainkan dua hal yang tidak bisa
- * diperbaiki sesudah kartunya tercetak:
+ * Dua hal yang dijaga di sini tidak bisa diperbaiki sesudah kartunya tercetak:
  *
  *   1. Slug harus aman dan tetap. QR memuat /tim/<slug>; slug yang berubah
  *      membuat setiap kartu yang sudah beredar menunjuk halaman mati.
@@ -20,6 +24,9 @@ import {
  *   2. Setiap orang harus punya QR-nya. Menambah anggota kelima tanpa
  *      menjalankan `npm run qr:tim` menghasilkan satu orang tanpa kartu, dan
  *      tidak ada yang menyadarinya sampai kartunya dibagikan.
+ *
+ * Dan satu lagi yang menentukan seluruh halamannya: bidang yang belum diisi
+ * harus HILANG, bukan tampil kosong.
  */
 
 describe("data tim", () => {
@@ -50,16 +57,13 @@ describe("data tim", () => {
     for (const orang of anggotaTim) {
       for (const jenis of ["svg", "png"]) {
         const berkas = `public/tim/qr-${orang.slug}.${jenis}`;
-        expect(
-          existsSync(berkas),
-          `${berkas} tidak ada. Jalankan: npm run qr:tim`,
-        ).toBe(true);
+        expect(existsSync(berkas), `${berkas} tidak ada. Jalankan: npm run qr:tim`).toBe(true);
       }
     }
   });
 });
 
-describe("bidang yang belum diisi", () => {
+describe("bidang yang belum diisi hilang, bukan tampil kosong", () => {
   it("penanda ISI_DULU diperlakukan sebagai belum ada", () => {
     // Sebabnya bukan kerapian: halaman ini dibuka orang yang baru menerima
     // kartunya, sering sambil berdiri di depan pemiliknya. Baris berbunyi
@@ -73,6 +77,48 @@ describe("bidang yang belum diisi", () => {
     expect(terisi("  Pengembang  ")).toBe("Pengembang");
   });
 
+  it("daftar membuang butir yang belum diisi, bukan menampilkannya", () => {
+    expect(daftarTerisi(["ISI_DULU", "Nyata", "", null])).toEqual(["Nyata"]);
+    expect(daftarTerisi(["ISI_DULU", "ISI_DULU"])).toEqual([]);
+    expect(daftarTerisi(null)).toEqual([]);
+  });
+
+  it("kelompok keahlian tanpa butir terisi ikut dibuang", () => {
+    // Kelompok bernama tanpa satu pun butir akan tampil sebagai judul yang
+    // menggantung -- lebih buruk daripada tidak ada bagian keahlian.
+    const kosong = keahlianTerisi({
+      slug: "uji",
+      nama: "Uji",
+      keahlian: [{ kelompok: "Alat", butir: ["ISI_DULU"] }],
+    });
+    expect(kosong).toEqual([]);
+
+    const ada = keahlianTerisi({
+      slug: "uji",
+      nama: "Uji",
+      keahlian: [
+        { kelompok: "Alat", butir: ["Figma", "ISI_DULU"] },
+        { kelompok: "ISI_DULU", butir: ["Next.js"] },
+      ],
+    });
+    expect(ada).toEqual([{ kelompok: "Alat", butir: ["Figma"] }]);
+  });
+
+  it("baris riwayat tanpa judul tidak ditampilkan", () => {
+    const orang = {
+      slug: "uji",
+      nama: "Uji",
+      pengalaman: [
+        { judul: "ISI_DULU", tempat: "Tempat", mulai: "2024", selesai: "Sekarang" },
+        { judul: "Nyata", tempat: "Tempat", mulai: "2024", selesai: "Sekarang" },
+      ],
+      pendidikan: [{ jenjang: "ISI_DULU", tempat: "Sekolah" }],
+    };
+    expect(pengalamanTerisi(orang)).toHaveLength(1);
+    expect(pengalamanTerisi(orang)[0].judul).toBe("Nyata");
+    expect(pendidikanTerisi(orang)).toEqual([]);
+  });
+
   it("kontak yang belum diisi tidak menghasilkan tautan", () => {
     const kosong = tautanKontak({
       slug: "uji",
@@ -80,6 +126,34 @@ describe("bidang yang belum diisi", () => {
       kontak: { surel: "ISI_DULU", telepon: null, linkedin: null, github: null, situs: null },
     });
     expect(kosong).toEqual([]);
+  });
+});
+
+describe("rentang waktu", () => {
+  it("menggabungkan dua sisi, atau memakai yang ada saja", () => {
+    expect(rentang("2021", "2024")).toBe("2021 — 2024");
+    expect(rentang("2024", "ISI_DULU")).toBe("2024");
+    expect(rentang("ISI_DULU", "Sekarang")).toBe("Sekarang");
+    expect(rentang("ISI_DULU", "ISI_DULU")).toBeNull();
+    expect(rentang(null, null)).toBeNull();
+  });
+});
+
+describe("tautan kontak", () => {
+  it("surel dan telepon lebih dulu daripada tautan lain", () => {
+    // Yang memindai kartu nama mencari cara menghubungi, bukan profil untuk
+    // dibaca-baca.
+    const tautan = tautanKontak({
+      slug: "uji",
+      nama: "Uji",
+      kontak: {
+        situs: "https://contoh.id",
+        linkedin: "https://linkedin.com/in/contoh",
+        surel: "halo@contoh.id",
+        telepon: "+62 812-3456-7890",
+      },
+    });
+    expect(tautan.map((t) => t.jenis)).toEqual(["surel", "telepon", "linkedin", "situs"]);
   });
 
   it("nomor telepon jadi tautan WhatsApp tanpa spasi dan tanda hubung", () => {
@@ -93,6 +167,20 @@ describe("bidang yang belum diisi", () => {
     // menolak spasi dan tanda hubung.
     expect(tautan[0].label).toBe("+62 812-3456-7890");
     expect(tautan[0].href).toBe("https://wa.me/6281234567890");
+  });
+
+  it("instagram menerima nama pengguna maupun alamat penuh", () => {
+    const dariNama = tautanKontak({ slug: "u", nama: "U", kontak: { instagram: "@contoh" } })[0];
+    expect(dariNama.label).toBe("@contoh");
+    expect(dariNama.href).toBe("https://instagram.com/contoh");
+
+    const dariAlamat = tautanKontak({
+      slug: "u",
+      nama: "U",
+      kontak: { instagram: "https://instagram.com/contoh" },
+    })[0];
+    expect(dariAlamat.label).toBe("@contoh");
+    expect(dariAlamat.href).toBe("https://instagram.com/contoh");
   });
 });
 

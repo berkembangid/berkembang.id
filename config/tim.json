@@ -3,38 +3,77 @@
     "Profil tim yang dituju QR di kartu nama. Dibaca app/tim dan",
     "scripts/generate-tim-qr.mjs.",
     "",
-    "YANG PERLU ANDA ISI: setiap nilai bertanda ISI_DULU. Halamannya sudah",
-    "jalan sebelum diisi -- bagian yang belum lengkap tidak ditampilkan, bukan",
-    "ditampilkan kosong -- jadi bisa diisi bertahap.",
+    "CARA MENGISI: ganti setiap ISI_DULU. Yang belum diisi TIDAK DITAMPILKAN,",
+    "bukan ditampilkan kosong -- jadi halamannya sudah layak dibuka sejak",
+    "sekarang, dan setiap bidang yang menyusul muncul sendiri. Baris daftar",
+    "yang bidang wajibnya masih ISI_DULU ikut dilewati, jadi contoh bentuknya",
+    "boleh ditinggal apa adanya sampai Anda sempat mengisinya.",
     "",
-    "KENAPA PERAN DAN KONTAK TIDAK DIISIKAN LEBIH DULU.",
+    "URUTAN PENGISIAN YANG PALING BERPENGARUH:",
     "",
-    "Ini keterangan tentang orang sungguhan, dan ia akan tercetak di kartu nama",
-    "yang diberikan kepada orang lain. Peran yang ditebak lalu dibagikan lebih",
-    "buruk daripada peran yang belum ditulis.",
+    "  1. peran + ringkas + kontribusi   <- ini yang membuat halamannya berguna",
+    "  2. kontak.surel                   <- satu cara menghubungi sudah cukup",
+    "  3. keahlian",
+    "  4. pengalaman, pendidikan, tautan lain, foto",
     "",
-    "SLUG IKUT TERCETAK, JADI JANGAN DIUBAH SESUDAH KARTUNYA DICETAK.",
+    "KENAPA `kontribusi` YANG PALING PENTING.",
     "",
-    "QR di kartu memuat alamat /tim/<slug>. Mengubah slug sesudah kartu dicetak",
-    "membuat setiap kartu yang sudah beredar menunjuk halaman yang tidak ada,",
-    "dan tidak ada cara menariknya kembali.",
+    "Yang membuka QR ini menilai apakah Anda benar-benar mengerjakan sesuatu.",
+    "\"Membangun mesin laporan keuangan SAK EMKM\" menjawab itu; \"teliti\" dan",
+    "\"pekerja keras\" tidak, karena tidak ada yang bisa membantahnya dan semua",
+    "orang menulis hal yang sama. Tulis tiga sampai empat, masing-masing satu",
+    "baris, sebutkan yang nyata.",
     "",
-    "FOTO bersifat opsional: taruh di public/tim/<slug>.jpg lalu tulis nama",
-    "berkasnya di bidang foto. Tanpa foto, yang tampil inisial namanya."
+    "PERAN DAN KONTAK TIDAK DIISIKAN LEBIH DULU OLEH SIAPA PUN SELAIN ANDA.",
+    "",
+    "Ini keterangan tentang orang sungguhan yang akan tercetak di kartu dan",
+    "diberikan kepada orang lain. Peran yang ditebak lalu dibagikan lebih buruk",
+    "daripada peran yang belum ditulis.",
+    "",
+    "SLUG IKUT TERCETAK DI QR. Mengubahnya sesudah kartu dicetak membuat setiap",
+    "kartu yang sudah beredar menunjuk halaman yang tidak ada.",
+    "",
+    "FOTO: taruh di public/tim/<slug>.jpg lalu tulis nama berkasnya di `foto`.",
+    "Tanpa foto, yang tampil inisial namanya -- bukan kotak kosong.",
+    "",
+    "BENTUK TIAP DAFTAR:",
+    "  keahlian   { kelompok, butir: [...] }",
+    "  pengalaman { judul, tempat, mulai, selesai, keterangan }",
+    "  pendidikan { jenjang, tempat, mulai, selesai }",
+    "  tautan     surel, telepon, linkedin, github, instagram, portofolio, situs"
   ],
   "anggota": [
     {
       "slug": "hadi",
       "nama": "Hadi",
       "peran": "ISI_DULU",
+      "lokasi": "ISI_DULU",
       "ringkas": "ISI_DULU",
       "tentang": "ISI_DULU",
       "foto": null,
+      "kontribusi": ["ISI_DULU", "ISI_DULU", "ISI_DULU"],
+      "keahlian": [
+        { "kelompok": "ISI_DULU", "butir": ["ISI_DULU"] }
+      ],
+      "pengalaman": [
+        {
+          "judul": "ISI_DULU",
+          "tempat": "ISI_DULU",
+          "mulai": "ISI_DULU",
+          "selesai": "ISI_DULU",
+          "keterangan": null
+        }
+      ],
+      "pendidikan": [
+        { "jenjang": "ISI_DULU", "tempat": "ISI_DULU", "mulai": "ISI_DULU", "selesai": "ISI_DULU" }
+      ],
       "kontak": {
         "surel": "ISI_DULU",
         "telepon": null,
         "linkedin": null,
         "github": null,
+        "instagram": null,
+        "portofolio": null,
         "situs": null
       }
     },
@@ -42,14 +81,33 @@
       "slug": "harsya",
       "nama": "Harsya",
       "peran": "ISI_DULU",
+      "lokasi": "ISI_DULU",
       "ringkas": "ISI_DULU",
       "tentang": "ISI_DULU",
       "foto": null,
+      "kontribusi": ["ISI_DULU", "ISI_DULU", "ISI_DULU"],
+      "keahlian": [
+        { "kelompok": "ISI_DULU", "butir": ["ISI_DULU"] }
+      ],
+      "pengalaman": [
+        {
+          "judul": "ISI_DULU",
+          "tempat": "ISI_DULU",
+          "mulai": "ISI_DULU",
+          "selesai": "ISI_DULU",
+          "keterangan": null
+        }
+      ],
+      "pendidikan": [
+        { "jenjang": "ISI_DULU", "tempat": "ISI_DULU", "mulai": "ISI_DULU", "selesai": "ISI_DULU" }
+      ],
       "kontak": {
         "surel": "ISI_DULU",
         "telepon": null,
         "linkedin": null,
         "github": null,
+        "instagram": null,
+        "portofolio": null,
         "situs": null
       }
     },
@@ -57,14 +115,33 @@
       "slug": "garly",
       "nama": "Garly",
       "peran": "ISI_DULU",
+      "lokasi": "ISI_DULU",
       "ringkas": "ISI_DULU",
       "tentang": "ISI_DULU",
       "foto": null,
+      "kontribusi": ["ISI_DULU", "ISI_DULU", "ISI_DULU"],
+      "keahlian": [
+        { "kelompok": "ISI_DULU", "butir": ["ISI_DULU"] }
+      ],
+      "pengalaman": [
+        {
+          "judul": "ISI_DULU",
+          "tempat": "ISI_DULU",
+          "mulai": "ISI_DULU",
+          "selesai": "ISI_DULU",
+          "keterangan": null
+        }
+      ],
+      "pendidikan": [
+        { "jenjang": "ISI_DULU", "tempat": "ISI_DULU", "mulai": "ISI_DULU", "selesai": "ISI_DULU" }
+      ],
       "kontak": {
         "surel": "ISI_DULU",
         "telepon": null,
         "linkedin": null,
         "github": null,
+        "instagram": null,
+        "portofolio": null,
         "situs": null
       }
     },
@@ -72,14 +149,33 @@
       "slug": "yosua",
       "nama": "Yosua",
       "peran": "ISI_DULU",
+      "lokasi": "ISI_DULU",
       "ringkas": "ISI_DULU",
       "tentang": "ISI_DULU",
       "foto": null,
+      "kontribusi": ["ISI_DULU", "ISI_DULU", "ISI_DULU"],
+      "keahlian": [
+        { "kelompok": "ISI_DULU", "butir": ["ISI_DULU"] }
+      ],
+      "pengalaman": [
+        {
+          "judul": "ISI_DULU",
+          "tempat": "ISI_DULU",
+          "mulai": "ISI_DULU",
+          "selesai": "ISI_DULU",
+          "keterangan": null
+        }
+      ],
+      "pendidikan": [
+        { "jenjang": "ISI_DULU", "tempat": "ISI_DULU", "mulai": "ISI_DULU", "selesai": "ISI_DULU" }
+      ],
       "kontak": {
         "surel": "ISI_DULU",
         "telepon": null,
         "linkedin": null,
         "github": null,
+        "instagram": null,
+        "portofolio": null,
         "situs": null
       }
     }

@@ -7,6 +7,8 @@ import tim from "@/config/tim.json";
  *
  * Bidang yang masih `ISI_DULU`, kosong, atau `null` diperlakukan sebagai
  * BELUM ADA -- dan yang belum ada tidak ditampilkan, bukan ditampilkan kosong.
+ * Untuk daftar, baris yang bidang wajibnya masih penanda ikut dilewati, jadi
+ * contoh bentuknya boleh ditinggal di berkas data sampai sempat diisi.
  *
  * Alasannya bukan kerapian. Halaman ini dituju QR di kartu nama yang sudah
  * tercetak dan diberikan kepada orang lain: yang membukanya sering sedang
@@ -24,16 +26,38 @@ export type KontakTim = {
   telepon?: string | null;
   linkedin?: string | null;
   github?: string | null;
+  instagram?: string | null;
+  portofolio?: string | null;
   situs?: string | null;
+};
+
+export type KelompokKeahlian = { kelompok?: string | null; butir?: Array<string | null> | null };
+export type Pengalaman = {
+  judul?: string | null;
+  tempat?: string | null;
+  mulai?: string | null;
+  selesai?: string | null;
+  keterangan?: string | null;
+};
+export type Pendidikan = {
+  jenjang?: string | null;
+  tempat?: string | null;
+  mulai?: string | null;
+  selesai?: string | null;
 };
 
 export type AnggotaTim = {
   slug: string;
   nama: string;
   peran?: string | null;
+  lokasi?: string | null;
   ringkas?: string | null;
   tentang?: string | null;
   foto?: string | null;
+  kontribusi?: Array<string | null> | null;
+  keahlian?: KelompokKeahlian[] | null;
+  pengalaman?: Pengalaman[] | null;
+  pendidikan?: Pendidikan[] | null;
   kontak?: KontakTim | null;
 };
 
@@ -43,6 +67,12 @@ export function terisi(nilai: string | null | undefined): string | null {
   const rapi = nilai.trim();
   if (rapi === "" || rapi === PENANDA_BELUM_DIISI) return null;
   return rapi;
+}
+
+/** Daftar teks, tanpa yang belum diisi. */
+export function daftarTerisi(nilai: Array<string | null> | null | undefined): string[] {
+  if (!Array.isArray(nilai)) return [];
+  return nilai.map(terisi).filter((x): x is string => x !== null);
 }
 
 export const anggotaTim: AnggotaTim[] = (tim.anggota as AnggotaTim[]).map((orang) => ({
@@ -69,7 +99,40 @@ export function inisial(nama: string): string {
   return (kata[0][0] + kata[kata.length - 1][0]).toUpperCase();
 }
 
-/** Tautan kontak yang sudah terisi, siap ditampilkan berurutan. */
+/** Kelompok keahlian yang punya nama kelompok DAN setidaknya satu butir. */
+export function keahlianTerisi(orang: AnggotaTim): Array<{ kelompok: string; butir: string[] }> {
+  if (!Array.isArray(orang.keahlian)) return [];
+  return orang.keahlian
+    .map((k) => ({ kelompok: terisi(k?.kelompok) ?? "", butir: daftarTerisi(k?.butir) }))
+    .filter((k) => k.kelompok !== "" && k.butir.length > 0);
+}
+
+/** Rentang waktu "2021 — 2024", atau hanya salah satunya kalau yang lain kosong. */
+export function rentang(mulai?: string | null, selesai?: string | null): string | null {
+  const a = terisi(mulai);
+  const b = terisi(selesai);
+  if (a && b) return `${a} — ${b}`;
+  return a ?? b ?? null;
+}
+
+/** Baris pengalaman yang setidaknya punya judul. */
+export function pengalamanTerisi(orang: AnggotaTim): Pengalaman[] {
+  if (!Array.isArray(orang.pengalaman)) return [];
+  return orang.pengalaman.filter((baris) => terisi(baris?.judul) !== null);
+}
+
+/** Baris pendidikan yang setidaknya punya jenjang. */
+export function pendidikanTerisi(orang: AnggotaTim): Pendidikan[] {
+  if (!Array.isArray(orang.pendidikan)) return [];
+  return orang.pendidikan.filter((baris) => terisi(baris?.jenjang) !== null);
+}
+
+/**
+ * Tautan kontak yang sudah terisi, berurutan dari yang paling berguna.
+ *
+ * Surel dan telepon lebih dulu: yang memindai kartu nama mencari cara
+ * menghubungi, bukan profil untuk dibaca-baca.
+ */
 export function tautanKontak(orang: AnggotaTim): Array<{ jenis: string; label: string; href: string }> {
   const k = orang.kontak ?? {};
   const daftar: Array<{ jenis: string; label: string; href: string }> = [];
@@ -92,6 +155,21 @@ export function tautanKontak(orang: AnggotaTim): Array<{ jenis: string; label: s
 
   const github = terisi(k.github);
   if (github) daftar.push({ jenis: "github", label: "GitHub", href: github });
+
+  const instagram = terisi(k.instagram);
+  if (instagram) {
+    const nama = instagram.replace(/^https?:\/\/(www\.)?instagram\.com\//, "").replace(/\/$/, "");
+    daftar.push({
+      jenis: "instagram",
+      label: nama.startsWith("@") ? nama : `@${nama}`,
+      href: instagram.startsWith("http") ? instagram : `https://instagram.com/${nama.replace(/^@/, "")}`,
+    });
+  }
+
+  const portofolio = terisi(k.portofolio);
+  if (portofolio) {
+    daftar.push({ jenis: "portofolio", label: "Portofolio", href: portofolio });
+  }
 
   const situs = terisi(k.situs);
   if (situs) daftar.push({ jenis: "situs", label: situs.replace(/^https?:\/\//, ""), href: situs });
