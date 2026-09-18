@@ -257,7 +257,7 @@ const UMKM_PROFILES = [
     dailyBase: 550000, margin: 0.25, hasKiosk: true, staff: 1
   },
   {
-    owner: "Wulan Guritno", business: "Toko Perlengkapan Rumah Tangga Plastik", sector: "Lainnya", city: "Kota Sidoarjo",
+    owner: "Wulan Guritno", business: "Toko Perlengkapan Rumah Tangga Plastik", sector: "Lainnya", city: "Kabupaten Sidoarjo",
     phone: "081234987040", form: "perorangan", startYear: 2025, level: "MULAI", optIn: false, // sengaja false
     dailyBase: 320000, margin: 0.30, hasKiosk: true, staff: 0
   },

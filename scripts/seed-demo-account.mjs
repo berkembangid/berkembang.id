@@ -123,6 +123,21 @@ const admin = createClient(url, serviceKey, { auth: { persistSession: false } })
 // Bentuk usaha demo
 // ---------------------------------------------------------------------------
 
+/**
+ * `lokasi` di bawah HARUS nilai yang ada di `config/kota-indonesia.json`.
+ *
+ * Nilai ini tersimpan apa adanya ke `businesses.location` dan
+ * `institutions.location`, lalu dibandingkan sebagai teks yang sama persis
+ * oleh ringkasan wilayah dinas. Sebelum ini isinya "Depok, Jawa Barat" --
+ * konsisten antar-akun demo, jadi dasbor dinasnya tampak benar, tetapi tidak
+ * pernah cocok dengan "Kota Depok" yang dipilih lewat layar pendaftaran.
+ *
+ * Akibatnya baru terasa pada peragaan yang paling ingin ditunjukkan: seorang
+ * pemilik mendaftar di depan penonton, memilih Kota Depok dari daftar, lalu
+ * tidak pernah muncul di dasbor dinas. Tidak ada galat yang bisa dibaca.
+ *
+ * `tests/unit/wilayah-kota.test.ts` menjaganya.
+ */
 const demo = {
   umkm: {
     email: "demo.umkm@berkembang.id",
@@ -131,7 +146,7 @@ const demo = {
       nama_pemilik: "Nita Rahmawati",
       nama_usaha: "Dapur Bu Nita",
       sektor_usaha: "Kuliner",
-      lokasi: "Depok, Jawa Barat",
+      lokasi: "Kota Depok",
     },
   },
   // Dua institusi, bukan satu. Basis data hanya mengizinkan SATU akses aktif
@@ -147,7 +162,7 @@ const demo = {
       nama_institusi: "Koperasi Sejahtera Depok",
       jenis_institusi: "Koperasi",
       nama_contact: "Bagus Pratama",
-      lokasi: "Depok, Jawa Barat",
+      lokasi: "Kota Depok",
     },
   },
   institutionPending: {
@@ -157,7 +172,7 @@ const demo = {
       nama_institusi: "BPR Mitra Usaha",
       jenis_institusi: "Bank",
       nama_contact: "Rina Kusuma",
-      lokasi: "Depok, Jawa Barat",
+      lokasi: "Kota Depok",
     },
   },
   // Dua persona SPEC Portal Institusi I12: CVC + Dinas program.
@@ -168,7 +183,7 @@ const demo = {
       nama_institusi: "BNI Ventures",
       jenis_institusi: "CVC",
       nama_contact: "Dimas Arya",
-      lokasi: "Jakarta Selatan",
+      lokasi: "Kota Jakarta Selatan",
     },
   },
   dinas: {
@@ -178,7 +193,7 @@ const demo = {
       nama_institusi: "Dinas Koperasi & UKM Kota Depok",
       jenis_institusi: "DINAS",
       nama_contact: "Siti Marwah",
-      lokasi: "Depok, Jawa Barat",
+      lokasi: "Kota Depok",
     },
   },
 };

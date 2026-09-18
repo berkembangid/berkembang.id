@@ -2771,6 +2771,7 @@ export type Database = {
           verification_note: string | null
           verified_by: string | null
           verified_at: string | null
+          portal_kind: string
         }
         Insert: {
           id?: string
@@ -2790,6 +2791,7 @@ export type Database = {
           verification_note?: string | null
           verified_by?: string | null
           verified_at?: string | null
+          portal_kind?: string
         }
         Update: {
           id?: string
@@ -2809,6 +2811,7 @@ export type Database = {
           verification_note?: string | null
           verified_by?: string | null
           verified_at?: string | null
+          portal_kind?: string
         }
         Relationships: [
           {

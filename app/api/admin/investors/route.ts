@@ -25,12 +25,15 @@ export async function GET(request: Request) {
   try {
     const admin = createServiceRoleClient();
 
-    // 1. Fetch from institutions table where type indicates investor/offtaker
+    // 1. Lembaga investor, dari kolom `portal_kind` -- bukan dari potongan
+    //    kata pada `type`. Saringan lama (`type.ilike.%investor%`) ikut
+    //    menangkap lembaga apa pun yang jenisnya kebetulan memuat kata itu,
+    //    dan melewatkan investor yang jenisnya tidak memuatnya.
     const { data: instData, error: instError } = await admin
       .from("institutions")
       .select("*")
       .neq("status", "archived")
-      .or("type.ilike.%investor%,type.ilike.%offtaker%");
+      .eq("portal_kind", "investor");
 
     if (instError) throw instError;
 
@@ -39,7 +42,14 @@ export async function GET(request: Request) {
       .from("profiles")
       .select("*")
       .neq("status", "inactive")
-      .or("role.eq.investor,jenis_institusi.ilike.%investor%,jenis_institusi.ilike.%offtaker%");
+      // Hanya `role`, tanpa pencocokan potongan kata pada `jenis_institusi`.
+      //
+      // Dua klausa `ilike` di sini dulu dimaksudkan menangkap akun lama yang
+      // perannya belum tersetel. Diperiksa di produksi: nol baris tertangkap
+      // olehnya dan tidak oleh `role` -- jadi keduanya tidak menambah apa pun,
+      // hanya memperluas daftar ini kepada siapa pun yang jenis lembaganya
+      // kebetulan memuat kata "investor".
+      .eq("role", "investor");
 
     if (profError) throw profError;
 

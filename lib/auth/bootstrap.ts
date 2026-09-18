@@ -177,6 +177,18 @@ export async function bootstrapAccountFromSignupMetadata(
         legacy_profile_id: user.id,
         name: institutionName,
         type: isInvestor ? textValue(metadata.jenis_investor, "Investor / Offtaker") : textValue(metadata.jenis_institusi, "other"),
+        // Portalnya disetel dari `accountType`, BUKAN dari `type` di atas.
+        //
+        // `accountType` berasal dari `signup_account_type` yang sudah lolos
+        // pemeriksaan beberapa baris di atas -- apa pun selain `umkm` dan
+        // `investor` ditolak. Sementara `type` diambil apa adanya dari
+        // metadata pendaftaran, tanpa dicocokkan dengan `INVESTOR_TYPES`.
+        //
+        // Sebelum `0095`, portal diturunkan dari `type` itu dengan pencocokan
+        // potongan kata. Akibatnya investor yang mengirim jenis "Koperasi"
+        // mendarat di portal lembaga: jawaban yang sahih sudah ada di tangan,
+        // lalu dibuang dan dikarang ulang dari sebuah nama.
+        portal_kind: isInvestor ? "investor" : "institution",
         contact_name: contactName,
         contact_email: email,
         location: location || null,

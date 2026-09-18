@@ -2,7 +2,7 @@
 -- Skema dasar BERKEMBANG.ID
 -- ---------------------------------------------------------------------------
 -- Dihasilkan oleh `npm run db:baseline` dari pemasangan bersih
--- 67 migrasi (0001_identity_business_membership.sql sampai 0067_nilai_sisa_alat_usaha.sql).
+-- 95 migrasi (0001_identity_business_membership.sql sampai 0095_portal_lembaga_dari_kolom_bukan_nama.sql).
 --
 -- JANGAN DISUNTING DENGAN TANGAN. Berkas ini adalah salinan keadaan akhir
 -- skema, bukan pendapat tentangnya. Perubahan berikutnya ditulis sebagai
@@ -74,6 +74,22 @@ CREATE FUNCTION private.accounting_business_access(p_business_id uuid) RETURNS b
     SET search_path TO ''
     AS $$
   select private.business_access(p_business_id) or private.is_platform_admin();
+$$;
+
+
+--
+-- Name: active_super_admin_count(); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.active_super_admin_count() RETURNS integer
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select count(*)::int
+  from public.admin_roles as granted
+  join public.platform_admins as administrator
+    on administrator.user_id = granted.user_id and administrator.status = 'active'
+  where granted.role = 'SUPER_ADMIN' and granted.revoked_at is null;
 $$;
 
 
@@ -158,6 +174,22 @@ begin
     or jsonb_array_length(coalesce(p_assets, '[]'::jsonb)) > 50
     or char_length(coalesce(p_notes, '')) > 500 then
     raise exception using errcode = '22023', message = 'VALIDATION_FAILED';
+  end if;
+end;
+$$;
+
+
+--
+-- Name: assert_ruang_mesin_access(); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.assert_ruang_mesin_access() RETURNS void
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
   end if;
 end;
 $$;
@@ -326,6 +358,277 @@ CREATE FUNCTION private.default_useful_life_months(p_category text) RETURNS inte
     when 'bangunan' then 240
     else 48
   end;
+$$;
+
+
+--
+-- Name: dinas_affiliation_active(uuid, uuid); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.dinas_affiliation_active(p_business_id uuid, p_institution_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select exists (
+    select 1
+    from public.business_dinas_affiliations as affiliation
+    where affiliation.business_id = p_business_id
+      and affiliation.institution_id = p_institution_id
+      and affiliation.revoked_at is null
+  );
+$$;
+
+
+--
+-- Name: dinas_broadcast_context(); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.dinas_broadcast_context() RETURNS TABLE(institution_id uuid, region text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_institution uuid;
+  v_region text;
+  v_region_wide boolean;
+begin
+  v_institution := public.resolve_my_institution_id(null);
+
+  select
+    coalesce(entitlement.region_wide_visibility, false),
+    nullif(lower(btrim(coalesce(institution.location, ''))), '')
+  into v_region_wide, v_region
+  from public.institutions as institution
+  left join public.institution_entitlements as entitlement
+    on entitlement.institution_id = institution.id
+  where institution.id = v_institution;
+
+  -- Broadcast terbuka untuk dinas pengamat juga: ia satu-satunya jalan Dinas
+  -- Penanaman Modal pernah melihat sebuah nama, dan jalan itu dibuka UMKM-nya
+  -- sendiri. Karena itu syaratnya wilayah, bukan identitas.
+  if not coalesce(v_region_wide, false) then
+    raise exception using errcode = '42501', message = 'BUKAN_LEMBAGA_BERWILAYAH';
+  end if;
+  if v_region is null then
+    raise exception using errcode = '22023', message = 'WILAYAH_LEMBAGA_BELUM_DIISI';
+  end if;
+
+  institution_id := v_institution;
+  region := v_region;
+  return next;
+end;
+$$;
+
+
+--
+-- Name: dinas_cohort(text, text, boolean); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.dinas_cohort(p_region text, p_recording_band text, p_legal_complete boolean) RETURNS TABLE(business_id uuid)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select business.id
+  from public.businesses as business
+  left join lateral (
+    select count(distinct transaction.transaction_date)::integer as active_days
+    from public.transactions as transaction
+    where transaction.business_id = business.id
+      and transaction.transaction_date >= current_date - 29
+  ) as activity on true
+  left join lateral (
+    select count(distinct document.doc_type)::integer as ready_count
+    from public.documents as document
+    where document.business_id = business.id
+      and document.doc_type in ('nib', 'npwp', 'ktp_owner', 'pirt', 'halal', 'distribution_permit')
+      and document.status not in ('rejected', 'archived', 'superseded')
+  ) as legal on true
+  where business.status = 'active'
+    and lower(btrim(coalesce(business.location, ''))) = p_region
+    and not private.is_demo_business(business.id)
+    and (p_recording_band is null or private.recording_band(activity.active_days) = p_recording_band)
+    and (p_legal_complete is null or private.legal_is_complete(legal.ready_count) = p_legal_complete);
+$$;
+
+
+--
+-- Name: dinas_cohort_countable(uuid, text, text, boolean); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.dinas_cohort_countable(p_institution_id uuid, p_region text, p_recording_band text, p_legal_complete boolean) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  with terpilih as (
+    select cell.jumlah, cell.anonim, cell.hide
+    from private.dinas_region_cells(p_institution_id, p_region) as cell
+    where (
+      p_recording_band is null
+      or cell.urutan_rekam = case p_recording_band
+        when 'Rutin mencatat' then 1
+        when 'Mulai rutin' then 2
+        when 'Jarang mencatat' then 3
+        else 4 end
+    )
+    and (
+      p_legal_complete is null
+      or cell.urutan_legal = case when p_legal_complete then 1 else 2 end
+    )
+  )
+  select case
+    -- Seluruh kota: penyebut yang ringkasan selalu terbitkan.
+    when p_recording_band is null and p_legal_complete is null then true
+    -- Satu sel: keputusan penyembunyiannya sendiri, termasuk penyembunyian
+    -- pelengkap -- karena itulah yang menahan pengurangan 8 - 6 = 2.
+    when p_recording_band is not null and p_legal_complete is not null then
+      not coalesce((select bool_or(terpilih.hide) from terpilih), false)
+    -- Satu sumbu: jumlah baris atau kolom, dengan batas anonimnya sendiri.
+    else coalesce((select sum(terpilih.anonim) from terpilih), 0)
+      not between 1 and private.min_cell_size() - 1
+  end;
+$$;
+
+
+--
+-- Name: dinas_region_cells(uuid, text); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.dinas_region_cells(p_institution_id uuid, p_region text) RETURNS TABLE(urutan_rekam integer, urutan_legal integer, jumlah integer, anonim integer, hide boolean)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_min integer := private.min_cell_size();
+  v_count integer[] := array_fill(0, array[8]);
+  v_anon integer[] := array_fill(0, array[8]);
+  v_hide boolean[] := array_fill(false, array[8]);
+  v_changed boolean := true;
+  v_hidden_count integer;
+  v_marginal_anon integer;
+  v_marginal_terbit boolean;
+  v_smallest integer;
+  v_smallest_idx integer;
+  v_idx integer;
+  v_row record;
+  i integer;
+  j integer;
+begin
+  for v_row in
+    select
+      case private.recording_band(activity.active_days)
+        when 'Rutin mencatat' then 1
+        when 'Mulai rutin' then 2
+        when 'Jarang mencatat' then 3
+        else 4
+      end as rekam,
+      case when private.legal_is_complete(legal.ready_count) then 1 else 2 end as legal_urutan,
+      count(*)::integer as banyak,
+      count(*) filter (where not affiliation.is_affiliated)::integer as tanpa_afiliasi
+    from public.businesses as business
+    left join lateral (
+      select count(distinct transaction.transaction_date)::integer as active_days
+      from public.transactions as transaction
+      where transaction.business_id = business.id
+        and transaction.transaction_date >= current_date - 29
+    ) as activity on true
+    left join lateral (
+      select count(distinct document.doc_type)::integer as ready_count
+      from public.documents as document
+      where document.business_id = business.id
+        and document.doc_type in ('nib', 'npwp', 'ktp_owner', 'pirt', 'halal', 'distribution_permit')
+        and document.status not in ('rejected', 'archived', 'superseded')
+    ) as legal on true
+    left join lateral (
+      select private.dinas_affiliation_active(business.id, p_institution_id) as is_affiliated
+    ) as affiliation on true
+    where business.status = 'active'
+      and lower(btrim(coalesce(business.location, ''))) = p_region
+      and not private.is_demo_business(business.id)
+    group by 1, 2
+  loop
+    v_idx := (v_row.rekam - 1) * 2 + v_row.legal_urutan;
+    v_count[v_idx] := v_row.banyak;
+    v_anon[v_idx] := v_row.tanpa_afiliasi;
+  end loop;
+
+  -- Penyembunyian utama: sel yang anonimnya menyempit.
+  for i in 1..8 loop
+    if v_anon[i] between 1 and v_min - 1 then
+      v_hide[i] := true;
+    end if;
+  end loop;
+
+  -- Penyembunyian pelengkap, dan HANYA di mana jumlahnya diterbitkan.
+  -- Penyembunyian hanya pernah bertambah dan selnya delapan, jadi berhenti.
+  while v_changed loop
+    v_changed := false;
+
+    -- Empat baris, dua sel masing-masing.
+    for i in 1..4 loop
+      v_marginal_anon := v_anon[(i - 1) * 2 + 1] + v_anon[(i - 1) * 2 + 2];
+      v_marginal_terbit := not (v_marginal_anon between 1 and v_min - 1);
+      if v_marginal_terbit and v_hide[(i - 1) * 2 + 1] <> v_hide[(i - 1) * 2 + 2] then
+        v_hide[(i - 1) * 2 + 1] := true;
+        v_hide[(i - 1) * 2 + 2] := true;
+        v_changed := true;
+      end if;
+    end loop;
+
+    -- Dua kolom, empat sel masing-masing.
+    for j in 1..2 loop
+      v_marginal_anon := 0;
+      v_hidden_count := 0;
+      v_smallest := null;
+      v_smallest_idx := null;
+      for i in 1..4 loop
+        v_idx := (i - 1) * 2 + j;
+        v_marginal_anon := v_marginal_anon + v_anon[v_idx];
+        if v_hide[v_idx] then
+          v_hidden_count := v_hidden_count + 1;
+        elsif v_smallest is null or v_anon[v_idx] < v_smallest then
+          v_smallest := v_anon[v_idx];
+          v_smallest_idx := v_idx;
+        end if;
+      end loop;
+      v_marginal_terbit := not (v_marginal_anon between 1 and v_min - 1);
+      if v_marginal_terbit and v_hidden_count = 1 and v_smallest_idx is not null then
+        v_hide[v_smallest_idx] := true;
+        v_changed := true;
+      end if;
+    end loop;
+
+    -- Seluruh tabel. Total kota SELALU diterbitkan, jadi satu sel tersembunyi
+    -- sendirian bisa dihitung dari total dikurangi tujuh sel lainnya. Penjaga
+    -- ini yang `0083` lewatkan.
+    v_hidden_count := 0;
+    v_smallest := null;
+    v_smallest_idx := null;
+    for i in 1..8 loop
+      if v_hide[i] then
+        v_hidden_count := v_hidden_count + 1;
+      elsif v_smallest is null or v_anon[i] < v_smallest then
+        v_smallest := v_anon[i];
+        v_smallest_idx := i;
+      end if;
+    end loop;
+    if v_hidden_count = 1 and v_smallest_idx is not null then
+      v_hide[v_smallest_idx] := true;
+      v_changed := true;
+    end if;
+  end loop;
+
+  for i in 1..4 loop
+    for j in 1..2 loop
+      v_idx := (i - 1) * 2 + j;
+      urutan_rekam := i;
+      urutan_legal := j;
+      jumlah := v_count[v_idx];
+      anonim := v_anon[v_idx];
+      hide := v_hide[v_idx];
+      return next;
+    end loop;
+  end loop;
+end;
 $$;
 
 
@@ -514,6 +817,24 @@ $$;
 
 
 --
+-- Name: fixed_assets_drop_salvage(); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.fixed_assets_drop_salvage() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+begin
+  -- Menormalkan, bukan menolak. Lihat catatan di kepala berkas: pemanggil lama
+  -- yang masih mengirim nilai sisa tidak boleh kehilangan seluruh kondisi
+  -- awalnya karena satu bidang yang sudah tidak berlaku.
+  new.salvage_value_idr := 0;
+  return new;
+end;
+$$;
+
+
+--
 -- Name: get_or_create_user_business(uuid, uuid); Type: FUNCTION; Schema: private; Owner: -
 --
 
@@ -656,6 +977,24 @@ $$;
 
 
 --
+-- Name: has_admin_role(text); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.has_admin_role(p_role text) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select private.is_platform_admin() and exists (
+    select 1
+    from public.admin_roles as granted
+    where granted.user_id = (select auth.uid())
+      and granted.role = p_role
+      and granted.revoked_at is null
+  );
+$$;
+
+
+--
 -- Name: has_any_business(); Type: FUNCTION; Schema: private; Owner: -
 --
 
@@ -671,6 +1010,24 @@ CREATE FUNCTION private.has_any_business() RETURNS boolean
     select 1 from public.businesses as business
     where business.legacy_profile_id = (select auth.uid())
       and business.status = 'active'
+  );
+$$;
+
+
+--
+-- Name: has_live_support_session(uuid); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.has_live_support_session(p_business_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select exists (
+    select 1
+    from public.support_sessions as session_row
+    where session_row.business_id = p_business_id
+      and session_row.admin_user_id = (select auth.uid())
+      and session_row.expires_at > now()
   );
 $$;
 
@@ -723,6 +1080,20 @@ CREATE FUNCTION private.is_active_institution_member(target_institution_id uuid)
       and institution.active
       and member.user_id = (select auth.uid())
       and member.status = 'active'
+  );
+$$;
+
+
+--
+-- Name: is_demo_business(uuid); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.is_demo_business(p_business_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select exists (
+    select 1 from public.demo_accounts as demo where demo.business_id = p_business_id
   );
 $$;
 
@@ -802,6 +1173,69 @@ CREATE FUNCTION private.legacy_category_for_emkm(p_category_code smallint, p_sub
       end
       else 'other'
     end;
+$$;
+
+
+--
+-- Name: legal_is_complete(integer); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.legal_is_complete(p_ready_count integer) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$
+  select coalesce(p_ready_count, 0) >= 3;
+$$;
+
+
+--
+-- Name: min_cell_size(); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.min_cell_size() RETURNS integer
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$
+  select 5;
+$$;
+
+
+--
+-- Name: my_business_for_broadcast(); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.my_business_for_broadcast() RETURNS uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select private.my_owned_business_id();
+$$;
+
+
+--
+-- Name: my_owned_business_id(); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.my_owned_business_id() RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_business uuid;
+begin
+  if (select auth.uid()) is null then
+    raise exception using errcode = '42501', message = 'UNAUTHENTICATED';
+  end if;
+  select business.id into v_business
+  from public.businesses as business
+  where private.business_access(business.id)
+  order by business.created_at
+  limit 1;
+  if v_business is null then
+    raise exception using errcode = '42501', message = 'BUSINESS_ACCESS_DENIED';
+  end if;
+  return v_business;
+end;
 $$;
 
 
@@ -919,8 +1353,15 @@ begin
       continue;
     end if;
 
-    v_depreciable := v_asset.cost_idr - v_asset.salvage_value_idr;
-    select coalesce(sum(amount_idr), 0) into v_posted
+    -- SAK EMKM 11.14: tanpa memperhitungkan nilai residu. Seluruh harga
+    -- perolehan yang disusutkan.
+    v_depreciable := v_asset.cost_idr;
+
+    -- Bulan yang sudah lewat sebelum pembukuan dimulai dihitung sebagai sudah
+    -- diposting. Tanpa ini, alat yang dibeli dua tahun sebelum pemilik mulai
+    -- mencatat akan disusutkan seluruh umurnya SEKALI LAGI.
+    select coalesce(v_asset.opening_accumulated_depreciation_idr, 0) + coalesce(sum(amount_idr), 0)
+    into v_posted
     from public.depreciation_postings where asset_id = v_asset.id;
     if v_posted >= v_depreciable then
       continue;
@@ -1374,9 +1815,10 @@ declare
   v_line int := 0;
   v_paid bigint;
   v_elapsed integer;
-  v_remaining integer;
-  v_book_value bigint;
-  v_salvage bigint;
+  v_accum bigint;
+  v_gross_assets bigint := 0;
+  v_accum_total bigint := 0;
+  v_net_assets bigint;
   v_history jsonb := '{}'::jsonb;
   v_old record;
   v_key text;
@@ -1476,13 +1918,8 @@ begin
     end if;
     v_life := coalesce(nullif(trim(coalesce(v_item->>'usefulLifeMonths', '')), '')::integer,
       private.default_useful_life_months(v_category));
-    -- Nilai sisa: perkiraan harga jual alat setelah umur ekonomisnya habis.
-    -- Ia tidak pernah ikut disusutkan, jadi harus lebih kecil dari harganya --
-    -- alat yang nilai sisanya sama dengan harga belinya tidak menyusut sama
-    -- sekali, dan itu hampir selalu salah ketik.
-    v_salvage := coalesce(nullif(trim(coalesce(v_item->>'salvageValueIdr', '')), '')::bigint, 0);
-    if v_name is null or v_amount <= 0 or v_life not between 1 and 600 or v_acquired > p_start_date
-      or v_salvage < 0 or v_salvage >= v_amount then
+    -- Nilai residu tidak ditanyakan dan tidak diperhitungkan: SAK EMKM 11.14.
+    if v_name is null or v_amount <= 0 or v_life not between 1 and 600 or v_acquired > p_start_date then
       raise exception using errcode = '22023', message = 'VALIDATION_FAILED';
     end if;
 
@@ -1490,21 +1927,38 @@ begin
     v_elapsed := greatest(
       (extract(year from age(p_start_date, v_acquired)) * 12
         + extract(month from age(p_start_date, v_acquired)))::integer, 0);
-    v_remaining := greatest(v_life - v_elapsed, 1);
-    -- Nilai pakainya hari itu. Yang menyusut hanya selisih harga dan nilai
-    -- sisanya; nilai sisa tetap utuh sampai kapan pun, jadi ia ditambahkan
-    -- kembali setelah bagian yang menyusut diprorata.
-    v_book_value := greatest((v_salvage + (v_amount - v_salvage)::numeric * v_remaining / v_life)::bigint, 1);
+
+    -- HARGA PEROLEHAN TETAP UTUH; yang menumpuk adalah akumulasinya.
+    --
+    -- Versi sebelumnya menyimpan `cost_idr` sebagai NILAI BUKU dan memotong
+    -- umurnya menjadi sisa umur. Akibatnya alat seharga tiga juta muncul di
+    -- Posisi Keuangan sebagai 2.968.750 tanpa satu baris akumulasi penyusutan
+    -- -- yaitu "aset tetap tiba-tiba berkurang", dan akun kontra 1690 tidak
+    -- pernah terpakai sama sekali pada jurnal pembuka.
+    --
+    -- Aset tetap disajikan pada harga perolehan, dan penyusutan yang sudah
+    -- terjadi disajikan terpisah sebagai akumulasi. Itu yang membuat jurnal
+    -- umum, buku besar, dan CALK bercerita hal yang sama.
+    v_accum := least((v_amount::numeric * v_elapsed / v_life)::bigint, v_amount);
 
     insert into public.fixed_assets (
       business_id, opening_balance_id, name, category, acquired_on,
-      cost_idr, useful_life_months, salvage_value_idr, original_cost_idr, original_useful_life_months, created_by
+      cost_idr, useful_life_months, salvage_value_idr,
+      opening_accumulated_depreciation_idr,
+      original_cost_idr, original_useful_life_months, created_by
     ) values (
       v_business_id, p_opening_id, left(v_name, 120), v_category, v_acquired,
-      v_book_value, v_remaining, v_salvage, v_amount, v_life, p_user_id
+      v_amount, v_life, 0,
+      v_accum,
+      v_amount, v_life, p_user_id
     );
-    v_assets_idr := v_assets_idr + v_book_value;
+    v_gross_assets := v_gross_assets + v_amount;
+    v_accum_total := v_accum_total + v_accum;
   end loop;
+
+  -- Yang masuk hitungan modal adalah nilai bukunya, bukan harga perolehannya.
+  v_assets_idr := v_gross_assets - v_accum_total;
+  v_net_assets := v_assets_idr;
 
   v_total_assets := coalesce(p_cash_idr, 0) + coalesce(p_bank_idr, 0) + v_receivables_idr
     + coalesce(p_inventory_idr, 0) + v_assets_idr;
@@ -1539,10 +1993,19 @@ begin
       insert into public.journal_lines (entry_id, business_id, account_code, debit, credit, line_order)
       values (v_entry_id, v_business_id, '1400', p_inventory_idr, 0, v_line);
     end if;
-    if v_assets_idr > 0 then
+    -- Dua baris, bukan satu. Aset tetap pada harga perolehan di debit, dan
+    -- penyusutan yang sudah terjadi di kredit akun kontranya. Menggabungkannya
+    -- menjadi satu baris bersih menghapus informasi yang justru dituntut
+    -- pengungkapan: berapa harga perolehannya, dan berapa yang sudah susut.
+    if v_gross_assets > 0 then
       v_line := v_line + 1;
       insert into public.journal_lines (entry_id, business_id, account_code, debit, credit, line_order)
-      values (v_entry_id, v_business_id, '1600', v_assets_idr, 0, v_line);
+      values (v_entry_id, v_business_id, '1600', v_gross_assets, 0, v_line);
+    end if;
+    if v_accum_total > 0 then
+      v_line := v_line + 1;
+      insert into public.journal_lines (entry_id, business_id, account_code, debit, credit, line_order)
+      values (v_entry_id, v_business_id, '1690', 0, v_accum_total, v_line);
     end if;
     if v_payables_idr > 0 then
       v_line := v_line + 1;
@@ -1580,7 +2043,7 @@ begin
     bank_idr = coalesce(p_bank_idr, 0),
     receivables_idr = v_receivables_idr,
     inventory_idr = coalesce(p_inventory_idr, 0),
-    fixed_assets_idr = v_assets_idr,
+    fixed_assets_idr = coalesce(v_net_assets, 0),
     payables_idr = v_payables_idr,
     loans_bank_idr = v_loans_bank_idr,
     loans_other_idr = v_loans_other_idr,
@@ -1602,6 +2065,23 @@ $$;
 
 
 --
+-- Name: recording_band(integer); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.recording_band(p_active_days integer) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$
+  select case
+    when coalesce(p_active_days, 0) >= 20 then 'Rutin mencatat'
+    when coalesce(p_active_days, 0) >= 8 then 'Mulai rutin'
+    when coalesce(p_active_days, 0) >= 1 then 'Jarang mencatat'
+    else 'Belum mulai'
+  end;
+$$;
+
+
+--
 -- Name: reject_journal_mutation(); Type: FUNCTION; Schema: private; Owner: -
 --
 
@@ -1611,6 +2091,22 @@ CREATE FUNCTION private.reject_journal_mutation() RETURNS trigger
     AS $$
 begin
   raise exception using errcode = 'P0001', message = 'JOURNAL_IS_IMMUTABLE';
+end;
+$$;
+
+
+--
+-- Name: reject_mutation(); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.reject_mutation() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+begin
+  raise exception using
+    errcode = '42501',
+    message = format('CATATAN_TIDAK_BISA_DIUBAH: %s hanya bisa bertambah.', tg_table_name);
 end;
 $$;
 
@@ -1823,6 +2319,38 @@ $$;
 
 
 --
+-- Name: write_admin_log(text, text, text, text, text, uuid, jsonb); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.write_admin_log(p_acting_role text, p_action text, p_reason text, p_target_type text DEFAULT NULL::text, p_target_id text DEFAULT NULL::text, p_business_id uuid DEFAULT NULL::uuid, p_metadata jsonb DEFAULT '{}'::jsonb) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_log_id uuid;
+begin
+  if v_actor is null then
+    raise exception using errcode = '42501', message = 'UNAUTHENTICATED';
+  end if;
+  if length(btrim(coalesce(p_reason, ''))) < 3 then
+    raise exception using errcode = '22023', message = 'ALASAN_WAJIB';
+  end if;
+
+  insert into public.admin_action_logs (
+    actor_user_id, acting_role, action, target_type, target_id, business_id, reason, metadata
+  ) values (
+    v_actor, p_acting_role, p_action, p_target_type, p_target_id, p_business_id,
+    btrim(p_reason), coalesce(p_metadata, '{}'::jsonb)
+  )
+  returning id into v_log_id;
+
+  return v_log_id;
+end;
+$$;
+
+
+--
 -- Name: access_verified_business_profile(uuid, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1861,6 +2389,946 @@ begin
     'downloadAllowed', grant_row.download_allowed);
 end;
 $$;
+
+
+--
+-- Name: admin_ai_quality(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_ai_quality(p_days integer DEFAULT 7) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_since timestamptz;
+  v_paths jsonb;
+  v_total int;
+  v_p50 numeric;
+  v_p95 numeric;
+  v_violations int;
+  v_failed int;
+begin
+  perform private.assert_ruang_mesin_access();
+  v_since := now() - make_interval(days => greatest(least(coalesce(p_days, 7), 90), 1));
+
+  select
+    coalesce(jsonb_object_agg(path_row.capture_path, path_row.jumlah), '{}'::jsonb),
+    coalesce(sum(path_row.jumlah), 0)
+  into v_paths, v_total
+  from (
+    select coalesce(capture.capture_path, 'TIDAK_DIKETAHUI') as capture_path, count(*) as jumlah
+    from public.transaction_captures as capture
+    where capture.created_at >= v_since
+      and not private.is_demo_business(capture.business_id)
+    group by 1
+  ) as path_row;
+
+  select
+    percentile_cont(0.5) within group (order by extract(epoch from capture.completed_at - capture.created_at) * 1000),
+    percentile_cont(0.95) within group (order by extract(epoch from capture.completed_at - capture.created_at) * 1000)
+  into v_p50, v_p95
+  from public.transaction_captures as capture
+  where capture.created_at >= v_since
+    and capture.completed_at is not null
+    and not private.is_demo_business(capture.business_id);
+
+  select coalesce(sum(capture.amount_overrides), 0)
+  into v_violations
+  from public.transaction_captures as capture
+  where capture.created_at >= v_since
+    and not private.is_demo_business(capture.business_id);
+
+  select count(*) into v_failed
+  from public.transaction_captures as capture
+  where capture.created_at >= v_since
+    and capture.status = 'failed'
+    and not private.is_demo_business(capture.business_id);
+
+  return jsonb_build_object(
+    'sinceDays', greatest(least(coalesce(p_days, 7), 90), 1),
+    'captureTotal', v_total,
+    'pathMix', v_paths,
+    'latencyP50Ms', round(coalesce(v_p50, 0)),
+    'latencyP95Ms', round(coalesce(v_p95, 0)),
+    'amountViolations', v_violations,
+    'failedCaptures', v_failed
+  );
+end;
+$$;
+
+
+--
+-- Name: admin_cost_row(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_cost_row(p_days integer DEFAULT 7) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_since timestamptz;
+  v_providers jsonb;
+  v_errors int;
+  v_queue_p95 numeric;
+  v_daily jsonb;
+begin
+  perform private.assert_ruang_mesin_access();
+  v_since := now() - make_interval(days => greatest(least(coalesce(p_days, 7), 90), 1));
+
+  select coalesce(jsonb_agg(row_to_json(provider_row)), '[]'::jsonb)
+  into v_providers
+  from (
+    select
+      run.provider,
+      run.model,
+      count(*) as runs,
+      coalesce(sum(run.prompt_tokens), 0) as prompt_tokens,
+      coalesce(sum(run.completion_tokens), 0) as completion_tokens,
+      count(*) filter (where run.status = 'failed') as failures
+    from public.ai_runs as run
+    where run.started_at >= v_since
+    group by run.provider, run.model
+    order by count(*) desc
+  ) as provider_row;
+
+  select count(*) into v_errors
+  from public.ai_runs as run
+  where run.started_at >= now() - interval '24 hours' and run.status = 'failed';
+
+  select percentile_cont(0.95) within group (
+    order by extract(epoch from coalesce(job.locked_at, now()) - job.created_at) * 1000
+  )
+  into v_queue_p95
+  from public.ai_jobs as job
+  where job.created_at >= v_since;
+
+  select coalesce(jsonb_agg(row_to_json(day_row) order by day_row.hari), '[]'::jsonb)
+  into v_daily
+  from (
+    select
+      date_trunc('day', run.started_at)::date as hari,
+      coalesce(sum(run.prompt_tokens), 0) + coalesce(sum(run.completion_tokens), 0) as tokens
+    from public.ai_runs as run
+    where run.started_at >= v_since
+    group by 1
+  ) as day_row;
+
+  return jsonb_build_object(
+    'sinceDays', greatest(least(coalesce(p_days, 7), 90), 1),
+    'providers', v_providers,
+    'errors24h', v_errors,
+    'queueP95Ms', round(coalesce(v_queue_p95, 0)),
+    'dailyTokens', v_daily
+  );
+end;
+$$;
+
+
+--
+-- Name: admin_demo_accounts(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_demo_accounts() RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_rows jsonb;
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+
+  select coalesce(jsonb_agg(row_to_json(demo_row) order by demo_row.created_at desc), '[]'::jsonb)
+  into v_rows
+  from (
+    select
+      demo.business_id,
+      demo.fixture_key,
+      demo.created_at,
+      business.name as business_name,
+      business.sector,
+      business.status
+    from public.demo_accounts as demo
+    join public.businesses as business on business.id = demo.business_id
+  ) as demo_row;
+
+  return v_rows;
+end;
+$$;
+
+
+--
+-- Name: admin_grant_role(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_grant_role(p_user_id uuid, p_role text, p_reason text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_bootstrap boolean;
+  v_role_id uuid;
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+  if p_role not in ('SUPER_ADMIN', 'OPS', 'PENDAMPING') then
+    raise exception using errcode = '22023', message = 'PERAN_TIDAK_DIKENAL';
+  end if;
+  if not exists (
+    select 1 from public.platform_admins as administrator
+    where administrator.user_id = p_user_id and administrator.status = 'active'
+  ) then
+    raise exception using errcode = '22023', message = 'BUKAN_ADMIN_AKTIF';
+  end if;
+
+  v_bootstrap := private.active_super_admin_count() = 0;
+
+  -- Memberi peran adalah pekerjaan SUPER_ADMIN, apa pun peran yang diberikan.
+  -- Kalau OPS boleh mengangkat OPS, satu akun yang jebol cukup untuk
+  -- memperbanyak dirinya sendiri sampai sebanyak yang ia mau.
+  if not v_bootstrap and not private.has_admin_role('SUPER_ADMIN') then
+    raise exception using errcode = '42501', message = 'BUTUH_SUPER_ADMIN';
+  end if;
+
+  -- Dua kunci: SUPER_ADMIN tidak lahir dari tangannya sendiri.
+  if p_role = 'SUPER_ADMIN' and not v_bootstrap and p_user_id = v_actor then
+    raise exception using errcode = '42501', message = 'SUPER_ADMIN_TIDAK_BOLEH_MENGANGKAT_DIRI';
+  end if;
+
+  insert into public.admin_roles (user_id, role, granted_by)
+  values (p_user_id, p_role, v_actor)
+  on conflict do nothing
+  returning id into v_role_id;
+
+  if v_role_id is null then
+    raise exception using errcode = '23505', message = 'PERAN_SUDAH_DIPEGANG';
+  end if;
+
+  perform private.write_admin_log(
+    'SUPER_ADMIN', 'ADMIN_ROLE_GRANTED', p_reason, 'admin_role', v_role_id::text, null,
+    jsonb_build_object('userId', p_user_id, 'role', p_role, 'bootstrap', v_bootstrap)
+  );
+
+  return jsonb_build_object('roleId', v_role_id, 'role', p_role, 'bootstrap', v_bootstrap);
+end;
+$$;
+
+
+--
+-- Name: admin_health_row(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_health_row() RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_runs_total int;
+  v_runs_failed int;
+  v_error_rate numeric;
+  v_queued int;
+  v_oldest_queue_minutes numeric;
+  v_violations int;
+  v_flags_off int;
+  v_last_success timestamptz;
+begin
+  perform private.assert_ruang_mesin_access();
+
+  select count(*), count(*) filter (where run.status = 'failed')
+  into v_runs_total, v_runs_failed
+  from public.ai_runs as run
+  where run.started_at > now() - interval '1 hour';
+
+  v_error_rate := case when v_runs_total = 0 then 0
+                       else round(v_runs_failed::numeric * 100 / v_runs_total, 1) end;
+
+  select count(*), coalesce(max(extract(epoch from now() - job.created_at) / 60), 0)
+  into v_queued, v_oldest_queue_minutes
+  from public.ai_jobs as job
+  where job.status = 'queued';
+
+  -- Inilah lampu yang paling penting di layar ini: berapa kali nominal
+  -- keluaran model ditimpa parser deterministik hari ini. Angka selain nol
+  -- berarti ada jalan di mana angka model bisa menjadi angka pembukuan.
+  select coalesce(sum(capture.amount_overrides), 0)
+  into v_violations
+  from public.transaction_captures as capture
+  where capture.created_at >= date_trunc('day', now())
+    and not private.is_demo_business(capture.business_id);
+
+  select count(*) into v_flags_off from public.feature_flags where not enabled;
+
+  select max(job.completed_at) into v_last_success
+  from public.ai_jobs as job
+  where job.status = 'succeeded';
+
+  return jsonb_build_array(
+    jsonb_build_object(
+      'key', 'api_error_rate', 'label', 'Kegagalan AI 1 jam',
+      'value', v_error_rate, 'unit', 'percent', 'measurable', true,
+      'tone', case when v_runs_total = 0 then 'idle'
+                   when v_error_rate >= 20 then 'alert'
+                   when v_error_rate >= 5 then 'warn' else 'ok' end,
+      'detail', format('%s dari %s percobaan', v_runs_failed, v_runs_total)
+    ),
+    jsonb_build_object(
+      'key', 'capture_queue', 'label', 'Antrean menunggu',
+      'value', v_queued, 'unit', 'count', 'measurable', true,
+      'tone', case when v_queued = 0 then 'ok'
+                   when v_oldest_queue_minutes >= 15 then 'alert'
+                   when v_queued >= 20 then 'warn' else 'ok' end,
+      'detail', case when v_queued = 0 then 'Kosong'
+                     else format('Terlama %s menit', round(v_oldest_queue_minutes)) end
+    ),
+    jsonb_build_object(
+      'key', 'daily_job', 'label', 'Job harian terakhir',
+      'value', null, 'unit', 'count',
+      -- Proyek ini belum punya penjadwal apa pun. Menampilkan "hijau" untuk
+      -- job yang tidak pernah dijadwalkan adalah kebohongan yang paling mahal
+      -- di layar ini: ia membuat orang berhenti memeriksa.
+      'measurable', false, 'tone', 'idle',
+      'detail', case when v_last_success is null then 'Belum ada penjadwal'
+                     else format('Pekerjaan terakhir sukses %s', to_char(v_last_success, 'DD Mon HH24:MI')) end
+    ),
+    jsonb_build_object(
+      'key', 'provider_breaker', 'label', 'Penyedia AI',
+      'value', v_runs_failed, 'unit', 'count', 'measurable', true,
+      'tone', case when v_runs_failed = 0 then 'ok'
+                   when v_runs_failed >= 10 then 'alert' else 'warn' end,
+      'detail', case when v_runs_failed = 0 then 'Tidak ada kegagalan sejam terakhir'
+                     else format('%s kegagalan sejam terakhir', v_runs_failed) end
+    ),
+    jsonb_build_object(
+      'key', 'llm_amount_violation', 'label', 'Nominal dari model',
+      'value', v_violations, 'unit', 'count', 'measurable', true,
+      'tone', case when v_violations = 0 then 'ok' else 'alert' end,
+      'detail', case when v_violations = 0 then 'Nol. Semua nominal lahir dari parser.'
+                     else format('%s nominal model ditimpa parser hari ini', v_violations) end
+    ),
+    jsonb_build_object(
+      'key', 'flags_off', 'label', 'Sakelar dimatikan',
+      'value', v_flags_off, 'unit', 'count', 'measurable', true,
+      -- Sakelar mati bukan kegagalan sistem; ia keputusan yang sengaja dibuat.
+      'tone', case when v_flags_off = 0 then 'ok' else 'warn' end,
+      'detail', case when v_flags_off = 0 then 'Semua fitur menyala'
+                     else format('%s fitur sedang dimatikan', v_flags_off) end
+    )
+  );
+end;
+$$;
+
+
+--
+-- Name: admin_institution_authority(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_institution_authority(p_institution_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_name text;
+  v_region text;
+  v_region_key text;
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+
+  select institution.name,
+         nullif(btrim(coalesce(institution.location, '')), ''),
+         nullif(lower(btrim(coalesce(institution.location, ''))), '')
+  into v_name, v_region, v_region_key
+  from public.institutions as institution
+  where institution.id = p_institution_id;
+
+  if v_name is null then
+    raise exception using errcode = '22023', message = 'LEMBAGA_TIDAK_DITEMUKAN';
+  end if;
+
+  return jsonb_build_object(
+    'institutionName', v_name,
+    'region', v_region,
+    'regionWide', coalesce((
+      select entitlement.region_wide_visibility from public.institution_entitlements as entitlement
+      where entitlement.institution_id = p_institution_id
+    ), false),
+    'canSeeIdentity', coalesce((
+      select entitlement.can_see_affiliated_identity from public.institution_entitlements as entitlement
+      where entitlement.institution_id = p_institution_id
+    ), false),
+    'minLevel', (
+      select entitlement.min_readiness_level from public.institution_entitlements as entitlement
+      where entitlement.institution_id = p_institution_id
+    ),
+    'broadcastQuota', coalesce((
+      select entitlement.broadcast_quota_monthly from public.institution_entitlements as entitlement
+      where entitlement.institution_id = p_institution_id
+    ), 4),
+    -- Luas akibatnya, dihitung sekarang.
+    'regionBusinessCount', case when v_region_key is null then null else (
+      select count(*)::integer from public.businesses as business
+      where business.status = 'active'
+        and lower(btrim(coalesce(business.location, ''))) = v_region_key
+        and not private.is_demo_business(business.id)
+    ) end,
+    'affiliatedCount', (
+      select count(*)::integer from public.business_dinas_affiliations as affiliation
+      where affiliation.institution_id = p_institution_id and affiliation.revoked_at is null
+    ),
+    'canBecomePembina', coalesce((
+      select entitlement.region_wide_visibility from public.institution_entitlements as entitlement
+      where entitlement.institution_id = p_institution_id
+    ), false)
+  );
+end;
+$$;
+
+
+--
+-- Name: admin_pending_broadcasts(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_pending_broadcasts() RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+
+  return coalesce((
+    select jsonb_agg(entry order by entry."createdAt")
+    from (
+      select
+        broadcast.id as id,
+        institution.name as "institutionName",
+        broadcast.region as region,
+        broadcast.message as message,
+        broadcast.filter_recording_band as "recordingBand",
+        broadcast.filter_legal_complete as "legalComplete",
+        broadcast.event_date as "eventDate",
+        broadcast.event_place as "eventPlace",
+        broadcast.event_link as "eventLink",
+        broadcast.audience_estimate as "audienceEstimate",
+        broadcast.created_at as "createdAt",
+        -- Kohort dihitung ulang SEKARANG, bukan dibaca dari potret. Admin perlu
+        -- melihat berapa yang benar-benar akan menerima kalau ia menyetujuinya
+        -- hari ini, bukan berapa yang cocok minggu lalu.
+        (select count(*)::integer from private.dinas_cohort(
+           broadcast.region, broadcast.filter_recording_band, broadcast.filter_legal_complete)) as "audienceNow"
+      from public.dinas_broadcasts as broadcast
+      join public.institutions as institution on institution.id = broadcast.institution_id
+      where broadcast.status = 'pending'
+      order by broadcast.created_at
+      limit 200
+    ) as entry
+  ), '[]'::jsonb);
+end;
+$$;
+
+
+--
+-- Name: admin_review_dinas_broadcast(uuid, boolean, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_review_dinas_broadcast(p_broadcast_id uuid, p_approve boolean, p_reason text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_role text;
+  v_profile uuid;
+  v_broadcast record;
+  v_delivered integer := 0;
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+  v_role := case when private.has_admin_role('SUPER_ADMIN') then 'SUPER_ADMIN'
+                 when private.has_admin_role('OPS') then 'OPS'
+                 else null end;
+  if v_role is null then
+    raise exception using errcode = '42501', message = 'BUTUH_PERAN_OPS';
+  end if;
+  if length(btrim(coalesce(p_reason, ''))) < 3 then
+    raise exception using errcode = '22023', message = 'ALASAN_WAJIB';
+  end if;
+
+  select * into v_broadcast from public.dinas_broadcasts where id = p_broadcast_id;
+  if v_broadcast.id is null then
+    raise exception using errcode = '22023', message = 'BROADCAST_TIDAK_DITEMUKAN';
+  end if;
+  if v_broadcast.status <> 'pending' then
+    raise exception using errcode = '22023', message = 'BROADCAST_SUDAH_DITINJAU';
+  end if;
+
+  select profile.id into v_profile
+  from public.profiles as profile where profile.auth_user_id = v_actor limit 1;
+
+  if not p_approve then
+    update public.dinas_broadcasts
+    set status = 'rejected', reviewed_by = v_profile, reviewed_at = now(), review_reason = btrim(p_reason)
+    where id = p_broadcast_id;
+
+    perform private.write_admin_log(
+      v_role, 'DINAS_BROADCAST_REJECTED', p_reason,
+      'dinas_broadcast', p_broadcast_id::text, null,
+      jsonb_build_object('institutionId', v_broadcast.institution_id)
+    );
+    return jsonb_build_object('status', 'rejected', 'delivered', 0);
+  end if;
+
+  -- Kohort diputuskan DI SINI, bukan saat diminta. Lihat catatan di kepala
+  -- berkas: di antara keduanya ada usaha yang keadaannya berubah.
+  insert into public.dinas_broadcast_recipients (broadcast_id, business_id)
+  select p_broadcast_id, cohort.business_id
+  from private.dinas_cohort(
+    v_broadcast.region, v_broadcast.filter_recording_band, v_broadcast.filter_legal_complete
+  ) as cohort
+  on conflict do nothing;
+
+  select count(*)::integer into v_delivered
+  from public.dinas_broadcast_recipients where broadcast_id = p_broadcast_id;
+
+  insert into public.notifications (user_id, business_id, notification_type, title, body, data)
+  select
+    profile.auth_user_id,
+    business.id,
+    'dinas_broadcast',
+    'Tawaran pendampingan dari ' || institution.name,
+    v_broadcast.message,
+    jsonb_build_object('broadcastId', p_broadcast_id, 'institutionName', institution.name)
+  from public.dinas_broadcast_recipients as recipient
+  join public.businesses as business on business.id = recipient.business_id
+  join public.profiles as profile on profile.id = business.legacy_profile_id
+  cross join (select name from public.institutions where id = v_broadcast.institution_id) as institution
+  where recipient.broadcast_id = p_broadcast_id
+    and profile.auth_user_id is not null;
+
+  update public.dinas_broadcasts
+  set status = 'approved', reviewed_by = v_profile, reviewed_at = now(),
+      review_reason = btrim(p_reason), delivered_at = now(), delivered_count = v_delivered
+  where id = p_broadcast_id;
+
+  perform private.write_admin_log(
+    v_role, 'DINAS_BROADCAST_APPROVED', p_reason,
+    'dinas_broadcast', p_broadcast_id::text, null,
+    jsonb_build_object(
+      'institutionId', v_broadcast.institution_id,
+      'delivered', v_delivered,
+      'audienceEstimate', v_broadcast.audience_estimate
+    )
+  );
+
+  return jsonb_build_object('status', 'approved', 'delivered', v_delivered);
+end;
+$$;
+
+
+--
+-- Name: admin_revoke_role(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_revoke_role(p_user_id uuid, p_role text, p_reason text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_role_id uuid;
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+  -- Sama seperti pemberian: mencabut peran juga pekerjaan SUPER_ADMIN.
+  if not private.has_admin_role('SUPER_ADMIN') then
+    raise exception using errcode = '42501', message = 'BUTUH_SUPER_ADMIN';
+  end if;
+
+  select id into v_role_id
+  from public.admin_roles
+  where user_id = p_user_id and role = p_role and revoked_at is null;
+
+  if v_role_id is null then
+    raise exception using errcode = '22023', message = 'PERAN_TIDAK_DIPEGANG';
+  end if;
+
+  if p_role = 'SUPER_ADMIN' and private.active_super_admin_count() <= 1 then
+    raise exception using errcode = '42501', message = 'SUPER_ADMIN_TERAKHIR';
+  end if;
+
+  update public.admin_roles
+  set revoked_at = now(), revoked_by = v_actor
+  where id = v_role_id;
+
+  perform private.write_admin_log(
+    'SUPER_ADMIN', 'ADMIN_ROLE_REVOKED', p_reason, 'admin_role', v_role_id::text, null,
+    jsonb_build_object('userId', p_user_id, 'role', p_role)
+  );
+
+  return jsonb_build_object('roleId', v_role_id, 'role', p_role);
+end;
+$$;
+
+
+--
+-- Name: admin_set_business_status(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_set_business_status(p_business_id uuid, p_status text, p_reason text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_previous text;
+  v_role text;
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+  if p_status not in ('active', 'suspended') then
+    raise exception using errcode = '22023', message = 'STATUS_TIDAK_DIIZINKAN';
+  end if;
+
+  v_role := case when private.has_admin_role('SUPER_ADMIN') then 'SUPER_ADMIN'
+                 when private.has_admin_role('OPS') then 'OPS'
+                 else null end;
+  if v_role is null then
+    raise exception using errcode = '42501', message = 'BUTUH_PERAN_OPS';
+  end if;
+  if p_status = 'active' and v_role <> 'SUPER_ADMIN' then
+    raise exception using errcode = '42501', message = 'BUKA_BEKUAN_BUTUH_SUPER_ADMIN';
+  end if;
+
+  select status into v_previous from public.businesses where id = p_business_id;
+  if v_previous is null then
+    raise exception using errcode = '22023', message = 'USAHA_TIDAK_DITEMUKAN';
+  end if;
+
+  update public.businesses
+  set status = p_status,
+      status_reason = btrim(p_reason),
+      status_changed_by = v_actor,
+      status_changed_at = now(),
+      updated_at = now()
+  where id = p_business_id;
+
+  perform private.write_admin_log(
+    v_role,
+    case when p_status = 'suspended' then 'BUSINESS_FROZEN' else 'BUSINESS_UNFROZEN' end,
+    p_reason, 'business', p_business_id::text, p_business_id,
+    jsonb_build_object('from', v_previous, 'to', p_status)
+  );
+
+  return jsonb_build_object('businessId', p_business_id, 'from', v_previous, 'to', p_status);
+end;
+$$;
+
+
+--
+-- Name: admin_set_demo_account(uuid, boolean, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_set_demo_account(p_business_id uuid, p_is_demo boolean, p_fixture_key text, p_reason text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_name text;
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+  -- Bukan OPS: tanda ini mengeluarkan sebuah usaha dari seluruh angka.
+  if not private.has_admin_role('SUPER_ADMIN') then
+    raise exception using errcode = '42501', message = 'BUTUH_SUPER_ADMIN';
+  end if;
+
+  select name into v_name from public.businesses where id = p_business_id;
+  if v_name is null then
+    raise exception using errcode = '22023', message = 'USAHA_TIDAK_DITEMUKAN';
+  end if;
+
+  if p_is_demo then
+    if length(btrim(coalesce(p_fixture_key, ''))) < 3 then
+      raise exception using errcode = '22023', message = 'FIXTURE_WAJIB';
+    end if;
+    insert into public.demo_accounts (business_id, fixture_key, created_by)
+    values (p_business_id, btrim(p_fixture_key), v_actor)
+    on conflict (business_id) do update set fixture_key = excluded.fixture_key;
+  else
+    delete from public.demo_accounts where business_id = p_business_id;
+  end if;
+
+  perform private.write_admin_log(
+    'SUPER_ADMIN',
+    case when p_is_demo then 'DEMO_ACCOUNT_MARKED' else 'DEMO_ACCOUNT_UNMARKED' end,
+    p_reason, 'business', p_business_id::text, p_business_id,
+    jsonb_build_object('fixtureKey', p_fixture_key, 'businessName', v_name)
+  );
+
+  return jsonb_build_object('businessId', p_business_id, 'isDemo', p_is_demo);
+end;
+$$;
+
+
+--
+-- Name: admin_set_feature_flag(text, boolean, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_set_feature_flag(p_flag_key text, p_enabled boolean, p_reason text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_role text;
+  v_previous boolean;
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+
+  v_role := case when private.has_admin_role('SUPER_ADMIN') then 'SUPER_ADMIN'
+                 when private.has_admin_role('OPS') then 'OPS'
+                 else null end;
+  if v_role is null then
+    raise exception using errcode = '42501', message = 'BUTUH_PERAN_OPS';
+  end if;
+
+  select enabled into v_previous from public.feature_flags where flag_key = p_flag_key;
+  if v_previous is null then
+    raise exception using errcode = '22023', message = 'SAKELAR_TIDAK_DIKENAL';
+  end if;
+
+  -- Menyalakan kembali adalah keputusan yang bisa ditunggu; mematikan tidak.
+  if p_enabled and not v_previous and v_role <> 'SUPER_ADMIN' then
+    raise exception using errcode = '42501', message = 'MENYALAKAN_BUTUH_SUPER_ADMIN';
+  end if;
+
+  update public.feature_flags
+  set enabled = p_enabled, updated_by = v_actor, updated_at = now()
+  where flag_key = p_flag_key;
+
+  perform private.write_admin_log(
+    v_role,
+    case when p_enabled then 'FEATURE_FLAG_ENABLED' else 'FEATURE_FLAG_DISABLED' end,
+    p_reason, 'feature_flag', p_flag_key, null,
+    jsonb_build_object('from', v_previous, 'to', p_enabled)
+  );
+
+  return jsonb_build_object('flagKey', p_flag_key, 'from', v_previous, 'to', p_enabled);
+end;
+$$;
+
+
+--
+-- Name: admin_set_feature_flag_for_business(text, uuid, boolean, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_set_feature_flag_for_business(p_flag_key text, p_business_id uuid, p_enabled boolean, p_reason text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_role text;
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+
+  v_role := case when private.has_admin_role('SUPER_ADMIN') then 'SUPER_ADMIN'
+                 when private.has_admin_role('OPS') then 'OPS'
+                 else null end;
+  if v_role is null then
+    raise exception using errcode = '42501', message = 'BUTUH_PERAN_OPS';
+  end if;
+
+  if not exists (select 1 from public.feature_flags where flag_key = p_flag_key) then
+    raise exception using errcode = '22023', message = 'SAKELAR_TIDAK_DIKENAL';
+  end if;
+  if not exists (select 1 from public.businesses where id = p_business_id) then
+    raise exception using errcode = '22023', message = 'USAHA_TIDAK_DITEMUKAN';
+  end if;
+
+  if p_enabled is null then
+    delete from public.feature_flag_overrides
+    where flag_key = p_flag_key and business_id = p_business_id;
+  else
+    insert into public.feature_flag_overrides (flag_key, business_id, enabled, set_by)
+    values (p_flag_key, p_business_id, p_enabled, v_actor)
+    on conflict (flag_key, business_id)
+    do update set enabled = excluded.enabled, set_by = excluded.set_by, set_at = now();
+  end if;
+
+  perform private.write_admin_log(
+    v_role, 'FEATURE_FLAG_OVERRIDE_SET', p_reason, 'feature_flag', p_flag_key, p_business_id,
+    jsonb_build_object('enabled', p_enabled)
+  );
+
+  return jsonb_build_object('flagKey', p_flag_key, 'businessId', p_business_id, 'enabled', p_enabled);
+end;
+$$;
+
+
+--
+-- Name: admin_set_institution_authority(uuid, boolean, boolean, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.admin_set_institution_authority(p_institution_id uuid, p_region_wide boolean, p_can_see_identity boolean, p_min_level text, p_reason text, p_broadcast_quota integer DEFAULT NULL::integer) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_role text;
+  v_region text;
+  v_name text;
+  v_was_region_wide boolean := false;
+  v_was_can_identity boolean := false;
+  v_was_min_level text;
+  v_was_quota integer := 4;
+  v_min_new text := nullif(btrim(coalesce(p_min_level, '')), '');
+  v_rank_before integer;
+  v_rank_after integer;
+  v_loosening boolean := false;
+  v_quota integer;
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+  if length(btrim(coalesce(p_reason, ''))) < 3 then
+    raise exception using errcode = '22023', message = 'ALASAN_WAJIB';
+  end if;
+  if v_min_new is not null and v_min_new not in ('MULAI', 'TEMBAGA', 'PERAK', 'EMAS') then
+    raise exception using errcode = '22023', message = 'TINGKAT_TIDAK_DIKENAL';
+  end if;
+
+  select institution.name, nullif(btrim(coalesce(institution.location, '')), '')
+  into v_name, v_region
+  from public.institutions as institution
+  where institution.id = p_institution_id;
+
+  if v_name is null then
+    raise exception using errcode = '22023', message = 'LEMBAGA_TIDAK_DITEMUKAN';
+  end if;
+
+  -- Gagal saat DISETEL, bukan gagal diam-diam saat dipakai.
+  --
+  -- Tanpa `institutions.location`, `dinas_region_summary` mengembalikan
+  -- "wilayah belum diisi" dan dasbornya kosong. Menolak di sini mengubah
+  -- dasbor kosong yang tidak bisa dijelaskan menjadi galat yang menyebutkan
+  -- apa yang harus diisi, kepada orang yang memang bisa mengisinya.
+  if p_region_wide and v_region is null then
+    raise exception using errcode = '22023', message = 'WILAYAH_LEMBAGA_BELUM_DIISI';
+  end if;
+
+  -- Identitas tanpa batas wilayah adalah lubang `0076` itu sendiri: kewenangan
+  -- melihat nama tanpa satu pun kepentingan yang membatasinya.
+  if p_can_see_identity and not p_region_wide then
+    raise exception using errcode = '22023', message = 'IDENTITAS_BUTUH_BATAS_WILAYAH';
+  end if;
+
+  -- Lembaga yang belum punya baris entitlement diperlakukan sebagai keadaan
+  -- paling tertutup, bukan sebagai galat: itu bentuk bawaan yang benar, dan
+  -- `insert ... on conflict` di bawah yang melahirkan barisnya.
+  select
+    coalesce(entitlement.region_wide_visibility, false),
+    coalesce(entitlement.can_see_affiliated_identity, false),
+    entitlement.min_readiness_level,
+    coalesce(entitlement.broadcast_quota_monthly, 4)
+  into v_was_region_wide, v_was_can_identity, v_was_min_level, v_was_quota
+  from public.institution_entitlements as entitlement
+  where entitlement.institution_id = p_institution_id;
+
+  v_was_region_wide := coalesce(v_was_region_wide, false);
+  v_was_can_identity := coalesce(v_was_can_identity, false);
+  v_was_quota := coalesce(v_was_quota, 4);
+
+  -- Tanpa batasan adalah keadaan yang PALING longgar, jadi peringkatnya nol.
+  v_rank_before := case v_was_min_level
+    when 'EMAS' then 4 when 'PERAK' then 3 when 'TEMBAGA' then 2 when 'MULAI' then 1 else 0 end;
+  v_rank_after := case v_min_new
+    when 'EMAS' then 4 when 'PERAK' then 3 when 'TEMBAGA' then 2 when 'MULAI' then 1 else 0 end;
+
+  if (p_region_wide and not v_was_region_wide)
+     or (p_can_see_identity and not v_was_can_identity)
+     or v_rank_after < v_rank_before then
+    v_loosening := true;
+  end if;
+
+  v_role := case when private.has_admin_role('SUPER_ADMIN') then 'SUPER_ADMIN'
+                 when private.has_admin_role('OPS') then 'OPS'
+                 else null end;
+  if v_role is null then
+    raise exception using errcode = '42501', message = 'BUTUH_PERAN_OPS';
+  end if;
+  if v_loosening and v_role <> 'SUPER_ADMIN' then
+    raise exception using errcode = '42501', message = 'MELONGGARKAN_BUTUH_SUPER_ADMIN';
+  end if;
+
+  v_quota := greatest(0, least(100, coalesce(p_broadcast_quota, v_was_quota)));
+
+  insert into public.institution_entitlements (
+    institution_id, region_wide_visibility, can_see_affiliated_identity,
+    min_readiness_level, broadcast_quota_monthly
+  ) values (
+    p_institution_id, p_region_wide, p_can_see_identity, v_min_new, v_quota
+  )
+  on conflict (institution_id) do update set
+    region_wide_visibility = p_region_wide,
+    can_see_affiliated_identity = p_can_see_identity,
+    min_readiness_level = v_min_new,
+    broadcast_quota_monthly = v_quota,
+    updated_at = now();
+
+  perform private.write_admin_log(
+    v_role,
+    case when v_loosening then 'INSTITUTION_AUTHORITY_WIDENED' else 'INSTITUTION_AUTHORITY_NARROWED' end,
+    p_reason, 'institution', p_institution_id::text, null,
+    jsonb_build_object(
+      'institutionName', v_name,
+      'region', v_region,
+      'before', jsonb_build_object(
+        'regionWide', v_was_region_wide,
+        'canSeeIdentity', v_was_can_identity,
+        'minLevel', v_was_min_level,
+        'broadcastQuota', v_was_quota
+      ),
+      'after', jsonb_build_object(
+        'regionWide', p_region_wide,
+        'canSeeIdentity', p_can_see_identity,
+        'minLevel', v_min_new,
+        'broadcastQuota', v_quota
+      )
+    )
+  );
+
+  return jsonb_build_object(
+    'regionWide', p_region_wide,
+    'canSeeIdentity', p_can_see_identity,
+    'minLevel', v_min_new,
+    'broadcastQuota', v_quota,
+    'loosening', v_loosening,
+    'actingRole', v_role
+  );
+end;
+$$;
+
+
+--
+-- Name: FUNCTION admin_set_institution_authority(p_institution_id uuid, p_region_wide boolean, p_can_see_identity boolean, p_min_level text, p_reason text, p_broadcast_quota integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.admin_set_institution_authority(p_institution_id uuid, p_region_wide boolean, p_can_see_identity boolean, p_min_level text, p_reason text, p_broadcast_quota integer) IS 'Satu-satunya pintu untuk kewenangan lembaga. Melonggarkan butuh SUPER_ADMIN, mengencangkan cukup OPS, dan keduanya wajib beralasan.';
 
 
 --
@@ -2479,10 +3947,10 @@ $$;
 
 
 --
--- Name: complete_capture_ai_job(uuid, integer, text, jsonb, integer, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+-- Name: complete_capture_ai_job(uuid, integer, text, jsonb, integer, integer, integer, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.complete_capture_ai_job(p_job_id uuid, p_attempt_number integer, p_transcription text, p_draft_payload jsonb, p_latency_ms integer, p_prompt_tokens integer DEFAULT NULL::integer, p_completion_tokens integer DEFAULT NULL::integer) RETURNS jsonb
+CREATE FUNCTION public.complete_capture_ai_job(p_job_id uuid, p_attempt_number integer, p_transcription text, p_draft_payload jsonb, p_latency_ms integer, p_prompt_tokens integer DEFAULT NULL::integer, p_completion_tokens integer DEFAULT NULL::integer, p_guard jsonb DEFAULT '{}'::jsonb) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -2490,6 +3958,9 @@ declare
   v_job public.ai_jobs%rowtype;
   v_capture public.transaction_captures%rowtype;
   v_item_count integer;
+  v_overrides integer;
+  v_drops integer;
+  v_summary jsonb;
 begin
   if p_attempt_number < 1
     or p_latency_ms < 0
@@ -2528,10 +3999,25 @@ begin
 
   v_item_count := jsonb_array_length(p_draft_payload);
 
+  -- Jejaknya dibersihkan di sini, bukan dipercaya apa adanya: angka negatif
+  -- atau bentuk yang salah lebih baik menjadi nol daripada menjadi lampu yang
+  -- menyala tanpa sebab.
+  v_overrides := greatest(coalesce((p_guard->>'overridden')::integer, 0), 0);
+  v_drops := greatest(coalesce((p_guard->>'dropped')::integer, 0), 0);
+  v_summary := case
+    when p_guard ? 'excerpt' or p_guard ? 'candidates'
+      then jsonb_build_object(
+        'excerpt', p_guard->'excerpt',
+        'ambiguous', coalesce(p_guard->'ambiguous', 'false'::jsonb),
+        'candidates', coalesce(p_guard->'candidates', '[]'::jsonb)
+      )
+    else null
+  end;
+
   update public.ai_runs
   set
     status = 'succeeded',
-    response_payload = jsonb_build_object('itemCount', v_item_count),
+    response_payload = jsonb_build_object('itemCount', v_item_count, 'amountOverrides', v_overrides),
     prompt_tokens = p_prompt_tokens,
     completion_tokens = p_completion_tokens,
     latency_ms = p_latency_ms,
@@ -2547,25 +4033,20 @@ begin
     status = 'needs_review',
     transcription = trim(p_transcription),
     draft_payload = p_draft_payload,
+    amount_overrides = v_overrides,
+    amount_drops = v_drops,
+    ocr_summary = v_summary,
     failure_code = null,
     failure_message = null,
     completed_at = now(),
     updated_at = now()
   where id = v_capture.id;
 
-  insert into public.audit_events (
-    actor_user_id, actor_type, business_id, action, target_type, target_id, metadata
-  ) values (
-    v_job.requested_by,
-    'system',
-    v_job.business_id,
-    'TRANSACTION_CAPTURE_NEEDS_REVIEW',
-    'transaction_capture',
-    v_capture.id::text,
-    jsonb_build_object('itemCount', v_item_count, 'attemptNumber', p_attempt_number)
+  return jsonb_build_object(
+    'captureId', v_capture.id,
+    'status', 'needs_review',
+    'itemCount', v_item_count
   );
-
-  return jsonb_build_object('captureId', v_capture.id, 'status', 'needs_review', 'itemCount', v_item_count);
 end;
 $$;
 
@@ -2945,6 +4426,8 @@ declare
   v_counterparty_id uuid;
   v_counterparty_type text;
   v_interest bigint;
+  v_asset_category text;
+  v_asset_life integer;
   v_label text;
   v_ai_job_id uuid;
   v_ai_run_id uuid;
@@ -3010,6 +4493,12 @@ begin
       v_transaction_date := (v_item->>'transactionDate')::date;
       v_emkm := nullif(trim(coalesce(v_item->>'emkmCategoryCode', '')), '')::smallint;
       v_interest := coalesce(nullif(trim(coalesce(v_item->>'interestAmountIdr', '')), '')::bigint, 0);
+    -- Jawaban pemilik tentang alat yang dibelinya. Jalur suara dan foto nota
+    -- melewati fungsi INI, bukan `create_ledger_transaction` -- jadi tanpa
+    -- kedua baris di bawah, pertanyaan yang sudah dijawab di layar catat
+    -- hilang sebelum sampai ke daftar alat, dan umurnya kembali ditebak.
+    v_asset_category := nullif(trim(coalesce(v_item->>'assetCategory', '')), '');
+    v_asset_life := nullif(trim(coalesce(v_item->>'assetUsefulLifeMonths', '')), '')::integer;
     exception when others then
       raise exception using errcode = '22023', message = 'VALIDATION_FAILED';
     end;
@@ -3112,7 +4601,8 @@ begin
       amount_idr, nominal, transaction_date, tanggal, category_group, category_code,
       category, kategori, item, qty, quantity, unit, unit_price_idr, payment_method,
       sales_channel, ledger_status, emkm_category_code, emkm_category_subtype,
-      counterparty_id, counterparty, interest_amount_idr, needs_reclass, created_at, updated_at
+      counterparty_id, counterparty, interest_amount_idr, needs_reclass, created_at, updated_at,
+      asset_category, asset_useful_life_months
     ) values (
       v_transaction_id, v_capture.business_id, v_user_id, v_capture.id, v_client_item_id,
       v_direction, case v_direction when 'income' then 'masuk' else 'keluar' end,
@@ -3120,7 +4610,9 @@ begin
       v_category_group, v_category_code, v_label, v_label, v_description,
       coalesce(v_quantity::text || coalesce(' ' || v_unit, ''), '1'),
       v_quantity, v_unit, v_unit_price_idr, v_payment_method, v_sales_channel, 'confirmed',
-      v_emkm, v_subtype, v_counterparty_id, v_counterparty_name, v_interest, false, now(), now()
+      v_emkm, v_subtype, v_counterparty_id, v_counterparty_name, v_interest, false, now(), now(),
+      case when v_emkm = 8 then v_asset_category end,
+      case when v_emkm = 8 then v_asset_life end
     );
 
     perform public.fn_post_transaction_journal(v_transaction_id);
@@ -3537,7 +5029,7 @@ $_$;
 -- Name: create_dossier_request(uuid, uuid, text, text, text[], text[], integer, boolean, text, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.create_dossier_request(p_business_id uuid, p_program_id uuid, p_purpose_code text, p_purpose_description text, p_requested_scopes text[], p_required_scopes text[] DEFAULT '{}'::text[], p_requested_duration_days integer DEFAULT 14, p_download_requested boolean DEFAULT false, p_idempotency_key text DEFAULT NULL::text, p_institution_id uuid DEFAULT NULL::uuid) RETURNS jsonb
+CREATE FUNCTION public.create_dossier_request(p_business_id uuid, p_program_id uuid DEFAULT NULL::uuid, p_purpose_code text DEFAULT ''::text, p_purpose_description text DEFAULT ''::text, p_requested_scopes text[] DEFAULT '{}'::text[], p_required_scopes text[] DEFAULT '{}'::text[], p_requested_duration_days integer DEFAULT 14, p_download_requested boolean DEFAULT false, p_idempotency_key text DEFAULT NULL::text, p_institution_id uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -3546,14 +5038,15 @@ declare
   request_row public.dossier_requests%rowtype;
   allowed_scopes constant text[] := array['business_identity','readiness','financial_summary','nib','npwp','owner_identity','qris_history','sector_certificates'];
 begin
+  -- Cari institusi tempat user terdaftar sebagai anggota aktif (semua role diperbolehkan)
   select member.institution_id into institution_id_value
   from public.institution_members as member
   join public.institutions as institution on institution.id = member.institution_id
   where member.user_id = (select auth.uid()) and member.status = 'active'
-    and member.role in ('admin','analyst','reviewer')
     and institution.status = 'active' and institution.active
     and (p_institution_id is null or member.institution_id = p_institution_id)
   order by member.created_at limit 1;
+
   if institution_id_value is null then raise exception 'INSTITUTION_ACCESS_DENIED'; end if;
   if not exists (select 1 from public.businesses where id = p_business_id and status = 'active') then
     raise exception 'CANDIDATE_NOT_FOUND';
@@ -3616,10 +5109,10 @@ $$;
 
 
 --
--- Name: create_ledger_transaction(text, text, bigint, date, text, text, text, numeric, text, bigint, text, text, text, smallint, text, uuid, bigint); Type: FUNCTION; Schema: public; Owner: -
+-- Name: create_ledger_transaction(text, text, bigint, date, text, text, text, numeric, text, bigint, text, text, text, smallint, text, uuid, bigint, text, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.create_ledger_transaction(p_idempotency_key text, p_transaction_type text, p_amount_idr bigint, p_transaction_date date, p_category_group text, p_category_code text, p_description text, p_quantity numeric DEFAULT NULL::numeric, p_unit text DEFAULT NULL::text, p_unit_price_idr bigint DEFAULT NULL::bigint, p_payment_method text DEFAULT NULL::text, p_sales_channel text DEFAULT NULL::text, p_counterparty text DEFAULT NULL::text, p_emkm_category_code smallint DEFAULT NULL::smallint, p_emkm_category_subtype text DEFAULT NULL::text, p_counterparty_id uuid DEFAULT NULL::uuid, p_interest_amount_idr bigint DEFAULT 0) RETURNS jsonb
+CREATE FUNCTION public.create_ledger_transaction(p_idempotency_key text, p_transaction_type text, p_amount_idr bigint, p_transaction_date date, p_category_group text, p_category_code text, p_description text, p_quantity numeric DEFAULT NULL::numeric, p_unit text DEFAULT NULL::text, p_unit_price_idr bigint DEFAULT NULL::bigint, p_payment_method text DEFAULT NULL::text, p_sales_channel text DEFAULT NULL::text, p_counterparty text DEFAULT NULL::text, p_emkm_category_code smallint DEFAULT NULL::smallint, p_emkm_category_subtype text DEFAULT NULL::text, p_counterparty_id uuid DEFAULT NULL::uuid, p_interest_amount_idr bigint DEFAULT 0, p_asset_category text DEFAULT NULL::text, p_asset_useful_life_months integer DEFAULT NULL::integer) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -3690,7 +5183,8 @@ begin
     business_id, user_id, idempotency_key, item, qty, direction, type, amount_idr, nominal,
     category, kategori, category_group, category_code, transaction_date, tanggal, quantity, unit,
     unit_price_idr, payment_method, sales_channel, counterparty, ledger_status,
-    emkm_category_code, emkm_category_subtype, counterparty_id, interest_amount_idr, needs_reclass
+    emkm_category_code, emkm_category_subtype, counterparty_id, interest_amount_idr, needs_reclass,
+    asset_category, asset_useful_life_months
   ) values (
     v_business_id, v_user_id, trim(p_idempotency_key), trim(p_description),
     coalesce(p_quantity::text || coalesce(' ' || nullif(trim(p_unit), ''), ''), '1'),
@@ -3699,7 +5193,8 @@ begin
     p_amount_idr, p_amount_idr, v_category_label, v_category_label, p_category_group, p_category_code,
     p_transaction_date, p_transaction_date, p_quantity, nullif(trim(p_unit), ''), p_unit_price_idr,
     v_payment, nullif(trim(p_sales_channel), ''), nullif(trim(p_counterparty), ''), 'confirmed',
-    v_emkm, v_subtype, p_counterparty_id, coalesce(p_interest_amount_idr, 0), false
+    v_emkm, v_subtype, p_counterparty_id, coalesce(p_interest_amount_idr, 0), false,
+    nullif(btrim(coalesce(p_asset_category, '')), ''), p_asset_useful_life_months
   ) returning * into v_transaction;
 
   v_entry_id := public.fn_post_transaction_journal(v_transaction.id);
@@ -3730,6 +5225,7 @@ declare
   v_extension text;
   v_storage_path text;
   v_has_audio boolean;
+  v_has_image boolean;
   v_has_text boolean;
   v_path text;
 begin
@@ -3739,7 +5235,7 @@ begin
   if p_idempotency_key is null or char_length(trim(p_idempotency_key)) not between 8 and 200 then
     raise exception using errcode = '22023', message = 'VALIDATION_FAILED';
   end if;
-  if p_input_method not in ('voice', 'manual') then
+  if p_input_method not in ('voice', 'manual', 'camera') then
     raise exception using errcode = '22023', message = 'VALIDATION_FAILED';
   end if;
 
@@ -3747,8 +5243,19 @@ begin
     and char_length(trim(p_source_text)) between 1 and 2000;
   v_has_audio := p_mime_type in ('audio/webm', 'audio/mp4', 'audio/ogg', 'audio/mpeg')
     and p_file_size is not null and p_file_size between 1 and 10485760;
+  -- Foto nota: dua megabyte sesudah dikecilkan klien ke sisi terpanjang 1600
+  -- piksel. Yang lebih besar dari itu hampir pasti belum lewat pengecilan, dan
+  -- menerimanya berarti membayar OCR untuk piksel yang tidak menolong dibaca.
+  v_has_image := p_mime_type in ('image/jpeg', 'image/png')
+    and p_file_size is not null and p_file_size between 1 and 2097152;
 
   if p_input_method = 'manual' and not v_has_text then
+    raise exception using errcode = '22023', message = 'VALIDATION_FAILED';
+  end if;
+
+  -- Kamera tanpa foto tidak punya apa pun untuk dibaca. Tidak ada jalur
+  -- cadangan seperti suara, karena tidak ada transkrip klien untuk foto.
+  if p_input_method = 'camera' and not v_has_image then
     raise exception using errcode = '22023', message = 'VALIDATION_FAILED';
   end if;
 
@@ -3761,7 +5268,7 @@ begin
   if p_checksum_sha256 is not null and p_checksum_sha256 !~ '^[a-fA-F0-9]{64}$' then
     raise exception using errcode = '22023', message = 'VALIDATION_FAILED';
   end if;
-  if p_capture_path is not null and p_capture_path not in ('TEXT_ONLY', 'WHISPER') then
+  if p_capture_path is not null and p_capture_path not in ('TEXT_ONLY', 'WHISPER', 'OCR') then
     raise exception using errcode = '22023', message = 'VALIDATION_FAILED';
   end if;
 
@@ -3798,13 +5305,19 @@ begin
   v_capture_id := gen_random_uuid();
   v_path := coalesce(
     p_capture_path,
-    case when p_input_method = 'voice' and not v_has_audio then 'TEXT_ONLY'
+    case when p_input_method = 'camera' then 'OCR'
+         when p_input_method = 'voice' and not v_has_audio then 'TEXT_ONLY'
          when p_input_method = 'voice' then 'WHISPER'
          else null end
   );
 
+  -- Foto nota memakai konvensi penyimpanan yang sama dengan audio: diawali
+  -- user_id supaya cocok dengan policy storage, lalu id capture-nya.
+  if p_input_method = 'camera' and v_has_image then
+    v_storage_path := v_user_id::text || '/' || v_capture_id::text || '/source.'
+      || case p_mime_type when 'image/png' then 'png' else 'jpg' end;
   -- Path penyimpanan hanya dibuat bila audionya memang akan diunggah.
-  if p_input_method = 'voice' and v_has_audio and v_path is distinct from 'TEXT_ONLY' then
+  elsif p_input_method = 'voice' and v_has_audio and v_path is distinct from 'TEXT_ONLY' then
     v_extension := case p_mime_type
       when 'audio/webm' then 'webm'
       when 'audio/mp4' then 'mp4'
@@ -3889,6 +5402,412 @@ begin
   where id = p_attachment_id;
 
   return jsonb_build_object('ok', true, 'id', p_attachment_id, 'idempotent', false);
+end;
+$$;
+
+
+--
+-- Name: dinas_broadcast_audience(text, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.dinas_broadcast_audience(p_recording_band text DEFAULT NULL::text, p_legal_complete boolean DEFAULT NULL::boolean) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_context record;
+  v_countable boolean;
+  v_count integer;
+begin
+  select * into v_context from private.dinas_broadcast_context();
+
+  if p_recording_band is not null and p_recording_band not in
+    ('Rutin mencatat', 'Mulai rutin', 'Jarang mencatat', 'Belum mulai') then
+    raise exception 'BAND_TIDAK_DIKENAL';
+  end if;
+
+  v_countable := private.dinas_cohort_countable(
+    v_context.institution_id, v_context.region, p_recording_band, p_legal_complete);
+
+  select count(*)::integer into v_count
+  from private.dinas_cohort(v_context.region, p_recording_band, p_legal_complete);
+
+  return jsonb_build_object(
+    'region', initcap(v_context.region),
+    -- Tersembunyi berarti dinas tetap boleh mengirim -- pesannya sampai, dan
+    -- itu gunanya -- tetapi jumlahnya tidak dilaporkan kepadanya.
+    'count', case when v_countable then v_count else null end,
+    'suppressed', not v_countable,
+    'minCell', private.min_cell_size()
+  );
+end;
+$$;
+
+
+--
+-- Name: dinas_region_drilldown(text, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.dinas_region_drilldown(p_recording_band text DEFAULT NULL::text, p_legal_complete boolean DEFAULT NULL::boolean) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  institution_id_value uuid;
+  region_wide_bool boolean := false;
+  can_identity_bool boolean := false;
+  viewer_region_value text;
+  v_min integer := private.min_cell_size();
+  v_rekam_urutan integer;
+  v_legal_urutan integer;
+  v_any_hidden boolean;
+  v_anon_total integer;
+  v_affiliated_total integer;
+  v_affiliated jsonb;
+  v_anonymous jsonb;
+  v_cap integer := 100;
+begin
+  institution_id_value := public.resolve_my_institution_id(null);
+
+  select
+    coalesce(entitlement.region_wide_visibility, false),
+    coalesce(entitlement.can_see_affiliated_identity, false),
+    nullif(lower(btrim(coalesce(institution.location, ''))), '')
+  into region_wide_bool, can_identity_bool, viewer_region_value
+  from public.institutions as institution
+  left join public.institution_entitlements as entitlement
+    on entitlement.institution_id = institution.id
+  where institution.id = institution_id_value;
+
+  if not region_wide_bool then
+    raise exception using errcode = '42501', message = 'BUKAN_LEMBAGA_BERWILAYAH';
+  end if;
+  -- Dinas pengamat berhenti di angka. Ini bukan kelalaian: daftar baris anonim
+  -- tidak menambah apa pun di atas angkanya, dan hanya memperluas permukaan
+  -- identifikasi ulang.
+  if not can_identity_bool then
+    raise exception using errcode = '42501', message = 'BUKAN_DINAS_PEMBINA';
+  end if;
+  if viewer_region_value is null then
+    return jsonb_build_object('regionKnown', false, 'minCell', v_min);
+  end if;
+
+  if p_recording_band is not null then
+    v_rekam_urutan := case p_recording_band
+      when 'Rutin mencatat' then 1
+      when 'Mulai rutin' then 2
+      when 'Jarang mencatat' then 3
+      when 'Belum mulai' then 4
+    end;
+    if v_rekam_urutan is null then
+      raise exception 'BAND_TIDAK_DIKENAL';
+    end if;
+  end if;
+  if p_legal_complete is not null then
+    v_legal_urutan := case when p_legal_complete then 1 else 2 end;
+  end if;
+
+  -- Satu aturan untuk seluruh pelepasan baris: setiap sel yang diminta harus
+  -- terlihat. Keputusan "terlihat" datang dari fungsi yang sama yang dipakai
+  -- ringkasan, jadi drill-down tidak bisa melepas apa yang ringkasan tutup.
+  select bool_or(cell.hide), coalesce(sum(cell.anonim), 0)
+  into v_any_hidden, v_anon_total
+  from private.dinas_region_cells(institution_id_value, viewer_region_value) as cell
+  where (v_rekam_urutan is null or cell.urutan_rekam = v_rekam_urutan)
+    and (v_legal_urutan is null or cell.urutan_legal = v_legal_urutan);
+
+  v_any_hidden := coalesce(v_any_hidden, false);
+
+  with rows_in_scope as (
+    select
+      business.id,
+      business.name,
+      coalesce(profile.name, '') as owner_name,
+      coalesce(business.sector, 'Belum diisi') as sector,
+      case readiness_state.level
+        when 'EMAS' then 'Emas'
+        when 'PERAK' then 'Perak'
+        when 'TEMBAGA' then 'Tembaga'
+        when 'MULAI' then 'Mulai'
+        else 'Belum dihitung' end as readiness_level,
+      private.recording_band(activity.active_days) as recording_activity,
+      private.legal_is_complete(legal.ready_count) as legal_complete,
+      coalesce(
+        optin.candidate_code,
+        'UMKM-' || upper(substr(replace(business.id::text, '-', ''), 1, 8))
+      ) as candidate_code,
+      affiliation.is_affiliated,
+      business.created_at
+    from public.businesses as business
+    left join public.profiles as profile on profile.id = business.legacy_profile_id
+    left join public.discovery_optins as optin on optin.business_id = business.id
+    left join public.business_readiness_state as readiness_state
+      on readiness_state.business_id = business.id
+    left join lateral (
+      select count(distinct transaction.transaction_date)::integer as active_days
+      from public.transactions as transaction
+      where transaction.business_id = business.id
+        and transaction.transaction_date >= current_date - 29
+    ) as activity on true
+    left join lateral (
+      select count(distinct document.doc_type)::integer as ready_count
+      from public.documents as document
+      where document.business_id = business.id
+        and document.doc_type in ('nib', 'npwp', 'ktp_owner', 'pirt', 'halal', 'distribution_permit')
+        and document.status not in ('rejected', 'archived', 'superseded')
+    ) as legal on true
+    left join lateral (
+      select private.dinas_affiliation_active(business.id, institution_id_value) as is_affiliated
+    ) as affiliation on true
+    where business.status = 'active'
+      and lower(btrim(coalesce(business.location, ''))) = viewer_region_value
+      and not private.is_demo_business(business.id)
+  ),
+  matched as (
+    select * from rows_in_scope
+    where (p_recording_band is null or recording_activity = p_recording_band)
+      and (p_legal_complete is null or legal_complete = p_legal_complete)
+  )
+  select
+    coalesce((
+      select jsonb_agg(entry order by entry."businessName")
+      from (
+        select
+          matched.name as "businessName",
+          nullif(matched.owner_name, '') as "ownerName",
+          matched.sector as sector,
+          matched.readiness_level as "readinessLevel",
+          matched.recording_activity as "recordingActivity",
+          matched.legal_complete as "legalComplete"
+        from matched
+        where matched.is_affiliated
+        order by matched.name
+        limit v_cap
+      ) as entry
+    ), '[]'::jsonb),
+    (select count(*)::integer from matched where matched.is_affiliated),
+    case when v_any_hidden then '[]'::jsonb else coalesce((
+      select jsonb_agg(entry order by entry."candidateCode")
+      from (
+        select
+          matched.candidate_code as "candidateCode",
+          matched.sector as sector,
+          matched.readiness_level as "readinessLevel",
+          matched.recording_activity as "recordingActivity",
+          matched.legal_complete as "legalComplete"
+        from matched
+        where not matched.is_affiliated
+        order by matched.candidate_code
+        limit v_cap
+      ) as entry
+    ), '[]'::jsonb) end
+  into v_affiliated, v_affiliated_total, v_anonymous;
+
+  return jsonb_build_object(
+    'regionKnown', true,
+    'region', initcap(viewer_region_value),
+    'recordingBand', p_recording_band,
+    'legalComplete', p_legal_complete,
+    'affiliated', v_affiliated,
+    'affiliatedTotal', v_affiliated_total,
+    'anonymous', v_anonymous,
+    -- Ketika tersembunyi, JUMLAHNYA pun tidak keluar. "3 usaha, barisnya tidak
+    -- ditampilkan" sudah menyerahkan angka yang justru dilindungi.
+    'anonymousTotal', case when v_any_hidden then null else v_anon_total end,
+    'anonymousSuppressed', v_any_hidden,
+    'cap', v_cap,
+    'minCell', v_min
+  );
+end;
+$$;
+
+
+--
+-- Name: FUNCTION dinas_region_drilldown(p_recording_band text, p_legal_complete boolean); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.dinas_region_drilldown(p_recording_band text, p_legal_complete boolean) IS 'Daftar di belakang angka ringkasan wilayah. Dua kolom, tanpa telepon dan tanpa rupiah, dan baris anonim hanya dilepas bila setiap sel yang diminta terlihat.';
+
+
+--
+-- Name: dinas_region_summary(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.dinas_region_summary() RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  institution_id_value uuid;
+  region_wide_bool boolean := false;
+  can_identity_bool boolean := false;
+  viewer_region_value text;
+  v_min integer := private.min_cell_size();
+  v_total integer := 0;
+  v_affiliated integer := 0;
+  v_rekam_label text[] := array['Rutin mencatat', 'Mulai rutin', 'Jarang mencatat', 'Belum mulai'];
+  v_legal_label text[] := array['Legalitas lengkap', 'Legalitas belum lengkap'];
+  v_recording jsonb := '[]'::jsonb;
+  v_legality jsonb := '[]'::jsonb;
+  v_matrix jsonb := '[]'::jsonb;
+  v_count integer[] := array_fill(0, array[8]);
+  v_anon integer[] := array_fill(0, array[8]);
+  v_hide boolean[] := array_fill(false, array[8]);
+  v_group_count integer;
+  v_group_anon integer;
+  v_idx integer;
+  v_cell record;
+  i integer;
+  j integer;
+begin
+  institution_id_value := public.resolve_my_institution_id(null);
+
+  select
+    coalesce(entitlement.region_wide_visibility, false),
+    coalesce(entitlement.can_see_affiliated_identity, false),
+    nullif(lower(btrim(coalesce(institution.location, ''))), '')
+  into region_wide_bool, can_identity_bool, viewer_region_value
+  from public.institutions as institution
+  left join public.institution_entitlements as entitlement
+    on entitlement.institution_id = institution.id
+  where institution.id = institution_id_value;
+
+  if not region_wide_bool then
+    raise exception using errcode = '42501', message = 'BUKAN_LEMBAGA_BERWILAYAH';
+  end if;
+
+  -- Gagal tertutup, dan bedanya disebut: "wilayah belum diisi" bukan "tidak
+  -- ada UMKM". Dasbor yang menampilkan nol untuk keduanya membuat pengelola
+  -- mengira platformnya kosong, bukan mengira datanya belum lengkap.
+  if viewer_region_value is null then
+    return jsonb_build_object('regionKnown', false, 'minCell', v_min, 'canDrillDown', can_identity_bool);
+  end if;
+
+  -- Dipanggil SEKALI lalu disalin ke array. Versi sebelumnya memanggilnya
+  -- untuk setiap baris, kolom, dan sel -- lima belas kali agregat yang sama
+  -- untuk satu layar.
+  for v_cell in
+    select * from private.dinas_region_cells(institution_id_value, viewer_region_value)
+  loop
+    v_idx := (v_cell.urutan_rekam - 1) * 2 + v_cell.urutan_legal;
+    v_count[v_idx] := v_cell.jumlah;
+    v_anon[v_idx] := v_cell.anonim;
+    v_hide[v_idx] := v_cell.hide;
+    v_total := v_total + v_cell.jumlah;
+    v_affiliated := v_affiliated + (v_cell.jumlah - v_cell.anonim);
+  end loop;
+
+  -- Sumbu 1. Jumlah baris punya batasnya sendiri: yang dilindungi di sini
+  -- adalah anonim di dalam baris itu, bukan sel-selnya.
+  for i in 1..4 loop
+    v_group_count := v_count[(i - 1) * 2 + 1] + v_count[(i - 1) * 2 + 2];
+    v_group_anon := v_anon[(i - 1) * 2 + 1] + v_anon[(i - 1) * 2 + 2];
+    v_recording := v_recording || jsonb_build_array(jsonb_build_object(
+      'band', v_rekam_label[i],
+      'count', case when v_group_anon between 1 and v_min - 1 then null else v_group_count end,
+      'suppressed', v_group_anon between 1 and v_min - 1
+    ));
+  end loop;
+
+  -- Sumbu 2.
+  for j in 1..2 loop
+    v_group_count := 0;
+    v_group_anon := 0;
+    for i in 1..4 loop
+      v_idx := (i - 1) * 2 + j;
+      v_group_count := v_group_count + v_count[v_idx];
+      v_group_anon := v_group_anon + v_anon[v_idx];
+    end loop;
+    v_legality := v_legality || jsonb_build_array(jsonb_build_object(
+      'band', v_legal_label[j],
+      'count', case when v_group_anon between 1 and v_min - 1 then null else v_group_count end,
+      'suppressed', v_group_anon between 1 and v_min - 1
+    ));
+  end loop;
+
+  -- Silangannya: delapan sel, dan di sinilah sel minimum paling sering
+  -- berlaku -- justru karena menyilangkan dua sumbu memang menyempitkannya.
+  for i in 1..4 loop
+    for j in 1..2 loop
+      v_idx := (i - 1) * 2 + j;
+      v_matrix := v_matrix || jsonb_build_array(jsonb_build_object(
+        'recording', v_rekam_label[i],
+        'legality', v_legal_label[j],
+        'count', case when v_hide[v_idx] then null else v_count[v_idx] end,
+        'suppressed', v_hide[v_idx]
+      ));
+    end loop;
+  end loop;
+
+  -- Jumlah seluruh kota selalu dilaporkan: angka sebesar itu tidak menunjuk
+  -- siapa pun, dan tanpanya persentase tidak punya penyebut.
+  return jsonb_build_object(
+    'regionKnown', true,
+    'region', initcap(viewer_region_value),
+    'total', v_total,
+    'affiliated', v_affiliated,
+    'recording', v_recording,
+    'legality', v_legality,
+    'matrix', v_matrix,
+    'minCell', v_min,
+    -- Sel hanya bisa diklik bila drill-downnya memang terbuka. Angka yang
+    -- tampak bisa diklik lalu menolak lebih buruk daripada angka biasa.
+    'canDrillDown', can_identity_bool
+  );
+end;
+$$;
+
+
+--
+-- Name: FUNCTION dinas_region_summary(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.dinas_region_summary() IS 'Angka wilayah untuk dinas. Tanpa identitas, tanpa rupiah, dengan sel minimum 5 yang ditegakkan di dalam fungsi.';
+
+
+--
+-- Name: dismiss_dinas_offer(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.dismiss_dinas_offer() RETURNS timestamp with time zone
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_user_id uuid := (select auth.uid());
+  v_before timestamptz;
+  v_at timestamptz;
+  v_found boolean;
+begin
+  if v_user_id is null then
+    raise exception using errcode = '42501', message = 'UNAUTHENTICATED';
+  end if;
+
+  -- Keadaan sebelumnya dibaca lebih dulu, dan itu bukan kehati-hatian
+  -- berlebih: tanpanya jejak audit ditulis pada SETIAP panggilan, termasuk
+  -- panggilan kedua yang tidak mengubah apa pun. Jejaknya lalu berbunyi
+  -- pemilik menunda dua kali padahal ia menunda sekali -- dan jejak audit yang
+  -- menghitung salah lebih buruk daripada tidak ada jejak, karena ia dipakai
+  -- untuk menjawab "apa yang sebenarnya terjadi".
+  select true, profile.dinas_offer_dismissed_at into v_found, v_before
+  from public.profiles as profile where profile.auth_user_id = v_user_id;
+
+  if not coalesce(v_found, false) then
+    raise exception using errcode = '42501', message = 'PROFIL_TIDAK_DITEMUKAN';
+  end if;
+
+  update public.profiles
+  set dinas_offer_dismissed_at = coalesce(dinas_offer_dismissed_at, now()),
+      updated_at = now()
+  where auth_user_id = v_user_id
+  returning dinas_offer_dismissed_at into v_at;
+
+  if v_before is null then
+    insert into public.audit_events (actor_user_id, actor_type, action, target_type)
+    values (v_user_id, 'user', 'DINAS_OFFER_DISMISSED', 'profile');
+  end if;
+
+  return v_at;
 end;
 $$;
 
@@ -4266,6 +6185,26 @@ begin
   return jsonb_build_object('documentId', v_version.document_id, 'documentVersionId', v_version.id,
     'status', case when v_retry then 'queued' else 'manual_review_required' end, 'retry', v_retry);
 end;
+$$;
+
+
+--
+-- Name: feature_flag_enabled(text, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.feature_flag_enabled(p_flag_key text, p_business_id uuid DEFAULT NULL::uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select coalesce(
+    (
+      select override.enabled
+      from public.feature_flag_overrides as override
+      where override.flag_key = p_flag_key and override.business_id = p_business_id
+    ),
+    (select flag.enabled from public.feature_flags as flag where flag.flag_key = p_flag_key),
+    false
+  );
 $$;
 
 
@@ -4835,13 +6774,45 @@ begin
   -- Beli alat usaha langsung terdaftar supaya penyusutannya bisa dihitung.
   if v_tx.emkm_category_code = 8
     and not exists (select 1 from public.fixed_assets fa where fa.source_transaction_id = v_tx.id) then
+    -- Jenis alat dan umur ekonomisnya dari JAWABAN PEMILIK bila ada.
+    --
+    -- Sebelumnya keduanya ditebak: jenisnya dari teks keterangan
+    -- (`guess_asset_category`) dan umurnya dari nilai bawaan jenis itu. Untuk
+    -- alat yang dibeli di tengah jalan, umur ekonomis adalah satu-satunya
+    -- angka yang menentukan beban penyusutan tiap bulan -- menebaknya berarti
+    -- menebak beban, dan beban yang ditebak masuk ke Laba Rugi tanpa ada yang
+    -- tahu ia tebakan.
+    --
+    -- Tebakan tetap dipertahankan sebagai cadangan. Catatan yang masuk lewat
+    -- jalur lama, lewat suara, atau lewat foto nota belum tentu membawa
+    -- jawabannya -- dan alat tanpa umur ekonomis tidak bisa disusutkan sama
+    -- sekali, yang lebih buruk daripada disusutkan dengan perkiraan.
     insert into public.fixed_assets (
       business_id, name, category, acquired_on, cost_idr, useful_life_months,
       source_transaction_id, created_by
     ) values (
       v_tx.business_id, left(coalesce(nullif(trim(v_tx.item), ''), 'Alat usaha'), 120),
-      private.guess_asset_category(v_tx.item), v_entry_date, v_amount,
-      private.default_useful_life_months(private.guess_asset_category(v_tx.item)),
+      coalesce(
+        case
+          when v_tx.asset_category in ('peralatan', 'mesin', 'kendaraan', 'bangunan', 'lainnya')
+          then v_tx.asset_category
+        end,
+        private.guess_asset_category(v_tx.item)
+      ),
+      v_entry_date, v_amount,
+      coalesce(
+        case when v_tx.asset_useful_life_months between 1 and 600
+          then v_tx.asset_useful_life_months end,
+        private.default_useful_life_months(
+          coalesce(
+            case
+              when v_tx.asset_category in ('peralatan', 'mesin', 'kendaraan', 'bangunan', 'lainnya')
+              then v_tx.asset_category
+            end,
+            private.guess_asset_category(v_tx.item)
+          )
+        )
+      ),
       v_tx.id, v_tx.user_id
     );
   end if;
@@ -5106,29 +7077,34 @@ $$;
 -- Name: fn_trial_balance(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_trial_balance(p_business_id uuid, p_as_of date) RETURNS TABLE(account_code text, account_name text, account_type text, normal_balance text, total_debit bigint, total_credit bigint, balance bigint)
+CREATE FUNCTION public.fn_trial_balance(p_business_id uuid, p_as_of date) RETURNS TABLE(account_code text, account_name text, account_type text, normal_balance text, debit bigint, credit bigint)
     LANGUAGE sql STABLE
     SET search_path TO ''
     AS $$
   select
-    account.code,
-    account.name,
-    account.account_type,
-    account.normal_balance,
-    coalesce(sum(line.debit), 0)::bigint,
-    coalesce(sum(line.credit), 0)::bigint,
-    case when account.normal_balance = 'DEBIT'
-      then coalesce(sum(line.debit) - sum(line.credit), 0)
-      else coalesce(sum(line.credit) - sum(line.debit), 0)
-    end::bigint
-  from public.coa_accounts as account
-  join public.journal_lines as line on line.account_code = account.code
-  join public.journal_entries as entry on entry.id = line.entry_id
-  where line.business_id = p_business_id
-    and entry.entry_date <= p_as_of
-  group by account.code, account.name, account.account_type, account.normal_balance, account.sort_order
-  having coalesce(sum(line.debit), 0) <> 0 or coalesce(sum(line.credit), 0) <> 0
-  order by account.sort_order;
+    saldo.code,
+    saldo.name,
+    saldo.account_type,
+    saldo.normal_balance,
+    greatest(saldo.net, 0)::bigint,
+    greatest(-saldo.net, 0)::bigint
+  from (
+    select
+      account.code,
+      account.name,
+      account.account_type,
+      account.normal_balance,
+      account.sort_order,
+      coalesce(sum(line.debit) - sum(line.credit), 0) as net
+    from public.coa_accounts as account
+    join public.journal_lines as line on line.account_code = account.code
+    join public.journal_entries as entry on entry.id = line.entry_id
+    where line.business_id = p_business_id
+      and entry.entry_date <= p_as_of
+    group by account.code, account.name, account.account_type, account.normal_balance, account.sort_order
+  ) as saldo
+  where saldo.net <> 0
+  order by saldo.sort_order;
 $$;
 
 
@@ -5199,6 +7175,64 @@ $$;
 
 
 --
+-- Name: join_dinas_broadcast(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.join_dinas_broadcast(p_broadcast_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_business uuid := private.my_business_for_broadcast();
+  v_institution uuid;
+  v_institution_name text;
+begin
+  select broadcast.institution_id, institution.name
+  into v_institution, v_institution_name
+  from public.dinas_broadcasts as broadcast
+  join public.institutions as institution on institution.id = broadcast.institution_id
+  where broadcast.id = p_broadcast_id
+    and broadcast.status = 'approved';
+
+  if v_institution is null then
+    raise exception using errcode = '22023', message = 'BROADCAST_TIDAK_DITEMUKAN';
+  end if;
+
+  -- Hanya yang diundang. Tanpa ini, id broadcast yang tersebar menjadi jalan
+  -- menyerahkan nama sendiri kepada dinas yang tidak pernah mengundang.
+  if not exists (
+    select 1 from public.dinas_broadcast_recipients as recipient
+    where recipient.broadcast_id = p_broadcast_id and recipient.business_id = v_business
+  ) then
+    raise exception using errcode = '42501', message = 'TIDAK_DIUNDANG';
+  end if;
+
+  if exists (
+    select 1 from public.dinas_broadcast_participants as participant
+    where participant.broadcast_id = p_broadcast_id
+      and participant.business_id = v_business
+      and participant.left_at is null
+  ) then
+    return jsonb_build_object('joined', true, 'institutionName', v_institution_name, 'changed', false);
+  end if;
+
+  insert into public.dinas_broadcast_participants (broadcast_id, business_id)
+  values (p_broadcast_id, v_business);
+
+  insert into public.audit_events (
+    actor_user_id, actor_type, business_id, institution_id, action, target_type, target_id, metadata
+  ) values (
+    (select auth.uid()), 'user', v_business, v_institution, 'DINAS_BROADCAST_JOINED',
+    'dinas_broadcast', p_broadcast_id::text,
+    jsonb_build_object('institutionName', v_institution_name)
+  );
+
+  return jsonb_build_object('joined', true, 'institutionName', v_institution_name, 'changed', true);
+end;
+$$;
+
+
+--
 -- Name: join_program_by_code(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5226,31 +7260,129 @@ $$;
 
 
 --
--- Name: list_anonymous_business_candidates(uuid, uuid, text, text, text, text, boolean, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+-- Name: leave_dinas_broadcast(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.list_anonymous_business_candidates(p_program_id uuid DEFAULT NULL::uuid, p_institution_id uuid DEFAULT NULL::uuid, p_sector text DEFAULT NULL::text, p_region text DEFAULT NULL::text, p_min_level text DEFAULT NULL::text, p_age_band text DEFAULT NULL::text, p_legal_complete boolean DEFAULT NULL::boolean, p_sort text DEFAULT 'newest'::text, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0) RETURNS jsonb
+CREATE FUNCTION public.leave_dinas_broadcast(p_broadcast_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_business uuid := private.my_business_for_broadcast();
+  v_institution uuid;
+  v_changed integer;
+begin
+  select institution_id into v_institution
+  from public.dinas_broadcasts where id = p_broadcast_id;
+  if v_institution is null then
+    raise exception using errcode = '22023', message = 'BROADCAST_TIDAK_DITEMUKAN';
+  end if;
+
+  update public.dinas_broadcast_participants
+  set left_at = now()
+  where broadcast_id = p_broadcast_id
+    and business_id = v_business
+    and left_at is null;
+  get diagnostics v_changed = row_count;
+
+  if v_changed > 0 then
+    insert into public.audit_events (
+      actor_user_id, actor_type, business_id, institution_id, action, target_type, target_id
+    ) values (
+      (select auth.uid()), 'user', v_business, v_institution, 'DINAS_BROADCAST_LEFT',
+      'dinas_broadcast', p_broadcast_id::text
+    );
+  end if;
+
+  return jsonb_build_object('joined', false, 'changed', v_changed > 0);
+end;
+$$;
+
+
+--
+-- Name: list_anonymous_business_candidates(uuid, uuid, text, text, text, text, boolean, text, integer, integer, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.list_anonymous_business_candidates(p_program_id uuid DEFAULT NULL::uuid, p_institution_id uuid DEFAULT NULL::uuid, p_sector text DEFAULT NULL::text, p_region text DEFAULT NULL::text, p_min_level text DEFAULT NULL::text, p_age_band text DEFAULT NULL::text, p_legal_complete boolean DEFAULT NULL::boolean, p_sort text DEFAULT 'newest'::text, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0, p_search text DEFAULT NULL::text) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
 declare
   institution_id_value uuid;
+  region_wide_bool boolean := false;
+  can_identity_bool boolean := false;
+  entitlement_min_level text;
+  viewer_region_value text;
+  effective_min_level text;
   result_value jsonb;
   total_value integer;
+  clean_search text;
 begin
   institution_id_value := public.resolve_my_institution_id(p_institution_id);
+
+  select
+    coalesce(entitlement.region_wide_visibility, false),
+    coalesce(entitlement.can_see_affiliated_identity, false),
+    entitlement.min_readiness_level,
+    nullif(lower(btrim(coalesce(institution.location, ''))), '')
+  into region_wide_bool, can_identity_bool, entitlement_min_level, viewer_region_value
+  from public.institutions as institution
+  left join public.institution_entitlements as entitlement
+    on entitlement.institution_id = institution.id
+  where institution.id = institution_id_value;
+
+  if viewer_region_value is null then
+    region_wide_bool := false;
+  end if;
+  if not region_wide_bool then
+    can_identity_bool := false;
+  end if;
+
   if p_program_id is not null and not exists (
     select 1 from public.programs as program
     where program.id = p_program_id and program.institution_id = institution_id_value
-  ) then raise exception 'PROGRAM_ACCESS_DENIED'; end if;
-  if p_sort not in ('newest', 'region') then raise exception 'INVALID_SORT'; end if;
+  ) then
+    raise exception 'PROGRAM_ACCESS_DENIED';
+  end if;
+  if p_sort not in ('newest', 'region') then
+    raise exception 'INVALID_SORT';
+  end if;
   if p_min_level is not null and p_min_level not in ('Mulai', 'Tembaga', 'Perak', 'Emas') then
     raise exception 'INVALID_LEVEL';
   end if;
 
+  effective_min_level := case
+    when entitlement_min_level is null then p_min_level
+    when p_min_level is null then initcap(lower(entitlement_min_level))
+    else (
+      select label from (values
+        ('Mulai', 1), ('Tembaga', 2), ('Perak', 3), ('Emas', 4)
+      ) as ranked(label, rank)
+      where ranked.rank = greatest(
+        case p_min_level when 'Emas' then 4 when 'Perak' then 3 when 'Tembaga' then 2 else 1 end,
+        case entitlement_min_level when 'EMAS' then 4 when 'PERAK' then 3 when 'TEMBAGA' then 2 else 1 end
+      )
+    )
+  end;
+
+  clean_search := nullif(trim(p_search), '');
+
   with candidates as (
     select
-      optin.candidate_code as "candidateCode",
+      coalesce(
+        optin.candidate_code,
+        'UMKM-' || upper(substr(replace(business.id::text, '-', ''), 1, 8))
+      ) as anonymous_code,
+      affiliation.is_affiliated,
+      case
+        when can_identity_bool and affiliation.is_affiliated then business.name
+        else coalesce(
+          optin.candidate_code,
+          'UMKM-' || upper(substr(replace(business.id::text, '-', ''), 1, 8))
+        )
+      end as "candidateCode",
+      case when can_identity_bool and affiliation.is_affiliated then business.name end as "businessName",
+      case when can_identity_bool and affiliation.is_affiliated then profile.name end as "ownerName",
       coalesce(business.sector, 'Belum diisi') as sector,
       coalesce(business.location, 'Belum diisi') as "generalLocation",
       case readiness_state.level
@@ -5265,13 +7397,10 @@ begin
         when financial.latest_transaction_date >= current_date - 179 then '3-6 bulan'
         when financial.latest_transaction_date >= current_date - 364 then '6-12 bulan'
         else '> 12 bulan' end as "recordingAgeBand",
-      (coalesce(legal.ready_count, 0) >= 3) as "legalComplete",
+      -- Ambang bersama (`0082`): satu definisi untuk ringkasan dan daftar.
+      private.legal_is_complete(legal.ready_count) as "legalComplete",
       coalesce(legal.ready_count, 0) as "legalEvidenceCount",
-      case
-        when coalesce(activity.active_days, 0) >= 20 then 'Sangat rutin'
-        when coalesce(activity.active_days, 0) >= 8 then 'Rutin'
-        when coalesce(activity.active_days, 0) >= 1 then 'Mulai rutin'
-        else 'Belum ada catatan terbaru' end as "recordingActivity",
+      private.recording_band(activity.active_days_30) as "recordingActivity",
       coalesce(evidence.types, '[]'::jsonb) as "evidenceAvailability",
       existing_request.status as "requestStatus",
       existing_dossier.status as "dossierStatus",
@@ -5281,14 +7410,22 @@ begin
         when 'PERAK' then 3
         when 'TEMBAGA' then 2
         when 'MULAI' then 1
-        else -1 end as level_rank
+        else -1 end as level_rank,
+      (can_identity_bool and affiliation.is_affiliated) as "identityVisible",
+      business.name as raw_business_name,
+      coalesce(profile.name, '') as raw_owner_name
     from public.businesses as business
-    join public.discovery_optins as optin on optin.business_id = business.id and optin.opted_in = true
+    left join public.profiles as profile on profile.id = business.legacy_profile_id
+    left join public.discovery_optins as optin on optin.business_id = business.id
     left join public.business_readiness_state as readiness_state
       on readiness_state.business_id = business.id
     left join lateral (
-      select count(distinct transaction.transaction_date)::integer as active_days,
-        max(transaction.transaction_date) as latest_transaction_date
+      select private.dinas_affiliation_active(business.id, institution_id_value) as is_affiliated
+    ) as affiliation on true
+    left join lateral (
+      select count(distinct transaction.transaction_date) filter (
+        where transaction.transaction_date >= current_date - 29
+      )::integer as active_days_30
       from public.transactions as transaction
       where transaction.business_id = business.id and transaction.transaction_date >= current_date - 364
     ) as activity on true
@@ -5299,45 +7436,68 @@ begin
     left join lateral (
       select count(distinct document.doc_type)::integer as ready_count
       from public.documents as document
-      where document.business_id = business.id and document.doc_type in ('nib','npwp','ktp_owner','pirt','halal','distribution_permit')
-        and document.status not in ('rejected','archived','superseded')
+      where document.business_id = business.id
+        and document.doc_type in ('nib', 'npwp', 'ktp_owner', 'pirt', 'halal', 'distribution_permit')
+        and document.status not in ('rejected', 'archived', 'superseded')
     ) as legal on true
     left join lateral (
       select jsonb_agg(distinct document.doc_type) as types from public.documents as document
-      where document.business_id = business.id and document.status not in ('rejected','archived','superseded')
+      where document.business_id = business.id and document.status not in ('rejected', 'archived', 'superseded')
     ) as evidence on true
     left join lateral (
       select request.status from public.dossier_requests as request
-      where request.institution_id = institution_id_value and request.business_id = business.id and request.status = 'pending'
+      where request.institution_id = institution_id_value and request.business_id = business.id
+        and request.status = 'pending'
       order by request.created_at desc limit 1
     ) as existing_request on true
     left join lateral (
       select dossier.status from public.dossiers as dossier
       join public.consent_grants as grant_row on grant_row.id = dossier.grant_id
-      where dossier.institution_id = institution_id_value and dossier.business_id = business.id and dossier.status = 'ready'
+      where dossier.institution_id = institution_id_value and dossier.business_id = business.id
+        and dossier.status = 'ready'
         and dossier.expires_at > now() and grant_row.status = 'active' and grant_row.expires_at > now()
       order by dossier.generated_at desc limit 1
     ) as existing_dossier on true
     where business.status = 'active'
+      -- Akun demo dikecualikan di SINI, bukan hanya di ringkasan. Kalau hanya
+      -- salah satunya yang mengecualikannya, dinas mengklik angka "14" lalu
+      -- mendapat 15 baris -- penyebut yang berbeda untuk pertanyaan yang sama.
+      and not private.is_demo_business(business.id)
+      and (
+        (
+          region_wide_bool
+          and lower(btrim(coalesce(business.location, ''))) = viewer_region_value
+        )
+        or (not region_wide_bool and optin.opted_in = true)
+      )
   ),
   filtered as (
     select * from candidates
     where (p_sector is null or sector = p_sector)
       and (p_region is null or "generalLocation" = p_region)
-      and (p_min_level is null or level_rank >= case p_min_level
-        when 'Emas' then 4 when 'Perak' then 3 when 'Tembaga' then 2 when 'Mulai' then 1 end)
+      and (effective_min_level is null or level_rank >= case effective_min_level
+        when 'Emas' then 4 when 'Perak' then 3 when 'Tembaga' then 2 else 1 end)
       and (p_age_band is null or "recordingAgeBand" = p_age_band)
       and (p_legal_complete is null or "legalComplete" = p_legal_complete)
+      and (
+        clean_search is null
+        or (
+          ("identityVisible" and (
+            raw_business_name ilike ('%' || clean_search || '%')
+            or raw_owner_name ilike ('%' || clean_search || '%')
+          ))
+          or anonymous_code ilike ('%' || clean_search || '%')
+          or sector ilike ('%' || clean_search || '%')
+          or "generalLocation" ilike ('%' || clean_search || '%')
+        )
+      )
   ),
-  -- Halaman hasil dan jumlah totalnya dihitung dalam SATU pernyataan. CTE
-  -- hanya hidup selama pernyataan yang memilikinya, jadi `filtered` yang
-  -- dipakai oleh pernyataan berikutnya tidak pernah ada -- fungsinya gagal
-  -- pada panggilan pertama dengan "relasi filtered tidak ada".
   page as (
     select
-      "candidateCode", sector, "generalLocation", "readinessLevel", "recordingAgeBand",
-      "legalComplete", "legalEvidenceCount", "recordingActivity", "evidenceAvailability",
-      "requestStatus", "dossierStatus", joined_at
+      "candidateCode", "businessName", "ownerName", sector, "generalLocation",
+      "readinessLevel", "recordingAgeBand", "legalComplete", "legalEvidenceCount",
+      "recordingActivity", "evidenceAvailability", "requestStatus", "dossierStatus",
+      joined_at, "identityVisible"
     from filtered
     order by
       case when p_sort = 'region' then "generalLocation" end,
@@ -5354,7 +7514,233 @@ begin
     ), '[]'::jsonb),
     (select count(*) from filtered)
   into result_value, total_value;
-  return jsonb_build_object('candidates', result_value, 'total', total_value);
+
+  return jsonb_build_object(
+    'candidates', result_value,
+    'total', total_value,
+    'isDinas', can_identity_bool,
+    'isRegionWide', region_wide_bool,
+    'isRestricted', not region_wide_bool,
+    'isInvestor', not region_wide_bool
+  );
+end;
+$$;
+
+
+--
+-- Name: list_dinas_broadcast_participants(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.list_dinas_broadcast_participants(p_broadcast_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_context record;
+begin
+  select * into v_context from private.dinas_broadcast_context();
+
+  if not exists (
+    select 1 from public.dinas_broadcasts as broadcast
+    where broadcast.id = p_broadcast_id
+      and broadcast.institution_id = v_context.institution_id
+  ) then
+    raise exception using errcode = '42501', message = 'BROADCAST_BUKAN_MILIK_LEMBAGA_INI';
+  end if;
+
+  return coalesce((
+    select jsonb_agg(entry order by entry."businessName")
+    from (
+      select
+        business.name as "businessName",
+        nullif(coalesce(profile.name, ''), '') as "ownerName",
+        coalesce(business.sector, 'Belum diisi') as sector,
+        participant.joined_at as "joinedAt"
+      from public.dinas_broadcast_participants as participant
+      join public.businesses as business on business.id = participant.business_id
+      left join public.profiles as profile on profile.id = business.legacy_profile_id
+      where participant.broadcast_id = p_broadcast_id
+        and participant.left_at is null
+    ) as entry
+  ), '[]'::jsonb);
+end;
+$$;
+
+
+--
+-- Name: list_institution_broadcasts(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.list_institution_broadcasts() RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_context record;
+  v_quota integer;
+  v_used integer;
+begin
+  select * into v_context from private.dinas_broadcast_context();
+
+  select coalesce(entitlement.broadcast_quota_monthly, 4) into v_quota
+  from public.institution_entitlements as entitlement
+  where entitlement.institution_id = v_context.institution_id;
+  v_quota := coalesce(v_quota, 4);
+
+  select count(*)::integer into v_used
+  from public.dinas_broadcasts as broadcast
+  where broadcast.institution_id = v_context.institution_id
+    and broadcast.status in ('pending', 'approved')
+    and broadcast.created_at >= date_trunc('month', now());
+
+  return jsonb_build_object(
+    'region', initcap(v_context.region),
+    'quotaMonthly', v_quota,
+    'quotaLeft', greatest(v_quota - v_used, 0),
+    'minCell', private.min_cell_size(),
+    'broadcasts', coalesce((
+      select jsonb_agg(entry order by entry."createdAt" desc)
+      from (
+        select
+          broadcast.id as id,
+          broadcast.message as message,
+          broadcast.filter_recording_band as "recordingBand",
+          broadcast.filter_legal_complete as "legalComplete",
+          broadcast.event_date as "eventDate",
+          broadcast.event_place as "eventPlace",
+          broadcast.event_link as "eventLink",
+          broadcast.status as status,
+          broadcast.review_reason as "reviewReason",
+          broadcast.created_at as "createdAt",
+          broadcast.delivered_at as "deliveredAt",
+          -- Pintu ketiga: jumlah yang diundang hanya keluar bila selnya
+          -- terlihat. Keputusannya dari fungsi yang sama dengan ringkasan.
+          case when private.dinas_cohort_countable(
+                 broadcast.institution_id, broadcast.region,
+                 broadcast.filter_recording_band, broadcast.filter_legal_complete)
+               then broadcast.delivered_count else null end as "invited",
+          not private.dinas_cohort_countable(
+            broadcast.institution_id, broadcast.region,
+            broadcast.filter_recording_band, broadcast.filter_legal_complete) as "invitedSuppressed",
+          -- Peserta TIDAK disembunyikan: mereka menekan "Saya ikut", dan
+          -- pengungkapan atas izin tidak tunduk pada aturan yang melindungi
+          -- orang yang belum mengizinkan.
+          (
+            select count(*)::integer from public.dinas_broadcast_participants as participant
+            where participant.broadcast_id = broadcast.id and participant.left_at is null
+          ) as "joined"
+        from public.dinas_broadcasts as broadcast
+        where broadcast.institution_id = v_context.institution_id
+        order by broadcast.created_at desc
+        limit 100
+      ) as entry
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+
+--
+-- Name: list_my_dinas_broadcasts(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.list_my_dinas_broadcasts() RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_business uuid := private.my_business_for_broadcast();
+begin
+  return coalesce((
+    select jsonb_agg(entry order by entry."deliveredAt" desc)
+    from (
+      select
+        broadcast.id as id,
+        institution.name as "institutionName",
+        broadcast.message as message,
+        broadcast.event_date as "eventDate",
+        broadcast.event_place as "eventPlace",
+        broadcast.event_link as "eventLink",
+        broadcast.delivered_at as "deliveredAt",
+        (
+          select participant.joined_at from public.dinas_broadcast_participants as participant
+          where participant.broadcast_id = broadcast.id
+            and participant.business_id = v_business
+            and participant.left_at is null
+        ) as "joinedAt"
+      from public.dinas_broadcast_recipients as recipient
+      join public.dinas_broadcasts as broadcast on broadcast.id = recipient.broadcast_id
+      join public.institutions as institution on institution.id = broadcast.institution_id
+      where recipient.business_id = v_business
+        and broadcast.status = 'approved'
+      order by broadcast.delivered_at desc
+      limit 50
+    ) as entry
+  ), '[]'::jsonb);
+end;
+$$;
+
+
+--
+-- Name: list_my_dinas_options(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.list_my_dinas_options() RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_user_id uuid := (select auth.uid());
+  v_business_id uuid;
+  v_region text;
+  v_rows jsonb;
+  v_active jsonb;
+begin
+  if v_user_id is null then
+    raise exception using errcode = '42501', message = 'UNAUTHENTICATED';
+  end if;
+
+  select business.id, nullif(lower(btrim(coalesce(business.location, ''))), '')
+  into v_business_id, v_region
+  from public.businesses as business
+  where private.business_access(business.id)
+  order by business.created_at
+  limit 1;
+
+  if v_business_id is null then
+    raise exception using errcode = '42501', message = 'BUSINESS_ACCESS_DENIED';
+  end if;
+
+  select coalesce(jsonb_agg(row_to_json(option) order by option.name), '[]'::jsonb)
+  into v_rows
+  from (
+    select institution.id, institution.name, institution.location
+    from public.institutions as institution
+    join public.institution_entitlements as entitlement
+      on entitlement.institution_id = institution.id
+    where entitlement.region_wide_visibility
+      and institution.active
+      and institution.status = 'active'
+      and v_region is not null
+      and lower(btrim(coalesce(institution.location, ''))) = v_region
+  ) as option;
+
+  select to_jsonb(active_row) into v_active
+  from (
+    select
+      affiliation.institution_id as "institutionId",
+      institution.name as "institutionName",
+      affiliation.granted_at as "grantedAt"
+    from public.business_dinas_affiliations as affiliation
+    join public.institutions as institution on institution.id = affiliation.institution_id
+    where affiliation.business_id = v_business_id and affiliation.revoked_at is null
+  ) as active_row;
+
+  return jsonb_build_object(
+    'regionKnown', v_region is not null,
+    'options', v_rows,
+    'active', v_active
+  );
 end;
 $$;
 
@@ -5373,14 +7759,24 @@ CREATE FUNCTION public.list_my_institutions() RETURNS jsonb
       'institutionId', institution.id,
       'name', institution.name,
       'type', institution.type,
+      'portalKind', institution.portal_kind,
       'status', institution.status,
       'verificationStatus', institution.verification_status,
       'role', member.role,
       'memberStatus', member.status,
+      -- Hanya kewenangannya, TANPA ikut memeriksa apakah lokasinya sudah
+      -- diisi. Kalau lokasinya kosong, dinas itulah yang paling perlu masuk
+      -- ke layarnya -- di situ tertulis "wilayah belum diisi". Menyembunyikan
+      -- menunya membuat satu-satunya orang yang bisa melaporkan masalah itu
+      -- tidak pernah melihat masalahnya.
+      'regionWide', coalesce(entitlement.region_wide_visibility, false),
+      'canSeeIdentity', coalesce(entitlement.can_see_affiliated_identity, false),
       'createdAt', member.created_at
     ) as payload, member.created_at
     from public.institution_members as member
     join public.institutions as institution on institution.id = member.institution_id
+    left join public.institution_entitlements as entitlement
+      on entitlement.institution_id = institution.id
     where member.user_id = (select auth.uid())
       and member.status = 'active'
   ) as entry;
@@ -5414,6 +7810,117 @@ begin
   values (public.resolve_my_institution_id(p_institution_id), member_id_value, p_business_id, p_artifact, p_artifact_id, p_action);
   return jsonb_build_object('ok', true);
 end;
+$$;
+
+
+--
+-- Name: mark_umkm_onboarding_seen(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.mark_umkm_onboarding_seen() RETURNS timestamp with time zone
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_user_id uuid := (select auth.uid());
+  v_seen timestamptz;
+begin
+  if v_user_id is null then
+    raise exception using errcode = '42501', message = 'UNAUTHENTICATED';
+  end if;
+
+  update public.profiles
+  set onboarding_seen_at = coalesce(onboarding_seen_at, now()),
+      updated_at = now()
+  where auth_user_id = v_user_id
+  returning onboarding_seen_at into v_seen;
+
+  if v_seen is null then
+    raise exception using errcode = '42501', message = 'PROFIL_TIDAK_DITEMUKAN';
+  end if;
+
+  return v_seen;
+end;
+$$;
+
+
+--
+-- Name: my_dinas_offer(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.my_dinas_offer() RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_business uuid := private.my_owned_business_id();
+  v_user_id uuid := (select auth.uid());
+  v_options jsonb;
+  v_count integer;
+  v_dismissed timestamptz;
+  v_ever_affiliated boolean;
+  v_has_records boolean;
+begin
+  v_options := public.list_my_dinas_options();
+  v_count := jsonb_array_length(coalesce(v_options -> 'options', '[]'::jsonb));
+
+  select profile.dinas_offer_dismissed_at into v_dismissed
+  from public.profiles as profile where profile.auth_user_id = v_user_id;
+
+  -- "Pernah", bukan "sedang": pemilik yang sudah mencabut afiliasinya telah
+  -- menjawab dengan sengaja.
+  select exists (
+    select 1 from public.business_dinas_affiliations as affiliation
+    where affiliation.business_id = v_business
+  ) into v_ever_affiliated;
+
+  -- Akun kosong tidak ditawari. Izin atas nol catatan tidak memberi dinas apa
+  -- pun, dan nilainya baru muncul berminggu-minggu kemudian -- ketika
+  -- pemiliknya sudah lupa pernah menyetujuinya.
+  select exists (
+    select 1 from public.transactions as transaction
+    where transaction.business_id = v_business
+  ) into v_has_records;
+
+  return jsonb_build_object(
+    'shouldOffer',
+      (v_options ->> 'regionKnown')::boolean
+      and v_count > 0
+      and not v_ever_affiliated
+      and v_has_records
+      and v_dismissed is null,
+    'optionCount', v_count,
+    -- Namanya disebut hanya bila pilihannya tepat satu. Menyebut salah satu
+    -- dari beberapa membuat pemilik mengira itu satu-satunya.
+    'institutionName', case when v_count = 1 then v_options -> 'options' -> 0 ->> 'name' end,
+    'regionKnown', (v_options ->> 'regionKnown')::boolean
+  );
+end;
+$$;
+
+
+--
+-- Name: my_feature_flags(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.my_feature_flags() RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  with mine as (
+    select business.id
+    from public.businesses as business
+    where private.business_access(business.id)
+    limit 1
+  )
+  select coalesce(
+    jsonb_object_agg(flag.flag_key, coalesce(override.enabled, flag.enabled)),
+    '{}'::jsonb
+  )
+  from public.feature_flags as flag
+  left join mine on true
+  left join public.feature_flag_overrides as override
+    on override.flag_key = flag.flag_key and override.business_id = mine.id;
 $$;
 
 
@@ -6285,6 +8792,89 @@ $$;
 
 
 --
+-- Name: request_dinas_broadcast(text, text, boolean, date, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.request_dinas_broadcast(p_message text, p_recording_band text DEFAULT NULL::text, p_legal_complete boolean DEFAULT NULL::boolean, p_event_date date DEFAULT NULL::date, p_event_place text DEFAULT NULL::text, p_event_link text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_context record;
+  v_actor uuid := (select auth.uid());
+  v_profile uuid;
+  v_quota integer;
+  v_used integer;
+  v_count integer;
+  v_id uuid;
+begin
+  select * into v_context from private.dinas_broadcast_context();
+
+  if length(btrim(coalesce(p_message, ''))) < 20 then
+    raise exception using errcode = '22023', message = 'PESAN_TERLALU_PENDEK';
+  end if;
+  if length(btrim(p_message)) > 1000 then
+    raise exception using errcode = '22023', message = 'PESAN_TERLALU_PANJANG';
+  end if;
+  if p_recording_band is not null and p_recording_band not in
+    ('Rutin mencatat', 'Mulai rutin', 'Jarang mencatat', 'Belum mulai') then
+    raise exception 'BAND_TIDAK_DIKENAL';
+  end if;
+
+  select profile.id into v_profile
+  from public.profiles as profile
+  where profile.auth_user_id = v_actor
+  limit 1;
+  if v_profile is null then
+    raise exception using errcode = '42501', message = 'PROFIL_TIDAK_DITEMUKAN';
+  end if;
+
+  select coalesce(entitlement.broadcast_quota_monthly, 4) into v_quota
+  from public.institution_entitlements as entitlement
+  where entitlement.institution_id = v_context.institution_id;
+  v_quota := coalesce(v_quota, 4);
+
+  select count(*)::integer into v_used
+  from public.dinas_broadcasts as broadcast
+  where broadcast.institution_id = v_context.institution_id
+    and broadcast.status in ('pending', 'approved')
+    and broadcast.created_at >= date_trunc('month', now());
+
+  if v_used >= v_quota then
+    raise exception using errcode = '22023', message = 'KUOTA_BROADCAST_BULAN_INI_HABIS';
+  end if;
+
+  select count(*)::integer into v_count
+  from private.dinas_cohort(v_context.region, p_recording_band, p_legal_complete);
+
+  if v_count = 0 then
+    raise exception using errcode = '22023', message = 'TIDAK_ADA_PENERIMA';
+  end if;
+
+  insert into public.dinas_broadcasts (
+    institution_id, requested_by, region, filter_recording_band, filter_legal_complete,
+    message, event_date, event_place, event_link, audience_estimate
+  ) values (
+    v_context.institution_id, v_profile, v_context.region, p_recording_band, p_legal_complete,
+    btrim(p_message), p_event_date, nullif(btrim(coalesce(p_event_place, '')), ''),
+    nullif(btrim(coalesce(p_event_link, '')), ''), v_count
+  )
+  returning id into v_id;
+
+  insert into public.audit_events (
+    actor_user_id, actor_type, institution_id, action, target_type, target_id, metadata
+  ) values (
+    v_actor, 'user', v_context.institution_id, 'DINAS_BROADCAST_REQUESTED',
+    'dinas_broadcast', v_id::text,
+    jsonb_build_object('region', v_context.region, 'audienceEstimate', v_count)
+  );
+
+  return jsonb_build_object('broadcastId', v_id, 'status', 'pending', 'quotaLeft', v_quota - v_used - 1);
+end;
+$$;
+
+
+--
 -- Name: resolve_anonymous_candidate_code(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -6574,6 +9164,58 @@ begin
     revocation_reason = nullif(trim(p_reason), '') where id = grant_row.id;
   update public.dossiers set status = 'revoked' where grant_id = grant_row.id and status = 'ready';
   return jsonb_build_object('grantId', grant_row.id, 'status', 'revoked', 'idempotent', false);
+end;
+$$;
+
+
+--
+-- Name: revoke_my_dinas_affiliation(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.revoke_my_dinas_affiliation() RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_user_id uuid := (select auth.uid());
+  v_business_id uuid;
+  v_affiliation public.business_dinas_affiliations%rowtype;
+begin
+  if v_user_id is null then
+    raise exception using errcode = '42501', message = 'UNAUTHENTICATED';
+  end if;
+
+  select business.id into v_business_id
+  from public.businesses as business
+  where private.business_access(business.id)
+  order by business.created_at
+  limit 1;
+
+  if v_business_id is null then
+    raise exception using errcode = '42501', message = 'BUSINESS_ACCESS_DENIED';
+  end if;
+
+  select * into v_affiliation
+  from public.business_dinas_affiliations
+  where business_id = v_business_id and revoked_at is null;
+
+  if not found then
+    return jsonb_build_object('revoked', false);
+  end if;
+
+  update public.business_dinas_affiliations
+  set revoked_at = now(), revoked_by = v_user_id
+  where id = v_affiliation.id;
+
+  insert into public.audit_events
+    (actor_user_id, actor_type, business_id, institution_id, action, target_type, target_id, metadata)
+  values (
+    v_user_id, 'user', v_business_id, v_affiliation.institution_id,
+    'DINAS_AFFILIATION_REVOKED', 'dinas_affiliation', v_affiliation.id::text,
+    jsonb_build_object('grantedAt', v_affiliation.granted_at)
+  );
+
+  return jsonb_build_object('revoked', true, 'institutionId', v_affiliation.institution_id);
 end;
 $$;
 
@@ -6986,6 +9628,105 @@ $$;
 
 
 --
+-- Name: set_my_dinas_affiliation(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.set_my_dinas_affiliation(p_institution_id uuid, p_copy_version text DEFAULT 'v1'::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_user_id uuid := (select auth.uid());
+  v_business_id uuid;
+  v_business_region text;
+  v_institution_region text;
+  v_institution_name text;
+  v_region_wide boolean;
+  v_affiliation_id uuid;
+begin
+  if v_user_id is null then
+    raise exception using errcode = '42501', message = 'UNAUTHENTICATED';
+  end if;
+
+  select business.id, nullif(lower(btrim(coalesce(business.location, ''))), '')
+  into v_business_id, v_business_region
+  from public.businesses as business
+  where private.business_access(business.id)
+  order by business.created_at
+  limit 1;
+
+  if v_business_id is null then
+    raise exception using errcode = '42501', message = 'BUSINESS_ACCESS_DENIED';
+  end if;
+  if v_business_region is null then
+    raise exception using errcode = '22023', message = 'KOTA_USAHA_BELUM_DIISI';
+  end if;
+
+  select
+    institution.name,
+    nullif(lower(btrim(coalesce(institution.location, ''))), ''),
+    coalesce(entitlement.region_wide_visibility, false)
+  into v_institution_name, v_institution_region, v_region_wide
+  from public.institutions as institution
+  left join public.institution_entitlements as entitlement
+    on entitlement.institution_id = institution.id
+  where institution.id = p_institution_id
+    and institution.active
+    and institution.status = 'active';
+
+  if v_institution_name is null then
+    raise exception using errcode = '22023', message = 'DINAS_TIDAK_DITEMUKAN';
+  end if;
+
+  -- Hanya dinas yang bisa menjadi pembina. Bank tidak boleh menjadi "dinas
+  -- pembina" seseorang cuma karena pemiliknya salah menekan.
+  if not v_region_wide then
+    raise exception using errcode = '22023', message = 'BUKAN_DINAS_PEMBINA';
+  end if;
+
+  -- Tanpa ini, batas wilayah yang dipasang `0080` bocor lewat pintu yang kita
+  -- sendiri buka: pemilik di Surabaya berafiliasi ke Dinas Bandung.
+  if v_institution_region is distinct from v_business_region then
+    raise exception using errcode = '22023', message = 'WILAYAH_TIDAK_COCOK';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(v_business_id::text || ':dinas', 0));
+
+  update public.business_dinas_affiliations
+  set revoked_at = now(), revoked_by = v_user_id
+  where business_id = v_business_id and revoked_at is null
+    and institution_id <> p_institution_id;
+
+  -- Memilih dinas yang sama dua kali tidak melahirkan baris kedua.
+  select id into v_affiliation_id
+  from public.business_dinas_affiliations
+  where business_id = v_business_id and institution_id = p_institution_id and revoked_at is null;
+
+  if v_affiliation_id is null then
+    insert into public.business_dinas_affiliations
+      (business_id, institution_id, granted_by, copy_version)
+    values (v_business_id, p_institution_id, v_user_id, coalesce(nullif(btrim(p_copy_version), ''), 'v1'))
+    returning id into v_affiliation_id;
+
+    insert into public.audit_events
+      (actor_user_id, actor_type, business_id, institution_id, action, target_type, target_id, metadata)
+    values (
+      v_user_id, 'user', v_business_id, p_institution_id,
+      'DINAS_AFFILIATION_GRANTED', 'dinas_affiliation', v_affiliation_id::text,
+      jsonb_build_object('institutionName', v_institution_name, 'copyVersion', p_copy_version)
+    );
+  end if;
+
+  return jsonb_build_object(
+    'affiliationId', v_affiliation_id,
+    'institutionId', p_institution_id,
+    'institutionName', v_institution_name
+  );
+end;
+$$;
+
+
+--
 -- Name: set_my_discovery_optin(boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -7103,6 +9844,51 @@ CREATE FUNCTION public.set_updated_at() RETURNS trigger
 begin
   new.updated_at = now();
   return new;
+end;
+$$;
+
+
+--
+-- Name: start_support_session(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.start_support_session(p_business_id uuid, p_reason text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_role text;
+  v_session_id uuid;
+  v_expires timestamptz;
+begin
+  if not private.is_platform_admin() then
+    raise exception using errcode = '42501', message = 'BUKAN_ADMIN';
+  end if;
+
+  v_role := case when private.has_admin_role('SUPER_ADMIN') then 'SUPER_ADMIN'
+                 when private.has_admin_role('OPS') then 'OPS'
+                 when private.has_admin_role('PENDAMPING') then 'PENDAMPING'
+                 else null end;
+  if v_role is null then
+    raise exception using errcode = '42501', message = 'BUTUH_PERAN';
+  end if;
+  if not exists (select 1 from public.businesses where id = p_business_id) then
+    raise exception using errcode = '22023', message = 'USAHA_TIDAK_DITEMUKAN';
+  end if;
+
+  v_expires := now() + interval '30 minutes';
+
+  insert into public.support_sessions (admin_user_id, business_id, reason, expires_at)
+  values (v_actor, p_business_id, btrim(p_reason), v_expires)
+  returning id into v_session_id;
+
+  perform private.write_admin_log(
+    v_role, 'SUPPORT_SESSION_OPENED', p_reason, 'support_session', v_session_id::text, p_business_id,
+    jsonb_build_object('expiresAt', v_expires)
+  );
+
+  return jsonb_build_object('sessionId', v_session_id, 'expiresAt', v_expires);
 end;
 $$;
 
@@ -7483,6 +10269,56 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: admin_action_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.admin_action_logs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    actor_user_id uuid NOT NULL,
+    acting_role text NOT NULL,
+    action text NOT NULL,
+    target_type text,
+    target_id text,
+    business_id uuid,
+    reason text NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    occurred_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT admin_action_logs_reason_check CHECK ((length(btrim(reason)) >= 3)),
+    CONSTRAINT admin_action_logs_role_check CHECK ((acting_role = ANY (ARRAY['SUPER_ADMIN'::text, 'OPS'::text, 'PENDAMPING'::text])))
+);
+
+
+--
+-- Name: TABLE admin_action_logs; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.admin_action_logs IS 'Append-only. Alasan wajib minimal 3 huruf; ditulis dalam transaksi yang sama dengan tindakannya.';
+
+
+--
+-- Name: admin_roles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.admin_roles (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    role text NOT NULL,
+    granted_by uuid,
+    granted_at timestamp with time zone DEFAULT now() NOT NULL,
+    revoked_by uuid,
+    revoked_at timestamp with time zone,
+    CONSTRAINT admin_roles_role_check CHECK ((role = ANY (ARRAY['SUPER_ADMIN'::text, 'OPS'::text, 'PENDAMPING'::text])))
+);
+
+
+--
+-- Name: TABLE admin_roles; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.admin_roles IS 'Lapisan kemampuan di atas platform_admins. platform_admins menjawab "siapa admin", tabel ini menjawab "boleh apa".';
+
+
+--
 -- Name: ai_feedback; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -7596,6 +10432,30 @@ CREATE TABLE public.audit_logs (
 
 
 --
+-- Name: business_dinas_affiliations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.business_dinas_affiliations (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    business_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    granted_by uuid,
+    granted_at timestamp with time zone DEFAULT now() NOT NULL,
+    revoked_at timestamp with time zone,
+    revoked_by uuid,
+    copy_version text DEFAULT 'v1'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE business_dinas_affiliations; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.business_dinas_affiliations IS 'Izin pemilik usaha kepada satu dinas pembina. Bukan kolom di profil: ia bertanggal, bisa dicabut, dan riwayatnya tersimpan.';
+
+
+--
 -- Name: business_members; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -7663,8 +10523,18 @@ CREATE TABLE public.businesses (
     status text DEFAULT 'active'::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    status_reason text,
+    status_changed_by uuid,
+    status_changed_at timestamp with time zone,
     CONSTRAINT businesses_status_check CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text, 'suspended'::text, 'archived'::text])))
 );
+
+
+--
+-- Name: COLUMN businesses.status_reason; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.businesses.status_reason IS 'Kenapa statusnya begini. Wajib diisi saat pembekuan lewat admin_set_business_status.';
 
 
 --
@@ -7714,6 +10584,37 @@ CREATE TABLE public.coa_accounts (
     CONSTRAINT coa_accounts_normal_balance_check CHECK ((normal_balance = ANY (ARRAY['DEBIT'::text, 'KREDIT'::text]))),
     CONSTRAINT coa_accounts_type_check CHECK ((account_type = ANY (ARRAY['ASET'::text, 'LIABILITAS'::text, 'EKUITAS'::text, 'PENDAPATAN'::text, 'BEBAN'::text])))
 );
+
+
+--
+-- Name: config_versions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.config_versions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    domain text NOT NULL,
+    version integer NOT NULL,
+    status text DEFAULT 'draft'::text NOT NULL,
+    payload jsonb DEFAULT '{}'::jsonb NOT NULL,
+    change_note text,
+    gate_report jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_by uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    published_by uuid,
+    published_at timestamp with time zone,
+    emergency boolean DEFAULT false NOT NULL,
+    emergency_reason text,
+    CONSTRAINT config_versions_domain_check CHECK ((domain = ANY (ARRAY['CATEGORY_COA'::text, 'PARSER'::text, 'SYSTEM_TEXTS'::text, 'READINESS'::text]))),
+    CONSTRAINT config_versions_emergency_check CHECK (((NOT emergency) OR (length(btrim(COALESCE(emergency_reason, ''::text))) >= 3))),
+    CONSTRAINT config_versions_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'in_review'::text, 'published'::text, 'superseded'::text])))
+);
+
+
+--
+-- Name: TABLE config_versions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.config_versions IS 'Draft -> tinjau -> terbit. READINESS tidak menyimpan payload di sini: readiness_rule_sets sudah ber-versi, domain ini hanya membungkusnya (lihat 0005).';
 
 
 --
@@ -7795,6 +10696,26 @@ CREATE TABLE public.daily_closings (
 
 
 --
+-- Name: demo_accounts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.demo_accounts (
+    business_id uuid NOT NULL,
+    fixture_key text NOT NULL,
+    note text,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE demo_accounts; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.demo_accounts IS 'Satu-satunya jawaban atas "akun ini demo". Tidak ada kolom is_demo -- dua tempat berarti dua jawaban.';
+
+
+--
 -- Name: depreciation_postings; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -7808,6 +10729,72 @@ CREATE TABLE public.depreciation_postings (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT depreciation_postings_values_check CHECK (((amount_idr > 0) AND (period_month = (date_trunc('month'::text, (period_month)::timestamp with time zone))::date)))
 );
+
+
+--
+-- Name: dinas_broadcast_participants; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dinas_broadcast_participants (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    broadcast_id uuid NOT NULL,
+    business_id uuid NOT NULL,
+    joined_at timestamp with time zone DEFAULT now() NOT NULL,
+    left_at timestamp with time zone
+);
+
+
+--
+-- Name: TABLE dinas_broadcast_participants; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.dinas_broadcast_participants IS 'Menekan "Saya ikut" adalah izin: pada detik itu nama pemilik dan nama usahanya terbuka bagi dinas pengundang.';
+
+
+--
+-- Name: dinas_broadcast_recipients; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dinas_broadcast_recipients (
+    broadcast_id uuid NOT NULL,
+    business_id uuid NOT NULL
+);
+
+
+--
+-- Name: dinas_broadcasts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dinas_broadcasts (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    requested_by uuid NOT NULL,
+    region text NOT NULL,
+    filter_recording_band text,
+    filter_legal_complete boolean,
+    message text NOT NULL,
+    event_date date,
+    event_place text,
+    event_link text,
+    audience_estimate integer DEFAULT 0 NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    reviewed_by uuid,
+    reviewed_at timestamp with time zone,
+    review_reason text,
+    delivered_at timestamp with time zone,
+    delivered_count integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT dinas_broadcasts_filter_recording_band_check CHECK (((filter_recording_band IS NULL) OR (filter_recording_band = ANY (ARRAY['Rutin mencatat'::text, 'Mulai rutin'::text, 'Jarang mencatat'::text, 'Belum mulai'::text])))),
+    CONSTRAINT dinas_broadcasts_message_check CHECK (((length(btrim(message)) >= 20) AND (length(btrim(message)) <= 1000))),
+    CONSTRAINT dinas_broadcasts_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))
+);
+
+
+--
+-- Name: TABLE dinas_broadcasts; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.dinas_broadcasts IS 'Tawaran pendampingan dari dinas. Pesannya ditulis dinas sendiri; kohortnya dipilih dari keadaan, bukan dari nama.';
 
 
 --
@@ -8148,6 +11135,32 @@ CREATE TABLE public.dossiers (
 
 
 --
+-- Name: feature_flag_overrides; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.feature_flag_overrides (
+    flag_key text NOT NULL,
+    business_id uuid NOT NULL,
+    enabled boolean NOT NULL,
+    set_by uuid,
+    set_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: feature_flags; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.feature_flags (
+    flag_key text NOT NULL,
+    description text NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    updated_by uuid,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: fixed_assets; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -8168,9 +11181,24 @@ CREATE TABLE public.fixed_assets (
     opening_balance_id uuid,
     original_cost_idr bigint,
     original_useful_life_months integer,
+    opening_accumulated_depreciation_idr bigint DEFAULT 0 NOT NULL,
     CONSTRAINT fixed_assets_category_check CHECK ((category = ANY (ARRAY['peralatan'::text, 'mesin'::text, 'kendaraan'::text, 'bangunan'::text, 'lainnya'::text]))),
     CONSTRAINT fixed_assets_values_check CHECK ((((char_length(TRIM(BOTH FROM name)) >= 1) AND (char_length(TRIM(BOTH FROM name)) <= 120)) AND (cost_idr > 0) AND ((useful_life_months >= 1) AND (useful_life_months <= 600)) AND (salvage_value_idr >= 0) AND (salvage_value_idr < cost_idr) AND ((acquired_on >= '1990-01-01'::date) AND (acquired_on <= '2100-01-01'::date)) AND ((disposed_on IS NULL) OR (disposed_on >= acquired_on))))
 );
+
+
+--
+-- Name: COLUMN fixed_assets.salvage_value_idr; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fixed_assets.salvage_value_idr IS 'Selalu 0. SAK EMKM 11.14 menyusutkan tanpa memperhitungkan nilai residu; kolomnya dipertahankan untuk SAK ETAP, dan dijaga nol oleh pemicu fixed_assets_drop_salvage.';
+
+
+--
+-- Name: COLUMN fixed_assets.opening_accumulated_depreciation_idr; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fixed_assets.opening_accumulated_depreciation_idr IS 'Penyusutan yang sudah terjadi sebelum pembukuan dimulai. Diperlakukan sebagai sudah diposting oleh post_monthly_depreciation, supaya bulan yang sama tidak disusutkan dua kali.';
 
 
 --
@@ -8213,8 +11241,41 @@ CREATE TABLE public.institution_entitlements (
     plan_note text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    region_wide_visibility boolean DEFAULT false NOT NULL,
+    can_see_affiliated_identity boolean DEFAULT false NOT NULL,
+    min_readiness_level text,
+    broadcast_quota_monthly integer DEFAULT 4 NOT NULL,
+    CONSTRAINT institution_entitlements_min_level_check CHECK (((min_readiness_level IS NULL) OR (min_readiness_level = ANY (ARRAY['MULAI'::text, 'TEMBAGA'::text, 'PERAK'::text, 'EMAS'::text])))),
     CONSTRAINT institution_entitlements_values_check CHECK (((seats >= 0) AND (dossier_credits >= 0) AND (credits_used >= 0) AND (credits_used <= dossier_credits)))
 );
+
+
+--
+-- Name: COLUMN institution_entitlements.region_wide_visibility; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.institution_entitlements.region_wide_visibility IS 'Melihat seluruh UMKM di wilayahnya, bukan hanya yang mendaftar sukarela. Untuk dinas.';
+
+
+--
+-- Name: COLUMN institution_entitlements.can_see_affiliated_identity; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.institution_entitlements.can_see_affiliated_identity IS 'Boleh melihat identitas, dan hanya milik UMKM yang berafiliasi dengannya.';
+
+
+--
+-- Name: COLUMN institution_entitlements.min_readiness_level; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.institution_entitlements.min_readiness_level IS 'Batas bawah kolam kandidat. null berarti semua tingkat.';
+
+
+--
+-- Name: COLUMN institution_entitlements.broadcast_quota_monthly; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.institution_entitlements.broadcast_quota_monthly IS 'Berapa broadcast per bulan kalender yang boleh diajukan lembaga ini. Dihitung atas permintaan yang menunggu dan yang disetujui.';
 
 
 --
@@ -8292,10 +11353,19 @@ CREATE TABLE public.institutions (
     verification_note text,
     verified_by uuid,
     verified_at timestamp with time zone,
+    portal_kind text DEFAULT 'institution'::text NOT NULL,
+    CONSTRAINT institutions_portal_kind_check CHECK ((portal_kind = ANY (ARRAY['institution'::text, 'investor'::text]))),
     CONSTRAINT institutions_programs_count_check CHECK ((programs_count >= 0)),
     CONSTRAINT institutions_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'active'::text, 'inactive'::text, 'suspended'::text, 'archived'::text]))),
     CONSTRAINT institutions_verification_status_check CHECK ((verification_status = ANY (ARRAY['pending'::text, 'verified'::text, 'rejected'::text])))
 );
+
+
+--
+-- Name: COLUMN institutions.portal_kind; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.institutions.portal_kind IS 'Portal yang dibuka anggota lembaga ini: institution atau investor. Disetel saat pendaftaran dari signup_account_type yang sudah divalidasi, atau oleh admin. TIDAK pernah diturunkan dari potongan kata pada kolom type.';
 
 
 --
@@ -8426,15 +11496,31 @@ CREATE TABLE public.profiles (
     deletion_requested_at timestamp with time zone,
     deletion_scheduled_for date,
     deletion_reason text,
+    onboarding_seen_at timestamp with time zone,
+    dinas_offer_dismissed_at timestamp with time zone,
     CONSTRAINT profiles_bentuk_usaha_check CHECK ((bentuk_usaha = ANY (ARRAY['perorangan'::text, 'badan_usaha'::text]))),
     CONSTRAINT profiles_jumlah_karyawan_check CHECK (((jumlah_karyawan IS NULL) OR (jumlah_karyawan = ANY (ARRAY['sendiri'::text, '1-4'::text, '5-19'::text])))),
     CONSTRAINT profiles_kanal_penjualan_check CHECK ((kanal_penjualan <@ ARRAY['warung'::text, 'whatsapp'::text, 'marketplace'::text, 'media_sosial'::text])),
     CONSTRAINT profiles_konsistensi_days_check CHECK ((konsistensi_days >= 0)),
     CONSTRAINT profiles_readiness_score_check CHECK (((readiness_score >= (0)::numeric) AND (readiness_score <= (100)::numeric))),
-    CONSTRAINT profiles_role_check CHECK (((role IS NULL) OR (role = ANY (ARRAY['umkm'::text, 'institution'::text, 'admin'::text])))),
+    CONSTRAINT profiles_role_check CHECK (((role IS NULL) OR (role = ANY (ARRAY['umkm'::text, 'institution'::text, 'admin'::text, 'investor'::text])))),
     CONSTRAINT profiles_status_check CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text, 'pending'::text, 'suspended'::text]))),
     CONSTRAINT profiles_tahun_mulai_check CHECK (((tahun_mulai_usaha IS NULL) OR ((tahun_mulai_usaha >= 1900) AND (tahun_mulai_usaha <= 2100))))
 );
+
+
+--
+-- Name: COLUMN profiles.onboarding_seen_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.profiles.onboarding_seen_at IS 'Kapan pemilik menyelesaikan atau melewati perkenalan singkat. Null berarti ia baru mendaftar dan belum pernah diantar ke Profil.';
+
+
+--
+-- Name: COLUMN profiles.dinas_offer_dismissed_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.profiles.dinas_offer_dismissed_at IS 'Kapan pemilik menunda tawaran dinas pembina. Null berarti belum pernah ditawari atau belum menjawab.';
 
 
 --
@@ -8522,7 +11608,11 @@ CREATE TABLE public.transactions (
     interest_amount_idr bigint DEFAULT 0 NOT NULL,
     needs_reclass boolean DEFAULT false NOT NULL,
     journal_entry_id uuid,
+    asset_category text,
+    asset_useful_life_months integer,
     CONSTRAINT transactions_amount_idr_check CHECK (((amount_idr IS NOT NULL) AND (amount_idr >= 0))),
+    CONSTRAINT transactions_asset_category_check CHECK (((asset_category IS NULL) OR (asset_category = ANY (ARRAY['peralatan'::text, 'mesin'::text, 'kendaraan'::text, 'bangunan'::text, 'lainnya'::text])))),
+    CONSTRAINT transactions_asset_life_check CHECK (((asset_useful_life_months IS NULL) OR ((asset_useful_life_months >= 1) AND (asset_useful_life_months <= 600)))),
     CONSTRAINT transactions_capture_details_check CHECK ((((quantity IS NULL) OR (quantity > (0)::numeric)) AND ((unit_price_idr IS NULL) OR (unit_price_idr > 0)) AND ((category_code IS NULL) OR (category_code = ANY (ARRAY['sales'::text, 'materials'::text, 'operations'::text, 'payroll'::text, 'other'::text, 'sales_direct'::text, 'sales_delivery'::text, 'sales_catering'::text, 'raw_material'::text, 'packaging'::text, 'utilities'::text, 'wage'::text, 'rent'::text, 'platform_fee'::text, 'transport'::text, 'equipment'::text, 'promotion'::text, 'sales_food'::text, 'sales_beverage'::text, 'sales_retail'::text, 'sales_service'::text, 'sales_other'::text, 'raw_ingredients'::text, 'inventory'::text, 'marketing'::text, 'maintenance'::text, 'supplies'::text, 'wages'::text, 'salary'::text, 'bonus'::text, 'tax'::text, 'loan_repayment'::text, 'capital_in'::text, 'loan_in'::text, 'receivable_paid'::text, 'owner_draw'::text, 'asset_purchase'::text, 'receivable_new'::text]))) AND ((payment_method IS NULL) OR (payment_method = ANY (ARRAY['cash'::text, 'qris'::text, 'bank_transfer'::text, 'ewallet'::text, 'edc'::text, 'credit'::text, 'unpaid'::text, 'other'::text]))))),
     CONSTRAINT transactions_category_group_check CHECK ((category_group = ANY (ARRAY['sales'::text, 'cost_of_goods'::text, 'operating_expense'::text, 'asset'::text, 'other'::text]))),
     CONSTRAINT transactions_date_check CHECK (((transaction_date IS NOT NULL) AND (tanggal IS NOT NULL))),
@@ -8533,6 +11623,13 @@ CREATE TABLE public.transactions (
     CONSTRAINT transactions_nominal_check CHECK (((nominal IS NOT NULL) AND (nominal >= 0))),
     CONSTRAINT transactions_type_check CHECK ((type = ANY (ARRAY['masuk'::text, 'keluar'::text])))
 );
+
+
+--
+-- Name: COLUMN transactions.asset_useful_life_months; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.transactions.asset_useful_life_months IS 'Umur ekonomis alat yang dibeli lewat catatan kategori 8, dalam bulan, dijawab pemilik. Null berarti belum dijawab dan nilai bawaan jenisnya yang dipakai.';
 
 
 --
@@ -8579,6 +11676,29 @@ CREATE TABLE public.loans (
     opening_balance_id uuid,
     CONSTRAINT loans_values_check CHECK ((((char_length(TRIM(BOTH FROM lender_name)) >= 1) AND (char_length(TRIM(BOTH FROM lender_name)) <= 120)) AND (principal_idr > 0) AND (outstanding_idr >= 0) AND ((monthly_installment_idr IS NULL) OR (monthly_installment_idr > 0)) AND ((annual_rate IS NULL) OR ((annual_rate >= (0)::numeric) AND (annual_rate <= (200)::numeric))) AND (lender_type = ANY (ARRAY['BANK'::text, 'KOPERASI'::text, 'KELUARGA'::text, 'SUPPLIER'::text, 'LAIN'::text]))))
 );
+
+
+--
+-- Name: metric_definitions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.metric_definitions (
+    metric_key text NOT NULL,
+    title text NOT NULL,
+    formula_text text NOT NULL,
+    source_note text NOT NULL,
+    unit text DEFAULT 'count'::text NOT NULL,
+    measurable boolean DEFAULT true NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT metric_definitions_unit_check CHECK ((unit = ANY (ARRAY['count'::text, 'percent'::text, 'idr'::text, 'ms'::text, 'ratio'::text])))
+);
+
+
+--
+-- Name: TABLE metric_definitions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.metric_definitions IS 'Setiap KPI di dasbor wajib punya barisnya. Menu tiga-titik menampilkan formula_text apa adanya.';
 
 
 --
@@ -8692,6 +11812,44 @@ CREATE TABLE public.opening_balances (
 --
 
 COMMENT ON COLUMN public.opening_balances.inventory_details IS 'Rincian stok awal per kategori: [{"kind":...,"items":[{"name":...,"amountIdr":n}],"otherAmountIdr":n,"amountIdr":n}]. amountIdr per kategori = jumlah items + otherAmountIdr; jumlah seluruhnya = inventory_idr.';
+
+
+--
+-- Name: ops_daily_rollups; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ops_daily_rollups (
+    metric_date date NOT NULL,
+    metric_key text NOT NULL,
+    dims jsonb DEFAULT '{}'::jsonb NOT NULL,
+    value numeric NOT NULL,
+    computed_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE ops_daily_rollups; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.ops_daily_rollups IS 'Agregat lintas akun. Tidak pernah memuat rupiah per akun UMKM; agregat lintas platform (mis. biaya AI) boleh.';
+
+
+--
+-- Name: password_reset_tokens; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.password_reset_tokens (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    email text NOT NULL,
+    token_hash text NOT NULL,
+    reset_session_token text,
+    attempts integer DEFAULT 0 NOT NULL,
+    max_attempts integer DEFAULT 5 NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    used_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
 
 
 --
@@ -8897,6 +12055,46 @@ CREATE TABLE public.rules_config (
 
 
 --
+-- Name: saved_views; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.saved_views (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    owner_admin_id uuid NOT NULL,
+    name text NOT NULL,
+    entity text DEFAULT 'umkm'::text NOT NULL,
+    filters jsonb DEFAULT '{}'::jsonb NOT NULL,
+    columns jsonb DEFAULT '[]'::jsonb NOT NULL,
+    shared boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT saved_views_entity_check CHECK ((entity = ANY (ARRAY['umkm'::text, 'institution'::text, 'capture'::text])))
+);
+
+
+--
+-- Name: support_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.support_sessions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    admin_user_id uuid NOT NULL,
+    business_id uuid NOT NULL,
+    reason text NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    CONSTRAINT support_sessions_reason_check CHECK ((length(btrim(reason)) >= 3)),
+    CONSTRAINT support_sessions_window_check CHECK ((expires_at > started_at))
+);
+
+
+--
+-- Name: TABLE support_sessions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.support_sessions IS 'Tiket baca 30 menit. Tidak bisa diubah: memperpanjang harus berarti membuka tiket baru yang tercatat.';
+
+
+--
 -- Name: tax_estimates; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -8945,12 +12143,29 @@ CREATE TABLE public.transaction_captures (
     confirmed_at timestamp with time zone,
     cancelled_at timestamp with time zone,
     capture_path text,
+    amount_overrides integer DEFAULT 0 NOT NULL,
+    amount_drops integer DEFAULT 0 NOT NULL,
+    ocr_summary jsonb,
     CONSTRAINT transaction_captures_file_size_check CHECK (((file_size IS NULL) OR (file_size >= 0))),
-    CONSTRAINT transaction_captures_input_method_check CHECK ((input_method = ANY (ARRAY['voice'::text, 'manual'::text, 'import'::text]))),
-    CONSTRAINT transaction_captures_path_check CHECK (((capture_path IS NULL) OR (capture_path = ANY (ARRAY['TEXT_ONLY'::text, 'WHISPER'::text])))),
+    CONSTRAINT transaction_captures_input_method_check CHECK ((input_method = ANY (ARRAY['voice'::text, 'manual'::text, 'import'::text, 'camera'::text]))),
+    CONSTRAINT transaction_captures_path_check CHECK (((capture_path IS NULL) OR (capture_path = ANY (ARRAY['TEXT_ONLY'::text, 'WHISPER'::text, 'OCR'::text])))),
     CONSTRAINT transaction_captures_source_text_check CHECK (((source_text IS NULL) OR ((char_length(source_text) >= 1) AND (char_length(source_text) <= 2000)))),
     CONSTRAINT transaction_captures_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'queued'::text, 'processing'::text, 'needs_review'::text, 'confirmed'::text, 'failed'::text, 'cancelled'::text])))
 );
+
+
+--
+-- Name: COLUMN transaction_captures.amount_overrides; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.transaction_captures.amount_overrides IS 'Berapa nominal keluaran model yang ditimpa parser deterministik. Sumber lampu llm_amount_violation.';
+
+
+--
+-- Name: COLUMN transaction_captures.ocr_summary; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.transaction_captures.ocr_summary IS 'Potongan baris nota dan kandidat nominalnya. Isi catatan pemilik: tidak pernah keluar lewat rute admin.';
 
 
 --
@@ -9017,6 +12232,22 @@ CREATE VIEW public.wp03_consistency_report WITH (security_invoker='true') AS
 
 
 --
+-- Name: admin_action_logs admin_action_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.admin_action_logs
+    ADD CONSTRAINT admin_action_logs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: admin_roles admin_roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.admin_roles
+    ADD CONSTRAINT admin_roles_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: ai_feedback ai_feedback_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9062,6 +12293,14 @@ ALTER TABLE ONLY public.audit_events
 
 ALTER TABLE ONLY public.audit_logs
     ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: business_dinas_affiliations business_dinas_affiliations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.business_dinas_affiliations
+    ADD CONSTRAINT business_dinas_affiliations_pkey PRIMARY KEY (id);
 
 
 --
@@ -9121,6 +12360,22 @@ ALTER TABLE ONLY public.coa_accounts
 
 
 --
+-- Name: config_versions config_versions_domain_version_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.config_versions
+    ADD CONSTRAINT config_versions_domain_version_key UNIQUE (domain, version);
+
+
+--
+-- Name: config_versions config_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.config_versions
+    ADD CONSTRAINT config_versions_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: consent_grants consent_grants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9153,6 +12408,14 @@ ALTER TABLE ONLY public.daily_closings
 
 
 --
+-- Name: demo_accounts demo_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.demo_accounts
+    ADD CONSTRAINT demo_accounts_pkey PRIMARY KEY (business_id);
+
+
+--
 -- Name: depreciation_postings depreciation_postings_asset_id_period_month_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9166,6 +12429,30 @@ ALTER TABLE ONLY public.depreciation_postings
 
 ALTER TABLE ONLY public.depreciation_postings
     ADD CONSTRAINT depreciation_postings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: dinas_broadcast_participants dinas_broadcast_participants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dinas_broadcast_participants
+    ADD CONSTRAINT dinas_broadcast_participants_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: dinas_broadcast_recipients dinas_broadcast_recipients_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dinas_broadcast_recipients
+    ADD CONSTRAINT dinas_broadcast_recipients_pkey PRIMARY KEY (broadcast_id, business_id);
+
+
+--
+-- Name: dinas_broadcasts dinas_broadcasts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dinas_broadcasts
+    ADD CONSTRAINT dinas_broadcasts_pkey PRIMARY KEY (id);
 
 
 --
@@ -9353,6 +12640,22 @@ ALTER TABLE ONLY public.dossiers
 
 
 --
+-- Name: feature_flag_overrides feature_flag_overrides_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.feature_flag_overrides
+    ADD CONSTRAINT feature_flag_overrides_pkey PRIMARY KEY (flag_key, business_id);
+
+
+--
+-- Name: feature_flags feature_flags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.feature_flags
+    ADD CONSTRAINT feature_flags_pkey PRIMARY KEY (flag_key);
+
+
+--
 -- Name: fixed_assets fixed_assets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9465,6 +12768,14 @@ ALTER TABLE ONLY public.loans
 
 
 --
+-- Name: metric_definitions metric_definitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.metric_definitions
+    ADD CONSTRAINT metric_definitions_pkey PRIMARY KEY (metric_key);
+
+
+--
 -- Name: migration_verification_results migration_verification_results_migration_key_check_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9526,6 +12837,22 @@ ALTER TABLE ONLY public.opening_balances
 
 ALTER TABLE ONLY public.opening_balances
     ADD CONSTRAINT opening_balances_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ops_daily_rollups ops_daily_rollups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ops_daily_rollups
+    ADD CONSTRAINT ops_daily_rollups_pkey PRIMARY KEY (metric_date, metric_key, dims);
+
+
+--
+-- Name: password_reset_tokens password_reset_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.password_reset_tokens
+    ADD CONSTRAINT password_reset_tokens_pkey PRIMARY KEY (id);
 
 
 --
@@ -9673,6 +13000,30 @@ ALTER TABLE ONLY public.rules_config
 
 
 --
+-- Name: saved_views saved_views_owner_admin_id_entity_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.saved_views
+    ADD CONSTRAINT saved_views_owner_admin_id_entity_name_key UNIQUE (owner_admin_id, entity, name);
+
+
+--
+-- Name: saved_views saved_views_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.saved_views
+    ADD CONSTRAINT saved_views_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: support_sessions support_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.support_sessions
+    ADD CONSTRAINT support_sessions_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: tax_estimates tax_estimates_month_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9710,6 +13061,34 @@ ALTER TABLE ONLY public.transaction_changes
 
 ALTER TABLE ONLY public.transactions
     ADD CONSTRAINT transactions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: admin_action_logs_actor_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX admin_action_logs_actor_idx ON public.admin_action_logs USING btree (actor_user_id, occurred_at DESC);
+
+
+--
+-- Name: admin_action_logs_business_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX admin_action_logs_business_idx ON public.admin_action_logs USING btree (business_id, occurred_at DESC) WHERE (business_id IS NOT NULL);
+
+
+--
+-- Name: admin_roles_active_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX admin_roles_active_idx ON public.admin_roles USING btree (user_id, role) WHERE (revoked_at IS NULL);
+
+
+--
+-- Name: admin_roles_lookup_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX admin_roles_lookup_idx ON public.admin_roles USING btree (user_id) WHERE (revoked_at IS NULL);
 
 
 --
@@ -9769,6 +13148,20 @@ CREATE UNIQUE INDEX audit_logs_legacy_numeric_id_unique_idx ON public.audit_logs
 
 
 --
+-- Name: business_dinas_affiliations_active_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX business_dinas_affiliations_active_idx ON public.business_dinas_affiliations USING btree (business_id) WHERE (revoked_at IS NULL);
+
+
+--
+-- Name: business_dinas_affiliations_institution_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX business_dinas_affiliations_institution_idx ON public.business_dinas_affiliations USING btree (institution_id) WHERE (revoked_at IS NULL);
+
+
+--
 -- Name: business_members_one_per_business_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9825,6 +13218,13 @@ CREATE UNIQUE INDEX category_templates_lookup_key ON public.category_templates U
 
 
 --
+-- Name: config_versions_published_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX config_versions_published_idx ON public.config_versions USING btree (domain) WHERE (status = 'published'::text);
+
+
+--
 -- Name: consent_grants_active_request_unique_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9850,6 +13250,34 @@ CREATE UNIQUE INDEX consent_grants_one_active_relationship_idx ON public.consent
 --
 
 CREATE UNIQUE INDEX counterparties_business_name_key ON public.counterparties USING btree (business_id, lower(TRIM(BOTH FROM name)));
+
+
+--
+-- Name: dinas_broadcast_participants_one_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX dinas_broadcast_participants_one_active ON public.dinas_broadcast_participants USING btree (broadcast_id, business_id) WHERE (left_at IS NULL);
+
+
+--
+-- Name: dinas_broadcast_recipients_business_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX dinas_broadcast_recipients_business_idx ON public.dinas_broadcast_recipients USING btree (business_id);
+
+
+--
+-- Name: dinas_broadcasts_institution_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX dinas_broadcasts_institution_idx ON public.dinas_broadcasts USING btree (institution_id, created_at DESC);
+
+
+--
+-- Name: dinas_broadcasts_pending_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX dinas_broadcasts_pending_idx ON public.dinas_broadcasts USING btree (created_at) WHERE (status = 'pending'::text);
 
 
 --
@@ -9997,6 +13425,20 @@ CREATE INDEX fixed_assets_business_idx ON public.fixed_assets USING btree (busin
 --
 
 CREATE INDEX fixed_assets_opening_idx ON public.fixed_assets USING btree (business_id, opening_balance_id);
+
+
+--
+-- Name: idx_password_reset_tokens_email_expires; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_password_reset_tokens_email_expires ON public.password_reset_tokens USING btree (email, expires_at);
+
+
+--
+-- Name: idx_password_reset_tokens_session; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_password_reset_tokens_session ON public.password_reset_tokens USING btree (reset_session_token) WHERE (reset_session_token IS NOT NULL);
 
 
 --
@@ -10189,10 +13631,31 @@ CREATE UNIQUE INDEX rules_config_legacy_numeric_id_unique_idx ON public.rules_co
 
 
 --
+-- Name: support_sessions_admin_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX support_sessions_admin_idx ON public.support_sessions USING btree (admin_user_id, started_at DESC);
+
+
+--
+-- Name: support_sessions_business_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX support_sessions_business_idx ON public.support_sessions USING btree (business_id, started_at DESC);
+
+
+--
 -- Name: tax_estimates_business_month_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX tax_estimates_business_month_idx ON public.tax_estimates USING btree (business_id, period_month DESC);
+
+
+--
+-- Name: transaction_captures_amount_overrides_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX transaction_captures_amount_overrides_idx ON public.transaction_captures USING btree (created_at) WHERE (amount_overrides > 0);
 
 
 --
@@ -10287,6 +13750,13 @@ CREATE UNIQUE INDEX transactions_user_idempotency_unique_idx ON public.transacti
 
 
 --
+-- Name: admin_action_logs admin_action_logs_append_only; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER admin_action_logs_append_only BEFORE DELETE OR UPDATE ON public.admin_action_logs FOR EACH ROW EXECUTE FUNCTION private.reject_mutation();
+
+
+--
 -- Name: businesses businesses_sync_owner_membership; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -10340,6 +13810,13 @@ CREATE TRIGGER dossier_download_notification AFTER INSERT ON public.dossier_acce
 --
 
 CREATE TRIGGER dossier_request_change_notification AFTER INSERT OR UPDATE OF status ON public.dossier_requests FOR EACH ROW EXECUTE FUNCTION public.notify_dossier_request_change();
+
+
+--
+-- Name: fixed_assets fixed_assets_drop_salvage; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER fixed_assets_drop_salvage BEFORE INSERT OR UPDATE ON public.fixed_assets FOR EACH ROW EXECUTE FUNCTION private.fixed_assets_drop_salvage();
 
 
 --
@@ -10609,6 +14086,13 @@ CREATE TRIGGER set_transactions_updated_at BEFORE UPDATE ON public.transactions 
 
 
 --
+-- Name: support_sessions support_sessions_append_only; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER support_sessions_append_only BEFORE DELETE OR UPDATE ON public.support_sessions FOR EACH ROW EXECUTE FUNCTION private.reject_mutation();
+
+
+--
 -- Name: transactions sync_transaction_compatibility_columns; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -10620,6 +14104,46 @@ CREATE TRIGGER sync_transaction_compatibility_columns BEFORE INSERT OR UPDATE ON
 --
 
 CREATE TRIGGER validate_active_consent_grant BEFORE INSERT OR UPDATE ON public.consent_grants FOR EACH ROW EXECUTE FUNCTION public.validate_active_consent_grant();
+
+
+--
+-- Name: admin_action_logs admin_action_logs_actor_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.admin_action_logs
+    ADD CONSTRAINT admin_action_logs_actor_user_id_fkey FOREIGN KEY (actor_user_id) REFERENCES auth.users(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: admin_action_logs admin_action_logs_business_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.admin_action_logs
+    ADD CONSTRAINT admin_action_logs_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id) ON DELETE SET NULL;
+
+
+--
+-- Name: admin_roles admin_roles_granted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.admin_roles
+    ADD CONSTRAINT admin_roles_granted_by_fkey FOREIGN KEY (granted_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: admin_roles admin_roles_revoked_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.admin_roles
+    ADD CONSTRAINT admin_roles_revoked_by_fkey FOREIGN KEY (revoked_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: admin_roles admin_roles_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.admin_roles
+    ADD CONSTRAINT admin_roles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 
 --
@@ -10719,6 +14243,38 @@ ALTER TABLE ONLY public.audit_logs
 
 
 --
+-- Name: business_dinas_affiliations business_dinas_affiliations_business_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.business_dinas_affiliations
+    ADD CONSTRAINT business_dinas_affiliations_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id) ON DELETE CASCADE;
+
+
+--
+-- Name: business_dinas_affiliations business_dinas_affiliations_granted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.business_dinas_affiliations
+    ADD CONSTRAINT business_dinas_affiliations_granted_by_fkey FOREIGN KEY (granted_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: business_dinas_affiliations business_dinas_affiliations_institution_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.business_dinas_affiliations
+    ADD CONSTRAINT business_dinas_affiliations_institution_id_fkey FOREIGN KEY (institution_id) REFERENCES public.institutions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: business_dinas_affiliations business_dinas_affiliations_revoked_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.business_dinas_affiliations
+    ADD CONSTRAINT business_dinas_affiliations_revoked_by_fkey FOREIGN KEY (revoked_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+
+--
 -- Name: business_members business_members_business_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10772,6 +14328,30 @@ ALTER TABLE ONLY public.business_readiness_state
 
 ALTER TABLE ONLY public.businesses
     ADD CONSTRAINT businesses_legacy_profile_id_fkey FOREIGN KEY (legacy_profile_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+
+--
+-- Name: businesses businesses_status_changed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.businesses
+    ADD CONSTRAINT businesses_status_changed_by_fkey FOREIGN KEY (status_changed_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: config_versions config_versions_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.config_versions
+    ADD CONSTRAINT config_versions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: config_versions config_versions_published_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.config_versions
+    ADD CONSTRAINT config_versions_published_by_fkey FOREIGN KEY (published_by) REFERENCES auth.users(id) ON DELETE SET NULL;
 
 
 --
@@ -10839,6 +14419,22 @@ ALTER TABLE ONLY public.daily_closings
 
 
 --
+-- Name: demo_accounts demo_accounts_business_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.demo_accounts
+    ADD CONSTRAINT demo_accounts_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id) ON DELETE CASCADE;
+
+
+--
+-- Name: demo_accounts demo_accounts_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.demo_accounts
+    ADD CONSTRAINT demo_accounts_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+
+--
 -- Name: depreciation_postings depreciation_postings_asset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10860,6 +14456,62 @@ ALTER TABLE ONLY public.depreciation_postings
 
 ALTER TABLE ONLY public.depreciation_postings
     ADD CONSTRAINT depreciation_postings_journal_entry_id_fkey FOREIGN KEY (journal_entry_id) REFERENCES public.journal_entries(id) ON DELETE SET NULL;
+
+
+--
+-- Name: dinas_broadcast_participants dinas_broadcast_participants_broadcast_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dinas_broadcast_participants
+    ADD CONSTRAINT dinas_broadcast_participants_broadcast_id_fkey FOREIGN KEY (broadcast_id) REFERENCES public.dinas_broadcasts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: dinas_broadcast_participants dinas_broadcast_participants_business_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dinas_broadcast_participants
+    ADD CONSTRAINT dinas_broadcast_participants_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id) ON DELETE CASCADE;
+
+
+--
+-- Name: dinas_broadcast_recipients dinas_broadcast_recipients_broadcast_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dinas_broadcast_recipients
+    ADD CONSTRAINT dinas_broadcast_recipients_broadcast_id_fkey FOREIGN KEY (broadcast_id) REFERENCES public.dinas_broadcasts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: dinas_broadcast_recipients dinas_broadcast_recipients_business_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dinas_broadcast_recipients
+    ADD CONSTRAINT dinas_broadcast_recipients_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id) ON DELETE CASCADE;
+
+
+--
+-- Name: dinas_broadcasts dinas_broadcasts_institution_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dinas_broadcasts
+    ADD CONSTRAINT dinas_broadcasts_institution_id_fkey FOREIGN KEY (institution_id) REFERENCES public.institutions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: dinas_broadcasts dinas_broadcasts_requested_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dinas_broadcasts
+    ADD CONSTRAINT dinas_broadcasts_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.profiles(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: dinas_broadcasts dinas_broadcasts_reviewed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dinas_broadcasts
+    ADD CONSTRAINT dinas_broadcasts_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.profiles(id) ON DELETE SET NULL;
 
 
 --
@@ -11116,6 +14768,38 @@ ALTER TABLE ONLY public.dossiers
 
 ALTER TABLE ONLY public.dossiers
     ADD CONSTRAINT dossiers_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.dossier_requests(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: feature_flag_overrides feature_flag_overrides_business_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.feature_flag_overrides
+    ADD CONSTRAINT feature_flag_overrides_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id) ON DELETE CASCADE;
+
+
+--
+-- Name: feature_flag_overrides feature_flag_overrides_flag_key_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.feature_flag_overrides
+    ADD CONSTRAINT feature_flag_overrides_flag_key_fkey FOREIGN KEY (flag_key) REFERENCES public.feature_flags(flag_key) ON DELETE CASCADE;
+
+
+--
+-- Name: feature_flag_overrides feature_flag_overrides_set_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.feature_flag_overrides
+    ADD CONSTRAINT feature_flag_overrides_set_by_fkey FOREIGN KEY (set_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: feature_flags feature_flags_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.feature_flags
+    ADD CONSTRAINT feature_flags_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES auth.users(id) ON DELETE SET NULL;
 
 
 --
@@ -11423,6 +15107,14 @@ ALTER TABLE ONLY public.opening_balances
 
 
 --
+-- Name: password_reset_tokens password_reset_tokens_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.password_reset_tokens
+    ADD CONSTRAINT password_reset_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
 -- Name: platform_admins platform_admins_profile_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11623,6 +15315,30 @@ ALTER TABLE ONLY public.rules_config
 
 
 --
+-- Name: saved_views saved_views_owner_admin_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.saved_views
+    ADD CONSTRAINT saved_views_owner_admin_id_fkey FOREIGN KEY (owner_admin_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: support_sessions support_sessions_admin_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.support_sessions
+    ADD CONSTRAINT support_sessions_admin_user_id_fkey FOREIGN KEY (admin_user_id) REFERENCES auth.users(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: support_sessions support_sessions_business_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.support_sessions
+    ADD CONSTRAINT support_sessions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id) ON DELETE CASCADE;
+
+
+--
 -- Name: tax_estimates tax_estimates_business_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11743,6 +15459,32 @@ ALTER TABLE ONLY public.transactions
 
 
 --
+-- Name: admin_action_logs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.admin_action_logs ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: admin_action_logs admin_action_logs_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY admin_action_logs_select ON public.admin_action_logs FOR SELECT TO authenticated USING (private.is_platform_admin());
+
+
+--
+-- Name: admin_roles; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.admin_roles ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: admin_roles admin_roles_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY admin_roles_select ON public.admin_roles FOR SELECT TO authenticated USING (private.is_platform_admin());
+
+
+--
 -- Name: ai_feedback; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -11812,6 +15554,19 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY audit_logs_select ON public.audit_logs FOR SELECT TO authenticated USING (( SELECT private.is_platform_admin() AS is_platform_admin));
+
+
+--
+-- Name: business_dinas_affiliations; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.business_dinas_affiliations ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: business_dinas_affiliations business_dinas_affiliations_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY business_dinas_affiliations_select ON public.business_dinas_affiliations FOR SELECT TO authenticated USING ((private.business_access(business_id) OR (private.institution_role(institution_id) IS NOT NULL) OR ( SELECT private.is_platform_admin() AS is_platform_admin)));
 
 
 --
@@ -11907,6 +15662,19 @@ CREATE POLICY coa_accounts_select ON public.coa_accounts FOR SELECT TO authentic
 
 
 --
+-- Name: config_versions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.config_versions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: config_versions config_versions_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY config_versions_select ON public.config_versions FOR SELECT TO authenticated USING (private.is_platform_admin());
+
+
+--
 -- Name: consent_grants; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -11967,6 +15735,19 @@ CREATE POLICY daily_closings_update ON public.daily_closings FOR UPDATE TO authe
 
 
 --
+-- Name: demo_accounts; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.demo_accounts ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: demo_accounts demo_accounts_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY demo_accounts_select ON public.demo_accounts FOR SELECT TO authenticated USING (private.is_platform_admin());
+
+
+--
 -- Name: depreciation_postings; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -11977,6 +15758,49 @@ ALTER TABLE public.depreciation_postings ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY depreciation_postings_select ON public.depreciation_postings FOR SELECT TO authenticated USING (private.accounting_business_access(business_id));
+
+
+--
+-- Name: dinas_broadcast_participants; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.dinas_broadcast_participants ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: dinas_broadcast_participants dinas_broadcast_participants_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY dinas_broadcast_participants_select ON public.dinas_broadcast_participants FOR SELECT TO authenticated USING ((private.business_access(business_id) OR ( SELECT private.is_platform_admin() AS is_platform_admin) OR (EXISTS ( SELECT 1
+   FROM public.dinas_broadcasts broadcast
+  WHERE ((broadcast.id = dinas_broadcast_participants.broadcast_id) AND (private.institution_role(broadcast.institution_id) IS NOT NULL))))));
+
+
+--
+-- Name: dinas_broadcast_recipients; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.dinas_broadcast_recipients ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: dinas_broadcast_recipients dinas_broadcast_recipients_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY dinas_broadcast_recipients_select ON public.dinas_broadcast_recipients FOR SELECT TO authenticated USING ((private.business_access(business_id) OR ( SELECT private.is_platform_admin() AS is_platform_admin)));
+
+
+--
+-- Name: dinas_broadcasts; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.dinas_broadcasts ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: dinas_broadcasts dinas_broadcasts_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY dinas_broadcasts_select ON public.dinas_broadcasts FOR SELECT TO authenticated USING (((private.institution_role(institution_id) IS NOT NULL) OR ( SELECT private.is_platform_admin() AS is_platform_admin) OR (EXISTS ( SELECT 1
+   FROM public.dinas_broadcast_recipients recipient
+  WHERE ((recipient.broadcast_id = dinas_broadcasts.id) AND private.business_access(recipient.business_id))))));
 
 
 --
@@ -12205,6 +16029,32 @@ CREATE POLICY dossiers_select ON public.dossiers FOR SELECT TO authenticated USI
 
 
 --
+-- Name: feature_flag_overrides; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.feature_flag_overrides ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: feature_flag_overrides feature_flag_overrides_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY feature_flag_overrides_select ON public.feature_flag_overrides FOR SELECT TO authenticated USING ((private.is_platform_admin() OR private.business_access(business_id)));
+
+
+--
+-- Name: feature_flags; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.feature_flags ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: feature_flags feature_flags_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY feature_flags_select ON public.feature_flags FOR SELECT TO authenticated USING (true);
+
+
+--
 -- Name: fixed_assets; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -12235,13 +16085,6 @@ CREATE POLICY indicator_monthly_select ON public.indicator_monthly FOR SELECT TO
 --
 
 ALTER TABLE public.institution_entitlements ENABLE ROW LEVEL SECURITY;
-
---
--- Name: institution_entitlements institution_entitlements_admin_update; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY institution_entitlements_admin_update ON public.institution_entitlements FOR UPDATE TO authenticated USING (((private.institution_role(institution_id) = 'admin'::text) OR ( SELECT private.is_platform_admin() AS is_platform_admin))) WITH CHECK (((private.institution_role(institution_id) = 'admin'::text) OR ( SELECT private.is_platform_admin() AS is_platform_admin)));
-
 
 --
 -- Name: institution_entitlements institution_entitlements_select; Type: POLICY; Schema: public; Owner: -
@@ -12397,6 +16240,19 @@ CREATE POLICY loans_select ON public.loans FOR SELECT TO authenticated USING (pr
 
 
 --
+-- Name: metric_definitions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.metric_definitions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: metric_definitions metric_definitions_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY metric_definitions_select ON public.metric_definitions FOR SELECT TO authenticated USING (private.is_platform_admin());
+
+
+--
 -- Name: migration_verification_results migration_results_select; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -12467,6 +16323,25 @@ ALTER TABLE public.opening_balances ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY opening_balances_select ON public.opening_balances FOR SELECT TO authenticated USING (private.accounting_business_access(business_id));
 
+
+--
+-- Name: ops_daily_rollups; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ops_daily_rollups ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: ops_daily_rollups ops_daily_rollups_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY ops_daily_rollups_select ON public.ops_daily_rollups FOR SELECT TO authenticated USING (private.is_platform_admin());
+
+
+--
+-- Name: password_reset_tokens; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.password_reset_tokens ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: platform_admins; Type: ROW SECURITY; Schema: public; Owner: -
@@ -12678,6 +16553,32 @@ ALTER TABLE public.rules_config ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY rules_config_select ON public.rules_config FOR SELECT TO authenticated USING (( SELECT private.is_platform_admin() AS is_platform_admin));
+
+
+--
+-- Name: saved_views; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.saved_views ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: saved_views saved_views_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY saved_views_select ON public.saved_views FOR SELECT TO authenticated USING ((private.is_platform_admin() AND (shared OR (owner_admin_id = ( SELECT auth.uid() AS uid)))));
+
+
+--
+-- Name: support_sessions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.support_sessions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: support_sessions support_sessions_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY support_sessions_select ON public.support_sessions FOR SELECT TO authenticated USING ((private.is_platform_admin() OR private.business_access(business_id)));
 
 
 --
@@ -13054,6 +16955,118 @@ GRANT ALL ON FUNCTION public.access_verified_business_profile(p_dossier_id uuid,
 
 
 --
+-- Name: FUNCTION admin_ai_quality(p_days integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_ai_quality(p_days integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_ai_quality(p_days integer) TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_cost_row(p_days integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_cost_row(p_days integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_cost_row(p_days integer) TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_demo_accounts(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_demo_accounts() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_demo_accounts() TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_grant_role(p_user_id uuid, p_role text, p_reason text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_grant_role(p_user_id uuid, p_role text, p_reason text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_grant_role(p_user_id uuid, p_role text, p_reason text) TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_health_row(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_health_row() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_health_row() TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_institution_authority(p_institution_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_institution_authority(p_institution_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_institution_authority(p_institution_id uuid) TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_pending_broadcasts(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_pending_broadcasts() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_pending_broadcasts() TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_review_dinas_broadcast(p_broadcast_id uuid, p_approve boolean, p_reason text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_review_dinas_broadcast(p_broadcast_id uuid, p_approve boolean, p_reason text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_review_dinas_broadcast(p_broadcast_id uuid, p_approve boolean, p_reason text) TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_revoke_role(p_user_id uuid, p_role text, p_reason text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_revoke_role(p_user_id uuid, p_role text, p_reason text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_revoke_role(p_user_id uuid, p_role text, p_reason text) TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_set_business_status(p_business_id uuid, p_status text, p_reason text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_set_business_status(p_business_id uuid, p_status text, p_reason text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_set_business_status(p_business_id uuid, p_status text, p_reason text) TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_set_demo_account(p_business_id uuid, p_is_demo boolean, p_fixture_key text, p_reason text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_set_demo_account(p_business_id uuid, p_is_demo boolean, p_fixture_key text, p_reason text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_set_demo_account(p_business_id uuid, p_is_demo boolean, p_fixture_key text, p_reason text) TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_set_feature_flag(p_flag_key text, p_enabled boolean, p_reason text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_set_feature_flag(p_flag_key text, p_enabled boolean, p_reason text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_set_feature_flag(p_flag_key text, p_enabled boolean, p_reason text) TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_set_feature_flag_for_business(p_flag_key text, p_business_id uuid, p_enabled boolean, p_reason text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_set_feature_flag_for_business(p_flag_key text, p_business_id uuid, p_enabled boolean, p_reason text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_set_feature_flag_for_business(p_flag_key text, p_business_id uuid, p_enabled boolean, p_reason text) TO authenticated;
+
+
+--
+-- Name: FUNCTION admin_set_institution_authority(p_institution_id uuid, p_region_wide boolean, p_can_see_identity boolean, p_min_level text, p_reason text, p_broadcast_quota integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_set_institution_authority(p_institution_id uuid, p_region_wide boolean, p_can_see_identity boolean, p_min_level text, p_reason text, p_broadcast_quota integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_set_institution_authority(p_institution_id uuid, p_region_wide boolean, p_can_see_identity boolean, p_min_level text, p_reason text, p_broadcast_quota integer) TO authenticated;
+
+
+--
 -- Name: FUNCTION archive_document(p_document_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -13126,11 +17139,11 @@ GRANT ALL ON FUNCTION public.close_ledger_day(p_closing_date date, p_opening_cas
 
 
 --
--- Name: FUNCTION complete_capture_ai_job(p_job_id uuid, p_attempt_number integer, p_transcription text, p_draft_payload jsonb, p_latency_ms integer, p_prompt_tokens integer, p_completion_tokens integer); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION complete_capture_ai_job(p_job_id uuid, p_attempt_number integer, p_transcription text, p_draft_payload jsonb, p_latency_ms integer, p_prompt_tokens integer, p_completion_tokens integer, p_guard jsonb); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.complete_capture_ai_job(p_job_id uuid, p_attempt_number integer, p_transcription text, p_draft_payload jsonb, p_latency_ms integer, p_prompt_tokens integer, p_completion_tokens integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.complete_capture_ai_job(p_job_id uuid, p_attempt_number integer, p_transcription text, p_draft_payload jsonb, p_latency_ms integer, p_prompt_tokens integer, p_completion_tokens integer) TO service_role;
+REVOKE ALL ON FUNCTION public.complete_capture_ai_job(p_job_id uuid, p_attempt_number integer, p_transcription text, p_draft_payload jsonb, p_latency_ms integer, p_prompt_tokens integer, p_completion_tokens integer, p_guard jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.complete_capture_ai_job(p_job_id uuid, p_attempt_number integer, p_transcription text, p_draft_payload jsonb, p_latency_ms integer, p_prompt_tokens integer, p_completion_tokens integer, p_guard jsonb) TO service_role;
 
 
 --
@@ -13166,6 +17179,13 @@ GRANT ALL ON FUNCTION public.confirm_transaction_capture(p_capture_id uuid, p_co
 
 
 --
+-- Name: FUNCTION consume_institution_dossier_credit(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.consume_institution_dossier_credit() FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION correct_opening_balances(p_reason text, p_start_date date, p_cash_idr bigint, p_bank_idr bigint, p_receivables jsonb, p_payables jsonb, p_inventory_idr bigint, p_assets jsonb, p_notes text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -13189,11 +17209,11 @@ GRANT ALL ON FUNCTION public.create_dossier_request(p_business_id uuid, p_progra
 
 
 --
--- Name: FUNCTION create_ledger_transaction(p_idempotency_key text, p_transaction_type text, p_amount_idr bigint, p_transaction_date date, p_category_group text, p_category_code text, p_description text, p_quantity numeric, p_unit text, p_unit_price_idr bigint, p_payment_method text, p_sales_channel text, p_counterparty text, p_emkm_category_code smallint, p_emkm_category_subtype text, p_counterparty_id uuid, p_interest_amount_idr bigint); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION create_ledger_transaction(p_idempotency_key text, p_transaction_type text, p_amount_idr bigint, p_transaction_date date, p_category_group text, p_category_code text, p_description text, p_quantity numeric, p_unit text, p_unit_price_idr bigint, p_payment_method text, p_sales_channel text, p_counterparty text, p_emkm_category_code smallint, p_emkm_category_subtype text, p_counterparty_id uuid, p_interest_amount_idr bigint, p_asset_category text, p_asset_useful_life_months integer); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.create_ledger_transaction(p_idempotency_key text, p_transaction_type text, p_amount_idr bigint, p_transaction_date date, p_category_group text, p_category_code text, p_description text, p_quantity numeric, p_unit text, p_unit_price_idr bigint, p_payment_method text, p_sales_channel text, p_counterparty text, p_emkm_category_code smallint, p_emkm_category_subtype text, p_counterparty_id uuid, p_interest_amount_idr bigint) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.create_ledger_transaction(p_idempotency_key text, p_transaction_type text, p_amount_idr bigint, p_transaction_date date, p_category_group text, p_category_code text, p_description text, p_quantity numeric, p_unit text, p_unit_price_idr bigint, p_payment_method text, p_sales_channel text, p_counterparty text, p_emkm_category_code smallint, p_emkm_category_subtype text, p_counterparty_id uuid, p_interest_amount_idr bigint) TO authenticated;
+REVOKE ALL ON FUNCTION public.create_ledger_transaction(p_idempotency_key text, p_transaction_type text, p_amount_idr bigint, p_transaction_date date, p_category_group text, p_category_code text, p_description text, p_quantity numeric, p_unit text, p_unit_price_idr bigint, p_payment_method text, p_sales_channel text, p_counterparty text, p_emkm_category_code smallint, p_emkm_category_subtype text, p_counterparty_id uuid, p_interest_amount_idr bigint, p_asset_category text, p_asset_useful_life_months integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.create_ledger_transaction(p_idempotency_key text, p_transaction_type text, p_amount_idr bigint, p_transaction_date date, p_category_group text, p_category_code text, p_description text, p_quantity numeric, p_unit text, p_unit_price_idr bigint, p_payment_method text, p_sales_channel text, p_counterparty text, p_emkm_category_code smallint, p_emkm_category_subtype text, p_counterparty_id uuid, p_interest_amount_idr bigint, p_asset_category text, p_asset_useful_life_months integer) TO authenticated;
 
 
 --
@@ -13210,6 +17230,38 @@ GRANT ALL ON FUNCTION public.create_transaction_capture(p_idempotency_key text, 
 
 REVOKE ALL ON FUNCTION public.detach_document(p_attachment_id uuid, p_reason text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.detach_document(p_attachment_id uuid, p_reason text) TO authenticated;
+
+
+--
+-- Name: FUNCTION dinas_broadcast_audience(p_recording_band text, p_legal_complete boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.dinas_broadcast_audience(p_recording_band text, p_legal_complete boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.dinas_broadcast_audience(p_recording_band text, p_legal_complete boolean) TO authenticated;
+
+
+--
+-- Name: FUNCTION dinas_region_drilldown(p_recording_band text, p_legal_complete boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.dinas_region_drilldown(p_recording_band text, p_legal_complete boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.dinas_region_drilldown(p_recording_band text, p_legal_complete boolean) TO authenticated;
+
+
+--
+-- Name: FUNCTION dinas_region_summary(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.dinas_region_summary() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.dinas_region_summary() TO authenticated;
+
+
+--
+-- Name: FUNCTION dismiss_dinas_offer(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.dismiss_dinas_offer() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.dismiss_dinas_offer() TO authenticated;
 
 
 --
@@ -13270,11 +17322,21 @@ GRANT ALL ON FUNCTION public.fail_document_extraction_job(p_job_id uuid, p_attem
 
 
 --
+-- Name: FUNCTION feature_flag_enabled(p_flag_key text, p_business_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.feature_flag_enabled(p_flag_key text, p_business_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.feature_flag_enabled(p_flag_key text, p_business_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.feature_flag_enabled(p_flag_key text, p_business_id uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION fn_balance_sheet(p_business_id uuid, p_as_of date); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.fn_balance_sheet(p_business_id uuid, p_as_of date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_balance_sheet(p_business_id uuid, p_as_of date) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_balance_sheet(p_business_id uuid, p_as_of date) TO service_role;
 
 
 --
@@ -13283,6 +17345,7 @@ GRANT ALL ON FUNCTION public.fn_balance_sheet(p_business_id uuid, p_as_of date) 
 
 REVOKE ALL ON FUNCTION public.fn_cash_flow(p_business_id uuid, p_date_from date, p_date_to date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_cash_flow(p_business_id uuid, p_date_from date, p_date_to date) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_cash_flow(p_business_id uuid, p_date_from date, p_date_to date) TO service_role;
 
 
 --
@@ -13291,6 +17354,7 @@ GRANT ALL ON FUNCTION public.fn_cash_flow(p_business_id uuid, p_date_from date, 
 
 REVOKE ALL ON FUNCTION public.fn_income_statement(p_business_id uuid, p_date_from date, p_date_to date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_income_statement(p_business_id uuid, p_date_from date, p_date_to date) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_income_statement(p_business_id uuid, p_date_from date, p_date_to date) TO service_role;
 
 
 --
@@ -13299,6 +17363,7 @@ GRANT ALL ON FUNCTION public.fn_income_statement(p_business_id uuid, p_date_from
 
 REVOKE ALL ON FUNCTION public.fn_indicator_monthly(p_business_id uuid, p_date_from date, p_date_to date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_indicator_monthly(p_business_id uuid, p_date_from date, p_date_to date) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_indicator_monthly(p_business_id uuid, p_date_from date, p_date_to date) TO service_role;
 
 
 --
@@ -13307,6 +17372,7 @@ GRANT ALL ON FUNCTION public.fn_indicator_monthly(p_business_id uuid, p_date_fro
 
 REVOKE ALL ON FUNCTION public.fn_notes_data(p_business_id uuid, p_date_from date, p_date_to date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_notes_data(p_business_id uuid, p_date_from date, p_date_to date) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_notes_data(p_business_id uuid, p_date_from date, p_date_to date) TO service_role;
 
 
 --
@@ -13380,6 +17446,14 @@ GRANT ALL ON FUNCTION public.get_my_institution_shortlist(p_institution_id uuid)
 
 
 --
+-- Name: FUNCTION join_dinas_broadcast(p_broadcast_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.join_dinas_broadcast(p_broadcast_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.join_dinas_broadcast(p_broadcast_id uuid) TO authenticated;
+
+
+--
 -- Name: FUNCTION join_program_by_code(p_join_code text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -13388,11 +17462,51 @@ GRANT ALL ON FUNCTION public.join_program_by_code(p_join_code text) TO authentic
 
 
 --
--- Name: FUNCTION list_anonymous_business_candidates(p_program_id uuid, p_institution_id uuid, p_sector text, p_region text, p_min_level text, p_age_band text, p_legal_complete boolean, p_sort text, p_limit integer, p_offset integer); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION leave_dinas_broadcast(p_broadcast_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.list_anonymous_business_candidates(p_program_id uuid, p_institution_id uuid, p_sector text, p_region text, p_min_level text, p_age_band text, p_legal_complete boolean, p_sort text, p_limit integer, p_offset integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.list_anonymous_business_candidates(p_program_id uuid, p_institution_id uuid, p_sector text, p_region text, p_min_level text, p_age_band text, p_legal_complete boolean, p_sort text, p_limit integer, p_offset integer) TO authenticated;
+REVOKE ALL ON FUNCTION public.leave_dinas_broadcast(p_broadcast_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.leave_dinas_broadcast(p_broadcast_id uuid) TO authenticated;
+
+
+--
+-- Name: FUNCTION list_anonymous_business_candidates(p_program_id uuid, p_institution_id uuid, p_sector text, p_region text, p_min_level text, p_age_band text, p_legal_complete boolean, p_sort text, p_limit integer, p_offset integer, p_search text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.list_anonymous_business_candidates(p_program_id uuid, p_institution_id uuid, p_sector text, p_region text, p_min_level text, p_age_band text, p_legal_complete boolean, p_sort text, p_limit integer, p_offset integer, p_search text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.list_anonymous_business_candidates(p_program_id uuid, p_institution_id uuid, p_sector text, p_region text, p_min_level text, p_age_band text, p_legal_complete boolean, p_sort text, p_limit integer, p_offset integer, p_search text) TO authenticated;
+
+
+--
+-- Name: FUNCTION list_dinas_broadcast_participants(p_broadcast_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.list_dinas_broadcast_participants(p_broadcast_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.list_dinas_broadcast_participants(p_broadcast_id uuid) TO authenticated;
+
+
+--
+-- Name: FUNCTION list_institution_broadcasts(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.list_institution_broadcasts() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.list_institution_broadcasts() TO authenticated;
+
+
+--
+-- Name: FUNCTION list_my_dinas_broadcasts(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.list_my_dinas_broadcasts() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.list_my_dinas_broadcasts() TO authenticated;
+
+
+--
+-- Name: FUNCTION list_my_dinas_options(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.list_my_dinas_options() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.list_my_dinas_options() TO authenticated;
 
 
 --
@@ -13412,11 +17526,70 @@ GRANT ALL ON FUNCTION public.log_institution_view(p_institution_id uuid, p_artif
 
 
 --
+-- Name: FUNCTION mark_umkm_onboarding_seen(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.mark_umkm_onboarding_seen() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.mark_umkm_onboarding_seen() TO authenticated;
+
+
+--
+-- Name: FUNCTION my_dinas_offer(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.my_dinas_offer() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.my_dinas_offer() TO authenticated;
+
+
+--
+-- Name: FUNCTION my_feature_flags(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.my_feature_flags() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.my_feature_flags() TO authenticated;
+
+
+--
+-- Name: FUNCTION notify_consent_grant_change(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.notify_consent_grant_change() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION notify_dossier_download(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.notify_dossier_download() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION notify_dossier_request_change(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.notify_dossier_request_change() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION prevent_immutable_row_mutation(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.prevent_immutable_row_mutation() FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION program_dashboard(p_program_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.program_dashboard(p_program_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.program_dashboard(p_program_id uuid) TO authenticated;
+
+
+--
+-- Name: FUNCTION project_dossier_access_to_institution_log(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.project_dossier_access_to_institution_log() FROM PUBLIC;
 
 
 --
@@ -13510,6 +17683,14 @@ GRANT ALL ON FUNCTION public.request_account_deletion(p_reason text) TO authenti
 
 
 --
+-- Name: FUNCTION request_dinas_broadcast(p_message text, p_recording_band text, p_legal_complete boolean, p_event_date date, p_event_place text, p_event_link text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.request_dinas_broadcast(p_message text, p_recording_band text, p_legal_complete boolean, p_event_date date, p_event_place text, p_event_link text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.request_dinas_broadcast(p_message text, p_recording_band text, p_legal_complete boolean, p_event_date date, p_event_place text, p_event_link text) TO authenticated;
+
+
+--
 -- Name: FUNCTION resolve_anonymous_candidate_code(p_candidate_code text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -13550,6 +17731,14 @@ GRANT ALL ON FUNCTION public.revoke_consent_grant(p_grant_id uuid, p_reason text
 
 
 --
+-- Name: FUNCTION revoke_my_dinas_affiliation(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.revoke_my_dinas_affiliation() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.revoke_my_dinas_affiliation() TO authenticated;
+
+
+--
 -- Name: FUNCTION save_inventory_count(p_period_month date, p_counted_value_idr bigint, p_notes text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -13582,6 +17771,14 @@ GRANT ALL ON FUNCTION public.schedule_capture_processing(p_capture_id uuid) TO a
 
 
 --
+-- Name: FUNCTION set_my_dinas_affiliation(p_institution_id uuid, p_copy_version text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.set_my_dinas_affiliation(p_institution_id uuid, p_copy_version text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.set_my_dinas_affiliation(p_institution_id uuid, p_copy_version text) TO authenticated;
+
+
+--
 -- Name: FUNCTION set_my_discovery_optin(p_opted_in boolean); Type: ACL; Schema: public; Owner: -
 --
 
@@ -13595,6 +17792,28 @@ GRANT ALL ON FUNCTION public.set_my_discovery_optin(p_opted_in boolean) TO authe
 
 REVOKE ALL ON FUNCTION public.set_transaction_category(p_transaction_id uuid, p_emkm_category_code smallint, p_emkm_category_subtype text, p_counterparty_id uuid, p_interest_amount_idr bigint) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.set_transaction_category(p_transaction_id uuid, p_emkm_category_code smallint, p_emkm_category_subtype text, p_counterparty_id uuid, p_interest_amount_idr bigint) TO authenticated;
+
+
+--
+-- Name: FUNCTION set_updated_at(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.set_updated_at() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION start_support_session(p_business_id uuid, p_reason text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.start_support_session(p_business_id uuid, p_reason text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.start_support_session(p_business_id uuid, p_reason text) TO authenticated;
+
+
+--
+-- Name: FUNCTION sync_transaction_compatibility_columns(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.sync_transaction_compatibility_columns() FROM PUBLIC;
 
 
 --
@@ -13636,6 +17855,29 @@ GRANT ALL ON FUNCTION public.upsert_counterparty(p_name text, p_type text) TO au
 
 
 --
+-- Name: FUNCTION validate_active_consent_grant(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.validate_active_consent_grant() FROM PUBLIC;
+
+
+--
+-- Name: TABLE admin_action_logs; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.admin_action_logs TO service_role;
+GRANT SELECT ON TABLE public.admin_action_logs TO authenticated;
+
+
+--
+-- Name: TABLE admin_roles; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.admin_roles TO service_role;
+GRANT SELECT ON TABLE public.admin_roles TO authenticated;
+
+
+--
 -- Name: TABLE ai_feedback; Type: ACL; Schema: public; Owner: -
 --
 
@@ -13673,6 +17915,14 @@ GRANT ALL ON TABLE public.audit_events TO service_role;
 
 GRANT SELECT ON TABLE public.audit_logs TO authenticated;
 GRANT ALL ON TABLE public.audit_logs TO service_role;
+
+
+--
+-- Name: TABLE business_dinas_affiliations; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.business_dinas_affiliations TO service_role;
+GRANT SELECT ON TABLE public.business_dinas_affiliations TO authenticated;
 
 
 --
@@ -13724,6 +17974,14 @@ GRANT ALL ON TABLE public.coa_accounts TO service_role;
 
 
 --
+-- Name: TABLE config_versions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.config_versions TO service_role;
+GRANT SELECT ON TABLE public.config_versions TO authenticated;
+
+
+--
 -- Name: TABLE consent_grants; Type: ACL; Schema: public; Owner: -
 --
 
@@ -13748,11 +18006,43 @@ GRANT ALL ON TABLE public.daily_closings TO service_role;
 
 
 --
+-- Name: TABLE demo_accounts; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.demo_accounts TO service_role;
+GRANT SELECT ON TABLE public.demo_accounts TO authenticated;
+
+
+--
 -- Name: TABLE depreciation_postings; Type: ACL; Schema: public; Owner: -
 --
 
 GRANT SELECT ON TABLE public.depreciation_postings TO authenticated;
 GRANT ALL ON TABLE public.depreciation_postings TO service_role;
+
+
+--
+-- Name: TABLE dinas_broadcast_participants; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.dinas_broadcast_participants TO service_role;
+GRANT SELECT ON TABLE public.dinas_broadcast_participants TO authenticated;
+
+
+--
+-- Name: TABLE dinas_broadcast_recipients; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.dinas_broadcast_recipients TO service_role;
+GRANT SELECT ON TABLE public.dinas_broadcast_recipients TO authenticated;
+
+
+--
+-- Name: TABLE dinas_broadcasts; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.dinas_broadcasts TO service_role;
+GRANT SELECT ON TABLE public.dinas_broadcasts TO authenticated;
 
 
 --
@@ -13867,6 +18157,22 @@ GRANT ALL ON TABLE public.dossiers TO service_role;
 
 
 --
+-- Name: TABLE feature_flag_overrides; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.feature_flag_overrides TO service_role;
+GRANT SELECT ON TABLE public.feature_flag_overrides TO authenticated;
+
+
+--
+-- Name: TABLE feature_flags; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.feature_flags TO service_role;
+GRANT SELECT ON TABLE public.feature_flags TO authenticated;
+
+
+--
 -- Name: TABLE fixed_assets; Type: ACL; Schema: public; Owner: -
 --
 
@@ -13886,7 +18192,7 @@ GRANT ALL ON TABLE public.indicator_monthly TO service_role;
 -- Name: TABLE institution_entitlements; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,UPDATE ON TABLE public.institution_entitlements TO authenticated;
+GRANT SELECT ON TABLE public.institution_entitlements TO authenticated;
 GRANT ALL ON TABLE public.institution_entitlements TO service_role;
 
 
@@ -14011,6 +18317,14 @@ GRANT ALL ON TABLE public.loans TO service_role;
 
 
 --
+-- Name: TABLE metric_definitions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.metric_definitions TO service_role;
+GRANT SELECT ON TABLE public.metric_definitions TO authenticated;
+
+
+--
 -- Name: TABLE migration_verification_results; Type: ACL; Schema: public; Owner: -
 --
 
@@ -14048,6 +18362,21 @@ GRANT ALL ON TABLE public.notifications TO service_role;
 
 GRANT SELECT ON TABLE public.opening_balances TO authenticated;
 GRANT ALL ON TABLE public.opening_balances TO service_role;
+
+
+--
+-- Name: TABLE ops_daily_rollups; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.ops_daily_rollups TO service_role;
+GRANT SELECT ON TABLE public.ops_daily_rollups TO authenticated;
+
+
+--
+-- Name: TABLE password_reset_tokens; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.password_reset_tokens TO service_role;
 
 
 --
@@ -14130,6 +18459,22 @@ GRANT ALL ON TABLE public.rules_config TO service_role;
 
 
 --
+-- Name: TABLE saved_views; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.saved_views TO service_role;
+GRANT SELECT ON TABLE public.saved_views TO authenticated;
+
+
+--
+-- Name: TABLE support_sessions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.support_sessions TO service_role;
+GRANT SELECT ON TABLE public.support_sessions TO authenticated;
+
+
+--
 -- Name: TABLE tax_estimates; Type: ACL; Schema: public; Owner: -
 --
 
@@ -14200,116 +18545,145 @@ SET check_function_bodies = false;
 -- Data for Name: category_templates; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('c6ee1d8b-6e2f-4b31-bb11-2a855291fe3d', 'PERDAGANGAN_KULINER', 1, NULL, 'Laku / Jualan', 'Uang masuk dari barang atau makanan yang terjual', 'income', 'CASH_STAR', '4100', 'OPERASI', true, '{laku,jual,jualan,terjual,masuk,omzet,penjualan,laris}', 10, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('35bdbc29-1849-4223-9c50-3c9676baf974', 'PERDAGANGAN_KULINER', 2, NULL, 'Pemasukan lain', 'Uang masuk di luar jualan, misalnya sewa etalase atau komisi titip jual', 'income', 'CASH_STAR', '4200', 'OPERASI', true, '{"sewa etalase",komisi,"titip jual",bonus,hadiah,cashback}', 20, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('37103a2a-e9da-4f68-b5c0-ad4c16cd1ab7', 'PERDAGANGAN_KULINER', 3, NULL, 'Piutang dibayar', 'Pelanggan melunasi utangnya', 'income', 'CASH_STAR', '1300', 'OPERASI', false, '{"bayar utang",lunas,pelunasan,nyaur,dibayar}', 30, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('1351e7d6-6be7-4a70-bbe0-52b39736793b', 'PERDAGANGAN_KULINER', 4, '4a', 'Modal masuk', 'Tambahan modal dari pemilik atau keluarga', 'income', 'CASH_STAR', '3100', 'PENDANAAN', false, '{modal,"tambah modal","suntik modal","setoran modal"}', 40, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('f2af32fc-63a4-41a0-9780-dfc5966d0d8b', 'PERDAGANGAN_KULINER', 4, '4b', 'Pinjaman masuk', 'Uang pinjaman yang cair', 'income', 'CASH_STAR', 'LIABILITY_STAR', 'PENDANAAN', false, '{pinjaman,pinjam,"kredit cair",cair,koperasi,"utang bank"}', 50, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('10619ece-2ea1-4a9b-9d8c-61d07a09deca', 'PERDAGANGAN_KULINER', 5, NULL, 'Belanja bahan / barang', 'Beli bahan baku atau stok dagangan', 'expense', '5100', 'CASH_OR_PAYABLE', 'OPERASI', true, '{belanja,kulak,"beli bahan",stok,"bahan baku",pasar,grosir}', 60, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('ad59ccf0-b665-44f1-bf95-079f97ccf6b4', 'PERDAGANGAN_KULINER', 6, '5210', 'Bahan bakar & energi', 'Gas, bensin, solar, minyak tanah', 'expense', '5210', 'CASH_OR_PAYABLE', 'OPERASI', true, '{gas,elpiji,bensin,solar,"minyak tanah",bbm}', 71, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('c86b376b-f410-4790-aac8-b69d879edea3', 'PERDAGANGAN_KULINER', 6, '5220', 'Listrik, air, internet', 'Tagihan utilitas usaha', 'expense', '5220', 'CASH_OR_PAYABLE', 'OPERASI', true, '{listrik,token,air,pdam,internet,wifi,"pulsa data"}', 72, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('a95b2061-a16c-4563-8b2c-3f4ae8459e04', 'PERDAGANGAN_KULINER', 6, '5230', 'Gaji / upah', 'Upah karyawan atau pembantu', 'expense', '5230', 'CASH_OR_PAYABLE', 'OPERASI', true, '{gaji,upah,karyawan,pegawai,"bayar orang",borongan}', 73, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('b339152e-5d5e-41ba-be50-634ab18fb4ba', 'PERDAGANGAN_KULINER', 6, '5240', 'Sewa tempat', 'Sewa kios, lapak, atau dapur', 'expense', '5240', 'CASH_OR_PAYABLE', 'OPERASI', true, '{sewa,kontrakan,kios,lapak,ruko}', 74, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('38893a7b-0993-4a47-a284-25d7399fb783', 'PERDAGANGAN_KULINER', 6, '5250', 'Kemasan & label', 'Plastik, kardus, stiker, label produk', 'expense', '5250', 'CASH_OR_PAYABLE', 'OPERASI', true, '{kemasan,plastik,kardus,stiker,label,box,cup}', 75, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('10495c7d-2b57-4280-9bbb-311a4e37d75b', 'PERDAGANGAN_KULINER', 6, '5260', 'Transport & ongkir', 'Ongkos jalan, bensin kirim, ongkir ekspedisi', 'expense', '5260', 'CASH_OR_PAYABLE', 'OPERASI', true, '{ongkir,transport,kirim,ekspedisi,angkut,parkir,tol}', 76, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('e8274c42-5f65-43f5-90d4-a2eef88d00b4', 'PERDAGANGAN_KULINER', 6, '5270', 'Promosi & komisi aplikasi', 'Iklan, endorse, potongan aplikasi pesan antar', 'expense', '5270', 'CASH_OR_PAYABLE', 'OPERASI', true, '{promosi,iklan,endorse,"komisi aplikasi","potongan aplikasi",gofood,grabfood,shopeefood}', 77, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('d4e2a60a-9d1a-4c52-befe-a71b4faa41e0', 'PERDAGANGAN_KULINER', 6, '5280', 'Penyusutan alat', 'Nilai alat usaha yang menyusut (dihitung sistem)', 'expense', '5280', 'CASH_OR_PAYABLE', 'OPERASI', true, '{penyusutan,susut}', 78, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('22d6e89f-d45f-4b43-befd-b18dc4440180', 'PERDAGANGAN_KULINER', 6, '5290', 'Biaya usaha lainnya', 'Biaya usaha yang tidak masuk kelompok lain', 'expense', '5290', 'CASH_OR_PAYABLE', 'OPERASI', true, '{lain,"serba serbi","biaya lain",iuran,retribusi,sampah,keamanan}', 79, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('8d7d3d9f-3eac-4de2-a22e-ffa69299d11a', 'PERDAGANGAN_KULINER', 7, NULL, 'Bayar utang / cicilan', 'Membayar cicilan atau melunasi utang usaha', 'expense', 'LIABILITY_STAR', 'CASH_STAR', 'PENDANAAN', false, '{cicilan,nyicil,angsuran,"bayar utang","setor koperasi","bayar pinjaman"}', 80, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('99e19f6f-08ca-4433-86d7-10e7303ba0b8', 'PERDAGANGAN_KULINER', 9, NULL, 'Ambil untuk rumah', 'Uang usaha yang dipakai untuk keperluan pribadi atau rumah', 'expense', '3200', 'CASH_STAR', 'PENDANAAN', false, '{rumah,anak,sekolah,spp,dapur,pribadi,"belanja rumah",arisan,kondangan}', 100, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('b8384c4b-315f-4a9a-9c16-3f1e49687c41', 'PERDAGANGAN_KULINER', 10, NULL, 'Ngutangin pelanggan', 'Barang sudah diberikan tapi pelanggan belum bayar', 'income', '1300', '4100', 'NON_KAS', true, '{ngutang,bon,kasbon,"belum bayar","utang pelanggan"}', 110, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('3c644896-ca43-4e12-8fd8-c4d329f838da', 'JASA', 1, NULL, 'Pemasukan jasa', 'Uang masuk dari pekerjaan atau jasa yang selesai', 'income', 'CASH_STAR', '4100', 'OPERASI', true, '{masuk,bayaran,"ongkos jasa","upah kerja",servis,service,order,job,omzet}', 10, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('124852be-44ab-4261-a6f9-3b3182886351', 'JASA', 2, NULL, 'Pemasukan lain', 'Uang masuk di luar pekerjaan utama, misalnya sewa alat atau komisi', 'income', 'CASH_STAR', '4200', 'OPERASI', true, '{"sewa alat",komisi,bonus,hadiah,cashback,royalti}', 20, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('361a9665-ac39-4021-b243-51866a5c29e9', 'JASA', 3, NULL, 'Piutang dibayar', 'Pelanggan melunasi sisa pembayarannya', 'income', 'CASH_STAR', '1300', 'OPERASI', false, '{"bayar utang",lunas,pelunasan,nyaur,dibayar,"pelunasan termin"}', 30, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('13573d0a-e345-48df-874f-f103e1388352', 'JASA', 4, '4a', 'Modal masuk', 'Tambahan modal dari pemilik atau keluarga', 'income', 'CASH_STAR', '3100', 'PENDANAAN', false, '{modal,"tambah modal","suntik modal","setoran modal"}', 40, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('ceac6e4d-d675-446b-9986-0ea9a6e6e74f', 'JASA', 4, '4b', 'Pinjaman masuk', 'Uang pinjaman yang cair', 'income', 'CASH_STAR', 'LIABILITY_STAR', 'PENDANAAN', false, '{pinjaman,pinjam,"kredit cair",cair,koperasi,"utang bank"}', 50, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('a0cc4ed0-1810-40bb-985d-6441b692a3df', 'JASA', 5, NULL, 'Bahan & alat habis pakai', 'Bahan yang habis terpakai untuk mengerjakan pesanan', 'expense', '5100', 'CASH_OR_PAYABLE', 'OPERASI', true, '{bahan,sparepart,onderdil,benang,kain,cat,oli,material,"habis pakai"}', 60, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('ff831b0f-3ddc-42bc-9b2c-8f40c3f82104', 'JASA', 6, '5210', 'Bahan bakar & energi', 'Bensin, solar, atau gas untuk menjalankan usaha', 'expense', '5210', 'CASH_OR_PAYABLE', 'OPERASI', true, '{bensin,solar,gas,elpiji,bbm,"isi bensin"}', 71, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('f83a55dc-aeb7-4934-a57f-8da91a957b96', 'JASA', 6, '5220', 'Listrik, air, internet', 'Tagihan utilitas usaha', 'expense', '5220', 'CASH_OR_PAYABLE', 'OPERASI', true, '{listrik,token,air,pdam,internet,wifi,"pulsa data",server,hosting}', 72, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('ea5a3407-6f8a-43ea-b941-db765d6317d3', 'JASA', 6, '5230', 'Gaji / upah', 'Upah pekerja, tukang, atau tenaga lepas', 'expense', '5230', 'CASH_OR_PAYABLE', 'OPERASI', true, '{gaji,upah,karyawan,tukang,freelance,"tenaga lepas",borongan}', 73, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('6a0a2105-9407-4950-b621-81e194a0c5ab', 'JASA', 6, '5240', 'Sewa tempat', 'Sewa bengkel, studio, salon, atau ruang kerja', 'expense', '5240', 'CASH_OR_PAYABLE', 'OPERASI', true, '{sewa,kontrakan,bengkel,studio,ruko,coworking}', 74, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('6513eedb-6dd9-4188-b6e6-ac9cd1325fe4', 'JASA', 6, '5250', 'Perlengkapan kerja', 'Sarung tangan, masker, alat tulis, dan perlengkapan habis pakai lain', 'expense', '5250', 'CASH_OR_PAYABLE', 'OPERASI', true, '{perlengkapan,"sarung tangan",masker,"alat tulis",atk,seragam}', 75, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('41134a71-9831-4346-b3c2-0ad7521e75f4', 'JASA', 6, '5260', 'Transport & perjalanan', 'Ongkos jalan ke tempat pelanggan, parkir, tol', 'expense', '5260', 'CASH_OR_PAYABLE', 'OPERASI', true, '{transport,"ongkos jalan",parkir,tol,ojek,grab,gojek,perjalanan}', 76, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('222ad1e5-d6dd-4359-944e-71f0ffb8a425', 'JASA', 6, '5270', 'Promosi & komisi aplikasi', 'Iklan, endorse, potongan aplikasi tempat Anda menerima order', 'expense', '5270', 'CASH_OR_PAYABLE', 'OPERASI', true, '{promosi,iklan,endorse,"komisi aplikasi","potongan aplikasi",ads}', 77, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('e329f250-c9fa-4778-bd58-ed413390e635', 'JASA', 6, '5280', 'Penyusutan alat', 'Nilai alat usaha yang menyusut (dihitung sistem)', 'expense', '5280', 'CASH_OR_PAYABLE', 'OPERASI', true, '{penyusutan,susut}', 78, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('5e443f7f-7b93-4021-aeb6-dc3f5dd0df37', 'JASA', 6, '5290', 'Biaya usaha lainnya', 'Biaya usaha yang tidak masuk kelompok lain', 'expense', '5290', 'CASH_OR_PAYABLE', 'OPERASI', true, '{lain,"serba serbi","biaya lain",iuran,retribusi,sampah,keamanan}', 79, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('468122a4-35ab-4ab2-a1f6-dda11eb1d1a3', 'JASA', 7, NULL, 'Bayar utang / cicilan', 'Membayar cicilan atau melunasi utang usaha', 'expense', 'LIABILITY_STAR', 'CASH_STAR', 'PENDANAAN', false, '{cicilan,nyicil,angsuran,"bayar utang","setor koperasi","bayar pinjaman"}', 80, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('ea217994-1f80-4f53-9cf4-2e2b1175b463', 'JASA', 9, NULL, 'Ambil untuk rumah', 'Uang usaha yang dipakai untuk keperluan pribadi atau rumah', 'expense', '3200', 'CASH_STAR', 'PENDANAAN', false, '{rumah,anak,sekolah,spp,dapur,pribadi,"belanja rumah",arisan,kondangan}', 100, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('e77ca411-390e-4bda-b1ad-7fdd98d8c6d0', 'JASA', 10, NULL, 'Pekerjaan belum dibayar', 'Pekerjaan sudah selesai tapi pelanggan belum membayar', 'income', '1300', '4100', 'NON_KAS', true, '{ngutang,bon,kasbon,"belum bayar","utang pelanggan",termin}', 110, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('9b2ca565-be43-4146-9e96-91126ac2ad3c', 'JASA', 8, NULL, 'Beli alat / aset', 'Beli peralatan kerja yang dipakai lama', 'expense', '1600', 'CASH_OR_PAYABLE', 'INVESTASI', false, '{"beli alat",blender,bor,chiller,dispenser,etalase,freezer,gerinda,gerobak,kipas,kompresor,komputer,kulkas,kursi,laptop,lemari,meja,mesin,"mesin jahit",mixer,motor,oven,penggorengan,peralatan,perkakas,printer,rak,showcase,tenda,timbangan,vitrin,"wajan besar"}', 90, 'coa-emkm-v1', true, '2026-09-07 00:33:05.043452+07');
-INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('80290e46-a29a-4eeb-8484-bcb65378fd04', 'PERDAGANGAN_KULINER', 8, NULL, 'Beli alat / aset', 'Beli peralatan usaha yang dipakai lama', 'expense', '1600', 'CASH_OR_PAYABLE', 'INVESTASI', false, '{alat,"beli kulkas",blender,bor,chiller,dispenser,etalase,freezer,gerinda,gerobak,kipas,kompor,kompresor,komputer,kulkas,kursi,laptop,lemari,meja,mesin,"mesin jahit",mixer,motor,oven,penggorengan,printer,rak,showcase,tenda,timbangan,vitrin,"wajan besar"}', 90, 'coa-emkm-v1', true, '2026-09-07 00:33:04.94318+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('615b3446-3c51-4486-8bb5-ecc2bdc820de', 'PERDAGANGAN_KULINER', 1, NULL, 'Laku / Jualan', 'Uang masuk dari barang atau makanan yang terjual', 'income', 'CASH_STAR', '4100', 'OPERASI', true, '{laku,jual,jualan,terjual,masuk,omzet,penjualan,laris}', 10, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('a73306e2-e002-49dd-b750-ddef0a667ebb', 'PERDAGANGAN_KULINER', 2, NULL, 'Pemasukan lain', 'Uang masuk di luar jualan, misalnya sewa etalase atau komisi titip jual', 'income', 'CASH_STAR', '4200', 'OPERASI', true, '{"sewa etalase",komisi,"titip jual",bonus,hadiah,cashback}', 20, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('b869e8d3-5ae6-4ef6-b8f4-c343b730ea03', 'PERDAGANGAN_KULINER', 3, NULL, 'Piutang dibayar', 'Pelanggan melunasi utangnya', 'income', 'CASH_STAR', '1300', 'OPERASI', false, '{"bayar utang",lunas,pelunasan,nyaur,dibayar}', 30, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('8025b7f3-88b1-412f-9672-eefbab1addd6', 'PERDAGANGAN_KULINER', 4, '4a', 'Modal masuk', 'Tambahan modal dari pemilik atau keluarga', 'income', 'CASH_STAR', '3100', 'PENDANAAN', false, '{modal,"tambah modal","suntik modal","setoran modal"}', 40, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('5d039515-4a17-42ab-a7a5-bf69f2d607da', 'PERDAGANGAN_KULINER', 4, '4b', 'Pinjaman masuk', 'Uang pinjaman yang cair', 'income', 'CASH_STAR', 'LIABILITY_STAR', 'PENDANAAN', false, '{pinjaman,pinjam,"kredit cair",cair,koperasi,"utang bank"}', 50, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('69eb871a-8638-4d8a-b1d2-2b47ffa5d3cb', 'PERDAGANGAN_KULINER', 5, NULL, 'Belanja bahan / barang', 'Beli bahan baku atau stok dagangan', 'expense', '5100', 'CASH_OR_PAYABLE', 'OPERASI', true, '{belanja,kulak,"beli bahan",stok,"bahan baku",pasar,grosir}', 60, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('29eb131a-5a38-4080-a9f1-f1f4b1ed037d', 'PERDAGANGAN_KULINER', 6, '5210', 'Bahan bakar & energi', 'Gas, bensin, solar, minyak tanah', 'expense', '5210', 'CASH_OR_PAYABLE', 'OPERASI', true, '{gas,elpiji,bensin,solar,"minyak tanah",bbm}', 71, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('e914df98-4de0-4752-a006-10d251f793a6', 'PERDAGANGAN_KULINER', 6, '5220', 'Listrik, air, internet', 'Tagihan utilitas usaha', 'expense', '5220', 'CASH_OR_PAYABLE', 'OPERASI', true, '{listrik,token,air,pdam,internet,wifi,"pulsa data"}', 72, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('928e347c-d676-4692-9735-e51046ab96bf', 'PERDAGANGAN_KULINER', 6, '5230', 'Gaji / upah', 'Upah karyawan atau pembantu', 'expense', '5230', 'CASH_OR_PAYABLE', 'OPERASI', true, '{gaji,upah,karyawan,pegawai,"bayar orang",borongan}', 73, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('1dec2bfc-652b-4e58-9c56-7afe91abd3fc', 'PERDAGANGAN_KULINER', 6, '5240', 'Sewa tempat', 'Sewa kios, lapak, atau dapur', 'expense', '5240', 'CASH_OR_PAYABLE', 'OPERASI', true, '{sewa,kontrakan,kios,lapak,ruko}', 74, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('15c756db-81dd-4d6c-8e97-b60e084bf1a6', 'PERDAGANGAN_KULINER', 6, '5250', 'Kemasan & label', 'Plastik, kardus, stiker, label produk', 'expense', '5250', 'CASH_OR_PAYABLE', 'OPERASI', true, '{kemasan,plastik,kardus,stiker,label,box,cup}', 75, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('9ef1777e-e417-4cff-b249-3a994b245f32', 'PERDAGANGAN_KULINER', 6, '5260', 'Transport & ongkir', 'Ongkos jalan, bensin kirim, ongkir ekspedisi', 'expense', '5260', 'CASH_OR_PAYABLE', 'OPERASI', true, '{ongkir,transport,kirim,ekspedisi,angkut,parkir,tol}', 76, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('b9a05ce5-bb63-4f60-b019-ceb5513ae0eb', 'PERDAGANGAN_KULINER', 6, '5270', 'Promosi & komisi aplikasi', 'Iklan, endorse, potongan aplikasi pesan antar', 'expense', '5270', 'CASH_OR_PAYABLE', 'OPERASI', true, '{promosi,iklan,endorse,"komisi aplikasi","potongan aplikasi",gofood,grabfood,shopeefood}', 77, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('637ef1a4-d56a-4bfe-baf5-78d8c28ee106', 'PERDAGANGAN_KULINER', 6, '5280', 'Penyusutan alat', 'Nilai alat usaha yang menyusut (dihitung sistem)', 'expense', '5280', 'CASH_OR_PAYABLE', 'OPERASI', true, '{penyusutan,susut}', 78, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('4f645426-5153-4352-9c1f-3471360f3f6b', 'PERDAGANGAN_KULINER', 6, '5290', 'Biaya usaha lainnya', 'Biaya usaha yang tidak masuk kelompok lain', 'expense', '5290', 'CASH_OR_PAYABLE', 'OPERASI', true, '{lain,"serba serbi","biaya lain",iuran,retribusi,sampah,keamanan}', 79, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('1253fb3d-cdb9-4fe7-bfb3-502144597822', 'PERDAGANGAN_KULINER', 7, NULL, 'Bayar utang / cicilan', 'Membayar cicilan atau melunasi utang usaha', 'expense', 'LIABILITY_STAR', 'CASH_STAR', 'PENDANAAN', false, '{cicilan,nyicil,angsuran,"bayar utang","setor koperasi","bayar pinjaman"}', 80, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('670996b0-0fd5-4350-ac30-a4052382f6f3', 'PERDAGANGAN_KULINER', 9, NULL, 'Ambil untuk rumah', 'Uang usaha yang dipakai untuk keperluan pribadi atau rumah', 'expense', '3200', 'CASH_STAR', 'PENDANAAN', false, '{rumah,anak,sekolah,spp,dapur,pribadi,"belanja rumah",arisan,kondangan}', 100, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('743c1617-448a-423e-b5e7-4e3973fb809d', 'PERDAGANGAN_KULINER', 10, NULL, 'Ngutangin pelanggan', 'Barang sudah diberikan tapi pelanggan belum bayar', 'income', '1300', '4100', 'NON_KAS', true, '{ngutang,bon,kasbon,"belum bayar","utang pelanggan"}', 110, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('3a8f0e0b-1593-4209-a8ed-e0559aa1a0c2', 'JASA', 1, NULL, 'Pemasukan jasa', 'Uang masuk dari pekerjaan atau jasa yang selesai', 'income', 'CASH_STAR', '4100', 'OPERASI', true, '{masuk,bayaran,"ongkos jasa","upah kerja",servis,service,order,job,omzet}', 10, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('9efe31b2-1bb9-47d0-8738-99067e60d100', 'JASA', 2, NULL, 'Pemasukan lain', 'Uang masuk di luar pekerjaan utama, misalnya sewa alat atau komisi', 'income', 'CASH_STAR', '4200', 'OPERASI', true, '{"sewa alat",komisi,bonus,hadiah,cashback,royalti}', 20, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('72b99125-618b-45f9-af49-487db6fa26d7', 'JASA', 3, NULL, 'Piutang dibayar', 'Pelanggan melunasi sisa pembayarannya', 'income', 'CASH_STAR', '1300', 'OPERASI', false, '{"bayar utang",lunas,pelunasan,nyaur,dibayar,"pelunasan termin"}', 30, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('c3b688ff-f8ec-4cb9-b5ee-66658e3a193e', 'JASA', 4, '4a', 'Modal masuk', 'Tambahan modal dari pemilik atau keluarga', 'income', 'CASH_STAR', '3100', 'PENDANAAN', false, '{modal,"tambah modal","suntik modal","setoran modal"}', 40, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('dc3e38bf-bedf-4161-bb72-d826dc3e49b2', 'JASA', 4, '4b', 'Pinjaman masuk', 'Uang pinjaman yang cair', 'income', 'CASH_STAR', 'LIABILITY_STAR', 'PENDANAAN', false, '{pinjaman,pinjam,"kredit cair",cair,koperasi,"utang bank"}', 50, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('ee9e8ab2-f8be-4ed0-bb69-30f9d1fe95ea', 'JASA', 5, NULL, 'Bahan & alat habis pakai', 'Bahan yang habis terpakai untuk mengerjakan pesanan', 'expense', '5100', 'CASH_OR_PAYABLE', 'OPERASI', true, '{bahan,sparepart,onderdil,benang,kain,cat,oli,material,"habis pakai"}', 60, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('1e2d4845-482f-4a53-b87b-46fb4b3f89df', 'JASA', 6, '5210', 'Bahan bakar & energi', 'Bensin, solar, atau gas untuk menjalankan usaha', 'expense', '5210', 'CASH_OR_PAYABLE', 'OPERASI', true, '{bensin,solar,gas,elpiji,bbm,"isi bensin"}', 71, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('a99251cd-7392-4cdf-b91b-d2fd42745102', 'JASA', 6, '5220', 'Listrik, air, internet', 'Tagihan utilitas usaha', 'expense', '5220', 'CASH_OR_PAYABLE', 'OPERASI', true, '{listrik,token,air,pdam,internet,wifi,"pulsa data",server,hosting}', 72, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('ee1780c3-f951-4ae4-8325-9bab91a2219c', 'JASA', 6, '5230', 'Gaji / upah', 'Upah pekerja, tukang, atau tenaga lepas', 'expense', '5230', 'CASH_OR_PAYABLE', 'OPERASI', true, '{gaji,upah,karyawan,tukang,freelance,"tenaga lepas",borongan}', 73, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('a87f5169-6c41-4c5b-b557-b895f623ef99', 'JASA', 6, '5240', 'Sewa tempat', 'Sewa bengkel, studio, salon, atau ruang kerja', 'expense', '5240', 'CASH_OR_PAYABLE', 'OPERASI', true, '{sewa,kontrakan,bengkel,studio,ruko,coworking}', 74, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('05bfaa93-dba2-4868-8594-bd347cccbb63', 'JASA', 6, '5250', 'Perlengkapan kerja', 'Sarung tangan, masker, alat tulis, dan perlengkapan habis pakai lain', 'expense', '5250', 'CASH_OR_PAYABLE', 'OPERASI', true, '{perlengkapan,"sarung tangan",masker,"alat tulis",atk,seragam}', 75, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('62df3cf4-cfc1-41d4-9fe0-3d1f1cd28c2c', 'JASA', 6, '5260', 'Transport & perjalanan', 'Ongkos jalan ke tempat pelanggan, parkir, tol', 'expense', '5260', 'CASH_OR_PAYABLE', 'OPERASI', true, '{transport,"ongkos jalan",parkir,tol,ojek,grab,gojek,perjalanan}', 76, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('1a08a9f7-82b3-40b7-ad71-767eb234b590', 'JASA', 6, '5270', 'Promosi & komisi aplikasi', 'Iklan, endorse, potongan aplikasi tempat Anda menerima order', 'expense', '5270', 'CASH_OR_PAYABLE', 'OPERASI', true, '{promosi,iklan,endorse,"komisi aplikasi","potongan aplikasi",ads}', 77, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('96b03e51-7c7b-4421-bcee-3002c18bb2f5', 'JASA', 6, '5280', 'Penyusutan alat', 'Nilai alat usaha yang menyusut (dihitung sistem)', 'expense', '5280', 'CASH_OR_PAYABLE', 'OPERASI', true, '{penyusutan,susut}', 78, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('0fa8f4c5-6a83-4efb-be5c-2a97f61e6eed', 'JASA', 6, '5290', 'Biaya usaha lainnya', 'Biaya usaha yang tidak masuk kelompok lain', 'expense', '5290', 'CASH_OR_PAYABLE', 'OPERASI', true, '{lain,"serba serbi","biaya lain",iuran,retribusi,sampah,keamanan}', 79, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('80f76ca2-d393-4b29-b63c-066881659582', 'JASA', 7, NULL, 'Bayar utang / cicilan', 'Membayar cicilan atau melunasi utang usaha', 'expense', 'LIABILITY_STAR', 'CASH_STAR', 'PENDANAAN', false, '{cicilan,nyicil,angsuran,"bayar utang","setor koperasi","bayar pinjaman"}', 80, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('abf412e1-ab89-4985-a69b-e98a7f09fae0', 'JASA', 9, NULL, 'Ambil untuk rumah', 'Uang usaha yang dipakai untuk keperluan pribadi atau rumah', 'expense', '3200', 'CASH_STAR', 'PENDANAAN', false, '{rumah,anak,sekolah,spp,dapur,pribadi,"belanja rumah",arisan,kondangan}', 100, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('e6cc14d0-32c2-4685-a0c0-bfee26bf6199', 'JASA', 10, NULL, 'Pekerjaan belum dibayar', 'Pekerjaan sudah selesai tapi pelanggan belum membayar', 'income', '1300', '4100', 'NON_KAS', true, '{ngutang,bon,kasbon,"belum bayar","utang pelanggan",termin}', 110, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('55018d0f-8d2d-4607-bc3d-fe918ea55cae', 'JASA', 8, NULL, 'Beli alat / aset', 'Beli peralatan kerja yang dipakai lama', 'expense', '1600', 'CASH_OR_PAYABLE', 'INVESTASI', false, '{"beli alat",blender,bor,chiller,dispenser,etalase,freezer,gerinda,gerobak,kipas,kompresor,komputer,kulkas,kursi,laptop,lemari,meja,mesin,"mesin jahit",mixer,motor,oven,penggorengan,peralatan,perkakas,printer,rak,showcase,tenda,timbangan,vitrin,"wajan besar"}', 90, 'coa-emkm-v1', true, '2026-09-18 13:56:07.471348+07');
+INSERT INTO public.category_templates (id, sector, category_code, subtype, label_umkm, description_umkm, direction, debit_rule, credit_rule, cash_flow_section, affects_pnl, trigger_keywords, sort_order, version, is_active, created_at) VALUES ('683e1679-4f05-4ed2-bd73-b0a8908e43e0', 'PERDAGANGAN_KULINER', 8, NULL, 'Beli alat / aset', 'Beli peralatan usaha yang dipakai lama', 'expense', '1600', 'CASH_OR_PAYABLE', 'INVESTASI', false, '{alat,"beli kulkas",blender,bor,chiller,dispenser,etalase,freezer,gerinda,gerobak,kipas,kompor,kompresor,komputer,kulkas,kursi,laptop,lemari,meja,mesin,"mesin jahit",mixer,motor,oven,penggorengan,printer,rak,showcase,tenda,timbangan,vitrin,"wajan besar"}', 90, 'coa-emkm-v1', true, '2026-09-18 13:56:07.197478+07');
 
 
 --
 -- Data for Name: coa_accounts; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1100', 'Kas', 'ASET', 'DEBIT', false, 'BS_KAS', NULL, 10, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1200', 'Bank / Giro', 'ASET', 'DEBIT', false, 'BS_GIRO', NULL, 20, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1300', 'Piutang Usaha', 'ASET', 'DEBIT', false, 'BS_PIUTANG_USAHA', NULL, 30, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1400', 'Persediaan', 'ASET', 'DEBIT', false, 'BS_PERSEDIAAN', NULL, 40, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1500', 'Beban Dibayar di Muka', 'ASET', 'DEBIT', false, 'BS_BEBAN_DIBAYAR_DIMUKA', NULL, 50, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1600', 'Aset Tetap', 'ASET', 'DEBIT', false, 'BS_ASET_TETAP', NULL, 60, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1690', 'Akumulasi Penyusutan', 'ASET', 'KREDIT', true, 'BS_AKUMULASI_PENYUSUTAN', NULL, 70, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('2100', 'Utang Usaha', 'LIABILITAS', 'KREDIT', false, 'BS_UTANG_USAHA', NULL, 110, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('2200', 'Utang Bank', 'LIABILITAS', 'KREDIT', false, 'BS_UTANG_BANK', NULL, 120, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('2300', 'Utang Pinjaman Lain', 'LIABILITAS', 'KREDIT', false, 'BS_UTANG_BANK', NULL, 130, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('2400', 'Utang Pajak', 'LIABILITAS', 'KREDIT', false, 'BS_UTANG_PAJAK', NULL, 140, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('3100', 'Modal Pemilik', 'EKUITAS', 'KREDIT', false, 'BS_MODAL', NULL, 210, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('3200', 'Prive', 'EKUITAS', 'DEBIT', true, 'BS_MODAL', NULL, 220, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('3300', 'Saldo Laba', 'EKUITAS', 'KREDIT', false, 'BS_SALDO_LABA', NULL, 230, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('4100', 'Pendapatan Usaha', 'PENDAPATAN', 'KREDIT', false, 'IS_PENDAPATAN_USAHA', NULL, 310, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('4200', 'Pendapatan Lain-lain', 'PENDAPATAN', 'KREDIT', false, 'IS_PENDAPATAN_LAIN', NULL, 320, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5100', 'Beban Pokok Penjualan', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', NULL, 410, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5210', 'Beban Bahan Bakar & Energi', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 421, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5220', 'Beban Utilitas', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 422, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5230', 'Beban Gaji & Upah', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 423, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5240', 'Beban Sewa', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 424, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5250', 'Beban Kemasan & Label', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 425, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5260', 'Beban Transport & Ongkir', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 426, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5270', 'Beban Promosi & Komisi Platform', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 427, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5280', 'Beban Penyusutan', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 428, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5290', 'Beban Usaha Lain-lain', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 429, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5310', 'Beban Bunga Pinjaman', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_LAIN', NULL, 510, true, '2026-09-07 00:33:04.94318+07');
-INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5400', 'Beban Pajak Penghasilan', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_PAJAK', NULL, 520, true, '2026-09-07 00:33:04.94318+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1100', 'Kas', 'ASET', 'DEBIT', false, 'BS_KAS', NULL, 10, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1200', 'Bank / Giro', 'ASET', 'DEBIT', false, 'BS_GIRO', NULL, 20, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1300', 'Piutang Usaha', 'ASET', 'DEBIT', false, 'BS_PIUTANG_USAHA', NULL, 30, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1400', 'Persediaan', 'ASET', 'DEBIT', false, 'BS_PERSEDIAAN', NULL, 40, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1500', 'Beban Dibayar di Muka', 'ASET', 'DEBIT', false, 'BS_BEBAN_DIBAYAR_DIMUKA', NULL, 50, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1600', 'Aset Tetap', 'ASET', 'DEBIT', false, 'BS_ASET_TETAP', NULL, 60, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('1690', 'Akumulasi Penyusutan', 'ASET', 'KREDIT', true, 'BS_AKUMULASI_PENYUSUTAN', NULL, 70, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('2100', 'Utang Usaha', 'LIABILITAS', 'KREDIT', false, 'BS_UTANG_USAHA', NULL, 110, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('2200', 'Utang Bank', 'LIABILITAS', 'KREDIT', false, 'BS_UTANG_BANK', NULL, 120, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('2300', 'Utang Pinjaman Lain', 'LIABILITAS', 'KREDIT', false, 'BS_UTANG_BANK', NULL, 130, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('2400', 'Utang Pajak', 'LIABILITAS', 'KREDIT', false, 'BS_UTANG_PAJAK', NULL, 140, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('3100', 'Modal Pemilik', 'EKUITAS', 'KREDIT', false, 'BS_MODAL', NULL, 210, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('3200', 'Prive', 'EKUITAS', 'DEBIT', true, 'BS_MODAL', NULL, 220, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('3300', 'Saldo Laba', 'EKUITAS', 'KREDIT', false, 'BS_SALDO_LABA', NULL, 230, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('4100', 'Pendapatan Usaha', 'PENDAPATAN', 'KREDIT', false, 'IS_PENDAPATAN_USAHA', NULL, 310, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('4200', 'Pendapatan Lain-lain', 'PENDAPATAN', 'KREDIT', false, 'IS_PENDAPATAN_LAIN', NULL, 320, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5100', 'Beban Pokok Penjualan', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', NULL, 410, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5210', 'Beban Bahan Bakar & Energi', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 421, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5220', 'Beban Utilitas', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 422, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5230', 'Beban Gaji & Upah', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 423, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5240', 'Beban Sewa', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 424, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5250', 'Beban Kemasan & Label', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 425, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5260', 'Beban Transport & Ongkir', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 426, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5270', 'Beban Promosi & Komisi Platform', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 427, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5280', 'Beban Penyusutan', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 428, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5290', 'Beban Usaha Lain-lain', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_USAHA', '5200', 429, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5310', 'Beban Bunga Pinjaman', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_LAIN', NULL, 510, true, '2026-09-18 13:56:07.197478+07');
+INSERT INTO public.coa_accounts (code, name, account_type, normal_balance, is_contra, report_line, parent_code, sort_order, is_active, created_at) VALUES ('5400', 'Beban Pajak Penghasilan', 'BEBAN', 'DEBIT', false, 'IS_BEBAN_PAJAK', NULL, 520, true, '2026-09-18 13:56:07.197478+07');
 
 
 --
 -- Data for Name: document_requirements; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('ac004644-bf43-41d3-93a0-e0be58a8a75d', 'PERDAGANGAN_KULINER', 'ktp', 'wajib', 1, 'dokumen-ktp', 'Fondasi identitas pemilik usaha.', '2026-09-07 00:33:05.047752+07');
-INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('93d4f881-5c18-460b-b090-d158dd4a107b', 'PERDAGANGAN_KULINER', 'nib', 'wajib', 2, 'dokumen-nib', 'Bisa diurus sendiri di OSS, gratis, sekitar 30 menit.', '2026-09-07 00:33:05.047752+07');
-INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('d96c2150-e250-45a1-8bc4-f5e3a501a42b', 'PERDAGANGAN_KULINER', 'pirt', 'wajib', 3, 'dokumen-pirt', 'Syarat edar pangan olahan rumah produksi.', '2026-09-07 00:33:05.047752+07');
-INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('0d1b1160-d89c-400a-bea6-dd9c170be80c', 'PERDAGANGAN_KULINER', 'halal', 'wajib', 4, 'dokumen-halal', 'Wajib bagi usaha mikro dan kecil mulai 17 Oktober 2026 (PP 42/2024).', '2026-09-07 00:33:05.047752+07');
-INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('36e38971-dec9-476f-a8c9-b0ae88cf45eb', 'PERDAGANGAN_KULINER', 'npwp', 'disarankan', 5, 'dokumen-npwp', 'Diperlukan saat penjualan setahun mendekati Rp500 juta.', '2026-09-07 00:33:05.047752+07');
-INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('1467b9e7-8eb4-4774-b600-b88a1fb22fce', 'PERDAGANGAN_KULINER', 'izin_edar', 'disarankan', 6, 'dokumen-bpom', 'Saat produk masuk ritel modern.', '2026-09-07 00:33:05.047752+07');
-INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('f808878b-36e0-4ca1-a77e-cfb1dd09c6de', 'PERDAGANGAN_KULINER', 'akta_pendirian', 'disarankan', 7, 'dokumen-merek', 'Perlindungan nama usaha untuk jangka panjang.', '2026-09-07 00:33:05.047752+07');
-INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('3ec70ff0-56eb-488c-961d-42b7a37cfdb2', 'JASA', 'ktp', 'wajib', 1, 'dokumen-ktp', 'Fondasi identitas pemilik usaha.', '2026-09-07 00:33:05.047752+07');
-INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('5f52ab48-54d5-484b-b367-907bb9ad39e1', 'JASA', 'nib', 'wajib', 2, 'dokumen-nib', 'Bisa diurus sendiri di OSS, gratis, sekitar 30 menit.', '2026-09-07 00:33:05.047752+07');
-INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('42606aea-a537-42be-8161-0905502614db', 'JASA', 'npwp', 'disarankan', 3, 'dokumen-npwp', 'Diperlukan saat penjualan setahun mendekati Rp500 juta.', '2026-09-07 00:33:05.047752+07');
+INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('0c579d63-49c4-4e03-b163-5af1d6e96742', 'PERDAGANGAN_KULINER', 'ktp', 'wajib', 1, 'dokumen-ktp', 'Fondasi identitas pemilik usaha.', '2026-09-18 13:56:07.480797+07');
+INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('1466379f-c402-43be-a14e-22a68d0e5597', 'PERDAGANGAN_KULINER', 'nib', 'wajib', 2, 'dokumen-nib', 'Bisa diurus sendiri di OSS, gratis, sekitar 30 menit.', '2026-09-18 13:56:07.480797+07');
+INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('b60691a5-21b1-4d79-a1a7-1983e812586c', 'PERDAGANGAN_KULINER', 'pirt', 'wajib', 3, 'dokumen-pirt', 'Syarat edar pangan olahan rumah produksi.', '2026-09-18 13:56:07.480797+07');
+INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('62b93a10-dd0c-459e-b26d-7731019489d4', 'PERDAGANGAN_KULINER', 'halal', 'wajib', 4, 'dokumen-halal', 'Wajib bagi usaha mikro dan kecil mulai 17 Oktober 2026 (PP 42/2024).', '2026-09-18 13:56:07.480797+07');
+INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('1e9d2a22-c7bc-49f0-ac9b-a1590c5b2c4a', 'PERDAGANGAN_KULINER', 'npwp', 'disarankan', 5, 'dokumen-npwp', 'Diperlukan saat penjualan setahun mendekati Rp500 juta.', '2026-09-18 13:56:07.480797+07');
+INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('3db30c66-3c04-448e-9e88-3190defb81bb', 'PERDAGANGAN_KULINER', 'izin_edar', 'disarankan', 6, 'dokumen-bpom', 'Saat produk masuk ritel modern.', '2026-09-18 13:56:07.480797+07');
+INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('bc051666-f753-457c-b42f-1ce253a01684', 'PERDAGANGAN_KULINER', 'akta_pendirian', 'disarankan', 7, 'dokumen-merek', 'Perlindungan nama usaha untuk jangka panjang.', '2026-09-18 13:56:07.480797+07');
+INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('4a6ce629-00c3-4d04-9e67-57bdd01ce1a9', 'JASA', 'ktp', 'wajib', 1, 'dokumen-ktp', 'Fondasi identitas pemilik usaha.', '2026-09-18 13:56:07.480797+07');
+INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('1a7292ef-88dd-4f09-8f77-d2cae5944912', 'JASA', 'nib', 'wajib', 2, 'dokumen-nib', 'Bisa diurus sendiri di OSS, gratis, sekitar 30 menit.', '2026-09-18 13:56:07.480797+07');
+INSERT INTO public.document_requirements (id, sector, doc_type, requirement, order_index, mission_key, note, created_at) VALUES ('93b8d301-283a-4ca0-b9b7-bd6560c905cc', 'JASA', 'npwp', 'disarankan', 3, 'dokumen-npwp', 'Diperlukan saat penjualan setahun mendekati Rp500 juta.', '2026-09-18 13:56:07.480797+07');
+
+
+--
+-- Data for Name: feature_flags; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+INSERT INTO public.feature_flags (flag_key, description, enabled, updated_by, updated_at) VALUES ('capture_voice', 'Catat dengan suara di layar Catat', true, NULL, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.feature_flags (flag_key, description, enabled, updated_by, updated_at) VALUES ('capture_camera', 'Catat dengan foto nota (jalur OCR)', false, NULL, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.feature_flags (flag_key, description, enabled, updated_by, updated_at) VALUES ('caption_live', 'Teks berjalan saat merekam suara', true, NULL, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.feature_flags (flag_key, description, enabled, updated_by, updated_at) VALUES ('pdf_export', 'Unduh laporan sebagai PDF', true, NULL, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.feature_flags (flag_key, description, enabled, updated_by, updated_at) VALUES ('discovery_institusi', 'Usaha bersedia ditemukan lembaga sebagai kandidat', true, NULL, '2026-09-18 13:56:07.842075+07');
+
+
+--
+-- Data for Name: metric_definitions; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('dau', 'Akun aktif harian', 'Jumlah usaha dengan minimal satu transaksi terkonfirmasi atau satu tutup kas pada tanggal itu.', 'transactions + daily_closings; akun demo dikecualikan.', 'count', true, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('new_accounts', 'Akun baru', 'Jumlah usaha yang dibuat pada tanggal itu.', 'businesses.created_at.', 'count', true, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('transactions_recorded', 'Transaksi tercatat', 'Jumlah transaksi berstatus terkonfirmasi pada tanggal itu.', 'transactions; yang dibatalkan tidak dihitung.', 'count', true, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('capture_path_mix', 'Bauran jalur catat', 'Bagian tiap jalur (TEXT_ONLY / WHISPER / OCR) terhadap seluruh capture pada rentang itu.', 'transaction_captures.capture_path.', 'ratio', true, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('capture_latency_p95', 'Ucapan sampai draf (p95)', 'Persentil ke-95 selisih waktu antara capture dibuat dan drafnya selesai.', 'transaction_captures.created_at sampai completed_at.', 'ms', true, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('provider_errors_24h', 'Kegagalan penyedia AI 24 jam', 'Jumlah percobaan yang berakhir gagal dalam 24 jam terakhir.', 'ai_runs.status = failed.', 'count', true, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('queue_age_p95', 'Umur antrean (p95)', 'Persentil ke-95 lama pekerjaan menunggu sebelum dikerjakan.', 'ai_jobs.created_at sampai locked_at.', 'ms', true, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('ai_tokens_daily', 'Token AI per hari', 'Jumlah token permintaan dan jawaban seluruh akun pada tanggal itu.', 'ai_runs.prompt_tokens + completion_tokens. Agregat lintas platform, bukan per akun.', 'count', true, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('llm_amount_violation', 'Nominal dari model yang ditolak', 'Jumlah nominal keluaran model yang ditimpa parser deterministik. Harus nol.', 'BELUM ADA SUMBER: penjaganya menghitung di capture-worker tetapi angkanya belum disimpan.', 'count', false, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('save_without_edit', 'Simpan tanpa edit', 'Bagian capture yang dikonfirmasi tanpa satu pun nilai draf diubah.', 'BELUM ADA SUMBER: perbandingan draf dengan hasil akhir belum disimpan.', 'percent', false, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('edit_amount_ratio', 'Edit nominal vs edit kategori', 'Bagian capture yang nominalnya diubah, dibanding yang kategorinya diubah.', 'BELUM ADA SUMBER: sama dengan di atas.', 'percent', false, '2026-09-18 13:56:07.842075+07');
+INSERT INTO public.metric_definitions (metric_key, title, formula_text, source_note, unit, measurable, updated_at) VALUES ('needs_input_reasons', 'Alasan draf butuh isian', 'Sebaran alasan capture berhenti di keadaan butuh isian.', 'BELUM ADA SUMBER: alasannya belum dicatat sebagai kolom.', 'count', false, '2026-09-18 13:56:07.842075+07');
 
 
 --
 -- Data for Name: missions; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('7ef3c478-3ed9-4024-8180-7caa1968eb9f', 'record_transactions', 'Catat transaksi usaha', 'Mulai dengan mencatat pemasukan atau pengeluaran yang benar-benar terjadi.', 'pencatatan', 'active', '{"effort": "low", "evidence": "confirmed_transactions"}', '{"impact": 45}', '2026-09-07 00:33:04.920199+07', '2026-09-07 00:33:04.920199+07');
-INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('58168353-12e0-42d6-881b-b770316bd1c0', 'upload_nib', 'Lengkapi NIB usaha', 'Unggah NIB agar legalitas dasar usaha dapat dibaca dan Anda periksa.', 'legalitas', 'active', '{"effort": "medium", "evidence": "nib_document"}', '{"impact": 25}', '2026-09-07 00:33:04.920199+07', '2026-09-07 00:33:04.920199+07');
-INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('5435978c-2f7d-49da-a55c-5cdcd114364a', 'complete_profile', 'Lengkapi profil usaha', 'Isi nama usaha, sektor, lokasi, dan kontak agar data usaha mudah dipahami.', 'profil', 'active', '{"effort": "low", "evidence": "profile_fields"}', '{"impact": 6}', '2026-09-07 00:33:04.920199+07', '2026-09-07 00:33:04.920199+07');
-INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('ea8fd270-e78e-44bf-9101-929a889bde4c', 'use_digital_payment', 'Catat pembayaran digital', 'Saat menerima QRIS, transfer, atau dompet digital, pilih cara pembayaran yang sesuai.', 'pencatatan', 'active', '{"effort": "low", "evidence": "digital_payment_transaction"}', '{"impact": 6}', '2026-09-07 00:33:04.920199+07', '2026-09-07 00:33:04.920199+07');
-INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('5de164ad-54c6-43a6-b14e-6ef8882932da', 'record_utilities', 'Catat biaya rutin usaha', 'Catat listrik, air, atau internet usaha agar biaya operasional lebih lengkap.', 'pencatatan', 'active', '{"effort": "low", "evidence": "utilities_transaction"}', '{"impact": 6}', '2026-09-07 00:33:04.920199+07', '2026-09-07 00:33:04.920199+07');
-INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('02800302-2bf5-4fda-ad6b-1619e5080001', 'record_sales_channel', 'Catat asal pesanan', 'Isi asal pesanan ketika transaksi datang dari toko, pesan antar, atau kanal lain.', 'pencatatan', 'active', '{"effort": "low", "evidence": "sales_channel_transaction"}', '{"impact": 6}', '2026-09-07 00:33:04.920199+07', '2026-09-07 00:33:04.920199+07');
-INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('7904ef04-e9c8-4cf1-8bf8-1bb0648a8bf6', 'upload_certificate', 'Tambahkan sertifikat pendukung', 'Unggah sertifikat atau izin tambahan yang memang dimiliki usaha.', 'dokumen', 'active', '{"effort": "medium", "evidence": "supporting_certificate"}', '{"impact": 6}', '2026-09-07 00:33:04.920199+07', '2026-09-07 00:33:04.920199+07');
+INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('b06a89b7-a127-49fc-8681-f3de333a4334', 'record_transactions', 'Catat transaksi usaha', 'Mulai dengan mencatat pemasukan atau pengeluaran yang benar-benar terjadi.', 'pencatatan', 'active', '{"effort": "low", "evidence": "confirmed_transactions"}', '{"impact": 45}', '2026-09-18 13:56:07.126102+07', '2026-09-18 13:56:07.126102+07');
+INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('44464fec-84dc-4cf8-8df6-71d800f89987', 'upload_nib', 'Lengkapi NIB usaha', 'Unggah NIB agar legalitas dasar usaha dapat dibaca dan Anda periksa.', 'legalitas', 'active', '{"effort": "medium", "evidence": "nib_document"}', '{"impact": 25}', '2026-09-18 13:56:07.126102+07', '2026-09-18 13:56:07.126102+07');
+INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('aaa668db-013f-45a1-8faa-aec5c9811d8f', 'complete_profile', 'Lengkapi profil usaha', 'Isi nama usaha, sektor, lokasi, dan kontak agar data usaha mudah dipahami.', 'profil', 'active', '{"effort": "low", "evidence": "profile_fields"}', '{"impact": 6}', '2026-09-18 13:56:07.126102+07', '2026-09-18 13:56:07.126102+07');
+INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('c567f273-eb71-4bd8-bf85-6e0adfac30a6', 'use_digital_payment', 'Catat pembayaran digital', 'Saat menerima QRIS, transfer, atau dompet digital, pilih cara pembayaran yang sesuai.', 'pencatatan', 'active', '{"effort": "low", "evidence": "digital_payment_transaction"}', '{"impact": 6}', '2026-09-18 13:56:07.126102+07', '2026-09-18 13:56:07.126102+07');
+INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('18238b98-d8b9-477a-b944-ffd353a247ce', 'record_utilities', 'Catat biaya rutin usaha', 'Catat listrik, air, atau internet usaha agar biaya operasional lebih lengkap.', 'pencatatan', 'active', '{"effort": "low", "evidence": "utilities_transaction"}', '{"impact": 6}', '2026-09-18 13:56:07.126102+07', '2026-09-18 13:56:07.126102+07');
+INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('036652c9-784f-441b-bca7-281645f532cb', 'record_sales_channel', 'Catat asal pesanan', 'Isi asal pesanan ketika transaksi datang dari toko, pesan antar, atau kanal lain.', 'pencatatan', 'active', '{"effort": "low", "evidence": "sales_channel_transaction"}', '{"impact": 6}', '2026-09-18 13:56:07.126102+07', '2026-09-18 13:56:07.126102+07');
+INSERT INTO public.missions (id, code, title, description, category, status, requirements, reward, created_at, updated_at) VALUES ('f3049f62-11e7-4548-aaa1-3dde17190e46', 'upload_certificate', 'Tambahkan sertifikat pendukung', 'Unggah sertifikat atau izin tambahan yang memang dimiliki usaha.', 'dokumen', 'active', '{"effort": "medium", "evidence": "supporting_certificate"}', '{"impact": 6}', '2026-09-18 13:56:07.126102+07', '2026-09-18 13:56:07.126102+07');
 
 
 --
 -- Data for Name: readiness_rule_sets; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO public.readiness_rule_sets (id, version, status, rules, weights, thresholds, created_by, published_by, published_at, created_at, updated_at, effective_at) VALUES ('b05969d0-1b8f-419b-9474-faa8669ce0e1', 'wp03-baseline-v1', 'retired', '{"source": "wp03_backfill", "authority": "transitional"}', '{}', '{}', NULL, NULL, '2026-09-07 00:33:04.832476+07', '2026-09-07 00:33:04.832476+07', '2026-09-07 00:33:04.920199+07', NULL);
-INSERT INTO public.readiness_rule_sets (id, version, status, rules, weights, thresholds, created_by, published_by, published_at, created_at, updated_at, effective_at) VALUES ('31bb07a0-155a-48d9-8ff7-6df62a842cb8', 'wp08-pilot-v1', 'published', '{"disclaimer": "Konfigurasi kesiapan data BERKEMBANG.ID, bukan penilaian resmi regulator atau jaminan pembiayaan."}', '{"utilities": 6, "basic_legality": 25, "complete_profile": 6, "digital_payments": 6, "digital_footprint": 6, "certificates_training": 6, "transaction_recording": 45}', '{"strong": 80, "building": 0, "consistent": 65, "developing": 35}', NULL, NULL, '2026-09-07 00:33:04.920199+07', '2026-09-07 00:33:04.920199+07', '2026-09-07 00:33:04.920199+07', '2026-09-07 00:33:04.920199+07');
-INSERT INTO public.readiness_rule_sets (id, version, status, rules, weights, thresholds, created_by, published_by, published_at, created_at, updated_at, effective_at) VALUES ('92030c89-13dd-4632-9bfc-18023d6d0e58', 'wp08-pilot-v2', 'published', '{"bronze": {"A1": 8, "A3": 14, "B1": 0.70, "D1": 1}, "levels": ["MULAI", "TEMBAGA", "PERAK", "EMAS"], "windows": {"habitDays": 30, "qualityDays": 90, "evidenceDays": 90, "fullMonthMinDays": 8, "fullMonthLookback": 3}, "graceDays": 7, "components": {"A1": {"gold": 24, "pillar": "A", "silver": 20, "partial": 8}, "A2": {"gold": 20, "pillar": "A", "silver": 12, "partial": 4}, "A3": {"gold": 90, "pillar": "A", "silver": 60, "partial": 14}, "B1": {"gold": 0.95, "pillar": "B", "silver": 0.90, "partial": 0.70}, "B2": {"gold": 3, "pillar": "B", "silver": 2, "partial": 1}, "B3": {"gold": 0.70, "pillar": "B", "silver": 0.40, "partial": 0.20}, "B4": {"gold": 2, "pillar": "B", "silver": null, "partial": 1}, "C1": {"gold": 4, "pillar": "C", "silver": 3, "partial": 1}, "C2": {"gold": 4, "pillar": "C", "silver": 4, "partial": 1}, "D1": {"gold": 1, "pillar": "D", "silver": 1, "partial": null}, "D2": {"gold": 6, "pillar": "D", "silver": 3, "partial": 1}, "D3": {"gold": 1, "pillar": "D", "silver": null, "partial": null}}, "disclaimer": "Tingkat kesiapan menggambarkan kelengkapan dan kebiasaan pencatatan usaha Anda, dihitung otomatis dengan aturan terbuka. Ini bukan penilaian resmi, bukan skor kredit, dan bukan jaminan pembiayaan.", "bigSpendIdr": 500000, "effortOrder": ["C2", "D1", "C1_NIB", "A2", "A1", "B3", "C1_HALAL", "D2"]}', '{}', '{}', NULL, NULL, '2026-09-07 00:33:05.083394+07', '2026-09-07 00:33:05.083394+07', '2026-09-07 00:33:05.083394+07', '2026-09-07 00:33:05.083394+07');
+INSERT INTO public.readiness_rule_sets (id, version, status, rules, weights, thresholds, created_by, published_by, published_at, created_at, updated_at, effective_at) VALUES ('9497bb9d-3833-4e5e-b9b7-0f19c5084e55', 'wp03-baseline-v1', 'retired', '{"source": "wp03_backfill", "authority": "transitional"}', '{}', '{}', NULL, NULL, '2026-09-18 13:56:06.855021+07', '2026-09-18 13:56:06.855021+07', '2026-09-18 13:56:07.126102+07', NULL);
+INSERT INTO public.readiness_rule_sets (id, version, status, rules, weights, thresholds, created_by, published_by, published_at, created_at, updated_at, effective_at) VALUES ('ff71a4a6-ba2f-4df0-8885-e2b3fe4aff58', 'wp08-pilot-v1', 'published', '{"disclaimer": "Konfigurasi kesiapan data BERKEMBANG.ID, bukan penilaian resmi regulator atau jaminan pembiayaan."}', '{"utilities": 6, "basic_legality": 25, "complete_profile": 6, "digital_payments": 6, "digital_footprint": 6, "certificates_training": 6, "transaction_recording": 45}', '{"strong": 80, "building": 0, "consistent": 65, "developing": 35}', NULL, NULL, '2026-09-18 13:56:07.126102+07', '2026-09-18 13:56:07.126102+07', '2026-09-18 13:56:07.126102+07', '2026-09-18 13:56:07.126102+07');
+INSERT INTO public.readiness_rule_sets (id, version, status, rules, weights, thresholds, created_by, published_by, published_at, created_at, updated_at, effective_at) VALUES ('f244e779-38fe-4499-9111-2583061eff4d', 'wp08-pilot-v2', 'published', '{"bronze": {"A1": 8, "A3": 14, "B1": 0.70, "D1": 1}, "levels": ["MULAI", "TEMBAGA", "PERAK", "EMAS"], "windows": {"habitDays": 30, "qualityDays": 90, "evidenceDays": 90, "fullMonthMinDays": 8, "fullMonthLookback": 3}, "graceDays": 7, "components": {"A1": {"gold": 24, "pillar": "A", "silver": 20, "partial": 8}, "A2": {"gold": 20, "pillar": "A", "silver": 12, "partial": 4}, "A3": {"gold": 90, "pillar": "A", "silver": 60, "partial": 14}, "B1": {"gold": 0.95, "pillar": "B", "silver": 0.90, "partial": 0.70}, "B2": {"gold": 3, "pillar": "B", "silver": 2, "partial": 1}, "B3": {"gold": 0.70, "pillar": "B", "silver": 0.40, "partial": 0.20}, "B4": {"gold": 2, "pillar": "B", "silver": null, "partial": 1}, "C1": {"gold": 4, "pillar": "C", "silver": 3, "partial": 1}, "C2": {"gold": 4, "pillar": "C", "silver": 4, "partial": 1}, "D1": {"gold": 1, "pillar": "D", "silver": 1, "partial": null}, "D2": {"gold": 6, "pillar": "D", "silver": 3, "partial": 1}, "D3": {"gold": 1, "pillar": "D", "silver": null, "partial": null}}, "disclaimer": "Tingkat kesiapan menggambarkan kelengkapan dan kebiasaan pencatatan usaha Anda, dihitung otomatis dengan aturan terbuka. Ini bukan penilaian resmi, bukan skor kredit, dan bukan jaminan pembiayaan.", "bigSpendIdr": 500000, "effortOrder": ["C2", "D1", "C1_NIB", "A2", "A1", "B3", "C1_HALAL", "D2"]}', '{}', '{}', NULL, NULL, '2026-09-18 13:56:07.585283+07', '2026-09-18 13:56:07.585283+07', '2026-09-18 13:56:07.585283+07', '2026-09-18 13:56:07.585283+07');
 
 
 --

@@ -1,0 +1,12 @@
+# Berkas yang DIHASILKAN skrip, bukan ditulis tangan, dipatok LF.
+#
+# `scripts/generate-database-types.mjs` menulis LF. Tanpa baris ini, git di
+# Windows (`core.autocrlf = true`) mengubahnya menjadi CRLF saat checkout, dan
+# `npm run db:types:check` -- yang membandingkan isi berkas dengan hasil
+# generate -- tidak pernah bisa lolos di sana meskipun tipenya sudah benar.
+#
+# Pemeriksaannya sendiri sekarang menyeragamkan akhiran baris sebelum
+# membandingkan, jadi baris ini bukan satu-satunya yang menahannya. Yang
+# dicegah di sini hal lain: berkas yang terus-menerus tampak berubah di
+# `git status` padahal tidak ada yang menyentuhnya.
+types/database.generated.ts text eol=lf

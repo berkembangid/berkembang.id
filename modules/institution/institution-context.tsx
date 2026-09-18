@@ -6,6 +6,16 @@ export type InstitutionMembership = {
   institutionId: string;
   name: string;
   type: string;
+  /**
+   * Portal yang dibuka lembaga ini: `institution` atau `investor`.
+   *
+   * Dibaca dari kolom `institutions.portal_kind`, bukan diturunkan dari
+   * potongan kata pada `type`. Sebelum `0095`, layar izin akses menebaknya
+   * dengan `type.includes("investor")` -- dan yang ditentukannya bukan menu,
+   * melainkan TUJUAN yang tercatat di `consent_grants` dan dibaca pemilik
+   * usaha sebelum menekan setuju.
+   */
+  portalKind?: string;
   status: string;
   verificationStatus: string;
   role: string;

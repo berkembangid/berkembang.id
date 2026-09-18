@@ -32,10 +32,19 @@ const fromBaseline = "berkembang_from_baseline_test";
 const migrationDirectory = path.join(process.cwd(), "supabase", "migrations");
 const baselineFile = path.join(process.cwd(), "supabase", "baseline", "0001_baseline_schema.sql");
 
+// Dibaca dari berkasnya sendiri, bukan dipotong dari teks sumber
+// `build-baseline-schema.mjs`.
+//
+// Versi sebelumnya memotong di antara dua penanda teks, dan penanda
+// akhirnya ditulis dengan LF. Git di Windows menyimpan berkas itu dengan
+// CRLF, jadi penandanya tidak pernah ketemu: `indexOf` mengembalikan -1,
+// `slice` menyapu seluruh sisa berkas, dan 12.872 karakter JavaScript
+// dikirim ke PostgreSQL. Galatnya berbunyi `sintaks error pada atau
+// didekat " ` "` -- tanpa menyebut sebabnya sedikit pun.
 const stubs = await readFile(
-  path.join(process.cwd(), "scripts", "build-baseline-schema.mjs"),
+  path.join(process.cwd(), "scripts", "supabase-stubs.sql"),
   "utf8",
-).then((source) => source.slice(source.indexOf("const supabaseStubs = `") + "const supabaseStubs = `".length, source.indexOf("`;\n\nasync function loadMigrations")));
+);
 
 async function recreate(database) {
   const adminUrl = new URL(base);

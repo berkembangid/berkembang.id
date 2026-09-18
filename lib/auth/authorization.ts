@@ -27,7 +27,7 @@ export async function getEffectivePortalRole(
       .maybeSingle(),
     client
       .from("institution_members")
-      .select("id, institution_id, institutions(type)")
+      .select("id, institution_id, institutions(portal_kind)")
       .eq("user_id", userId)
       .eq("status", "active")
       .limit(1)
@@ -45,17 +45,31 @@ export async function getEffectivePortalRole(
     throw new AuthorizationLookupError();
   }
 
-  let isInvestor = false;
-  if (institutionMember.data) {
-    const inst = institutionMember.data as unknown as { institutions?: { type?: string } | Array<{ type?: string }> };
-    const instType = Array.isArray(inst.institutions)
-      ? inst.institutions[0]?.type || ""
-      : inst.institutions?.type || "";
-    const lowerType = instType.toLowerCase();
-    if (lowerType.includes("investor") || lowerType.includes("offtaker") || lowerType.includes("ventura") || lowerType.includes("buyer")) {
-      isInvestor = true;
-    }
-  }
+  // Portal dibaca dari kolom `institutions.portal_kind`, bukan diturunkan dari
+  // potongan kata pada `institutions.type`.
+  //
+  // Sebelum `0095`, baris ini berbunyi:
+  //
+  //   lowerType.includes("investor") || lowerType.includes("offtaker")
+  //     || lowerType.includes("ventura") || lowerType.includes("buyer")
+  //
+  // Tiga hal salah dengan itu. Koperasi bernama jenis "Koperasi Investor
+  // Bersama" terlempar ke portal investor tanpa ada yang tahu. Nilai `type`
+  // untuk investor ditulis `bootstrap.ts` langsung dari metadata pendaftaran,
+  // yang dikendalikan pendaftar dan tidak dicocokkan dengan `INVESTOR_TYPES`.
+  // Dan yang paling menentukan: `signup_account_type` SUDAH menyatakan
+  // investor atau bukan, dan nilai itu divalidasi -- menebaknya lagi dari
+  // sebuah nama berarti membuang jawaban yang sahih.
+  //
+  // Kalau kolomnya tidak terbaca, jawabannya `institution`: portal pembiayaan
+  // yang lebih sedikit akibatnya, bukan portal investor yang memuat dossier.
+  const institusi = institutionMember.data as unknown as {
+    institutions?: { portal_kind?: string } | Array<{ portal_kind?: string }>;
+  } | null;
+  const portalKind = Array.isArray(institusi?.institutions)
+    ? institusi?.institutions[0]?.portal_kind
+    : institusi?.institutions?.portal_kind;
+  const isInvestor = portalKind === "investor";
 
   return resolveEffectivePortalRole({
     hasActivePlatformAdmin: Boolean(platformAdmin.data),

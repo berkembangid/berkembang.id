@@ -218,6 +218,40 @@ try {
 
   const tables = [...definitions.entries()].filter(([, value]) => value.tableType === "BASE TABLE");
   const views = [...definitions.entries()].filter(([, value]) => value.tableType === "VIEW");
+
+  // -------------------------------------------------------------------------
+  // Basis datanya harus SUDAH bermigrasi
+  // -------------------------------------------------------------------------
+  // Skrip ini hanya MEMBACA basis data yang ditunjuk `DATABASE_TEST_URL`; ia
+  // tidak pernah memasang migrasi sendiri. Menunjuknya ke basis data `*_test`
+  // yang masih kosong dulu berakhir seperti ini: berkas tipe ditimpa menjadi
+  // kosong, 5.666 baris hilang, dan pesannya berbunyi
+  //
+  //   Generated types/database.generated.ts from 0 tables, 0 views, and 0 functions.
+  //
+  // Kalimat itu terbaca seperti keberhasilan. Yang lebih buruk, `--check` pada
+  // basis data yang sama melaporkan "types/database.generated.ts is stale" --
+  // menuduh berkas yang sebenarnya benar, dan mengarahkan orang untuk
+  // menghasilkan ulang, yaitu tepat perbuatan yang merusaknya.
+  //
+  // Penjaga ini menuntut beberapa tabel penanda ada. Bukan sekadar "jumlahnya
+  // masuk akal": nama-nama ini lahir di migrasi paling awal, jadi
+  // ketiadaannya berarti satu hal saja -- migrasinya belum dipasang di sini.
+  const penanda = ["profiles", "businesses", "transactions"];
+  const hilang = penanda.filter((nama) => !definitions.has(nama));
+  if (hilang.length > 0) {
+    throw new Error(
+      `Basis data di DATABASE_TEST_URL belum bermigrasi: tabel ${hilang.join(", ")} tidak ada
+(hanya ${tables.length} tabel terbaca di skema public).
+
+Pasang migrasinya dulu, lalu tunjuk basis data YANG SAMA:
+  DATABASE_TEST_URL=<url> npm run db:test
+  DATABASE_TEST_URL=<url> npm run db:types
+
+Tanpa penjaga ini, berkas tipe ditimpa menjadi kosong dan pesannya
+terbaca seperti keberhasilan.`,
+    );
+  }
   const renderTable = ([name, table]) => `      ${name}: {
         Row: {
 ${renderFields(table, "Row")}
@@ -299,7 +333,25 @@ export type TablesUpdate<TableName extends keyof PublicSchema["Tables"]> =
 
   if (checkOnly) {
     const current = await readFile(outputPath, "utf8");
-    if (current !== output) {
+    // Dibandingkan setelah akhiran barisnya diseragamkan, bukan byte per byte.
+    //
+    // Skrip ini menulis LF. Di Windows dengan `core.autocrlf = true` -- dan
+    // repositori ini tidak punya `.gitattributes` sampai sekarang -- git
+    // mengubahnya menjadi CRLF saat checkout. Perbandingan byte per byte
+    // membuat gate ini TIDAK PERNAH bisa lolos di sana, padahal isinya sama
+    // persis.
+    //
+    // Dan pesan galatnya memperburuk: ia menyuruh menjalankan `db:types`, yang
+    // menulis LF lagi, lalu git mengubahnya kembali ke CRLF pada checkout
+    // berikutnya. Gate yang menuntut perbuatan yang tidak pernah bisa
+    // memuaskannya.
+    //
+    // Yang diperiksa gate ini adalah apakah TIPENYA tertinggal dari skema --
+    // dan akhiran baris bukan bagian dari pertanyaan itu.
+    const CR = String.fromCharCode(13);
+    const LF = String.fromCharCode(10);
+    const seragam = (teks) => teks.split(CR + LF).join(LF);
+    if (seragam(current) !== seragam(output)) {
       throw new Error("types/database.generated.ts is stale; run npm run db:types.");
     }
   } else {

@@ -22,7 +22,8 @@
     "check:voice-bundle": "node scripts/check-voice-bundle-size.mjs",
     "db:types:check": "node scripts/generate-database-types.mjs --check",
     "test:e2e": "playwright test",
-    "test:e2e:smoke": "playwright test --grep @smoke"
+    "test:e2e:smoke": "playwright test --grep @smoke",
+    "check:security": "node scripts/verify-portal-security.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -254,6 +254,16 @@ export async function POST(request: Request) {
             .insert({
               name: operation.name,
               type: operation.type,
+              // Disebut, tidak dibiarkan disimpulkan. Sebelum `0095` portal
+              // sebuah lembaga diturunkan dari potongan kata pada `type`,
+              // sehingga mengganti nama jenisnya bisa memindahkannya
+              // antar-portal tanpa ada yang meminta.
+              //
+              // Lembaga yang dibuat admin lewat jalur ini selalu memakai
+              // portal pembiayaan: tidak satu pun pilihan di layarnya adalah
+              // investor. Investor lahir dari pendaftaran sendiri, dan
+              // `lib/auth/bootstrap.ts` yang menyetelnya di sana.
+              portal_kind: "institution",
               programs_count: 1,
               active: true,
               status: "active",

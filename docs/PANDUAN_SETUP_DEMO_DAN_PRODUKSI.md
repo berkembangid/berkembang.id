@@ -29,17 +29,52 @@ akan muncul lagi tiga langkah kemudian sebagai kegagalan yang membingungkan.
 
 ### Peta sembilan langkah
 
-| # | Langkah | Di mana | Kira-kira |
-| --- | --- | --- | --- |
-| 1 | Pasang migrasi `0082`–`0092` ke produksi | Terminal | 10 menit |
-| 2 | Commit, push, satukan ke cabang produksi | Terminal | 10 menit |
-| 3 | Tambahkan `APP_MODE` di Vercel produksi | Vercel | 2 menit |
-| 4 | Deploy produksi, baca lognya | Vercel | 5 menit |
-| 5 | Buat Vercel project demo dan isi variabelnya | Vercel | 15 menit |
-| 6 | Daftarkan `demo.berkembang.id` | Cloudflare | 10 menit + tunggu |
-| 7 | Deploy demo, periksa tiga hal | Vercel + peramban | 5 menit |
-| 8 | Masuk dengan Google, untuk kedua lingkungan | Supabase + Google | 15 menit |
-| 9 | Isi demo dengan data contoh | Terminal | 5 menit |
+| # | Langkah | Di mana | Kira-kira | Status |
+| --- | --- | --- | --- | --- |
+| 1 | Pasang migrasi `0082`–`0092` ke produksi | Terminal | 10 menit | **selesai** |
+| 2 | Commit, push, satukan ke cabang produksi | Terminal | 10 menit | **selesai** |
+| 3 | Tambahkan `APP_MODE` di Vercel produksi | Vercel | 2 menit | **selesai** |
+| 4 | Deploy produksi, baca lognya | Vercel | 5 menit | **selesai** |
+| 5 | Buat Vercel project demo dan isi variabelnya | Vercel | 15 menit | **selesai** |
+| 6 | Daftarkan `demo.berkembang.id` | Cloudflare | 10 menit + tunggu | **selesai** |
+| 7 | Deploy demo, periksa tiga hal | Vercel + peramban | 5 menit | **selesai** |
+| 8 | Masuk dengan Google, untuk kedua lingkungan | Supabase + Google | 15 menit | **selesai** |
+| 9 | Isi demo dengan data contoh | Terminal | 5 menit | ← di sini, yang terakhir |
+
+Tujuh langkah pertama sudah diperiksa langsung, bukan dianggap selesai:
+
+```
+produksi  migrasi 0092 terpasang, tabel_bisa_ditulis = 9
+          www.berkembang.id      → 200, /api/v1/dinas-offer → 401
+          tanpa spanduk demo, tanpa noindex          ← benar untuk produksi
+          OAuth: site_url www, Google aktif
+
+demo      demo.berkembang.id     → 200, /api/v1/dinas-offer → 401
+          spanduk demo ada, noindex ada              ← benar untuk demo
+          bundel peramban menunjuk ridutytfdwshvunodnzo
+```
+
+`/api/v1/dinas-offer` menjawab `401` di **kedua** alamat — itu buktinya
+keduanya melayani kode yang sama dan terbaru. Rute itu baru ada di pekerjaan
+terakhir; kalau salah satu masih `404`, berarti commit-nya tertinggal.
+
+**Yang tersisa hanya dua, dan keduanya di sisi demo:**
+
+- **Langkah 8 sudah beres untuk kedua lingkungan.** Proyek demo: `site_url` =
+  `https://demo.berkembang.id`, daftar izin memuat localhost dan demo,
+  penyedia Google aktif dengan OAuth client yang sama dengan produksi, dan
+  callback demo sudah terdaftar di Google Cloud. Diukur, bukan diduga: kedua
+  lingkungan menjawab ~890 KB dengan `redirect_uri_mismatch` = 0.
+
+  **Satu client OAuth untuk keduanya**, bukan dua. Layar izin (Branding,
+  Audience) milik PROJECT Google Cloud, bukan milik client, jadi client kedua
+  di project yang sama tidak membuat demo terlihat berbeda sama sekali. Dan
+  Client Secret tidak pernah sampai ke peramban — hanya dibaca server
+  Supabase — sehingga memperagakan demo tidak memperbesar paparannya. Yang
+  membuat pemisahan berarti adalah project Google Cloud tersendiri, dan itu
+  baru perlu kalau demo diserahkan ke orang di luar tim.
+- **Langkah 9 belum.** Basis data demo masih kosong: `usaha` = 0,
+  `transaksi` = 0, `lembaga` = 0, `profil` = 0.
 
 Langkah 6 bisa berhenti menunggu DNS menyebar. Kalau itu terjadi, Langkah 8
 boleh dikerjakan sambil menunggu — hanya bagian pemeriksaannya yang perlu
@@ -106,11 +141,13 @@ sama sekali.
 | `.env.demo` | Lokal, menunjuk **demo**, `APP_MODE=demo` |
 | Vercel produksi | Sudah hidup; `www.berkembang.id` menjawab `200` dari Vercel |
 | DNS `berkembang.id` | Cloudflare, apex sudah mengalihkan ke `www` |
-| Penjaga `APP_MODE` | Ada di kode; menolak jalan kalau mode dan proyeknya tidak cocok |
-| Spanduk demo + `noindex` | Ada di kode; menyala sendiri ketika `APP_MODE=demo` |
+| Penjaga `APP_MODE` | Hidup di produksi; menolak jalan kalau mode dan proyeknya tidak cocok |
+| Spanduk demo + `noindex` | Hidup di kode; menyala sendiri ketika `APP_MODE=demo` |
+| Migrasi produksi | Sudah sampai `0092`; `tabel_bisa_ditulis` = 9 |
+| Kode produksi | Sudah di-deploy dan terbukti melayani versi baru |
 
-Dua baris terakhir ada **di kode**, belum di produksi — kodenya belum
-di-deploy. Itu Langkah 2 sampai 4.
+Yang **belum**: seluruh sisi demo — Vercel project, domain, OAuth, dan data
+contohnya. Itu Langkah 5 sampai 9.
 
 ---
 
@@ -269,8 +306,28 @@ yang sedang dilayaninya. Penjaga itu dipanggil dari `next.config.ts`, jadi
 **berjalan saat build** — sebelum satu halaman pun dibangun.
 
 Artinya: tanpa variabel ini, deploy pertama kode baru akan **gagal**. Produksi
-tetap hidup dengan versi sebelumnya dan tidak ada yang rusak, tetapi Anda
-kehilangan waktu menebak sebabnya.
+tetap hidup dengan versi sebelumnya dan tidak ada yang rusak.
+
+**Judul galatnya tidak menyebut sebabnya**, dan ini perlu Anda ketahui sebelum
+melihatnya. Vercel akan menampilkan:
+
+```
+⨯ Failed to load next.config.ts, see more info here https://nextjs.org/...
+> Build error occurred
+```
+
+Sampai di situ kelihatan seperti berkas konfigurasinya rusak. **Sebabnya
+tercetak beberapa baris di bawahnya** — gulir log-nya ke bawah:
+
+```
+Error: APP_MODE belum diisi. Setel production atau demo di berkas lingkungan
+       ini supaya aplikasi bisa menyebutkan lingkungan mana yang sedang berjalan.
+    at assertAppModeMatchesProject (lib/env/app-mode.ts:45:15)
+    at assertAppModeFromEnv (lib/env/app-mode.ts:74:12)
+```
+
+Begitulah cara Next melaporkan galat apa pun yang dilempar saat memuat
+`next.config.ts`: judulnya selalu sama, dan sebab sesungguhnya ada di bawah.
 
 **Variabel dulu, deploy kemudian.** Kalau Langkah 2 sudah memulai deployment
 yang gagal, tidak apa-apa: isi variabelnya, lalu **Redeploy**.
@@ -331,12 +388,14 @@ Hitung ulang: harus ada **10** variabel di environment Production.
 
 | Gejala | Sebab |
 | --- | --- |
+| Build gagal, `Failed to load next.config.ts` | Hampir selalu ini: `APP_MODE` belum ada. Gulir lognya ke bawah untuk pesan sebenarnya |
 | Build gagal, `APP_MODE belum diisi` | Variabelnya belum tersimpan, atau tersimpan di environment Preview saja |
+| Sudah mengisi variabelnya, tetapi masih gagal | Variabel baru hanya terbaca oleh build **berikutnya**. Buka deployment yang gagal → **Redeploy**. Tidak perlu push lagi |
 | Build gagal, `APP_MODE="demo" tetapi ... menunjuk proyek` | Nilainya `demo` di project produksi. Ubah ke `production` |
 
 ---
 
-## Langkah 4 — Deploy produksi dan baca lognya
+## Langkah 4 — Deploy produksi dan buktikan lingkungannya benar
 
 ### Di mana
 
@@ -351,28 +410,69 @@ Kalau belum ada, push ke cabang produksi memulainya.
 
 ### Periksa
 
-Setelah deploy **berhasil**, buka deployment itu → **Runtime Logs**. Harus ada
-baris:
+Ada dua penjaga, dan masing-masing meninggalkan bukti yang berbeda.
+
+**1. Build yang berhasil sudah membuktikan penjaga pertama lolos.**
+
+`next.config.ts` memanggil pemeriksanya saat build. Jadi kalau build-nya
+**berhasil**, itu sendiri sudah bukti bahwa `APP_MODE` terpasang **dan** cocok
+dengan `NEXT_PUBLIC_SUPABASE_URL`. Tidak ada cara build lolos dengan mode yang
+salah — kegagalannya yang Anda lihat di Langkah 3 justru penjaga yang sama.
+
+**2. Untuk penjaga kedua, panggil satu fungsi server:**
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" https://www.berkembang.id/api/v1/accounting/trial-balance
+```
+
+Yang benar: **`401`**. Terdengar aneh sebagai "berhasil", tetapi `401` berarti
+fungsinya **berjalan** lalu menolak Anda karena belum masuk — dan fungsi yang
+berjalan berarti penjaga runtime-nya lolos. Kalau `APP_MODE` tidak cocok saat
+berjalan, `register()` melempar galat dan jawabannya **`500`**.
+
+Lalu pastikan mode-nya memang produksi, bukan demo:
+
+```bash
+curl -s https://www.berkembang.id/ | grep -c "LINGKUNGAN DEMO"   # harus 0
+curl -s https://www.berkembang.id/ | grep -c 'name="robots"'     # harus 0
+```
+
+### Tentang baris log lingkungan
 
 ```
 [berkembang.id] lingkungan Produksi, proyek Supabase ggudmwfhaqoqcguwgdac
 ```
 
-Baris itu dicetak saat server dinyalakan — sudah dibuktikan dengan menjalankan
-build-nya. Ini satu-satunya tempat yang menyatakan basis data mana yang sedang
-dilayani, jadi bacalah sekali setiap kali Anda mengubah variabel. Membacanya
-jauh lebih murah daripada menyadarinya dari data yang mendarat di tempat salah.
+Baris ini berguna, tetapi **tidak bisa dipakai sebagai pemeriksaan** — dan ini
+koreksi atas versi panduan sebelumnya, yang menyuruh Anda menganggap
+ketiadaannya sebagai kegagalan. Ada tiga sebab baris itu bisa tidak ada padahal
+semuanya benar:
 
-Lalu buka `https://www.berkembang.id` dan pastikan **tidak ada** spanduk
-cokelat. Kalau ada, `APP_MODE` di project ini `demo` — dan itu berarti produksi
-sedang menulis ke basis data demo. Berhenti dan betulkan.
+- **Log build bukan Runtime Logs.** Baris ini dicetak `instrumentation.ts`
+  ketika server **menyala**, dan `register()` memang tidak berjalan saat
+  `next build`. Di log build, baris ini tidak akan pernah ada. Bukanya:
+  Deployment → tab **Runtime Logs** (bukan **Building**).
+- **Halaman depan tidak menyalakan server apa pun.** `/` disajikan statis dari
+  CDN, jadi membukanya tidak menghidupkan satu fungsi pun — dan tanpa fungsi
+  yang menyala, tidak ada yang mencetak baris itu.
+- **Serverless menyala hanya saat dibutuhkan.** Barisnya muncul pada *cold
+  start*; permintaan berikutnya memakai instance yang sama dan tidak
+  mencetaknya lagi.
+
+Jadi kalau Anda memang ingin melihatnya: jalankan `curl` di atas lebih dulu —
+permintaan itu menyalakan fungsinya — lalu buka **Runtime Logs**.
+
+Pakai baris itu untuk **membaca** lingkungan mana yang naik, bukan untuk
+menyimpulkan ada yang salah.
 
 ### Kalau salah
 
 | Gejala | Sebab |
 | --- | --- |
-| Tidak ada baris log itu sama sekali | Deployment yang Anda buka bukan yang terbaru, atau belum ada permintaan masuk sehingga server belum menyala |
-| Baris itu menyebut proyek yang salah | `NEXT_PUBLIC_SUPABASE_URL` salah. Betulkan, lalu **deploy ulang** — nilai ini tertanam saat build |
+| `curl` di atas menjawab `500` | `APP_MODE` diubah di Vercel tanpa deploy ulang, jadi tidak lagi cocok dengan URL yang tertanam saat build. **Redeploy** |
+| Spanduk cokelat muncul di `www.berkembang.id` | **Berhenti.** `APP_MODE` produksi bernilai `demo` — produksi sedang menulis ke basis data demo |
+| Baris log itu tidak ada | Belum tentu masalah. Baca bagian di atas |
+| Baris log itu menyebut proyek yang salah | `NEXT_PUBLIC_SUPABASE_URL` salah. Betulkan, lalu **deploy ulang** — nilai ini tertanam saat build |
 
 ---
 
@@ -389,6 +489,20 @@ salinan kode dan bukan cabang berbeda. Yang membedakan demo dari produksi
 **hanya variabelnya**.
 
 Beri nama `berkembang-demo`.
+
+> **Segera sesudah import, betulkan cabangnya.** Vercel memilih **default
+> branch** repo di GitHub, dan di repo ini itu `master` — bukan `main`.
+> `master` tertinggal di belakang, jadi demo akan membangun kode lama tanpa
+> memberi tahu Anda: situsnya hidup, alamatnya benar, basis datanya benar,
+> tetapi layar-layar barunya tidak ada.
+>
+> **Settings → Environments → Production → Production Branch** → ubah ke
+> `main`. (Bukan di halaman **Git** — di sana hanya sambungan repo.)
+>
+> Mengubah setelan ini **tidak** memicu deployment. Picu sendiri lewat form
+> **Deploy Hooks** di halaman Git dengan branch `main`, atau dengan
+> `git commit --allow-empty` lalu push ke `main`. "Redeploy" tidak menolong:
+> ia membangun ulang commit yang sama, yang justru commit lamanya.
 
 **2. Isi sepuluh variabel.** Perhatikan kolom paling kanan:
 
@@ -506,21 +620,87 @@ Vercel → project `berkembang-demo`, lalu peramban.
 
 ### Periksa
 
-```
-1. Runtime Logs memuat:
-   [berkembang.id] lingkungan Demo, proyek Supabase ridutytfdwshvunodnzo
+**1. Fungsi servernya berjalan** — ini yang membuktikan penjaga runtime lolos:
 
-2. Buka https://demo.berkembang.id — ada spanduk cokelat di paling atas:
-   "LINGKUNGAN DEMO — Datanya contoh dan bisa dihapus kapan saja.
-    Jangan memasukkan catatan usaha yang sungguhan."
-
-3. Lihat sumber halamannya (Ctrl+U), cari noindex. Harus ada:
-   <meta name="robots" content="noindex, nofollow, nocache"/>
+```bash
+curl -s -o /dev/null -w "%{http_code}" https://demo.berkembang.id/api/v1/accounting/trial-balance
 ```
 
-Ketiganya sudah dibuktikan dengan menjalankan build demo secara lokal, jadi
-kalau salah satu tidak muncul, yang salah adalah setelan di Vercel — bukan
+Harus **`401`**, bukan `500`. Seperti di Langkah 4: `401` berarti fungsinya
+jalan lalu menolak Anda karena belum masuk.
+
+**2. Spanduk demo terlihat, dan `noindex` ada:**
+
+```bash
+curl -s https://demo.berkembang.id/ | grep -c "LINGKUNGAN DEMO"   # harus 1
+curl -s https://demo.berkembang.id/ | grep -o '<meta name="robots"[^>]*>'
+```
+
+Yang kedua harus mencetak:
+
+```
+<meta name="robots" content="noindex, nofollow, nocache"/>
+```
+
+Di peramban, spanduknya berbunyi: *"LINGKUNGAN DEMO — Datanya contoh dan bisa
+dihapus kapan saja. Jangan memasukkan catatan usaha yang sungguhan."*
+
+**3. Baris log lingkungannya** — opsional, dan hanya setelah `curl` di poin 1
+menyalakan fungsinya. Buka **Runtime Logs** (bukan log build):
+
+```
+[berkembang.id] lingkungan Demo, proyek Supabase ridutytfdwshvunodnzo
+```
+
+Ketiadaan baris ini bukan bukti ada yang salah — sebabnya dijelaskan di
+Langkah 4.
+
+Poin 1 dan 2 sudah dibuktikan dengan menjalankan build demo secara lokal, jadi
+kalau salah satu tidak sesuai, yang salah adalah setelan di Vercel — bukan
 kodenya.
+
+### Kalau demo menjalankan kode lama
+
+Ini benar-benar terjadi saat panduan ini dipakai, dan gejalanya menyesatkan:
+situsnya hidup, alamatnya benar, basis datanya benar — tetapi spanduk demo
+tidak ada. Mudah disalahartikan sebagai `APP_MODE` yang salah.
+
+Sebabnya lain: **Vercel project demo men-deploy commit yang lebih tua.** Saat
+sebuah project baru diimpor, yang dibangun adalah commit yang ada di cabang
+produksinya saat itu — bukan otomatis yang terbaru, dan bukan cabang yang
+sedang Anda kerjakan.
+
+**Cara memastikan**, dua rute yang hanya ada di kode baru:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" https://demo.berkembang.id/api/v1/dinas-offer
+curl -s -o /dev/null -w "%{http_code}" https://demo.berkembang.id/api/v1/broadcasts
+```
+
+- **`401`** → kodenya baru. Kalau spanduknya tetap tidak ada, `APP_MODE` yang
+  salah.
+- **`404`** → rutenya tidak ada, jadi kodenya lama. Itu sebabnya.
+
+Pemeriksaan lain yang sama cepatnya:
+
+```bash
+curl -sI "https://demo.berkembang.id/?code=uji" | head -1
+```
+
+Kode baru menjawab `307` (diteruskan ke `/auth/callback`); kode lama menjawab
+`200`.
+
+**Membetulkannya:**
+
+1. **Pastikan `APP_MODE=demo` sudah tersimpan lebih dulu.** Ini penting: kode
+   lama tidak punya penjaga, jadi build-nya lolos tanpa variabel itu. Begitu
+   kode baru dibangun, build akan **gagal** kalau variabelnya belum ada —
+   persis seperti yang terjadi di produksi pada Langkah 3.
+2. Vercel → project `berkembang-demo` → **Settings → Git → Production Branch** —
+   pastikan sama dengan cabang produksi Anda (`main`).
+3. **Deployments** → deployment terbaru → **Redeploy**. Kalau daftarnya masih
+   menunjuk commit lama, push apa pun ke cabang itu akan memicu build baru.
+4. Ulangi pemeriksaan poin 1 dan 2 di atas.
 
 **Spanduk itu tidak bisa ditutup, dan nilainya tidak pernah dikirim ke
 peramban** — `APP_MODE` hanya dibaca di server. Jadi tidak ada yang bisa
@@ -530,9 +710,11 @@ mematikannya dari sisi pembaca, termasuk yang membuka alat pengembang.
 
 | Gejala | Sebab |
 | --- | --- |
-| Spanduk tidak muncul | `APP_MODE` di project demo bukan `demo`, atau belum deploy ulang |
+| Spanduk tidak muncul, **dan** `noindex` juga tidak ada | Periksa dulu apakah kodenya versi lama — lihat "Kalau demo menjalankan kode lama" di bawah. Kalau kodenya baru, berarti `APP_MODE` bukan `demo` |
+| Spanduk tidak muncul tetapi `noindex` ada | Aneh, dan tidak seharusnya mungkin. Laporkan |
 | Spanduk muncul di `www.berkembang.id` | **Berhenti.** `APP_MODE` produksi bernilai `demo`. Produksi sedang menulis ke basis data demo |
 | `noindex` tidak ada tetapi spanduknya ada | Tidak mungkin terjadi — keduanya dibaca dari satu nilai yang sama. Kalau muncul, laporkan |
+| `curl` menjawab `500` | `APP_MODE` diubah tanpa deploy ulang. **Redeploy** |
 
 ---
 
@@ -575,6 +757,32 @@ Dua, karena setiap proyek Supabase punya alamat callback-nya sendiri. Kalau
 hanya satu yang didaftarkan, masuk dengan Google gagal di lingkungan yang lain
 — dengan pesan dari Google, bukan dari aplikasi ini, sehingga tidak ada
 petunjuk apa pun di log Anda.
+
+**Cara memeriksanya tanpa harus mencoba masuk**, berguna karena galatnya datang
+dari Google dan tidak meninggalkan jejak di log Anda:
+
+```bash
+REF=ridutytfdwshvunodnzo   # ganti dengan ref proyek yang mau diperiksa
+LOC=$(curl -si "https://$REF.supabase.co/auth/v1/authorize?provider=google"   | tr -d '
+' | awk '/^[Ll]ocation: /{print substr($0,11)}')
+curl -sL "$LOC" -o /tmp/g.html -w "ukuran %{size_download}
+"
+grep -c redirect_uri_mismatch /tmp/g.html
+```
+
+Bacanya:
+
+| Hasil | Artinya |
+| --- | --- |
+| ~890 KB, `redirect_uri_mismatch` = 0 | Callbacknya **terdaftar**. Itu halaman masuk Google yang sesungguhnya |
+| ~775 KB, `redirect_uri_mismatch` ≥ 1 | Callbacknya **belum terdaftar** di Google Cloud |
+
+Perbedaan ukurannya bukan kebetulan: halaman galat Google jauh lebih kecil
+daripada layar masuknya. Uji ini sudah dikalibrasi dengan tiga kasus — callback
+produksi yang memang jalan, callback demo, dan satu alamat ngawur sebagai
+kontrol — karena tanpa kontrol itu, `302` dari Google mudah disalahartikan
+sebagai "diterima": Google menjawab `302` pada kedua keadaan, dan bedanya baru
+terlihat setelah redirect-nya diikuti sampai habis.
 
 **3. Nyalakan penyedia Google di proyek demo.** Supabase dashboard proyek demo →
 **Authentication → Providers → Google** → nyalakan, lalu isikan Client ID dan
@@ -728,11 +936,11 @@ deployment — jadi `.env.production` akan ikut termuat setiap kali Anda
 Langkah 1  [ ] Produksi terpasang sampai 0092, tabel_bisa_ditulis = 9
 Langkah 2  [ ] git status kosong, cabang produksi sudah memuat kodenya
 Langkah 3  [ ] Vercel produksi: 10 variabel, APP_MODE=production
-Langkah 4  [ ] Log produksi menyebut "lingkungan Produksi"
-Langkah 4  [ ] www.berkembang.id TIDAK memuat spanduk cokelat
+Langkah 4  [ ] /api/v1/accounting/trial-balance menjawab 401, bukan 500
+Langkah 4  [ ] www.berkembang.id TIDAK memuat spanduk cokelat, dan tanpa noindex
 Langkah 5  [ ] Vercel demo: 10 variabel, lima di antaranya BEDA
 Langkah 6  [ ] demo.berkembang.id menjawab 200 dengan Server: Vercel
-Langkah 7  [ ] Log demo menyebut "lingkungan Demo"
+Langkah 7  [ ] Log demo menyebut "lingkungan Demo" (picu cold start dulu)
 Langkah 7  [ ] Spanduk cokelat terlihat, dan noindex ada di sumber halaman
 Langkah 8  [ ] setup-oauth-urls dijalankan untuk KEDUA target
 Langkah 8  [ ] Google Cloud memuat DUA alamat callback Supabase
@@ -747,9 +955,11 @@ Langkah 9  [ ] Usaha demo TIDAK ditandai sebagai akun demo di Ruang Mesin
 
 | Gejala | Sebab yang paling sering |
 | --- | --- |
+| Deployment gagal, `Failed to load next.config.ts` | `APP_MODE` belum ada di Vercel (Langkah 3). Sebab sesungguhnya tercetak di bawah `Build error occurred` |
 | Deployment gagal, `APP_MODE belum diisi` | Variabelnya belum ditambahkan di Vercel (Langkah 3) |
 | Deployment gagal, `APP_MODE="demo" tetapi ... menunjuk proyek` | `NEXT_PUBLIC_SUPABASE_URL` masih nilai produksi |
 | Vercel diam saja setelah `git push` | Anda push ke cabang yang bukan Production Branch (Langkah 2) |
+| Demo hidup, basis datanya benar, tetapi layar barunya tidak ada | Production Branch project demo masih `master` (default GitHub), bukan `main` (Langkah 5) |
 | Spanduk demo tidak muncul di demo | `APP_MODE` bukan `demo`, atau belum deploy ulang |
 | Vercel tak pernah menandai `demo.berkembang.id` Valid | CNAME-nya ditambahkan di Hostinger, bukan Cloudflare |
 | `demo.berkembang.id` galat sertifikat atau terlalu banyak pengalihan | Awan oranye Cloudflare menyala. Harus `DNS only` |

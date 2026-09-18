@@ -2,68 +2,22 @@
 
 import { useState, useRef, useEffect } from "react";
 import { MapPin, Search, ChevronDown, Check } from "lucide-react";
+import wilayah from "@/config/kota-indonesia.json";
 
-export const INDONESIA_CITIES = [
-  "Kota Depok",
-  "Kota Jakarta Selatan",
-  "Kota Jakarta Barat",
-  "Kota Jakarta Timur",
-  "Kota Jakarta Pusat",
-  "Kota Jakarta Utara",
-  "Kota Bandung",
-  "Kota Bogor",
-  "Kota Bekasi",
-  "Kota Tangerang",
-  "Kota Tangerang Selatan",
-  "Kota Surabaya",
-  "Kota Semarang",
-  "Kota Medan",
-  "Kota Makassar",
-  "Kota Palembang",
-  "Kota Denpasar",
-  "Kota Yogyakarta",
-  "Kota Surakarta (Solo)",
-  "Kota Malang",
-  "Kota Batam",
-  "Kota Pekanbaru",
-  "Kota Padang",
-  "Kota Bandar Lampung",
-  "Kota Pontianak",
-  "Kota Banjarmasin",
-  "Kota Balikpapan",
-  "Kota Samarinda",
-  "Kota Manado",
-  "Kota Mataram",
-  "Kabupaten Bogor",
-  "Kabupaten Bandung",
-  "Kabupaten Bandung Barat",
-  "Kabupaten Bekasi",
-  "Kabupaten Tangerang",
-  "Kabupaten Karawang",
-  "Kabupaten Purwakarta",
-  "Kabupaten Sukabumi",
-  "Kabupaten Cianjur",
-  "Kabupaten Garut",
-  "Kabupaten Tasikmalaya",
-  "Kabupaten Cirebon",
-  "Kabupaten Indramayu",
-  "Kabupaten Majalengka",
-  "Kabupaten Sumedang",
-  "Kabupaten Subang",
-  "Kabupaten Brebes",
-  "Kabupaten Banyumas",
-  "Kabupaten Cilacap",
-  "Kabupaten Semarang",
-  "Kabupaten Sleman",
-  "Kabupaten Bantul",
-  "Kabupaten Sidoarjo",
-  "Kabupaten Gresik",
-  "Kabupaten Pasuruan",
-  "Kabupaten Malang",
-  "Kabupaten Badung",
-  "Kabupaten Gianyar",
-  "Lainnya"
-];
+/**
+ * Daftar wilayahnya TIDAK tinggal di sini.
+ *
+ * Nilai yang dipilih di layar ini tersimpan apa adanya ke
+ * `businesses.location`, lalu dibandingkan sebagai teks yang sama persis
+ * dengan `institutions.location` oleh ringkasan wilayah dinas (`0082`-`0084`).
+ * Jadi daftar ini bukan sekadar isi dropdown -- ia kunci yang menentukan
+ * sebuah usaha terlihat oleh pembinanya atau tidak.
+ *
+ * Ketika daftarnya hidup di berkas ini, skrip seed menulis nama kotanya
+ * sendiri dan keduanya menyimpang tanpa satu pun galat. Sekarang keduanya
+ * membaca `config/kota-indonesia.json`, dan penyimpangannya tertangkap tes.
+ */
+export const INDONESIA_CITIES: readonly string[] = wilayah.kota;
 
 interface CitySelectProps {
   value: string;

@@ -40,12 +40,19 @@ export default function InstitutionCandidatesPage() {
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [scopes, setScopes] = useState<ConsentScope[]>(defaultScopes);
 
-  const isInvestorViewer = Boolean(
-    selectedOrg?.type?.toLowerCase().includes("investor") ||
-    selectedOrg?.type?.toLowerCase().includes("offtaker") ||
-    selectedOrg?.type?.toLowerCase().includes("ventura") ||
-    selectedOrg?.type?.toLowerCase().includes("buyer")
-  );
+  // Dibaca dari kolomnya, bukan ditebak dari namanya.
+  //
+  // Yang ditentukan baris ini bukan tampilan: ia memilih TUJUAN bawaan
+  // permintaan izin akses, dan tujuan itu tersimpan di `consent_grants` lalu
+  // dibaca pemilik usaha sebelum menekan setuju. Tujuan adalah bagian dari
+  // dasar hukum persetujuan (UU 27/2022), jadi menurunkannya dari potongan
+  // kata pada sebuah nama berarti pemilik bisa menyetujui tujuan yang bukan
+  // tujuan sesungguhnya.
+  //
+  // Bawaannya bukan investor: kalau kolomnya belum terbaca, yang muncul
+  // kalimat pendampingan dan pembiayaan -- pernyataan yang lebih sempit,
+  // bukan yang lebih luas.
+  const isInvestorViewer = selectedOrg?.portalKind === "investor";
 
   const [purpose, setPurpose] = useState(
     isInvestorViewer

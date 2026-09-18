@@ -50,53 +50,35 @@ const referenceTables = [
   "public.document_requirements",
   "public.readiness_rule_sets",
   "public.missions",
+  // Dua yang pernah tertinggal, dan ketiadaannya tidak terlihat dari bentuk
+  // skema sama sekali:
+  //
+  //   feature_flags       lima sakelar yang diisi `0069`. Tanpa barisnya,
+  //                       `feature_flag_enabled()` menjawab false untuk
+  //                       SEMUANYA -- catat lewat suara, kamera, ekspor PDF --
+  //                       jadi lingkungan yang dibangun dari baseline lahir
+  //                       dengan seluruh fiturnya mati, tanpa satu pun galat.
+  //
+  //   metric_definitions  dua belas definisi metrik Ruang Mesin. Tanpa
+  //                       barisnya, layar metriknya kosong.
+  //
+  // Keduanya definisi produk, bukan data pengguna -- sama sifatnya dengan
+  // `coa_accounts`. Yang tetap DIKECUALIKAN: `feature_flag_overrides`
+  // (penyimpangan per akun) dan `migration_verification_results` (catatan
+  // yang ditulis migrasi tentang dirinya sendiri).
+  "public.feature_flags",
+  "public.metric_definitions",
 ];
 
 /** Prasyarat yang di produksi disediakan Supabase sendiri. */
-const supabaseStubs = `
-do $$
-begin
-  if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
-  if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
-  if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin bypassrls; end if;
-end;
-$$;
-drop extension if exists pgcrypto cascade;
-drop schema if exists public cascade;
-drop schema if exists auth cascade;
-drop schema if exists storage cascade;
-drop schema if exists private cascade;
-drop schema if exists extensions cascade;
-create schema public;
-create schema extensions;
-create extension pgcrypto with schema extensions;
-create schema auth;
-create table auth.users (
-  id uuid primary key,
-  email text,
-  raw_user_meta_data jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now()
+// SQL-nya ada di `scripts/supabase-stubs.sql`, dibaca juga oleh
+// `scripts/verify-baseline-schema.mjs`. Dulu ia template literal di sini,
+// dan skrip verifikasi mengambilnya dengan memotong teks sumber berkas ini
+// di antara dua penanda -- rapuh terhadap perubahan sekecil akhiran baris.
+const supabaseStubs = await readFile(
+  path.join(process.cwd(), "scripts", "supabase-stubs.sql"),
+  "utf8",
 );
-create function auth.uid() returns uuid language sql stable set search_path = '' as $fn$
-  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
-$fn$;
-grant usage on schema auth to anon, authenticated;
-grant execute on function auth.uid() to anon, authenticated;
-create schema storage;
-create table storage.buckets (
-  id text primary key, name text not null, public boolean not null default false,
-  file_size_limit bigint, allowed_mime_types text[]
-);
-create table storage.objects (
-  id uuid primary key default gen_random_uuid(),
-  bucket_id text not null references storage.buckets(id) on delete cascade,
-  name text not null, owner_id text, metadata jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (bucket_id, name)
-);
-alter table storage.objects enable row level security;
-`;
 
 async function loadMigrations() {
   const entries = (await readdir(migrationDirectory)).filter((name) => name.endsWith(".sql")).sort();
