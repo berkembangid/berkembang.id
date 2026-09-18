@@ -1,0 +1,87 @@
+{
+  "catatan": [
+    "Profil tim yang dituju QR di kartu nama. Dibaca app/tim dan",
+    "scripts/generate-tim-qr.mjs.",
+    "",
+    "YANG PERLU ANDA ISI: setiap nilai bertanda ISI_DULU. Halamannya sudah",
+    "jalan sebelum diisi -- bagian yang belum lengkap tidak ditampilkan, bukan",
+    "ditampilkan kosong -- jadi bisa diisi bertahap.",
+    "",
+    "KENAPA PERAN DAN KONTAK TIDAK DIISIKAN LEBIH DULU.",
+    "",
+    "Ini keterangan tentang orang sungguhan, dan ia akan tercetak di kartu nama",
+    "yang diberikan kepada orang lain. Peran yang ditebak lalu dibagikan lebih",
+    "buruk daripada peran yang belum ditulis.",
+    "",
+    "SLUG IKUT TERCETAK, JADI JANGAN DIUBAH SESUDAH KARTUNYA DICETAK.",
+    "",
+    "QR di kartu memuat alamat /tim/<slug>. Mengubah slug sesudah kartu dicetak",
+    "membuat setiap kartu yang sudah beredar menunjuk halaman yang tidak ada,",
+    "dan tidak ada cara menariknya kembali.",
+    "",
+    "FOTO bersifat opsional: taruh di public/tim/<slug>.jpg lalu tulis nama",
+    "berkasnya di bidang foto. Tanpa foto, yang tampil inisial namanya."
+  ],
+  "anggota": [
+    {
+      "slug": "hadi",
+      "nama": "Hadi",
+      "peran": "ISI_DULU",
+      "ringkas": "ISI_DULU",
+      "tentang": "ISI_DULU",
+      "foto": null,
+      "kontak": {
+        "surel": "ISI_DULU",
+        "telepon": null,
+        "linkedin": null,
+        "github": null,
+        "situs": null
+      }
+    },
+    {
+      "slug": "harsya",
+      "nama": "Harsya",
+      "peran": "ISI_DULU",
+      "ringkas": "ISI_DULU",
+      "tentang": "ISI_DULU",
+      "foto": null,
+      "kontak": {
+        "surel": "ISI_DULU",
+        "telepon": null,
+        "linkedin": null,
+        "github": null,
+        "situs": null
+      }
+    },
+    {
+      "slug": "garly",
+      "nama": "Garly",
+      "peran": "ISI_DULU",
+      "ringkas": "ISI_DULU",
+      "tentang": "ISI_DULU",
+      "foto": null,
+      "kontak": {
+        "surel": "ISI_DULU",
+        "telepon": null,
+        "linkedin": null,
+        "github": null,
+        "situs": null
+      }
+    },
+    {
+      "slug": "yosua",
+      "nama": "Yosua",
+      "peran": "ISI_DULU",
+      "ringkas": "ISI_DULU",
+      "tentang": "ISI_DULU",
+      "foto": null,
+      "kontak": {
+        "surel": "ISI_DULU",
+        "telepon": null,
+        "linkedin": null,
+        "github": null,
+        "situs": null
+      }
+    }
+  ]
+}
