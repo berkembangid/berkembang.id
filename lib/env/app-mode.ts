@@ -99,9 +99,70 @@ export function assertAppModeMatchesProject(
   return { mode: trimmedMode as AppMode, ref, label: target.label };
 }
 
-/** Bentuk yang dipakai saat dijalankan: membaca lingkungan proses. */
+/**
+ * Bentuk yang dipakai saat dijalankan: membaca lingkungan proses.
+ *
+ * MENCETAK DIAGNOSISNYA SEBELUM MELEMPAR, DAN ITU BUKAN HIASAN.
+ *
+ * Fungsi ini dipanggil dari `next.config.ts`, dan Next melaporkan galat apa
+ * pun dari sana dengan satu judul yang sama:
+ *
+ *   ⨯ Failed to load next.config.ts, see more info here https://nextjs.org/...
+ *   > Build error occurred
+ *
+ * Sebab sesungguhnya tercetak SESUDAH baris itu. Di log Vercel, orang membaca
+ * sampai baris merah pertama lalu berhenti -- dan yang terbaca menuduh berkas
+ * konfigurasi rusak, padahal yang salah satu variabel lingkungan.
+ *
+ * Itu sudah tiga kali memakan waktu di proyek ini: sekali saat `APP_MODE`
+ * belum dipasang di produksi, sekali lagi saat log yang sama ditempelkan tanpa
+ * baris penyebabnya, dan sekali lagi sesudahnya.
+ *
+ * Jadi diagnosisnya dicetak ke stderr LEBIH DULU. Keluaran itu muncul di atas
+ * judul generik Next, yaitu tepat di tempat orang sudah melihat.
+ *
+ * Yang dicetak hanya nama variabel, nilai `APP_MODE`, dan ref proyek Supabase.
+ * Ref itu ada di `NEXT_PUBLIC_SUPABASE_URL` yang memang dikirim ke setiap
+ * peramban, jadi bukan rahasia. Kunci tidak pernah ikut tercetak.
+ */
 export function assertAppModeFromEnv() {
-  return assertAppModeMatchesProject(process.env.APP_MODE, process.env.NEXT_PUBLIC_SUPABASE_URL);
+  try {
+    return assertAppModeMatchesProject(process.env.APP_MODE, process.env.NEXT_PUBLIC_SUPABASE_URL);
+  } catch (galat) {
+    const mode = process.env.APP_MODE;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const refTerbaca = refFromUrl((url ?? "").trim());
+
+    const baris = [
+      "",
+      "==============================================================",
+      "  LINGKUNGAN DEPLOYMENT INI TIDAK BISA DIPASTIKAN",
+      "==============================================================",
+      "",
+      `  ${(galat as Error).message}`,
+      "",
+      "  Yang terbaca saat build:",
+      `    APP_MODE                 : ${mode === undefined ? "TIDAK DISETEL" : JSON.stringify(mode)}`,
+      `    NEXT_PUBLIC_SUPABASE_URL : ${url === undefined ? "TIDAK DISETEL" : JSON.stringify(url)}`,
+      `    ref proyek Supabase      : ${refTerbaca ?? "tidak terbaca dari URL di atas"}`,
+      "",
+      "  Yang sah:",
+      ...Object.entries(TARGETS).map(
+        ([nama, sasaran]) => `    APP_MODE=${nama.padEnd(11)} dengan ref ${sasaran.ref}  (${sasaran.label})`,
+      ),
+      "",
+      "  Betulkan di Vercel: Settings -> Environment Variables, lalu Redeploy.",
+      "  Variabel baru hanya terbaca oleh build BERIKUTNYA.",
+      "",
+      "  Baris 'Failed to load next.config.ts' di bawah ini adalah akibat,",
+      "  bukan sebab. Berkas konfigurasinya tidak rusak.",
+      "==============================================================",
+      "",
+    ];
+
+    console.error(baris.join("\n"));
+    throw galat;
+  }
 }
 
 /** Apakah deployment ini demo. Dipakai layar untuk menandainya. */
