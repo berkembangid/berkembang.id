@@ -24,7 +24,7 @@
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke",
     "check:security": "node scripts/verify-portal-security.mjs",
-    "qr:tim": "node scripts/generate-tim-qr.mjs"
+    "qr:team": "node scripts/generate-team-qr.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -57,6 +57,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "jsqr": "^1.4.0",
     "pg": "^8.23.0",
     "qrcode": "^1.5.4",
     "supabase": "^2.115.0",

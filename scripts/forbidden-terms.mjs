@@ -124,7 +124,13 @@ export const financialSurfaces = [
  * modul domain, dan route handler. Dokumen internal seperti playbook justru
  * harus menyebut kata-kata itu untuk melarangnya, jadi tidak ikut dipindai.
  */
-const scannedRoots = ["app", "components", "modules", "lib"];
+// `content` ikut disisir sejak halaman tim publik ada.
+//
+// Di situlah biografi yang ditulis anggota tim tinggal -- teks yang dibaca
+// juri dan bank, dan yang paling mudah ditangkap layar. Halaman aplikasi
+// sudah terjaga sejak awal; berkas konten yang tidak tersisir adalah pintu
+// yang justru paling terbuka.
+const scannedRoots = ["app", "components", "modules", "lib", "content"];
 
 /** Direktori yang tidak pernah dipindai. */
 const ignoredDirectories = new Set([
