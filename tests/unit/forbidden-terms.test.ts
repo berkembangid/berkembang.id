@@ -51,9 +51,21 @@ describe("forbidden credit-assessment language", () => {
     ]);
   });
 
+  // Batas waktunya dinaikkan, dan itu bukan menutupi kelambatan.
+  //
+  // Satu-satunya tes di berkas ini yang menyentuh disk: ia menyisir seluruh
+  // `app`, `components`, `modules`, dan `lib`. Sendirian, scan itu selesai
+  // dalam ~1,1 detik. Di dalam suite penuh -- 56 berkas tes berjalan
+  // berdampingan -- ia melewati batas 5 detik bawaan pada dua dari tiga
+  // percobaan, dan pesannya berbunyi "Test timed out" tanpa menyebut sebabnya.
+  //
+  // Gate yang gagal dua dari tiga kali tanpa sebab yang terbaca lebih buruk
+  // daripada gate yang gagal: orang belajar mengulanginya sampai hijau, dan
+  // pada saat itu ia sudah berhenti menjadi gate. Yang salah bukan
+  // assertion-nya melainkan anggarannya.
   it("keeps the shipped product clean", async () => {
     await expect(scanProject(process.cwd())).resolves.toEqual([]);
-  });
+  }, 60_000);
 });
 
 describe("owner copy dictionary", () => {
