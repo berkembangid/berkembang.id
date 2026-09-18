@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Download, Globe, GraduationCap, Mail, Users } from "lucide-react";
 import { BlokProduk } from "@/components/marketing/BlokProduk";
+import { muatAnggota, muatTim } from "@/modules/tim/team-source";
 import {
-  anggota,
   anggotaLain,
   daftarIsi,
   inisial,
@@ -37,15 +37,21 @@ import {
  * ditampilkan kosong. Kartunya boleh dicetak sebelum seluruh profil lengkap.
  */
 
-export const dynamic = "force-static";
+// Statis, dibangun ulang hanya ketika admin menekan simpan.
+//
+// `force-static` diganti `revalidate = false`: halamannya tetap disajikan
+// sebagai berkas statis -- pengunjung tidak menyentuh basis data -- tetapi
+// `revalidatePath` dari layar admin boleh menggantinya. Dengan `force-static`,
+// permintaan bangun ulang itu diabaikan diam-diam.
+export const revalidate = false;
 
-export function generateStaticParams() {
-  return team.map((orang) => ({ slug: orang.slug }));
+export async function generateStaticParams() {
+  return (await muatTim()).map((orang) => ({ slug: orang.slug }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const orang = anggota(slug);
+  const orang = await muatAnggota(slug);
   if (!orang) return { title: "Profil tidak ditemukan | BERKEMBANG.ID" };
 
   const peran = orang.role.replace(/\*\*/g, "");
@@ -87,7 +93,7 @@ export default async function ProfilAnggotaPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const orang = anggota(slug);
+  const orang = await muatAnggota(slug);
   if (!orang) notFound();
 
   const tagline = isi(orang.tagline);
@@ -98,7 +104,7 @@ export default async function ProfilAnggotaPage({
   const tools = daftarIsi(orang.tools);
   const highlights = (orang.highlights ?? []).filter((b) => isi(b.text) !== null);
   const sosial = tautanSosial(orang);
-  const lain = anggotaLain(orang.slug);
+  const lain = anggotaLain(orang.slug, await muatTim());
 
   return (
     <main className="min-h-screen bg-[#fbf8ff] pb-24 sm:pb-0">

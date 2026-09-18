@@ -113,6 +113,7 @@
     "0092_hak_tulis_hanya_yang_disengaja.sql",
     "0093_wilayah_satu_ejaan.sql",
     "0094_hak_eksekusi_hanya_yang_disengaja.sql",
-    "0095_portal_lembaga_dari_kolom_bukan_nama.sql"
+    "0095_portal_lembaga_dari_kolom_bukan_nama.sql",
+    "0096_profil_tim_disunting_admin.sql"
   ]
 }

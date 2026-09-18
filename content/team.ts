@@ -177,9 +177,14 @@ export function anggota(slug: string): TeamMember | null {
   return team.find((orang) => orang.slug === slug) ?? null;
 }
 
-/** Tetangga untuk navigasi antar-anggota (§1.2 butir 8). */
-export function anggotaLain(slug: string): TeamMember[] {
-  return team.filter((orang) => orang.slug !== slug);
+/**
+ * Tetangga untuk navigasi antar-anggota (§1.2 butir 8).
+ *
+ * Daftarnya diberikan pemanggil supaya isi yang sudah disunting admin ikut
+ * terpakai; tanpa argumen ia jatuh ke berkas ini.
+ */
+export function anggotaLain(slug: string, daftar: TeamMember[] = team): TeamMember[] {
+  return daftar.filter((orang) => orang.slug !== slug);
 }
 
 /**

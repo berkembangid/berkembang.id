@@ -1,4 +1,4 @@
-import { anggota, team } from "@/content/team";
+import { muatAnggota, muatTim } from "@/modules/tim/team-source";
 import { namaBerkasVcard, susunVcard } from "@/modules/tim/vcard";
 
 /**
@@ -16,10 +16,10 @@ import { namaBerkasVcard, susunVcard } from "@/modules/tim/vcard";
  * harus tetap alamat resminya.
  */
 
-export const dynamic = "force-static";
+export const revalidate = false;
 
-export function generateStaticParams() {
-  return team.map((orang) => ({ slug: orang.slug }));
+export async function generateStaticParams() {
+  return (await muatTim()).map((orang) => ({ slug: orang.slug }));
 }
 
 export async function GET(
@@ -27,7 +27,7 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
-  const orang = anggota(slug);
+  const orang = await muatAnggota(slug);
   if (!orang) {
     return new Response("Profil tidak ditemukan.", { status: 404 });
   }

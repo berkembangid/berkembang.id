@@ -2,9 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { BlokProduk } from "@/components/marketing/BlokProduk";
-import { inisial, isi, peranBerchip, team } from "@/content/team";
+import { inisial, isi, peranBerchip } from "@/content/team";
+import { muatTim } from "@/modules/tim/team-source";
 
-export const dynamic = "force-static";
+export const revalidate = false;
 
 export const metadata = {
   title: "Tim P0160 — orang di balik berkembang.id | BERKEMBANG.ID",
@@ -25,7 +26,9 @@ export const metadata = {
  * nama diberikan satu orang. Yang ini induknya: pengunjung yang penasaran bisa
  * melihat siapa lagi, dan tautan "Tim" di setiap profil punya tujuan.
  */
-export default function TimPage() {
+export default async function TimPage() {
+  const team = await muatTim();
+
   return (
     <main className="min-h-screen bg-[#fbf8ff]">
       <header className="border-b border-slate-200 bg-white">

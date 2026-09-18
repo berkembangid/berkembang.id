@@ -4328,6 +4328,35 @@ export type Database = {
           }
         ]
       }
+      team_profiles: {
+        Row: {
+          slug: string
+          data: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          slug: string
+          data: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          slug?: string
+          data?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_profiles_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       transaction_captures: {
         Row: {
           id: string
@@ -4853,6 +4882,13 @@ export type Database = {
           p_user_id: string
           p_role: string
           p_reason: string
+        }
+        Returns: Json
+      }
+      admin_save_team_profile: {
+        Args: {
+          p_slug: string
+          p_data: Json
         }
         Returns: Json
       }

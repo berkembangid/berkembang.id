@@ -68,6 +68,12 @@ export const ADMIN_ROUTES: readonly PortalRoute[] = [
     Icon: ToggleLeft,
   },
   {
+    match: "/admin/tim",
+    title: "Profil Tim",
+    hint: "Isi halaman publik /tim yang dituju QR kartu nama",
+    Icon: Users,
+  },
+  {
     match: "/admin/demo",
     title: "Akun demo",
     hint: "Dikeluarkan dari seluruh angka Ruang Mesin",

@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getEffectivePortalRole } from "@/lib/auth/authorization";
@@ -58,6 +59,34 @@ const operationSchema = z.discriminatedUnion("action", [
     active: z.boolean(),
   }),
   z.object({ action: z.literal("delete_mitra"), id: uuid }),
+  z.object({
+    action: z.literal("save_team_profile"),
+    // Slug ikut tercetak di QR kartu nama dan tidak boleh berubah sesudahnya,
+    // jadi bentuknya dipatok di sini DAN di `admin_save_team_profile`.
+    slug: z.string().trim().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(40),
+    name: z.string().trim().min(1).max(120),
+    role: z.string().trim().max(120).default(""),
+    tagline: z.string().trim().max(240).default(""),
+    about: z.string().trim().max(1200).default(""),
+    highlights: z
+      .array(z.object({ year: z.string().trim().max(40), text: z.string().trim().max(240) }))
+      .max(5)
+      .default([]),
+    skills: z.array(z.string().trim().max(60)).max(5).default([]),
+    tools: z.array(z.string().trim().max(60)).max(6).default([]),
+    productRole: z.string().trim().max(600).default(""),
+    links: z
+      .object({
+        email: z.string().trim().max(160).default(""),
+        linkedin: z.string().trim().max(300).default(""),
+        instagram: z.string().trim().max(160).default(""),
+        scholar: z.string().trim().max(300).default(""),
+      })
+      .default({ email: "", linkedin: "", instagram: "", scholar: "" }),
+    photo: z.string().trim().max(160).default(""),
+    ogImage: z.string().trim().max(160).default(""),
+    vcardPhone: z.string().trim().max(40).default(""),
+  }),
   z.object({
     action: z.literal("publish_rules"),
     version: z.string().trim().regex(/^v[0-9]+$/).max(32),
@@ -459,6 +488,26 @@ export async function POST(request: Request) {
         await writeAudit(admin, user.id, user.email ?? null, "SAVE_MITRA", "mitra", resultId ?? null, { name: operation.name });
         break;
       }
+      case "save_team_profile": {
+        const { action: _aksi, slug, ...isiProfil } = operation;
+
+        // Lewat RPC, bukan tulis langsung: tabelnya sengaja tidak punya hak
+        // maupun kebijakan RLS, dan RPC-nya yang menuntut admin platform.
+        const { error } = await admin.rpc("admin_save_team_profile", {
+          p_slug: slug,
+          p_data: isiProfil,
+        });
+        ensureNoError(error, "TEAM_PROFILE_SAVE_FAILED");
+
+        // Halamannya statis. Tanpa dua baris ini, isi yang baru disimpan tidak
+        // akan pernah terlihat sampai deploy berikutnya -- dan alamat halaman
+        // itu sudah tercetak di kartu nama.
+        revalidatePath("/tim");
+        revalidatePath(`/tim/${slug}`);
+        revalidatePath(`/tim/${slug}/vcard`);
+        break;
+      }
+
       case "delete_mitra": {
         ensureNoError((await admin.from("mitra").delete().eq("id", operation.id)).error, "MITRA_DELETE_FAILED");
         await writeAudit(admin, user.id, user.email ?? null, "DELETE_MITRA", "mitra", operation.id, {});
