@@ -34,16 +34,18 @@ export function BlokProduk() {
           {PRODUCT_POSITION}
         </p>
 
-        <ul className="mt-6 grid gap-2.5 sm:grid-cols-3">
-          {PRODUCT_ANCHORS.map((angka) => (
-            <li
-              key={angka}
-              className="rounded-xl bg-white/10 px-3.5 py-3 text-xs font-bold leading-5 text-[#7fffe4]"
-            >
-              {angka}
-            </li>
-          ))}
-        </ul>
+        {PRODUCT_ANCHORS.length > 0 && (
+          <ul className="mt-6 grid gap-2.5 sm:grid-cols-3">
+            {PRODUCT_ANCHORS.map((angka) => (
+              <li
+                key={angka}
+                className="rounded-xl bg-white/10 px-3.5 py-3 text-xs font-bold leading-5 text-[#7fffe4]"
+              >
+                {angka}
+              </li>
+            ))}
+          </ul>
+        )}
 
         <Link
           href="/"

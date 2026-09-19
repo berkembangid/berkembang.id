@@ -75,11 +75,7 @@ export type TeamMember = {
  * tentang produk yang akan dibaca juri dan bank, jadi ia disimpan di satu
  * tempat, bukan disalin ke empat halaman.
  */
-export const PRODUCT_ANCHORS = [
-  "Finalis PIDI DIGDAYA Hackathon 2026",
-  "Riset 100 UMKM Depok",
-  "Laporan SAK EMKM direview akuntan",
-] as const;
+export const PRODUCT_ANCHORS: readonly string[] = [];
 
 export const PRODUCT_POSITION =
   "Pendamping pencatatan dan kesiapan data usaha mikro — laporan berbasis SAK EMKM.";
@@ -103,10 +99,14 @@ export const team: TeamMember[] = [
     skills: [],
     tools: [],
     productRole: TODO_KONTEN,
-    links: { email: TODO_KONTEN },
-    photo: undefined,
+    links: {
+      email: TODO_KONTEN,
+      instagram: "https://www.instagram.com/hadinsight",
+      linkedin: "https://www.linkedin.com/in/hadi-wijaya-8772b462",
+    },
+    photo: "Hadi Wijaya.jpg",
     ogImage: "tim-hadi.png",
-    vcardPhone: undefined,
+    vcardPhone: "+62 822-7877-5003",
   },
   {
     slug: "garly",
@@ -118,10 +118,14 @@ export const team: TeamMember[] = [
     skills: [],
     tools: [],
     productRole: TODO_KONTEN,
-    links: { email: TODO_KONTEN },
-    photo: undefined,
+    links: {
+      email: TODO_KONTEN,
+      instagram: "https://www.instagram.com/theprincegarl",
+      linkedin: "https://www.linkedin.com/in/theprincegarl",
+    },
+    photo: "Garly Nugraha.jpg",
     ogImage: "tim-garly.png",
-    vcardPhone: undefined,
+    vcardPhone: "+62 881-0806-40433",
   },
   {
     slug: "harsya",
@@ -133,10 +137,14 @@ export const team: TeamMember[] = [
     skills: [],
     tools: [],
     productRole: TODO_KONTEN,
-    links: { email: TODO_KONTEN },
-    photo: undefined,
+    links: {
+      email: TODO_KONTEN,
+      instagram: "https://www.instagram.com/harsyax1",
+      linkedin: "https://www.linkedin.com/in/harsya",
+    },
+    photo: "Harsya.jpg",
     ogImage: "tim-harsya.png",
-    vcardPhone: undefined,
+    vcardPhone: "+62 819-4582-5489",
   },
   {
     slug: "yosua",
@@ -148,10 +156,14 @@ export const team: TeamMember[] = [
     skills: [],
     tools: [],
     productRole: TODO_KONTEN,
-    links: { email: TODO_KONTEN },
-    photo: undefined,
+    links: {
+      email: TODO_KONTEN,
+      instagram: "https://www.instagram.com/yos.ihk",
+      linkedin: "https://www.linkedin.com/in/yosuaimmanuelhk",
+    },
+    photo: "Yosua Immanuel Hizkya Kristiawan.png",
     ogImage: "tim-yosua.png",
-    vcardPhone: undefined,
+    vcardPhone: "+62 821-1218-7810",
   },
 ];
 
