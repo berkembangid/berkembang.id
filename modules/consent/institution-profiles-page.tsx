@@ -178,7 +178,7 @@ export default function InstitutionProfilesPage() {
             className="flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs font-bold text-[#0b5f86] transition-colors hover:bg-slate-50 disabled:opacity-50"
           >
             <Download size={14} />
-            {downloading === dossier.id ? "Menyiapkan..." : "PDF watermark"}
+            {downloading === dossier.id ? "Menyiapkan..." : "Unduh Dossier PDF"}
           </button>
           <button onClick={() => void requestRefresh(dossier)} className="flex min-h-10 items-center gap-1 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"><RefreshCw size={13} />Minta pembaruan</button>
         </div>

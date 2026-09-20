@@ -10,6 +10,7 @@ import type { IncomeStatementView } from "@/modules/accounting/reports";
 import type { IndicatorMonthlyRow, NotesPayload } from "@/modules/accounting/period";
 import { monthBounds, monthsEndingAt } from "@/modules/accounting/warung";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
+import type { DossierDocumentData, LegalitasItem } from "@/modules/institution/dossier-document";
 
 export type DossierContext = {
   dossierId: string;
@@ -278,4 +279,161 @@ export async function buildDossierDocument(
 
 export function dossierFormulaVersion(): string {
   return indicatorFormulaVersion;
+}
+
+// ── Snapshot helpers ───────────────────────────────────────────────────────
+
+function snapshotStr(items: Record<string, Record<string, unknown>>, itemType: string, key: string): string | null {
+  const val = items[itemType]?.[key];
+  return typeof val === "string" && val.trim() ? val.trim() : null;
+}
+
+function snapshotNum(items: Record<string, Record<string, unknown>>, itemType: string, key: string): number | null {
+  const val = items[itemType]?.[key];
+  if (val === null || val === undefined) return null;
+  const n = Number(val);
+  return isNaN(n) ? null : n;
+}
+
+/**
+ * Membangun DossierDocumentData (format PDF ringkas 1-2 halaman) dari konteks
+ * dossier yang sudah di-resolve beserta data live keuangan.
+ *
+ * Snapshot legalitas, identitas, dan kesiapan diambil dari `dossier_items`;
+ * angka keuangan diambil live dari fungsi SQL yang sama dengan layar UMKM.
+ */
+export async function buildDossierDocumentData(
+  context: DossierContext,
+  documentUid: string,
+  printedAt: string,
+): Promise<DossierDocumentData> {
+  // Reuse liveNumbers via buildDossierDocument to avoid duplicating RPC calls
+  const statementDoc = await buildDossierDocument(context, documentUid, printedAt);
+  const { items } = context;
+
+  // ── Identitas dari snapshot ──────────────────────────────────────────────
+  const ownerName =
+    snapshotStr(items, "owner_identity", "name") ??
+    snapshotStr(items, "business_identity", "owner_name");
+  const businessForm =
+    snapshotStr(items, "business_identity", "business_form") ??
+    snapshotStr(items, "business_identity", "entity_type");
+  const sector =
+    snapshotStr(items, "business_identity", "sector") ??
+    statementDoc.notes?.business?.sector ?? null;
+  const city =
+    snapshotStr(items, "business_identity", "city") ??
+    snapshotStr(items, "business_identity", "location") ??
+    statementDoc.notes?.business?.location ?? null;
+  const yearStarted = snapshotNum(items, "business_identity", "year_started");
+  const employeeCount = snapshotNum(items, "business_identity", "employee_count");
+  const contactEmail = snapshotStr(items, "business_identity", "contact_email");
+  const contactPhone =
+    snapshotStr(items, "business_identity", "contact_phone") ??
+    snapshotStr(items, "business_identity", "whatsapp");
+
+  // ── Kesiapan dari snapshot ────────────────────────────────────────────────
+  const readinessLevel = snapshotStr(items, "readiness", "level");
+  const readinessScore = snapshotNum(items, "readiness", "score");
+  const readinessDate = snapshotStr(items, "readiness", "calculated_at");
+
+  // ── Legalitas dari snapshot ───────────────────────────────────────────────
+  const legalitas: LegalitasItem[] = [];
+
+  // KTP Pemilik
+  const ktpStatus = snapshotStr(items, "owner_identity", "verification_status");
+  legalitas.push({
+    label: "KTP Pemilik",
+    status: ktpStatus === "verified" ? "verified" : ktpStatus ? "available" : "unavailable",
+    detail: snapshotStr(items, "owner_identity", "verified_at")
+      ? `Dikonfirmasi ${snapshotStr(items, "owner_identity", "verified_at")?.slice(0, 10) ?? ""}`
+      : snapshotStr(items, "owner_identity", "nik_masked") ?? undefined,
+  });
+
+  // NIB
+  const nibNumber = snapshotStr(items, "nib", "nib_number");
+  const nibStatus = snapshotStr(items, "nib", "status");
+  legalitas.push({
+    label: "NIB (Nomor Induk Berusaha)",
+    status: nibNumber ? "verified" : nibStatus ? "available" : "unavailable",
+    detail: nibNumber ?? nibStatus ?? undefined,
+  });
+
+  // NPWP
+  const npwpNumber = snapshotStr(items, "npwp", "npwp_number") ?? snapshotStr(items, "npwp", "npwp_masked");
+  const npwpStatus = snapshotStr(items, "npwp", "status");
+  legalitas.push({
+    label: "NPWP Usaha / Pemilik",
+    status: npwpNumber ? "verified" : npwpStatus ? "available" : "unavailable",
+    detail: npwpNumber ?? npwpStatus ?? undefined,
+  });
+
+  // Sertifikasi sektor (PIRT, Halal, Izin Edar, dll)
+  const certificates = items["sector_certificates"];
+  if (certificates && typeof certificates === "object") {
+    const certList = Array.isArray(certificates["items"])
+      ? (certificates["items"] as Array<Record<string, unknown>>)
+      : [];
+    for (const cert of certList) {
+      const certName = typeof cert["name"] === "string" ? cert["name"] : "Sertifikasi";
+      const certStatus = typeof cert["status"] === "string" ? cert["status"] : "";
+      legalitas.push({
+        label: certName,
+        status: certStatus === "verified" ? "verified" : certStatus ? "available" : "unavailable",
+        detail: typeof cert["number"] === "string" ? cert["number"] : undefined,
+      });
+    }
+  }
+
+  // Fallback: minimal 3 baris agar tabel tidak kosong
+  if (legalitas.length < 3) {
+    const missing = 3 - legalitas.length;
+    for (let i = 0; i < missing; i++) {
+      legalitas.push({ label: "Sertifikasi Lainnya", status: "unavailable" });
+    }
+  }
+
+  // ── Ringkasan Keuangan dari liveNumbers ──────────────────────────────────
+  const income = statementDoc.incomeStatement.current;
+  const financialRows = [
+    { label: "Total Pendapatan Usaha", amountIdr: income.operatingRevenueIdr },
+    { label: "Total Pendapatan Lain-lain", amountIdr: income.otherRevenueIdr },
+    { label: "Total Beban Usaha", amountIdr: income.operatingExpenseIdr },
+    { label: "Total Beban Lain-lain", amountIdr: income.otherExpenseIdr },
+    { label: "Estimasi Laba Bersih", amountIdr: income.profitAfterTaxIdr },
+  ];
+
+  // Indikator: total dari 6 bulan
+  const indicators = statementDoc.indicators;
+  const totalDaysRecorded = indicators.reduce((sum, m) => sum + (m.daysRecorded ?? 0), 0);
+  const avgNoncashRatio = (() => {
+    const validMonths = indicators.filter((m) => m.noncashSalesRatio !== null);
+    if (validMonths.length === 0) return null;
+    return validMonths.reduce((sum, m) => sum + (m.noncashSalesRatio ?? 0), 0) / validMonths.length;
+  })();
+
+  return {
+    documentId: statementDoc.documentId,
+    documentUid,
+    printedAt,
+    period: statementDoc.period,
+    businessName: context.businessName,
+    ownerName,
+    businessForm,
+    sector,
+    city,
+    yearStarted,
+    employeeCount,
+    contactEmail,
+    contactPhone,
+    readinessLevel,
+    readinessScore,
+    readinessDate,
+    legalitas,
+    financialRows,
+    transactionCount: null, // tidak ada RPC khusus, bisa ditambahkan nanti
+    noncashRatio: avgNoncashRatio,
+    daysRecorded: totalDaysRecorded > 0 ? totalDaysRecorded : null,
+    hasEvidence: statementDoc.hasEvidence,
+  };
 }

@@ -4,7 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { ConsentOperationError, consentErrorResponse } from "@/modules/consent/consent-errors";
 import { buildDocumentUid } from "@/modules/accounting/report-issue";
 import {
-  buildDossierDocument,
+  buildDossierDocumentData,
   dossierFormulaVersion,
   resolveInstitutionContext,
 } from "@/modules/institution/dossier-repository";
@@ -84,7 +84,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       }
     }
 
-    const document = await buildDossierDocument(dossier, documentUid, printedAt);
+    const document = await buildDossierDocumentData(dossier, documentUid, printedAt);
     const pdf = await renderInstitutionDossierPdf(document, {
       institutionName: dossier.institutionName,
       memberLabel: dossier.memberLabel,
