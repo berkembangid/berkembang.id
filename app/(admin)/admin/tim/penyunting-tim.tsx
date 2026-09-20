@@ -264,8 +264,8 @@ export function PenyuntingTim({ anggota }: Props) {
 
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <label className={label}>Foto — berkas di public/tim/</label>
-            <input className={input} value={form.photo} onChange={(e) => setForm({ ...form, photo: e.target.value })} placeholder="hadi.jpg" />
+            <label className={label}>Foto — berkas di public/images/</label>
+            <input className={input} value={form.photo} onChange={(e) => setForm({ ...form, photo: e.target.value })} placeholder="Hadi Wijaya.jpg" />
           </div>
           <div>
             <label className={label}>OG image — public/og/</label>
