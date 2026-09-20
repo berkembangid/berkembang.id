@@ -114,6 +114,7 @@
     "0093_wilayah_satu_ejaan.sql",
     "0094_hak_eksekusi_hanya_yang_disengaja.sql",
     "0095_portal_lembaga_dari_kolom_bukan_nama.sql",
-    "0096_profil_tim_disunting_admin.sql"
+    "0096_profil_tim_disunting_admin.sql",
+    "0097_anggota_lembaga_dikenali_dan_diundang_lewat_surel.sql"
   ]
 }

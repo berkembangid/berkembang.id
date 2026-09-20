@@ -54,6 +54,30 @@ export type InstitutionPortalSupplement = {
       };
     };
     Functions: {
+      /**
+       * 0097 -- direktori anggota lembaga beserta nama dan surelnya.
+       *
+       * `profiles_select` hanya mengizinkan orang membaca profilnya sendiri,
+       * jadi tanpa fungsi ini layar Organisasi hanya bisa menampilkan UUID.
+       */
+      institution_member_directory: {
+        Args: { p_institution_id: string };
+        Returns: Array<{
+          id: string;
+          user_id: string | null;
+          role: string;
+          status: string;
+          joined_at: string | null;
+          display_name: string | null;
+          email: string | null;
+          is_self: boolean;
+        }>;
+      };
+      /** 0097 -- menambah anggota lewat surel; perannya selalu `viewer`. */
+      institution_add_member_by_email: {
+        Args: { p_institution_id: string; p_email: string };
+        Returns: import("@/types/database.generated").Json;
+      };
       resolve_my_institution_id: {
         Args: { p_institution_id?: string };
         Returns: string;
