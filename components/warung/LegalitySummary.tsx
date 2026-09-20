@@ -74,9 +74,17 @@ export function LegalitySummary() {
 
   return (
     <div>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
         <label className="block text-xs font-bold text-[#4a6280]">Ringkasan legalitas</label>
-        <Link href="/umkm/profil/dokumen" className="text-[11px] font-bold text-[#0b5f86]">
+        {/*
+          `-mr-2 px-2` + `min-h-11`: area sentuhnya 44px tanpa menggeser
+          tulisannya dari tepi kanan. Tautan setinggi 17px di dalam kartu yang
+          padat adalah sasaran yang hampir selalu meleset di ponsel.
+        */}
+        <Link
+          href="/umkm/profil/dokumen"
+          className="-mr-2 inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-[11px] font-bold text-[#0b5f86] hover:bg-[#f3f6f9]"
+        >
           Kelola dokumen
         </Link>
       </div>

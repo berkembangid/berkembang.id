@@ -192,7 +192,7 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
           <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
             Angka bulan ini, supaya tidak ada kejutan setelah berkasnya terkirim.
           </p>
-          <dl className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <dl className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
             <PreviewFigure label="Uang masuk dari jualan" value={warung.boxes.salesIdr} />
             <PreviewFigure label="Untung bersih" value={warung.boxes.netIncomeIdr} />
             <PreviewFigure label="Yang usaha punya" value={sheet.totalAssetsIdr} />

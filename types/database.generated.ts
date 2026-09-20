@@ -450,6 +450,67 @@ export type Database = {
           }
         ]
       }
+      business_bank_accounts: {
+        Row: {
+          id: string
+          business_id: string
+          bank_name: string
+          account_holder_name: string
+          account_last4: string
+          evidence_document_id: string | null
+          owner_confirmed_at: string | null
+          declared_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          bank_name: string
+          account_holder_name: string
+          account_last4: string
+          evidence_document_id?: string | null
+          owner_confirmed_at?: string | null
+          declared_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          bank_name?: string
+          account_holder_name?: string
+          account_last4?: string
+          evidence_document_id?: string | null
+          owner_confirmed_at?: string | null
+          declared_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_bank_accounts_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_bank_accounts_declared_by_fkey"
+            columns: ["declared_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_bank_accounts_evidence_document_id_fkey"
+            columns: ["evidence_document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       business_dinas_affiliations: {
         Row: {
           id: string
@@ -4943,6 +5004,12 @@ export type Database = {
         }
         Returns: Json
       }
+      attach_business_bank_account_evidence: {
+        Args: {
+          p_document_id: string
+        }
+        Returns: Json
+      }
       attach_document: {
         Args: {
           p_document_id: string
@@ -5375,6 +5442,14 @@ export type Database = {
           days_recorded: number
         }[]
       }
+      forget_business_bank_account: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      get_business_bank_account: {
+        Args: Record<string, never>
+        Returns: Json
+      }
       get_my_discovery_optin: {
         Args: Record<string, never>
         Returns: Json
@@ -5384,6 +5459,28 @@ export type Database = {
           p_institution_id?: string
         }
         Returns: Json
+      }
+      institution_add_member_by_email: {
+        Args: {
+          p_institution_id: string
+          p_email: string
+        }
+        Returns: Json
+      }
+      institution_member_directory: {
+        Args: {
+          p_institution_id: string
+        }
+        Returns: {
+          id: string
+          user_id: string
+          role: string
+          status: string
+          joined_at: string
+          display_name: string
+          email: string
+          is_self: boolean
+        }[]
       }
       join_dinas_broadcast: {
         Args: {
@@ -5598,6 +5695,14 @@ export type Database = {
       }
       revoke_my_dinas_affiliation: {
         Args: Record<string, never>
+        Returns: Json
+      }
+      save_business_bank_account: {
+        Args: {
+          p_bank_name: string
+          p_account_holder_name: string
+          p_account_last4: string
+        }
         Returns: Json
       }
       save_inventory_count: {

@@ -191,7 +191,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         <div className={styles.profile}>
           <div className="flex items-center gap-3">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#d6eefa] text-xs font-extrabold text-[#0b5f86]">{userName.slice(0, 2).toUpperCase()}</div>
-            <Link href="/umkm/profil" className="min-w-0 flex-1">
+            <Link href="/umkm/profil" className="flex min-h-11 min-w-0 flex-1 flex-col justify-center">
               <p className="truncate text-xs font-bold text-[#1b2a3a]">{userName}</p>
               <p className="truncate text-[10px] text-[#6e859e]">{businessName || "Kelola profil usaha"}</p>
             </Link>

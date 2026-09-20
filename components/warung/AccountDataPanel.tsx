@@ -112,7 +112,7 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
         type="button"
         onClick={() => void exportData()}
         disabled={exporting}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#c8d3de] bg-white px-4 py-3 text-xs font-bold text-[#4a6280] transition-colors hover:bg-[#f7f9fb] disabled:opacity-60"
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#c8d3de] bg-white px-4 py-3 text-xs font-bold text-[#4a6280] transition-colors hover:bg-[#f7f9fb] disabled:opacity-60"
       >
         {exporting ? <LoaderCircle size={14} className="animate-spin" /> : <Download size={14} />}
         {exporting ? "Menyiapkan berkas…" : "Unduh semua data saya"}
@@ -172,7 +172,7 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
           type="button"
           onClick={() => setStage("confirming")}
           disabled={stage === "working"}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#c8d3de] bg-white px-4 py-3 text-xs font-bold text-[#b4304a] transition-colors hover:bg-[#fdf1f3] disabled:opacity-60"
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#c8d3de] bg-white px-4 py-3 text-xs font-bold text-[#b4304a] transition-colors hover:bg-[#fdf1f3] disabled:opacity-60"
         >
           <Trash2 size={14} /> Hapus akun
         </button>

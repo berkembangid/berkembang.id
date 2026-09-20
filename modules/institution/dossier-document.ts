@@ -58,6 +58,14 @@ export type DossierDocumentData = {
   readinessScore: number | null;
   /** Tanggal penghitungan kesiapan */
   readinessDate: string | null;
+  /**
+   * Pemisahan uang usaha dari uang pribadi (komponen B5).
+   *
+   * `null` berarti potretnya dibuat sebelum komponen ini ada — bukan berarti
+   * usahanya tidak punya rekening terpisah. Nama bank dan nomornya tidak
+   * pernah ikut: yang dibagikan hanya derajat pembuktiannya.
+   */
+  separateBankAccount: "berbukti" | "tercatat" | "belum" | null;
 
   // ── Legalitas & Perizinan ────────────────────────────────────────────────
   legalitas: LegalitasItem[];

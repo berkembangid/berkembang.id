@@ -305,13 +305,13 @@ export default function InstitutionProgramPage() {
           />
         </div>
       ) : (
-        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <div className="mt-5 grid min-w-0 gap-4 lg:grid-cols-2">
           {programs.map((program) => {
             const status = STATUS[program.status] ?? { label: program.status, kelas: "bg-slate-100 text-slate-600" };
             const sedangDisunting = sunting?.id === program.id;
 
             return (
-              <article key={program.id} className="rounded-2xl border border-slate-200 bg-white p-5">
+              <article key={program.id} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5">
                 {sedangDisunting ? (
                   <div className="space-y-3">
                     <label className="block text-xs font-bold text-slate-600">

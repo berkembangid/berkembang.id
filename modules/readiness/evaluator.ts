@@ -18,7 +18,7 @@ export type ReadinessLevel = (typeof readinessLevels)[number];
 
 export const componentIds = [
   "A1", "A2", "A3",
-  "B1", "B2", "B3", "B4",
+  "B1", "B2", "B3", "B4", "B5",
   "C1", "C2",
   "D1", "D2", "D3",
 ] as const;
@@ -61,6 +61,8 @@ export type ReadinessFacts = {
   b3CoveredIdr: number;
   b3Count: number;
   b4StockMonths: number;
+  /** Anak tangga rekening usaha: 0 belum ada, 1 tercatat, 2 berbukti. */
+  b5BusinessAccount: number;
   c1Required: number;
   c1Confirmed: number;
   c2Filled: number;
@@ -107,6 +109,11 @@ export function componentValue(id: ComponentId, facts: ReadinessFacts): number |
     // selamanya dari Perak justru karena ia hemat.
     case "B3": return facts.b3TotalIdr === 0 ? null : facts.b3CoveredIdr / facts.b3TotalIdr;
     case "B4": return facts.b4StockMonths;
+    // Nol berarti "belum dicatat", dan itu memang nol -- bukan BELUM_ADA_DATA.
+    // Perbedaannya menentukan: komponen tanpa data dianggap terpenuhi oleh
+    // `satisfies`, jadi mengembalikan null di sini akan membuat langkah ini
+    // tidak pernah muncul sebagai pekerjaan yang tersisa bagi siapa pun.
+    case "B5": return facts.b5BusinessAccount;
     case "C1": return facts.c1Confirmed;
     case "C2": return facts.c2Filled;
     case "D1": return facts.d1OpeningBalance ? 1 : 0;

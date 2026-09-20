@@ -48,6 +48,7 @@ const componentNames: Record<string, string> = {
   B2: "Uang pribadi tercatat terpisah",
   B3: "Nota untuk belanja besar",
   B4: "Hitung sisa bahan",
+  B5: "Rekening usaha terpisah",
   C1: "Izin wajib sektor",
   C2: "Kelengkapan profil",
   D1: "Kondisi awal usaha",
@@ -55,8 +56,12 @@ const componentNames: Record<string, string> = {
   D3: "Laporan yang pernah diterbitkan",
 };
 
-function threshold(value: number | null): string {
+/** Anak tangga B5 bukan hitungan apa pun, jadi angkanya tidak berarti di layar. */
+const anakTanggaRekening: Record<number, string> = { 1: "tercatat", 2: "berbukti" };
+
+function threshold(value: number | null, id?: string): string {
   if (value === null) return "—";
+  if (id === "B5") return anakTanggaRekening[value] ?? String(value);
   // Nilai di bawah satu adalah proporsi; sisanya hitungan.
   return value < 1 ? `${Math.round(value * 100)}%` : String(value);
 }
@@ -112,10 +117,11 @@ export default function MetodologiPage() {
           </section>
 
           <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5">
-            <h2 className="text-sm font-bold text-[#1b2a3a]">Dua belas hal yang dilihat</h2>
+            <h2 className="text-sm font-bold text-[#1b2a3a]">Tiga belas hal yang dilihat</h2>
             <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
-              Semuanya dihitung dari catatan dan dokumen yang sudah ada. Tidak ada satu pun yang
-              perlu kamu klaim sendiri. Hari mencatat dihitung dari {data.windows.habitDays} hari
+              Hampir semuanya dihitung dari catatan dan dokumen yang sudah ada. Satu-satunya yang
+              kamu nyatakan sendiri adalah rekening usaha — dan pernyataan itu baru terhitung penuh
+              setelah ada berkasnya. Hari mencatat dihitung dari {data.windows.habitDays} hari
               terakhir, mutu catatan dari {data.windows.qualityDays} hari terakhir, dan belanja
               besar berarti di atas Rp{data.bigSpendIdr.toLocaleString("id-ID")}.
             </p>
@@ -140,9 +146,9 @@ export default function MetodologiPage() {
                           {component.pillarTitle}
                         </span>
                       </td>
-                      <td className="py-2 pr-3 tabular-nums text-[#4a6280]">{threshold(component.partial)}</td>
-                      <td className="py-2 pr-3 tabular-nums text-[#4a6280]">{threshold(component.silver)}</td>
-                      <td className="py-2 tabular-nums text-[#4a6280]">{threshold(component.gold)}</td>
+                      <td className="py-2 pr-3 tabular-nums text-[#4a6280]">{threshold(component.partial, component.id)}</td>
+                      <td className="py-2 pr-3 tabular-nums text-[#4a6280]">{threshold(component.silver, component.id)}</td>
+                      <td className="py-2 tabular-nums text-[#4a6280]">{threshold(component.gold, component.id)}</td>
                     </tr>
                   ))}
                 </tbody>

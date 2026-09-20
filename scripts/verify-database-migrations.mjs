@@ -3341,32 +3341,65 @@ async function verifyAccountingPeriodReports() {
   assert.equal(purge.purged, 0, "nothing is deleted yet");
 
   // ---------------------------------------------------------------------
-  // Tingkat Kesiapan wp08-pilot-v2 (0047)
+  // Tingkat Kesiapan wp08-pilot-v3 (0047, lalu 0098)
   // ---------------------------------------------------------------------
+  // Versi yang berlaku naik ke v3 bersama komponen B5. Yang diperiksa di sini
+  // selalu versi yang SEDANG berlaku: pembekunya hanya menjaga baris
+  // berstatus `published`, jadi memeriksa v2 yang sudah pensiun akan lulus
+  // karena alasan yang salah -- barisnya memang tidak lagi dijaga.
+  //
   // Konfigurasi terbit tidak boleh berubah diam-diam. Tanpa penjagaan ini,
   // seseorang bisa menggeser ambang dan seluruh riwayat tingkat berubah makna
   // tanpa ada yang bisa menunjukkan kapan.
   await expectRejected(
     `update public.readiness_rule_sets
      set rules = jsonb_set(rules, '{bigSpendIdr}', '1'::jsonb)
-     where version = 'wp08-pilot-v2'`,
+     where version = 'wp08-pilot-v3'`,
     "P0001",
   );
   // Menerbitkan ulang isi yang sama tetap boleh: migrasi harus bisa diputar
   // dua kali.
   await client.query(
-    `update public.readiness_rule_sets set updated_at = now() where version = 'wp08-pilot-v2'`,
+    `update public.readiness_rule_sets set updated_at = now() where version = 'wp08-pilot-v3'`,
+  );
+
+  // Tepat satu versi model tingkat yang berlaku.
+  //
+  // Sengaja DIBATASI pada keluarga `wp08-pilot-v2`/`v3`, bukan seluruh tabel:
+  // `wp08-pilot-v1` sudah berstatus `published` berdampingan dengan v2 sejak
+  // `0047`, dan itu keadaan lama yang tidak diciptakan `0098`. Menuntut "hanya
+  // satu baris terbit di seluruh tabel" akan merah karena sesuatu yang bukan
+  // urusan pemeriksaan ini.
+  assert.equal(
+    await scalar(
+      `select count(*)::int as value from public.readiness_rule_sets
+       where status = 'published' and version in ('wp08-pilot-v2', 'wp08-pilot-v3')`,
+    ),
+    1,
+    "only one level-model rule set may be published at a time",
+  );
+  assert.equal(
+    (await client.query(
+      "select status as value from public.readiness_rule_sets where version = 'wp08-pilot-v2'",
+    )).rows[0].value,
+    "retired",
+    "the previous version is retired, never deleted -- old snapshots name it",
   );
 
   const configRow = (await client.query(
-    `select rules from public.readiness_rule_sets where version = 'wp08-pilot-v2' and status = 'published'`,
+    `select rules from public.readiness_rule_sets where version = 'wp08-pilot-v3' and status = 'published'`,
   )).rows[0];
-  assert.ok(configRow, "the v2 configuration must be published");
+  assert.ok(configRow, "the v3 configuration must be published");
   assert.equal(
     Object.keys(configRow.rules.components).length,
-    12,
+    13,
     "every component the model claims must exist in the configuration",
   );
+  // B5 tidak boleh menahan Perak. Ambang Perak yang terisi di sini akan
+  // menurunkan setiap usaha yang sudah Perak pada pembacaan berikutnya.
+  assert.equal(configRow.rules.components.B5.silver, null, "B5 must never gate Perak");
+  assert.equal(configRow.rules.components.B5.gold, 2, "proven separation is the gold rung");
+  assert.equal(configRow.rules.components.B5.pillar, "B", "B5 belongs to the record-quality pillar");
   assert.equal(configRow.rules.bigSpendIdr, 500000, "big spend threshold lives in configuration");
   assert.equal(
     configRow.rules.components.B3.silver,
@@ -3415,7 +3448,7 @@ async function verifyAccountingPeriodReports() {
   for (const key of [
     "a1RecordingDays", "a2Closings", "a3AgeDays",
     "b1Total", "b1Unchecked", "b2PriveMonths",
-    "b3TotalIdr", "b3CoveredIdr", "b4StockMonths",
+    "b3TotalIdr", "b3CoveredIdr", "b4StockMonths", "b5BusinessAccount",
     "c1Required", "c1Confirmed", "c2Filled",
     "d1OpeningBalance", "d2FullMonths", "d3Reports",
   ]) {
@@ -3480,6 +3513,107 @@ async function verifyAccountingPeriodReports() {
     `select count(*)::int as value from public.readiness_daily where business_id = '${businessB}'`,
   );
   assert.equal(Number(foreignReadiness.rows[0].value), 0, "readiness must not leak across businesses");
+
+  // ---------------------------------------------------------------------
+  // Rekening usaha terpisah (0098)
+  // ---------------------------------------------------------------------
+  // Tanpa catatan apa pun, anak tangganya NOL -- bukan null. Perbedaannya
+  // menentukan: komponen tanpa data dianggap terpenuhi oleh evaluator, jadi
+  // null di sini akan membuat langkah ini tidak pernah muncul sebagai
+  // pekerjaan yang tersisa bagi siapa pun.
+  assert.equal(facts.b5BusinessAccount, 0, "a business with no record sits on rung zero");
+
+  // Tabelnya tidak boleh ditulis langsung dari peramban (aturan 0092).
+  await assert.rejects(
+    () => asAuthenticated(
+      userB,
+      `insert into public.business_bank_accounts(business_id, bank_name, account_holder_name, account_last4)
+       values ('${businessB}', 'BRI', 'Siti', '1234')`,
+    ),
+    "writing a bank account straight from the browser must be refused",
+  );
+
+  const rekening = (await asAuthenticatedCommitted(
+    userB,
+    "select public.save_business_bank_account('BRI', 'Siti Aminah', '0201-0123-4821') as value",
+  )).rows[0].value;
+  assert.equal(
+    rekening.accountLast4,
+    "4821",
+    "a full account number typed by the owner is stored as four digits only",
+  );
+  assert.equal(rekening.stage, 1, "recording alone stops at the middle rung");
+
+  const factsTercatat = (await asAuthenticatedCommitted(
+    userB,
+    "select public.fn_readiness_facts() as value",
+  )).rows[0].value;
+  assert.equal(factsTercatat.b5BusinessAccount, 1, "the readiness facts follow the same rung");
+
+  // Kode galatnya dikenali katalog `lib/api/galat.ts`; pesan mentah PostgreSQL
+  // tidak pernah sampai ke layar.
+  await expectAuthenticatedRejected(
+    userB,
+    "select public.save_business_bank_account('BRI', 'Siti Aminah', '12')",
+    "22023",
+  );
+  await expectAuthenticatedRejected(
+    userB,
+    "select public.attach_business_bank_account_evidence('00000000-0000-4000-8000-0000000000ff')",
+    "42501",
+  );
+
+  const koran = (await client.query(
+    `insert into public.documents(business_id, user_id, name, doc_type, status, storage_path)
+     values ('${businessB}', '${userB}', 'Rekening koran uji', 'rekening_koran', 'uploaded', 'private/uji-rekening.pdf')
+     returning id as value`,
+  )).rows[0].value;
+
+  const berbukti = (await asAuthenticatedCommitted(
+    userB,
+    `select public.attach_business_bank_account_evidence('${koran}') as value`,
+  )).rows[0].value;
+  assert.equal(berbukti.stage, 2, "a file plus the owner's statement reaches the top rung");
+  assert.ok(berbukti.ownerConfirmedAt, "the statement is dated, or it says nothing");
+
+  // Dokumen yang diarsipkan berhenti menopang anak tangga kedua. Kalau hanya
+  // id-nya yang diperiksa, "berbukti" akan berdiri di atas berkas yang sudah
+  // tidak berlaku.
+  await client.query(`update public.documents set status = 'superseded' where id = '${koran}'`);
+  const factsArsip = (await asAuthenticatedCommitted(
+    userB,
+    "select public.fn_readiness_facts() as value",
+  )).rows[0].value;
+  assert.equal(factsArsip.b5BusinessAccount, 1, "an archived file no longer proves anything");
+  await client.query(`update public.documents set status = 'uploaded' where id = '${koran}'`);
+
+  // Mengubah nomornya melepas buktinya: berkas lama membuktikan rekening lain.
+  const diubah = (await asAuthenticatedCommitted(
+    userB,
+    "select public.save_business_bank_account('BRI', 'Siti Aminah', '9999') as value",
+  )).rows[0].value;
+  assert.equal(diubah.stage, 1, "changing the number releases the evidence");
+  assert.equal(diubah.evidenceDocumentId, null, "the released evidence is unlinked, not kept");
+
+  // Rekening usaha lain tidak pernah terbaca.
+  const foreignAccount = await asAuthenticated(
+    userA,
+    `select count(*)::int as value from public.business_bank_accounts where business_id = '${businessB}'`,
+  );
+  assert.equal(Number(foreignAccount.rows[0].value), 0, "bank accounts must not leak across businesses");
+
+  // Setiap perubahan meninggalkan jejak.
+  assert.ok(
+    await scalar(
+      `select count(*)::int as value from public.audit_events
+       where business_id = '${businessB}' and action like 'BUSINESS_BANK_ACCOUNT%'`,
+    ) >= 3,
+    "declaring, proving, and changing a bank account each leave an audit event",
+  );
+
+  // Dibersihkan supaya pemeriksaan berikutnya melihat usaha B apa adanya.
+  await asAuthenticatedCommitted(userB, "select public.forget_business_bank_account()");
+  await client.query(`delete from public.documents where id = '${koran}'`);
 
   // Jurnal tetap tidak bisa disentuh setelah semua ini.
   await expectRejected(

@@ -296,6 +296,33 @@ function snapshotNum(items: Record<string, Record<string, unknown>>, itemType: s
 }
 
 /**
+ * Anak tangga rekening usaha, dibaca dari potret kesiapan yang sudah beku.
+ *
+ * TIDAK ADA KUERI BARU, DAN TIDAK ADA LINGKUP CONSENT BARU. Potret `readiness`
+ * sudah memuat seluruh komponen apa adanya sejak `0063`, jadi B5 sampai ke
+ * dossier begitu ia menjadi komponen. Yang dibaca lembaga hanya statusnya --
+ * nama bank dan empat digitnya tidak pernah ikut ke potret mana pun.
+ */
+function bankAccountFromSnapshot(
+  items: Record<string, Record<string, unknown>>,
+): "berbukti" | "tercatat" | "belum" | null {
+  const components = items.readiness?.components;
+  if (!Array.isArray(components)) return null;
+  const b5 = components.find(
+    (item): item is { id: string; value: unknown } =>
+      typeof item === "object" && item !== null && (item as { id?: unknown }).id === "B5",
+  );
+  // Potret yang dibuat sebelum `0098` tidak punya B5 sama sekali. Itu bukan
+  // "belum punya rekening" -- itu "tidak ditanyakan waktu itu", dan dossier
+  // lama tidak boleh berubah arti karena kita menambah komponen hari ini.
+  if (!b5) return null;
+  const value = Number(b5.value ?? 0);
+  if (value >= 2) return "berbukti";
+  if (value >= 1) return "tercatat";
+  return "belum";
+}
+
+/**
  * Membangun DossierDocumentData (format PDF ringkas 1-2 halaman) dari konteks
  * dossier yang sudah di-resolve beserta data live keuangan.
  *
@@ -336,6 +363,7 @@ export async function buildDossierDocumentData(
   const readinessLevel = snapshotStr(items, "readiness", "level");
   const readinessScore = snapshotNum(items, "readiness", "score");
   const readinessDate = snapshotStr(items, "readiness", "calculated_at");
+  const separateBankAccount = bankAccountFromSnapshot(items);
 
   // ── Legalitas dari snapshot ───────────────────────────────────────────────
   const legalitas: LegalitasItem[] = [];
@@ -429,6 +457,7 @@ export async function buildDossierDocumentData(
     readinessLevel,
     readinessScore,
     readinessDate,
+    separateBankAccount,
     legalitas,
     financialRows,
     transactionCount: null, // tidak ada RPC khusus, bisa ditambahkan nanti

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AccountDataPanel } from "@/components/warung/AccountDataPanel";
 import { profileSectorOptions } from "@/modules/accounting/sector-mapping";
 import { LegalitySummary } from "@/components/warung/LegalitySummary";
+import { BusinessAccountSummary } from "@/components/warung/BusinessAccountSummary";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { User, Mail, Building2, Phone, Save, FileText, Camera, LogOut, ChevronRight } from "lucide-react";
@@ -94,7 +95,7 @@ function ChipGroup<T extends string>({
           key={opt.value}
           type="button"
           onClick={() => toggle(opt.value)}
-          className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+          className={`inline-flex min-h-11 items-center text-xs font-semibold px-4 rounded-full border transition-colors ${
             isActive(opt.value)
               ? "bg-[#0b5f86] text-white border-[#0b5f86]"
               : "bg-white text-[#4a6280] border-[#c8d3de] hover:border-[#0b5f86] hover:text-[#0b5f86]"
@@ -377,7 +378,7 @@ export default function ProfilPage() {
                     value={form.namaUsaha}
                     onChange={(e) => setForm({ ...form, namaUsaha: e.target.value })}
                     placeholder="Contoh: Warung Ayam Geprek Ibu Sari"
-                    className="w-full rounded-xl border border-[#c8d3de] px-3 py-2.5 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                    className="w-full rounded-xl border border-[#c8d3de] px-3 py-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
                   />
                 </FormField>
 
@@ -407,7 +408,7 @@ export default function ProfilPage() {
                       onChange={(e) => setForm({ ...form, tahunMulai: e.target.value.replace(/[^0-9]/g, "").slice(0, 4) })}
                       inputMode="numeric"
                       placeholder="2019"
-                      className="w-full rounded-xl border border-[#c8d3de] px-3 py-2.5 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                      className="w-full rounded-xl border border-[#c8d3de] px-3 py-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
                     />
                   </FormField>
 
@@ -444,7 +445,7 @@ export default function ProfilPage() {
                     value={form.alamat}
                     onChange={(e) => setForm({ ...form, alamat: e.target.value })}
                     placeholder="Jl. Merdeka No. 12, Kelurahan X"
-                    className="w-full rounded-xl border border-[#c8d3de] px-3 py-2.5 text-sm outline-none transition-colors focus:border-[#0b5f86] resize-none"
+                    className="w-full rounded-xl border border-[#c8d3de] px-3 py-3 text-sm outline-none transition-colors focus:border-[#0b5f86] resize-none"
                   />
                 </FormField>
               </div>
@@ -465,7 +466,7 @@ export default function ProfilPage() {
                         value={form.namaPemilik}
                         onChange={(e) => setForm({ ...form, namaPemilik: e.target.value })}
                         placeholder="Contoh: Ibu Sari"
-                        className="w-full rounded-xl border border-[#c8d3de] py-2.5 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                        className="w-full rounded-xl border border-[#c8d3de] py-3 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
                       />
                       <User size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9fb0c2]" />
                     </div>
@@ -476,7 +477,7 @@ export default function ProfilPage() {
                       <input
                         disabled
                         value={form.email}
-                        className="w-full rounded-xl border border-[#e3e9f0] bg-[#f8fafc] py-2.5 pl-9 pr-3 text-sm text-[#6e859e] cursor-not-allowed"
+                        className="w-full rounded-xl border border-[#e3e9f0] bg-[#f8fafc] py-3 pl-9 pr-3 text-sm text-[#6e859e] cursor-not-allowed"
                       />
                       <Mail size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9fb0c2]" />
                     </div>
@@ -489,7 +490,7 @@ export default function ProfilPage() {
                         value={form.phone}
                         onChange={(e) => setForm({ ...form, phone: e.target.value })}
                         placeholder="081234567890"
-                        className="w-full rounded-xl border border-[#c8d3de] py-2.5 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                        className="w-full rounded-xl border border-[#c8d3de] py-3 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
                       />
                       <Phone size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9fb0c2]" />
                     </div>
@@ -504,13 +505,19 @@ export default function ProfilPage() {
                     <FileText size={15} className="text-[#0b5f86]" />
                     <h2 className="text-xs font-bold text-[#1b2a3a]">Legalitas usaha</h2>
                   </div>
-                  <Link href="/umkm/profil/dokumen" className="flex items-center gap-1 text-[10px] font-bold text-[#0b5f86] hover:underline">
+                  <Link href="/umkm/profil/dokumen" className="-mr-2 flex min-h-11 items-center gap-1 rounded-lg px-2 text-[11px] font-bold text-[#0b5f86] hover:bg-[#f3f6f9]">
                     Kelola dokumen <ChevronRight size={11} />
                   </Link>
                 </div>
-                <div className="p-5">
+                <div className="space-y-4 p-5">
                   {/* NIB tidak lagi diketik di sini — sumber kebenaran tunggal: berkas di halaman Dokumen. */}
                   <LegalitySummary />
+                  {/* Rekening usaha duduk di sini, bukan di Laporan: ia bagian
+                      dari « usaha saya seperti apa », sama seperti izin. */}
+                  <div>
+                    <label className="mb-2 block text-xs font-bold text-[#4a6280]">Pemisahan uang usaha</label>
+                    <BusinessAccountSummary />
+                  </div>
                 </div>
               </section>
             </div>

@@ -22,7 +22,14 @@ import {
   stepHeadline,
 } from "@/modules/readiness/level-copy";
 
-export const readinessFormulaVersion = "wp08-pilot-v2";
+/**
+ * Naik ke v3 bersama migrasi `0098`, yang menambahkan komponen B5.
+ *
+ * Konstanta ini dan nama versi di migrasi harus berubah bersamaan: kalau salah
+ * satu tertinggal, `loadReadinessConfig` mencari versi yang tidak berstatus
+ * `published` dan seluruh halaman Perjalanan menjawab SERVICE_UNAVAILABLE.
+ */
+export const readinessFormulaVersion = "wp08-pilot-v3";
 
 export type ReadinessComponentPayload = {
   id: ComponentId;
@@ -81,6 +88,11 @@ function displayValue(component: EvaluatedComponent): string {
   // Komponen berupa proporsi ditulis sebagai persen; sisanya angka bulat.
   if (["B1", "B3"].includes(component.id)) return `${Math.round(component.value * 100)}%`;
   if (component.id === "D1") return component.value >= 1 ? "Sudah" : "Belum";
+  // Angka 0/1/2 tidak berarti apa-apa di layar. Yang dibaca pemilik adalah
+  // namanya, bukan anak tangga keberapa ia berdiri.
+  if (component.id === "B5") {
+    return component.value >= 2 ? "Berbukti" : component.value >= 1 ? "Tercatat" : "Belum";
+  }
   return String(Math.round(component.value));
 }
 

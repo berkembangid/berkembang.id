@@ -229,7 +229,16 @@ export default function InstitutionCandidatesPage() {
 
     {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
     <div className="mb-5 flex flex-wrap gap-2" aria-label="Saring berdasarkan bidang usaha">{sectors.map((item) => <button key={item} onClick={() => apply({ sector: item })} className={`min-h-11 rounded-full px-4 text-xs font-bold ${sector === item ? "bg-[#0b5f86] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>{item}</button>)}</div>
-    <div className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[auto_1fr_1fr_1fr_1fr_auto] md:items-end">
+    {/*
+      Enam kolom mulai dari `xl`, bukan `md`.
+
+      `md` adalah breakpoint yang sama dengan munculnya menu samping 272px.
+      Pada 768px keduanya menyala bersamaan: isinya tinggal ~496px, enam kolom
+      dipaksakan ke dalamnya, dan penyaring terakhir terdorong sampai 830px --
+      di luar layar, terpotong diam-diam oleh `overflow-x: hidden`. Petugas
+      yang memakai tablet kehilangan penyaring urutan tanpa tahu ia ada.
+    */}
+    <div className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-[auto_1fr_1fr_1fr_1fr_auto] xl:items-end">
       <div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal size={15} className="text-[#0b5f86]" />Saring kandidat</div>
       <label className="text-xs font-bold text-slate-600">Wilayah<select value={region} onChange={(event) => apply({ region: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal"><option value="Semua">Semua wilayah</option>{regions.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
       <label className="text-xs font-bold text-slate-600">Kesiapan min.<select value={readinessFilter} onChange={(event) => apply({ readiness: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal"><option value="Semua">Semua tingkat</option>{readinessBands.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>

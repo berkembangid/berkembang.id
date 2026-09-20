@@ -267,7 +267,19 @@ export default function InstitutionOrganizationPage() {
           description="Hubungi admin platform untuk menyiapkan organisasi."
         />
       ) : (
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        /*
+          `grid-cols-[minmax(0,1fr)]`, bukan sekadar `grid`.
+
+          Track grid bawaan berukuran `auto`, yang berarti TIDAK PERNAH lebih
+          sempit dari min-content item terlebar. Di 360px satu kartu memaksa
+          track menjadi 346px, dan karena hanya satu kolom, KETIGA kartu ikut
+          melebihi layar -- lalu `overflow-x: hidden` di shell menyembunyikan
+          akibatnya alih-alih memperbaikinya: tepi kanannya terpotong diam-diam.
+
+          `minmax(0,1fr)` mengizinkan tracknya menyusut, dan isinya yang
+          memotong diri.
+        */
+        <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="text-xs font-bold uppercase tracking-wide text-[#0b5f86]">Profil organisasi</p>
             <h2 className="mt-2 text-xl font-black text-slate-900">{institution.name}</h2>
@@ -284,7 +296,15 @@ export default function InstitutionOrganizationPage() {
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="text-xs font-bold uppercase tracking-wide text-[#0b5f86]">Lisensi pilot</p>
-            <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+            {/*
+              Dua kolom di layar paling sempit, tiga mulai dari 400px.
+
+              "Kredit terpakai" tidak bisa menyusut lebih sempit dari katanya,
+              jadi tiga kolom pada 360px memaksa kartunya melebihi lebar layar
+              -- dan `overflow-x: hidden` di shell MENYEMBUNYIKAN akibatnya
+              alih-alih memperbaikinya: tepi kanan kartunya terpotong diam-diam.
+            */}
+            <div className="mt-4 grid grid-cols-2 gap-3 text-center min-[400px]:grid-cols-3">
               {/*
                 Kursi ditulis sebagai "2 dari 10", bukan "10".
                 Angka tunggal membuat batasnya tak terlihat sampai ia menolak
@@ -447,7 +467,7 @@ function Info({ label, value }: { label: string; value: string }) {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-xl font-black text-slate-900">{value}</p>
       <p className="mt-1 text-[11px] text-slate-500">{label}</p>
     </div>

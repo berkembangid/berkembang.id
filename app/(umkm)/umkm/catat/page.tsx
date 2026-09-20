@@ -829,7 +829,7 @@ export default function CatatPage() {
                   key={mode}
                   type="button"
                   onClick={() => setInputMode(mode)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl transition-all cursor-pointer ${
+                  className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                     inputMode === mode ? "bg-[#0b5f86] text-white shadow-sm" : "text-[#4a6280] hover:text-[#0b5f86]"
                   }`}
                 >
@@ -935,7 +935,7 @@ export default function CatatPage() {
                     key={sug.label}
                     type="button"
                     onClick={() => handleSuggestionClick(sug.text)}
-                    className="w-full text-left p-3 rounded-xl bg-[#f3f2ff] hover:bg-[#eef8fd] border border-[#e3e9f0] transition-colors flex items-center justify-between text-xs font-semibold text-[#1b2a3a] cursor-pointer"
+                    className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-[#e3e9f0] bg-[#f3f2ff] p-3 text-left text-xs font-semibold text-[#1b2a3a] transition-colors hover:bg-[#eef8fd] cursor-pointer"
                   >
                     <span>{sug.label}</span>
                     <span className="text-[11px] font-bold text-[#0b5f86]">Coba AI →</span>

@@ -69,6 +69,23 @@ export const PESAN_GALAT: Record<string, string> = {
   MEMBER_INVITE_FAILED: "Anggota belum dapat ditambahkan. Coba lagi sebentar lagi.",
   AUDIT_WRITE_FAILED: "Catatan audit belum tersimpan. Tindakan Anda sendiri tetap berjalan.",
 
+  // -- Rekening usaha -------------------------------------------------------
+  // Kode-kode ini dilemparkan `save_business_bank_account` dan
+  // `attach_business_bank_account_evidence`, lalu dikenali kembali oleh
+  // `kodeDariPesanDb`. Kalimatnya menyebut apa yang kurang, bukan bahwa
+  // isiannya salah -- yang mengisi layar ini sedang mengerjakan langkah yang
+  // benar.
+  REKENING_UNAVAILABLE: "Catatan rekening usaha belum bisa dimuat. Coba lagi sebentar lagi.",
+  REKENING_ISIAN_KURANG: "Nama bank, nama pemilik rekening, dan 4 angka terakhir perlu terisi semua.",
+  REKENING_BANK_KOSONG: "Pilih atau tulis nama banknya lebih dulu.",
+  REKENING_NAMA_KOSONG: "Tulis nama yang tertera pada rekening itu.",
+  REKENING_DIGIT_KURANG: "Tulis 4 angka terakhir nomor rekeningnya.",
+  REKENING_BELUM_DICATAT: "Catat dulu rekening usahanya, baru buktinya bisa dilampirkan.",
+  DOKUMEN_TIDAK_DIKENAL: "Berkasnya tidak dikenali. Unggah ulang, lalu coba lagi.",
+  DOKUMEN_BUKAN_MILIK_USAHA: "Berkas itu bukan milik usaha Anda.",
+  DOKUMEN_TIDAK_BERLAKU: "Berkas itu sudah diarsipkan. Unggah rekening koran yang berlaku.",
+  DOKUMEN_BUKAN_REKENING: "Berkas itu bukan rekening koran. Unggah mutasi rekening atau foto halaman depan buku tabungan.",
+
   /**
    * Nol baris berubah. Kelas galat tersendiri, dan sengaja begitu.
    *

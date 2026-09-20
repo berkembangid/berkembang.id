@@ -465,31 +465,45 @@ function KualitasDataSection({ data }: { data: DossierDocumentData }) {
       detail: data.readinessLevel ?? "Belum dihitung",
     },
   ];
+
+  // Pemisahan rekening hanya muncul bila potretnya memang memuatnya. Dossier
+  // yang dibekukan sebelum komponen ini ada tidak boleh berbunyi "belum" --
+  // yang benar adalah pertanyaannya tidak pernah diajukan waktu itu.
+  if (data.separateBankAccount !== null) {
+    items.push({
+      label: "Rekening Usaha Terpisah",
+      ok: data.separateBankAccount === "berbukti",
+      detail:
+        data.separateBankAccount === "berbukti"
+          ? "Tercatat, dengan berkas pendukung"
+          : data.separateBankAccount === "tercatat"
+            ? "Dinyatakan pemilik, tanpa berkas"
+            : "Belum dipisahkan",
+    });
+  }
+
+  // Dibariskan dua-dua secara umum, bukan dengan potongan tetap: daftar ini
+  // sudah pernah bertambah panjang, dan potongan tetap membuat baris kedua
+  // diam-diam memuat tiga kolom.
+  const rows: (typeof items)[] = [];
+  for (let index = 0; index < items.length; index += 2) rows.push(items.slice(index, index + 2));
+
   return (
     <View style={s.section}>
       <SectionHeader title="Kualitas Data & Integritas Catatan" />
-      <View style={s.qualityRow}>
-        {items.slice(0, 2).map((item, i) => (
-          <View key={i} style={[s.qualityItem, { flex: 1 }]}>
-            <View style={[s.qualityDot, { backgroundColor: item.ok ? C.verified : C.warning }]} />
-            <View>
-              <Text style={[s.qualityText, { fontFamily: "Helvetica-Bold" }]}>{item.label}</Text>
-              <Text style={[s.qualityText, { color: C.muted }]}>{item.detail}</Text>
+      {rows.map((row, rowIndex) => (
+        <View key={rowIndex} style={s.qualityRow}>
+          {row.map((item, i) => (
+            <View key={i} style={[s.qualityItem, { flex: 1 }]}>
+              <View style={[s.qualityDot, { backgroundColor: item.ok ? C.verified : C.warning }]} />
+              <View>
+                <Text style={[s.qualityText, { fontFamily: "Helvetica-Bold" }]}>{item.label}</Text>
+                <Text style={[s.qualityText, { color: C.muted }]}>{item.detail}</Text>
+              </View>
             </View>
-          </View>
-        ))}
-      </View>
-      <View style={s.qualityRow}>
-        {items.slice(2).map((item, i) => (
-          <View key={i} style={[s.qualityItem, { flex: 1 }]}>
-            <View style={[s.qualityDot, { backgroundColor: item.ok ? C.verified : C.warning }]} />
-            <View>
-              <Text style={[s.qualityText, { fontFamily: "Helvetica-Bold" }]}>{item.label}</Text>
-              <Text style={[s.qualityText, { color: C.muted }]}>{item.detail}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
+          ))}
+        </View>
+      ))}
     </View>
   );
 }

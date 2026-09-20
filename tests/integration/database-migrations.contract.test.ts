@@ -400,10 +400,16 @@ describe("WP-06 private-document contract", () => {
       join(process.cwd(), "app", "api", "v1", "documents", "[id]", "retry-extraction", "route.ts"),
     ];
     const routes = routeFiles.map((file) => readFileSync(file, "utf8")).join("\n");
-    const page = readFileSync(
+    // Urutan unggahnya pindah ke `document-upload.ts` ketika layar Rekening
+    // usaha ikut memerlukannya. Yang dijaga uji ini bukan berkas mana yang
+    // memuatnya, melainkan bahwa jalur unggah dari peramban tetap lewat signed
+    // URL dan tetap mendaftarkan versinya -- jadi keduanya dibaca bersama.
+    const page = [
       join(process.cwd(), "app", "(umkm)", "umkm", "profil", "dokumen", "page.tsx"),
-      "utf8",
-    );
+      join(process.cwd(), "modules", "documents", "document-upload.ts"),
+    ]
+      .map((file) => readFileSync(file, "utf8"))
+      .join("\n");
     const consentDialog = readFileSync(
       join(process.cwd(), "components", "documents", "DocumentUploadConsentDialog.tsx"),
       "utf8",
@@ -1308,5 +1314,83 @@ describe("dossier API keys contract (0059)", () => {
   it("exchanges a key without a user session and logs the access", () => {
     expect(migration).toContain("function public.exchange_dossier_api_key");
     expect(migration).toContain("dossier_access_events");
+  });
+});
+
+describe("rekening usaha terpisah contract (0098)", () => {
+  const migration = readFileSync(
+    join(migrationDirectory, "0098_rekening_usaha_terpisah.sql"),
+    "utf8",
+  );
+
+  it("keeps the table readable but never writable from the browser", () => {
+    // Aturan `0092`: hanya sembilan tabel yang boleh ditulis langsung, dan ini
+    // bukan salah satunya. Hak tulis yang bocor ke sini berarti satu baris
+    // rekening bisa berubah tanpa meninggalkan jejak audit.
+    expect(migration).toContain("create table if not exists public.business_bank_accounts");
+    expect(migration).toContain("grant select on public.business_bank_accounts to authenticated");
+    expect(migration).not.toMatch(
+      /grant\s+(insert|update|delete)[^;]*on public\.business_bank_accounts/i,
+    );
+  });
+
+  it("stores four digits, never the whole account number", () => {
+    expect(migration).toContain("account_last4 text not null");
+    expect(migration).toMatch(/account_last4 ~ '\^\[0-9\]\{4\}\$'/);
+    // Kolom bernama account_number dalam bentuk apa pun tidak boleh lahir di
+    // sini: nomor penuhnya tinggal di dalam berkas rekening koran, di private
+    // storage, di balik consent.
+    expect(migration).not.toMatch(/account_number\b/);
+  });
+
+  it("refuses an owner statement that has no file behind it", () => {
+    expect(migration).toContain(
+      "(owner_confirmed_at is null or evidence_document_id is not null)",
+    );
+  });
+
+  it("writes every change through a function that leaves an audit trail", () => {
+    for (const fn of [
+      "public.save_business_bank_account",
+      "public.attach_business_bank_account_evidence",
+      "public.forget_business_bank_account",
+    ]) {
+      expect(migration, fn).toContain(`create or replace function ${fn}`);
+    }
+    expect(migration.match(/insert into public\.audit_events/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(migration).toContain("BUSINESS_BANK_ACCOUNT_DECLARED");
+    expect(migration).toContain("BUSINESS_BANK_ACCOUNT_EVIDENCE_CONFIRMED");
+  });
+
+  it("computes the rung in exactly one place", () => {
+    // Dua tempat yang menghitung "apakah rekening ini berbukti" akan
+    // berselisih, dan yang menemukannya adalah pemilik yang melihat kartunya
+    // hijau di satu layar dan abu-abu di layar lain.
+    expect(migration).toContain("function private.business_bank_account_stage");
+    expect(migration).toContain("v_b5 := private.business_bank_account_stage(v_business_id)");
+    expect(migration).toContain("'b5BusinessAccount', v_b5,");
+  });
+
+  it("publishes a new rule set instead of editing the frozen one", () => {
+    expect(migration).toContain("'wp08-pilot-v3'");
+    expect(migration).toContain("where version = 'wp08-pilot-v2' and status = 'published'");
+    // B5 tidak boleh punya ambang Perak: komponen baru yang menahan Perak akan
+    // menurunkan setiap usaha yang sudah Perak hari ini.
+    expect(migration).toContain(
+      "'B5', jsonb_build_object('pillar', 'B', 'partial', 1, 'silver', null, 'gold', 2)",
+    );
+  });
+
+  it("keeps the published version and the code constant in step", () => {
+    // Kalau keduanya berselisih, `loadReadinessConfig` mencari versi yang
+    // tidak berstatus published dan seluruh halaman Perjalanan menjawab
+    // SERVICE_UNAVAILABLE -- kegagalan total dari satu kata yang lupa diubah.
+    const repository = readFileSync(
+      join(process.cwd(), "modules", "readiness", "level-repository.ts"),
+      "utf8",
+    );
+    const published = migration.match(/insert into public\.readiness_rule_sets[\s\S]*?'(wp08-[a-z0-9-]+)'/)?.[1];
+    expect(published).toBe("wp08-pilot-v3");
+    expect(repository).toContain(`export const readinessFormulaVersion = "${published}"`);
   });
 });

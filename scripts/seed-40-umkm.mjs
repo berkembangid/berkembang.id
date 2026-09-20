@@ -421,62 +421,109 @@ async function seedOneUmkm(item, index) {
   const docList = [];
   docList.push({
     business_id: businessId,
-    doc_type: "ktp_owner",
-    title: `KTP ${item.owner}`,
+    doc_type: "ktp",
+    name: `KTP ${item.owner}`,
     status: "verified",
     assurance_level: "confirmed",
     storage_path: `mock/ktp-${businessId}.jpg`,
-    created_by: userId
+    user_id: userId
   });
   if (item.level === "TEMBAGA" || item.level === "PERAK" || item.level === "EMAS") {
     docList.push({
       business_id: businessId,
       doc_type: "nib",
-      title: `NIB ${item.business}`,
+      name: `NIB ${item.business}`,
       status: "verified",
       assurance_level: "confirmed",
       storage_path: `mock/nib-${businessId}.pdf`,
-      created_by: userId
+      user_id: userId
     });
   }
   if (item.level === "PERAK" || item.level === "EMAS") {
     docList.push({
       business_id: businessId,
       doc_type: "npwp",
-      title: `NPWP Usaha`,
+      name: `NPWP Usaha`,
       status: "verified",
       assurance_level: "confirmed",
       storage_path: `mock/npwp-${businessId}.pdf`,
-      created_by: userId
+      user_id: userId
     });
   }
   if (item.level === "EMAS" && item.sector === "Kuliner") {
     docList.push({
       business_id: businessId,
       doc_type: "halal",
-      title: `Sertifikat Halal`,
+      name: `Sertifikat Halal`,
       status: "verified",
       assurance_level: "confirmed",
       storage_path: `mock/halal-${businessId}.pdf`,
-      created_by: userId
+      user_id: userId
     });
     docList.push({
       business_id: businessId,
       doc_type: "pirt",
-      title: `Sertifikat PIRT`,
+      name: `Sertifikat PIRT`,
       status: "verified",
       assurance_level: "confirmed",
       storage_path: `mock/pirt-${businessId}.pdf`,
-      created_by: userId
+      user_id: userId
     });
   }
   for (const doc of docList) {
     const { data: existingDoc } = await admin.from("documents").select("id").eq("business_id", businessId).eq("doc_type", doc.doc_type).maybeSingle();
     if (!existingDoc) {
-      try {
-        await admin.from("documents").insert(doc);
-      } catch {}
+      // Galatnya DILAPORKAN, tidak ditelan. Sebelum ini blok ini memakai nama
+      // kolom yang tidak ada (`title`, `created_by`), PostgREST menolak setiap
+      // baris, dan tidak ada satu pun dokumen yang pernah terbentuk -- tanpa
+      // satu pun pesan di layar seeder.
+      const { error: docErr } = await admin.from("documents").insert(doc);
+      if (docErr) console.warn(`    ! dokumen ${doc.doc_type} gagal: ${docErr.message}`);
     }
+  }
+
+  // 7b. Rekening usaha terpisah (komponen B5, migrasi `0098`)
+  //
+  // Demo harus memperlihatkan ketiga anak tangganya, dan yang Emas harus
+  // benar-benar berbukti -- kalau tidak, seluruh usaha Emas di demo akan turun
+  // ke Perak pada pembacaan halaman Perjalanan yang pertama.
+  const BANK_DEMO = ["BRI", "BNI", "Bank Mandiri", "BCA", "BSI", "Bank Jatim"];
+  const tahapRekening = item.level === "EMAS" ? 2 : item.level === "PERAK" ? 1 : (rand() < 0.45 ? 1 : 0);
+
+  if (tahapRekening > 0) {
+    let buktiId = null;
+    if (tahapRekening === 2) {
+      const { data: koranLama } = await admin.from("documents").select("id")
+        .eq("business_id", businessId).eq("doc_type", "rekening_koran").maybeSingle();
+      if (koranLama) {
+        buktiId = koranLama.id;
+      } else {
+        const { data: koranBaru, error: koranErr } = await admin.from("documents").insert({
+          business_id: businessId,
+          doc_type: "rekening_koran",
+          name: `Rekening koran ${item.business}`,
+          status: "verified",
+          assurance_level: "confirmed",
+          storage_path: `mock/rekening-koran-${businessId}.pdf`,
+          user_id: userId
+        }).select("id").maybeSingle();
+        if (koranErr) console.warn(`    ! rekening koran gagal: ${koranErr.message}`);
+        buktiId = koranBaru?.id ?? null;
+      }
+    }
+
+    // Tanpa berkasnya, pernyataan pemilik tidak boleh ikut ditulis: batasan
+    // `business_bank_accounts_shape_check` menolaknya, dan memang seharusnya.
+    const { error: rekErr } = await admin.from("business_bank_accounts").upsert({
+      business_id: businessId,
+      bank_name: BANK_DEMO[Math.floor(rand() * BANK_DEMO.length)],
+      account_holder_name: item.owner,
+      account_last4: String(1000 + Math.floor(rand() * 9000)),
+      evidence_document_id: buktiId,
+      owner_confirmed_at: buktiId ? new Date().toISOString() : null,
+      declared_by: userId
+    }, { onConflict: "business_id" });
+    if (rekErr) console.warn(`    ! rekening usaha gagal: ${rekErr.message}`);
   }
 
   // 8. Opening Balances (Kondisi Awal Usaha)

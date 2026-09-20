@@ -80,7 +80,16 @@ export function MonthlyTab({ month }: { month: string }) {
 
   return (
     <div className="space-y-4">
-      <section aria-label="Ringkasan bulan ini" className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
+      {/*
+        Empat kolom mulai dari `xl`, bukan `md`.
+
+        `md` adalah breakpoint yang sama dengan munculnya menu samping 272px.
+        Pada 768px keduanya menyala bersamaan: tiap kartu tinggal 99px,
+        sementara "Rp4.538.166" pada `text-lg font-black` butuh 128px. Angkanya
+        meluber keluar kartunya sendiri dan menyeret seluruh halaman menggulir
+        ke samping -- di halaman yang justru dibuka untuk MEMBACA angka itu.
+      */}
+      <section aria-label="Ringkasan bulan ini" className="grid grid-cols-2 gap-2 xl:grid-cols-4 xl:gap-3">
         {(Object.keys(warungBoxLabels) as Array<keyof typeof warungBoxLabels>).map((key) => {
           const tone = boxTone[key];
           const value = report.boxes[key];

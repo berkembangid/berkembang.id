@@ -8,7 +8,7 @@ import {
   type ReadinessFacts,
 } from "@/modules/readiness/evaluator";
 
-/** Salinan konfigurasi `wp08-pilot-v2` yang ditanam di migrasi `0047`. */
+/** Salinan konfigurasi `wp08-pilot-v3` yang ditanam di migrasi `0098`. */
 const config: ReadinessConfig = {
   disclaimer: "…",
   windows: {
@@ -19,7 +19,7 @@ const config: ReadinessConfig = {
     fullMonthMinDays: 8,
   },
   bigSpendIdr: 500_000,
-  effortOrder: ["C2", "D1", "C1_NIB", "A2", "A1", "B3", "C1_HALAL", "D2"],
+  effortOrder: ["C2", "D1", "B5", "C1_NIB", "A2", "A1", "B3", "C1_HALAL", "D2"],
   components: {
     A1: { pillar: "A", partial: 8, silver: 20, gold: 24 },
     A2: { pillar: "A", partial: 4, silver: 12, gold: 20 },
@@ -28,6 +28,7 @@ const config: ReadinessConfig = {
     B2: { pillar: "B", partial: 1, silver: 2, gold: 3 },
     B3: { pillar: "B", partial: 0.2, silver: 0.4, gold: 0.7 },
     B4: { pillar: "B", partial: 1, silver: null, gold: 2 },
+    B5: { pillar: "B", partial: 1, silver: null, gold: 2 },
     C1: { pillar: "C", partial: 1, silver: 3, gold: 4 },
     C2: { pillar: "C", partial: 1, silver: 4, gold: 4 },
     D1: { pillar: "D", partial: null, silver: 1, gold: 1 },
@@ -51,6 +52,7 @@ function facts(overrides: Partial<ReadinessFacts> = {}): ReadinessFacts {
     b3CoveredIdr: 0,
     b3Count: 0,
     b4StockMonths: 0,
+    b5BusinessAccount: 0,
     c1Required: 4,
     c1Confirmed: 0,
     c2Filled: 0,
@@ -82,7 +84,7 @@ function silverFacts(overrides: Partial<ReadinessFacts> = {}): ReadinessFacts {
   });
 }
 
-const evaluate = (input: ReadinessFacts) => evaluateReadiness(config, input, "wp08-pilot-v2");
+const evaluate = (input: ReadinessFacts) => evaluateReadiness(config, input, "wp08-pilot-v3");
 const statusOf = (input: ReadinessFacts, id: ComponentId) =>
   evaluate(input).components.find((component) => component.id === id)!.status;
 
@@ -124,6 +126,7 @@ describe("tingkat", () => {
       b2PriveMonths: 3,
       b3CoveredIdr: 700_000,
       b4StockMonths: 2,
+      b5BusinessAccount: 2,
       c1Confirmed: 4,
       d2FullMonths: 6,
       d3Reports: 1,
@@ -177,9 +180,17 @@ describe("BELUM_ADA_DATA tidak menjatuhkan tingkat", () => {
   });
 
   it("keeps it out of the pillar bar divider", () => {
-    const result = evaluate(facts({ b1Total: 0, b3TotalIdr: 0, b2PriveMonths: 3, b4StockMonths: 2 }));
+    const result = evaluate(facts({
+      b1Total: 0,
+      b3TotalIdr: 0,
+      b2PriveMonths: 3,
+      b4StockMonths: 2,
+      // B5 selalu punya data -- nol berarti "belum dicatat", bukan "tidak
+      // diketahui" -- jadi ia selalu masuk pembagi dan harus diisi di sini.
+      b5BusinessAccount: 2,
+    }));
     const pillarB = result.pillars.find((pillar) => pillar.id === "B")!;
-    // Hanya B2 dan B4 yang punya data; keduanya penuh, jadi bar-nya penuh.
+    // B1 dan B3 tidak punya data; sisanya penuh, jadi bar-nya penuh.
     expect(pillarB.progress).toBe(1);
   });
 });
@@ -214,7 +225,71 @@ describe("komponen", () => {
 
   it("covers every component the model claims to have", () => {
     expect(evaluate(facts()).components).toHaveLength(componentIds.length);
-    expect(componentIds).toHaveLength(12);
+    expect(componentIds).toHaveLength(13);
+  });
+});
+
+/**
+ * B5 -- rekening usaha terpisah.
+ *
+ * Uji yang paling penting di blok ini bukan yang memeriksa tangganya naik,
+ * melainkan yang memeriksa tidak ada yang TURUN. Komponen baru yang menahan
+ * Perak akan menurunkan setiap usaha yang sudah Perak pada pembacaan halaman
+ * berikutnya, karena sesuatu yang belum pernah diminta dari mereka.
+ */
+describe("rekening usaha", () => {
+  const goldFacts = (overrides: Partial<ReadinessFacts> = {}) =>
+    silverFacts({
+      a1RecordingDays: 24,
+      a2Closings: 20,
+      a3AgeDays: 90,
+      b1Total: 100,
+      b1Unchecked: 4,
+      b2PriveMonths: 3,
+      b3CoveredIdr: 700_000,
+      b4StockMonths: 2,
+      b5BusinessAccount: 2,
+      c1Confirmed: 4,
+      d2FullMonths: 6,
+      d3Reports: 1,
+      ...overrides,
+    });
+
+  it("never costs anyone the level they already hold", () => {
+    // Usaha Perak yang belum pernah mencatat rekeningnya tetap Perak.
+    expect(evaluate(silverFacts({ b5BusinessAccount: 0 })).level).toBe("PERAK");
+  });
+
+  it("holds Emas until the account is proven, not merely recorded", () => {
+    expect(evaluate(goldFacts()).level).toBe("EMAS");
+    expect(evaluate(goldFacts({ b5BusinessAccount: 1 })).level).toBe("PERAK");
+    expect(evaluate(goldFacts({ b5BusinessAccount: 0 })).level).toBe("PERAK");
+  });
+
+  it("reads its three rungs as three statuses", () => {
+    expect(statusOf(facts({ b5BusinessAccount: 0 }), "B5")).toBe("BELUM");
+    expect(statusOf(facts({ b5BusinessAccount: 1 }), "B5")).toBe("SEBAGIAN");
+    expect(statusOf(facts({ b5BusinessAccount: 2 }), "B5")).toBe("TERPENUHI");
+  });
+
+  it("is never treated as a component without data", () => {
+    // BELUM_ADA_DATA dianggap memenuhi oleh model ini. Kalau nol rekening
+    // pernah terbaca begitu, langkah ini tidak akan pernah muncul sebagai
+    // pekerjaan yang tersisa bagi siapa pun.
+    expect(statusOf(facts(), "B5")).not.toBe("BELUM_ADA_DATA");
+    expect(evaluate(goldFacts({ b5BusinessAccount: 0 })).missing).toContain("B5");
+  });
+
+  it("points at recording first, proving second", () => {
+    const cari = (nilai: number) =>
+      evaluate(facts({ b5BusinessAccount: nilai })).components.find((item) => item.id === "B5")!;
+    expect(cari(0).targetNext).toBe(1);
+    expect(cari(1).targetNext).toBe(2);
+    expect(cari(2).targetNext).toBeNull();
+  });
+
+  it("is offered before the permits, because most owners only need to record it", () => {
+    expect(mostImpactfulStep(["C1", "B5", "D2"], config.effortOrder)).toBe("B5");
   });
 });
 

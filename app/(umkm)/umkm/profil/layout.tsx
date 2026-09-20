@@ -47,11 +47,23 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
                 key={href}
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-11 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 text-xs font-bold transition-colors ${
+                /*
+                  IKONNYA DISEMBUNYIKAN DI PONSEL, BUKAN LABELNYA.
+
+                  Tiga tab dengan ikon tidak muat di 390px: yang ketiga
+                  terdorong sampai 429px dan tersembunyi separuh di balik
+                  `overflow-x-auto`, tanpa satu pun penanda bahwa ia ada di
+                  sana. Yang belum pernah membuka "Kondisi awal" tidak akan
+                  menemukannya.
+
+                  Label yang menjelaskan lebih berharga daripada ikon yang
+                  menghias, jadi ikonnya yang mengalah di layar sempit.
+                */
+                className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2 text-xs font-bold transition-colors sm:gap-2 sm:px-3 ${
                   active ? "bg-white text-[#001b85] shadow-sm" : "text-[#6e859e] hover:text-[#1b2a3a]"
                 }`}
               >
-                <Icon size={14} className="shrink-0" />
+                <Icon size={14} className="hidden shrink-0 sm:block" />
                 {label}
               </Link>
             );

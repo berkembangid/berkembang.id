@@ -139,7 +139,7 @@ export default function ReadinessLevelPage() {
         <PageHeader title="Langkah usaha saya" description="Semua dinilai otomatis dari catatan dan dokumenmu." icon={ShieldCheck} />
         <p className="rounded-2xl border border-[#f0d9a8] bg-[#fdf8ee] px-4 py-3 text-xs text-[#8a6412]">
           {problem}{" "}
-          <button type="button" onClick={() => void load()} className="font-bold underline">
+          <button type="button" onClick={() => void load()} className="-mx-1.5 inline-flex min-h-11 items-center rounded-lg px-1.5 font-bold underline">
             Coba lagi
           </button>
         </p>

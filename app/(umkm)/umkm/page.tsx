@@ -178,7 +178,7 @@ export default function BerandaPage() {
               <div className={styles.mission}>
                 <strong>{readiness?.step?.title ?? "Semua langkah utama sudah didukung data"}</strong>
                 <p>{readiness?.step?.headline ?? "Lanjutkan kebiasaan mencatat agar ringkasan usaha tetap lengkap."}</p>
-                <Link href={readiness?.step?.action?.href ?? "/umkm/kesiapan"} className="mt-3 inline-flex items-center gap-1 text-[10px] font-extrabold text-[#0b5f86]">Lanjutkan <ChevronRight size={12} /></Link>
+                <Link href={readiness?.step?.action?.href ?? "/umkm/kesiapan"} className="-mx-2 mt-2 inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-[11px] font-extrabold text-[#0b5f86] hover:bg-[#eef8fd]">Lanjutkan <ChevronRight size={12} /></Link>
               </div>
             </div>
           </section>
@@ -215,7 +215,7 @@ export default function BerandaPage() {
 
           <div className={styles.desktopGrid}>
             <section aria-labelledby="activity-desktop-title" className={styles.panel}>
-              <div className={styles.panelHeader}><div><h2 id="activity-desktop-title" className={styles.panelTitle}>Aktivitas terbaru</h2><p className="mt-1 text-[10px] text-[#6e859e]">Catatan dan perubahan terbaru di usaha Anda</p></div><Link href="/umkm/laporan" className="rounded-lg border border-[#e3e9f0] px-3 py-2 text-[10px] font-bold text-[#34496a]">Buka laporan</Link></div>
+              <div className={styles.panelHeader}><div><h2 id="activity-desktop-title" className={styles.panelTitle}>Aktivitas terbaru</h2><p className="mt-1 text-[10px] text-[#6e859e]">Catatan dan perubahan terbaru di usaha Anda</p></div><Link href="/umkm/laporan" className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-[#e3e9f0] px-3 text-[11px] font-bold text-[#34496a] hover:bg-[#f7f9fb]">Buka laporan</Link></div>
               <div className={styles.panelBody}>{loading ? <p className="py-10 text-center text-xs text-[#6e859e]">Menyiapkan aktivitas...</p> : activities.length === 0 ? <EmptyActivity /> : activities.map((item) => <ActivityRow key={item.id} item={item} />)}</div>
             </section>
 
@@ -230,7 +230,7 @@ export default function BerandaPage() {
                   <h2 id="mission-desktop-title" className={styles.panelTitle}>Langkah usaha berikutnya</h2>
                   <p className="mt-1 text-[10px] text-[#6e859e]">Rekomendasi berdasarkan data yang sudah tersedia</p>
                 </div>
-                <Link href="/umkm/kesiapan" className="text-[10px] font-bold text-[#0b5f86] hover:underline">Lihat perjalanan</Link>
+                <Link href="/umkm/kesiapan" className="-mx-2 inline-flex min-h-11 items-center rounded-lg px-2 text-[11px] font-bold text-[#0b5f86] hover:bg-[#eef8fd]">Lihat perjalanan</Link>
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5">
                 <div className="flex items-start gap-3.5 min-w-0 flex-1">

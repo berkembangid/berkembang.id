@@ -138,6 +138,30 @@ export function componentCopy(component: EvaluatedComponent): ComponentCopy {
           : "Akhir bulan, cek sisa bahan sekali saja.",
         action: done ? null : { label: "Hitung", href: "/umkm/laporan" },
       };
+    case "B5": {
+      // Tiga keadaan, tiga kalimat. Yang pertama TIDAK berbunyi "uangmu masih
+      // tercampur": kita tidak tahu itu. Yang kita tahu hanya bahwa belum ada
+      // yang dicatat, dan itulah yang ditulis.
+      const tercatat = (value ?? 0) >= 1;
+      return {
+        title: done
+          ? "Rekening usaha terpisah, dengan buktinya"
+          : tercatat
+            ? "Rekening usaha sudah dicatat"
+            : "Rekening usaha belum dicatat",
+        hint: done
+          ? "Uang usahamu punya wadah sendiri, dan berkasnya tersimpan di lemari."
+          : tercatat
+            ? "Lampirkan rekening koran atau foto halaman depan buku tabungan sebagai buktinya."
+            : "Rekening sendiri membuat laporan usahamu bisa dibaca tanpa memilah belanja rumah.",
+        action: done
+          ? null
+          : {
+              label: tercatat ? "Lampirkan bukti" : "Catat rekening",
+              href: "/umkm/profil/rekening",
+            },
+      };
+    }
     case "C1":
       return {
         title: done

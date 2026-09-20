@@ -22,27 +22,21 @@ import {
   requirementLabel,
   uploadCardsFor,
 } from "@/modules/documents/cabinet-shelves";
-import { compressImageFile } from "@/modules/documents/image-compression";
 import type { CabinetPayload } from "@/modules/documents/cabinet-repository";
 import { DocumentUploadConsentDialog } from "@/components/documents/DocumentUploadConsentDialog";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { useConfirm } from "@/components/ui/confirm";
 import { dismissNotice, notifyBusy, notifyFromError, notifySuccess } from "@/lib/notify";
-import { supabase } from "@/lib/supabase";
 import {
   archiveDocument,
-  completeDocumentVersion,
   confirmDocumentExtraction,
   createDocumentSignedUrl,
-  createDocumentUploadSession,
   DocumentClientError,
   getDocument,
   listDocuments,
   retryDocumentExtraction,
-  sha256Hex,
 } from "@/modules/documents/document-client";
 import {
-  createDocumentUploadSessionSchema,
   documentTypeLabels,
   maxDocumentBytes,
   parseDocumentOcrResult,
@@ -52,6 +46,7 @@ import {
   type OcrDocumentType,
 } from "@/modules/documents/document-schema";
 import type { DocumentView } from "@/modules/documents/document-repository";
+import { uploadDocumentFile, uploadStageText } from "@/modules/documents/document-upload";
 
 
 function inspectImageQuality(file: File) {
@@ -196,55 +191,16 @@ export default function UploadPage() {
     // tahap. Unggah dokumen melewati empat keadaan; empat pemberitahuan
     // berturut-turut membuat layar berkedip dan yang terakhir menutupi yang
     // sebenarnya perlu dibaca.
-    const progress = notifyBusy("Memeriksa file sebelum disimpan...");
+    const progress = notifyBusy(uploadStageText.memeriksa);
     try {
-      // Foto dokumen dari ponsel datang pada 3-5 MB. Di sinyal 3G itu berarti
-      // unggahan puluhan detik yang sering putus di tengah, dan pemilik
-      // menyerah sebelum berkasnya sampai. PDF dan berkas yang tidak bisa
-      // digambar kanvas dikembalikan apa adanya oleh fungsi ini.
-      const compressed = await compressImageFile(file);
-      file = compressed.file;
-      const checksumSha256 = await sha256Hex(file);
-      const parsed = createDocumentUploadSessionSchema.safeParse({
-        ...(existingDocument ? { documentId: existingDocument.id } : {}),
-        docType,
-        ocrConsent: supportsDocumentOcr(docType) ? ocrConsent : false,
-        file: {
-          name: file.name,
-          mimeType: file.type,
-          size: file.size,
-          checksumSha256,
-        },
+      // Urutan unggahnya ada di `uploadDocumentFile`, bukan di sini: layar
+      // Rekening melakukan hal yang sama, dan dua salinan urutan berlima tahap
+      // adalah dua kesempatan untuk melewatkan tahap terakhir.
+      await uploadDocumentFile(file, docType, {
+        existingDocumentId: existingDocument?.id,
+        ocrConsent,
+        onStage: (stage) => notifyBusy(uploadStageText[stage], { id: progress }),
       });
-      if (!parsed.success) {
-        throw new DocumentClientError(
-          "VALIDATION_FAILED",
-          parsed.error.issues[0]?.message ?? "File belum valid.",
-          false,
-        );
-      }
-
-      notifyBusy("Menyiapkan penyimpanan aman...", { id: progress });
-      const session = await createDocumentUploadSession(
-        parsed.data,
-        `document:${crypto.randomUUID()}`,
-      );
-      const { error: uploadError } = await supabase.storage
-        .from(session.upload.bucket)
-        .uploadToSignedUrl(session.upload.path, session.upload.token, file, {
-          contentType: parsed.data.file.mimeType,
-          upsert: false,
-        });
-      if (uploadError) {
-        throw new DocumentClientError(
-          "UPLOAD_FAILED",
-          "File belum berhasil dikirim ke penyimpanan privat. Silakan unggah kembali.",
-          true,
-        );
-      }
-
-      notifyBusy("Memastikan file tersimpan dengan lengkap...", { id: progress });
-      await completeDocumentVersion(session.documentId, session.sessionId);
       notifySuccess(`${documentTypeLabels[docType]} tersimpan`, {
         id: progress,
         duration: 5000,
