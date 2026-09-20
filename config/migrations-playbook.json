@@ -117,6 +117,7 @@
     "0096_profil_tim_disunting_admin.sql",
     "0097_anggota_lembaga_dikenali_dan_diundang_lewat_surel.sql",
     "0098_rekening_usaha_terpisah.sql",
-    "0099_potret_dosir_hanya_transaksi_dikonfirmasi.sql"
+    "0099_potret_dosir_hanya_transaksi_dikonfirmasi.sql",
+    "0100_service_role_bisa_melihat_skema_private.sql"
   ]
 }

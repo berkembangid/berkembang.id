@@ -408,14 +408,23 @@ async function seedOneUmkm(item, index) {
     copy_version: "v1"
   }, { onConflict: "business_id" });
 
-  // 6. Business Readiness State
-  await admin.from("business_readiness_state").upsert({
-    business_id: businessId,
-    level: item.level,
-    level_since: formatDate(addDays(new Date(), -60)),
-    formula_version: "v2",
-    updated_at: new Date().toISOString()
-  }, { onConflict: "business_id" });
+  // 6. Tingkat kesiapan SENGAJA TIDAK DITULIS DI SINI.
+  //
+  //    Baris ini dulu meng-upsert `business_readiness_state.level` langsung
+  //    dari `item.level` -- label yang ditulis tangan di daftar profil di atas
+  //    -- dengan `formula_version: "v2"`. Itu bukan hasil evaluasi; itu
+  //    hiasan.
+  //
+  //    Akibatnya dua layar menyebut angka berbeda untuk usaha yang sama:
+  //    `list_anonymous_business_candidates` membaca tabel ini, jadi portal
+  //    dinas dan investor menampilkan label seeder; halaman Perjalanan milik
+  //    pemiliknya menghitung ulang dari catatannya dan menjawab lain. Diukur:
+  //    delapan usaha berlabel EMAS dievaluasi sebagai TEMBAGA, satu bahkan
+  //    MULAI.
+  //
+  //    Yang benar mengisi tabel ini hanya `save_readiness_snapshot`, yang
+  //    dipanggil saat tingkat kesiapan dibaca. `scripts/refresh-readiness.mjs`
+  //    memicunya untuk seluruh usaha demo sesudah seeding.
 
   // 7. Dokumen Legalitas (Documents)
   const docList = [];

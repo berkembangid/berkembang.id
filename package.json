@@ -19,6 +19,8 @@
     "db:types": "node scripts/generate-database-types.mjs",
     "db:push:pooler": "node scripts/db-push-pooler.mjs",
     "seed:demo": "node scripts/seed-demo-account.mjs",
+    "seed:40": "node scripts/seed-40-umkm.mjs",
+    "readiness:refresh": "node scripts/refresh-readiness.mjs",
     "check:voice-bundle": "node scripts/check-voice-bundle-size.mjs",
     "db:types:check": "node scripts/generate-database-types.mjs --check",
     "test:e2e": "playwright test",
