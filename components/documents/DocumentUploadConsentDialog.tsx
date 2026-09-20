@@ -20,7 +20,7 @@ export function DocumentUploadConsentDialog({
   const [agreed, setAgreed] = useState(false);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 md:items-center md:p-6" role="dialog" aria-modal="true" aria-labelledby="document-consent-title">
+    <div className="fixed inset-0 z-[var(--z-dialog)] flex items-end justify-center bg-slate-950/50 p-0 md:items-center md:p-6" role="dialog" aria-modal="true" aria-labelledby="document-consent-title">
       <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl md:max-w-xl md:rounded-3xl md:p-6">
         <div className="flex items-start justify-between gap-4">
           <div>

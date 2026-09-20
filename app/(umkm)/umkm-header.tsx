@@ -1,18 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Popover } from "@base-ui/react/popover";
 import {
   ArrowDownLeft, ArrowLeft, ArrowUpRight, Bell, Building2, CheckCircle2,
-  FileText, LogOut, Mic, Sparkles, Wallet, X,
+  FileText, LifeBuoy, LogOut, Mic, Sparkles, Wallet, X,
 } from "lucide-react";
 
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuLinkItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { WelcomeTour } from "@/components/warung/WelcomeTour";
 import { resolveHeading } from "./umkm-navigation";
 import styles from "./umkm-shell.module.css";
 
@@ -271,25 +273,60 @@ function NotificationBell({
  * terlihat di ponsel -- dan tiga halaman profil hanya bisa dicapai lewat tab
  * di dalam halaman profil itu sendiri. Keempatnya sekarang satu ketukan dari
  * mana pun di dalam aplikasi.
+ *
+ * DI SINI JUGA PERKENALAN BISA DIPUTAR ULANG, DAN DIPUTAR DI TEMPAT.
+ *
+ * Mulanya butir ini menautkan `/umkm/profil?tour=1`, dan halaman profil yang
+ * membaca parameternya. Itu punya cacat yang hanya muncul pada putaran KEDUA:
+ * dari halaman profil, menekannya berarti berpindah ke rute yang sama, jadi
+ * komponennya tidak dipasang ulang dan effect pembaca parameternya tidak
+ * pernah jalan lagi. Tombol "putar ulang" yang hanya mau diputar sekali.
+ *
+ * Membacanya dengan `useSearchParams` akan menuntut batas Suspense, karena
+ * `/umkm/profil` dirender statis -- ongkos besar untuk satu parameter.
+ *
+ * Perkenalan ini modal; ia tidak butuh halaman tertentu. Dirender dari sini,
+ * ia terbuka di tempat pemilik berdiri, dari layar UMKM mana pun, sebanyak
+ * yang ia mau. Tidak ada alamat yang berubah, jadi tidak ada yang perlu
+ * dibersihkan sesudahnya.
+ *
+ * Halaman profil tetap memegang perkenalan PERTAMA, yang muncul sendiri dan
+ * menulis penandanya. Yang di sini tidak menulis apa pun.
  */
 function AccountMenu({
   userName, businessName, onSignOut, children,
 }: { userName: string; businessName: string; onSignOut: () => void; children: React.ReactNode }) {
+  const [perkenalan, setPerkenalan] = useState(false);
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={children as React.ReactElement<Record<string, unknown>>} />
-      <DropdownMenuContent>
-        <DropdownMenuLabel>
-          <p className="truncate text-sm font-bold text-[#1b2a3a]">{userName}</p>
-          <p className="truncate text-xs text-[#6e859e]">{businessName || "Lengkapi profil usaha"}</p>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuLinkItem render={<Link href="/umkm/profil" />}><Building2 />Informasi usaha</DropdownMenuLinkItem>
-        <DropdownMenuLinkItem render={<Link href="/umkm/profil/dokumen" />}><FileText />Dokumen usaha</DropdownMenuLinkItem>
-        <DropdownMenuLinkItem render={<Link href="/umkm/profil/kondisi-awal" />}><Wallet />Kondisi awal</DropdownMenuLinkItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={onSignOut}><LogOut />Keluar dari akun</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      {perkenalan && <WelcomeTour replay onClose={() => setPerkenalan(false)} />}
+
+      <DropdownMenu>
+        <DropdownMenuTrigger render={children as React.ReactElement<Record<string, unknown>>} />
+        <DropdownMenuContent>
+          <DropdownMenuLabel>
+            <p className="truncate text-sm font-bold text-[#1b2a3a]">{userName}</p>
+            <p className="truncate text-xs text-[#6e859e]">{businessName || "Lengkapi profil usaha"}</p>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuLinkItem render={<Link href="/umkm/profil" />}><Building2 />Informasi usaha</DropdownMenuLinkItem>
+          <DropdownMenuLinkItem render={<Link href="/umkm/profil/dokumen" />}><FileText />Dokumen usaha</DropdownMenuLinkItem>
+          <DropdownMenuLinkItem render={<Link href="/umkm/profil/kondisi-awal" />}><Wallet />Kondisi awal</DropdownMenuLinkItem>
+          <DropdownMenuSeparator />
+          {/*
+            Ditaruh di menu akun, bukan di satu halaman. Komponen ini dipakai
+            header desktop DAN header ponsel, jadi satu butir menutupi keduanya
+            -- dan pemilik yang lupa isi perkenalannya tidak perlu menebak
+            halaman mana yang menyimpannya.
+          */}
+          <DropdownMenuItem onClick={() => setPerkenalan(true)}>
+            <LifeBuoy />Lihat perkenalan lagi
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={onSignOut}><LogOut />Keluar dari akun</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }

@@ -65,10 +65,29 @@ function DropdownMenuItem({
   )
 }
 
-function DropdownMenuLinkItem({ className, ...props }: MenuPrimitive.LinkItem.Props) {
+/**
+ * `closeOnClick` dibalik jadi `true`, berbeda dari bawaan Base UI.
+ *
+ * Bawaannya `false`, dan itu benar untuk `<a>` biasa: halamannya dimuat ulang,
+ * menunya lenyap bersama dokumen lama. Di aplikasi ini setiap butir menu
+ * membungkus `<Link>` Next, yang berpindah halaman TANPA memuat ulang -- jadi
+ * menunya bertahan, menggantung di atas halaman baru sampai ditutup manual.
+ *
+ * Paling kelihatan pada "Lihat perkenalan lagi": halaman berganti, perkenalan
+ * terbuka, dan menu akun tetap terpampang di baliknya.
+ *
+ * Ditulis di sini, bukan di setiap pemakaian, supaya butir berikutnya yang
+ * ditambahkan siapa pun tidak perlu tahu jebakan ini untuk menghindarinya.
+ */
+function DropdownMenuLinkItem({
+  className,
+  closeOnClick = true,
+  ...props
+}: MenuPrimitive.LinkItem.Props) {
   return (
     <MenuPrimitive.LinkItem
       data-slot="dropdown-menu-link-item"
+      closeOnClick={closeOnClick}
       className={cn(itemClass, className)}
       {...props}
     />

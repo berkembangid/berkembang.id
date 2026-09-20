@@ -1,4 +1,11 @@
 .shell {
+  /*
+    Jangkar untuk `.mobileHeader`, yang `position: absolute`. Tanpa ini ia
+    berlabuh ke puncak DOKUMEN dan duduk di balik spanduk lingkungan -- di
+    demo, seluruh header beranda ponsel tertutup dan tombolnya mati.
+  */
+  position: relative;
+
   --umkm-blue: #1590c7;
   --umkm-blue-dark: #0b5f86;
   --umkm-ink: #1b2a3a;
@@ -118,6 +125,7 @@
 
 .mobileHeaderLight {
   position: sticky;
+  top: var(--tinggi-spanduk, 0px);
   border-bottom: 1px solid rgba(227, 233, 240, .9);
   background: rgba(255,255,255,.9);
   color: #1b2a3a;
@@ -252,7 +260,7 @@
 @media (min-width: 768px) {
   .sidebar { display: flex; }
   .content { margin-left: 272px; }
-  .desktopHeader { display: flex; position: sticky; top: 0; z-index: 20; }
+  .desktopHeader { display: flex; position: sticky; top: var(--tinggi-spanduk, 0px); z-index: 20; }
   .mobileHeader, .bottomNav { display: none; }
 }
 

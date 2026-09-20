@@ -1,4 +1,5 @@
 import { isDemoMode } from "@/lib/env/app-mode";
+import { UkurSpandukDemo } from "./UkurSpandukDemo";
 
 /**
  * Penanda bahwa ini lingkungan demo.
@@ -42,12 +43,18 @@ export function DemoEnvironmentBanner() {
   return (
     <div
       role="status"
+      data-spanduk-lingkungan
       className="sticky top-0 z-[60] flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 bg-[#5c3700] px-3 py-1.5 text-center text-[11px] font-bold leading-snug text-[#fff4dc]"
     >
       <span>LINGKUNGAN DEMO</span>
       <span className="font-medium opacity-90">
         Datanya contoh dan bisa dihapus kapan saja. Jangan memasukkan catatan usaha yang sungguhan.
       </span>
+      {/*
+        Mengumumkan tinggi spanduk ini supaya header yang juga menempel di
+        puncak layar berhenti di bawahnya, bukan di baliknya.
+      */}
+      <UkurSpandukDemo />
     </div>
   );
 }

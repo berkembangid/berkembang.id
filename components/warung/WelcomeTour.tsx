@@ -1,5 +1,7 @@
 "use client";
 
+import { createPortal } from "react-dom";
+
 /**
  * Perkenalan singkat untuk pemilik yang baru mendaftar.
  *
@@ -86,7 +88,26 @@ const STEPS: readonly Step[] = [
   },
 ];
 
-export function WelcomeTour({ ownerName, onClose }: { ownerName?: string | null; onClose: () => void }) {
+/**
+ * `replay` = dibuka sendiri dari menu akun, bukan muncul otomatis.
+ *
+ * Bedanya satu: penanda `onboarding_seen_at` TIDAK ditulis lagi. Ia penanda
+ * sekali-pakai yang sudah tersetel sejak perkenalan pertama, jadi menulisnya
+ * ulang tidak mengubah apa pun -- dan permintaan jaringan yang tidak mengubah
+ * apa pun tetap bisa gagal, lalu memunculkan pesan galat yang membingungkan
+ * pada tindakan yang sebenarnya berhasil.
+ *
+ * Memutar ulang perkenalan adalah tindakan membaca. Ia tidak menulis apa pun.
+ */
+export function WelcomeTour({
+  ownerName,
+  onClose,
+  replay = false,
+}: {
+  ownerName?: string | null;
+  onClose: () => void;
+  replay?: boolean;
+}) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const last = step === STEPS.length - 1;
@@ -100,6 +121,12 @@ export function WelcomeTour({ ownerName, onClose }: { ownerName?: string | null;
    * muncul sekali lagi -- bukan pemilik yang terkurung di dalamnya.
    */
   async function finish() {
+    // Diputar ulang: tutup saja, tanpa menyentuh jaringan.
+    if (replay) {
+      onClose();
+      return;
+    }
+
     setBusy(true);
     onClose();
     try {
@@ -115,9 +142,26 @@ export function WelcomeTour({ ownerName, onClose }: { ownerName?: string | null;
   const current = STEPS[step];
   const Icon = current.icon;
 
-  return (
+  /**
+   * Lewat portal ke `document.body`, bukan dirender di tempat.
+   *
+   * `position: fixed` mengukur diri dari viewport HANYA selama tidak ada
+   * leluhur yang membuat containing block baru. `transform`, `filter`, dan
+   * `backdrop-filter` membuatnya -- dan header UMKM memakai
+   * `backdrop-filter: blur(18px)`.
+   *
+   * Akibatnya terlihat begitu perkenalan ini dipanggil dari menu akun di
+   * header: `inset-0` berhenti di tepi header, dan lembar bawah yang mestinya
+   * selebar layar menyusut jadi 138px terjepit di pojok kanan atas. Tidak ada
+   * yang salah pada kelasnya; yang salah adalah tempat ia dirender.
+   *
+   * Portal membuat pemanggilnya tidak perlu tahu hal ini. Aman dipanggil dari
+   * mana pun, karena isinya baru dirender setelah ada yang menekan tombol --
+   * jadi `document.body` sudah pasti ada.
+   */
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 md:items-center md:p-6"
+      className="fixed inset-0 z-[var(--z-dialog)] flex items-end justify-center bg-slate-950/50 md:items-center md:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="sambutan-judul"
@@ -125,7 +169,14 @@ export function WelcomeTour({ ownerName, onClose }: { ownerName?: string | null;
       <section className="max-h-[88dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-5 pb-[calc(env(safe-area-inset-bottom)+20px)] shadow-2xl md:max-h-[88vh] md:max-w-md md:rounded-3xl md:p-6">
         <div className="flex items-start justify-between gap-3">
           <p className="text-[11px] font-bold uppercase tracking-wide text-[#0b5f86]">
-            Selamat datang{ownerName ? `, ${ownerName.split(" ")[0]}` : ""}
+            {/*
+              "Selamat datang" hanya benar sekali. Pemilik yang membukanya lagi
+              dari menu akun sudah memakai aplikasi ini berbulan-bulan; disambut
+              seperti orang baru membuat perkenalannya terasa tidak menyimak.
+            */}
+            {replay
+              ? "Perkenalan singkat"
+              : `Selamat datang${ownerName ? `, ${ownerName.split(" ")[0]}` : ""}`}
           </p>
           {/* Selalu terlihat, di setiap langkah. */}
           <button
@@ -176,10 +227,19 @@ export function WelcomeTour({ ownerName, onClose }: { ownerName?: string | null;
             disabled={busy}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-[#0b5f86] px-5 text-sm font-bold text-white disabled:opacity-50 md:text-xs"
           >
-            {last ? <><Check size={15} /> Mulai lengkapi profil</> : <>Lanjut <ArrowRight size={15} /></>}
+            {last ? (
+              <>
+                <Check size={15} /> {replay ? "Selesai" : "Mulai lengkapi profil"}
+              </>
+            ) : (
+              <>
+                Lanjut <ArrowRight size={15} />
+              </>
+            )}
           </button>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

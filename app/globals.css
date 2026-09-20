@@ -94,6 +94,32 @@
    berdampingan dengan yang sudah ada, dan sejak itu setiap warna punya dua
    sumber kebenaran. */
 :root {
+  /*
+    Tinggi spanduk lingkungan, diumumkan `UkurSpandukDemo` saat spanduknya
+    ada. Nol di produksi, karena di sana spanduknya memang tidak dirender.
+    Header yang menempel di puncak layar memakainya sebagai `top`, sehingga
+    ia berhenti di bawah spanduk, bukan di baliknya.
+  */
+  --tinggi-spanduk: 0px;
+
+  /*
+    URUTAN LAPISAN, SATU TEMPAT.
+
+    Angka z-index dulu ditulis lepas di tiap berkas, dan dua di antaranya
+    kebetulan sama: bilah menu bawah UMKM dan dialog `fixed inset-0` sama-sama
+    50. Pada z yang sama, yang menang adalah yang belakangan di DOM -- jadi
+    bilah menu duduk DI ATAS baris tombol lembar bawah, dan tombol "Lanjut"
+    di perkenalan tidak bisa ditekan sama sekali di ponsel. Tidak ada yang
+    salah menulisnya; yang salah adalah tidak adanya tempat untuk melihat
+    bahwa keduanya bertabrakan.
+
+    Naik ke atas:
+      20  header yang menempel     50  bilah menu bawah UMKM
+      60  spanduk lingkungan      110  menu & popover
+     120  dialog, dan isinya di 121
+  */
+  --z-dialog: 120;
+
   --radius: 14px;
 
   --foreground: var(--on-surface);

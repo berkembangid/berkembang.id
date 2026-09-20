@@ -13,7 +13,7 @@
 .navActive { background: #eef8fd; color: #0b5f86; box-shadow: inset 3px 0 #1590c7; }
 .sidebarFooter { margin-top: auto; padding: 12px 10px; border-top: 1px solid #eef2f6; }
 .main { min-height: 100vh; width: 100%; overflow-x: hidden; }
-.topbar { position: sticky; top: 0; z-index: 30; display: flex; height: 64px; align-items: center; justify-content: space-between; border-bottom: 1px solid #e3e9f0; background: rgba(255,255,255,.9); padding: 0 16px; backdrop-filter: blur(18px); }
+.topbar { position: sticky; top: var(--tinggi-spanduk, 0px); z-index: 30; display: flex; height: 64px; align-items: center; justify-content: space-between; border-bottom: 1px solid #e3e9f0; background: rgba(255,255,255,.9); padding: 0 16px; backdrop-filter: blur(18px); }
 .menuButton { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 11px; color: #4a6280; }
 .pageLabel { color: #1b2a3a; font-size: 12px; font-weight: 750; }
 .portalBadge { border: 1px solid #addcf4; border-radius: 999px; background: #eef8fd; padding: 5px 9px; color: #0b5f86; font-size: 8px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
