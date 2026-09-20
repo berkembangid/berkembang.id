@@ -11,40 +11,78 @@
  * - Dokumen legalitas: KTP, NIB, NPWP, Halal, PIRT sesuai kesiapan
  * - Transaksi keuangan realistis (omzet harian, belanja bahan HPP, operasional, gaji, sewa, prive)
  * - Jurnal akuntansi seimbang otomatis via RPC create_ledger_transaction & daily closings
+ *
+ * HANYA DEMO, DAN PENOLAKANNYA TIDAK BISA DILEWATI.
+ *
+ * Skrip ini dulu membaca `.env` dan `.env.local` -- dan `.env` menunjuk
+ * PRODUKSI. Dijalankan apa adanya dari repositori yang sudah disiapkan, ia
+ * membuat 40 usaha karangan beserta pemiliknya, jurnalnya, dan dokumen
+ * legalitasnya di basis data orang sungguhan. Tidak ada galat yang muncul:
+ * semuanya berhasil, dan keempat puluhnya lalu tampil di dasbor dinas
+ * sungguhan sebagai kandidat yang bisa dimintai dosir.
+ *
+ * Tidak ada alasan sah menjalankannya di produksi, jadi sasarannya tidak lagi
+ * ditentukan oleh berkas env mana yang kebetulan ada. Ia membaca `.env.demo`,
+ * memeriksa ref proyeknya terhadap `config/supabase-projects.json`, dan
+ * berhenti kalau tidak cocok.
  */
 
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
-function loadEnv() {
-  const env = {};
-  for (const name of [".env", ".env.local"]) {
-    try {
-      const text = readFileSync(join(process.cwd(), name), "utf8");
-      for (const line of text.split(/\r?\n/)) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("=")) continue;
-        const idx = trimmed.indexOf("=");
-        env[trimmed.slice(0, idx).trim()] = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, "");
-      }
-    } catch {
-      continue;
-    }
-  }
-  return { ...env, ...process.env };
+const projects = JSON.parse(readFileSync(path.resolve("config/supabase-projects.json"), "utf8"));
+const DEMO = projects.targets.demo;
+
+function berhenti(...baris) {
+  console.error(baris.join("\n"));
+  process.exit(1);
 }
 
-const env = loadEnv();
-const url = env.NEXT_PUBLIC_SUPABASE_URL;
-const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_ANON_KEY;
-const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+// ---------------------------------------------------------------------------
+// Env, dan penjaga sasaran
+//
+// Dibaca HANYA dari berkas demo. `process.env` sengaja tidak lagi ikut
+// menimpa: satu `NEXT_PUBLIC_SUPABASE_URL` yang tertinggal di shell sudah
+// cukup untuk mengalihkan seluruh penyuntikan ini ke proyek lain, dan itu
+// persis kejadian yang penjaganya dipasang untuk mencegah.
+// ---------------------------------------------------------------------------
+
+let berkasEnv = "";
+try {
+  berkasEnv = readFileSync(path.resolve(DEMO.envFile), "utf8");
+} catch {
+  berhenti(`${DEMO.envFile} tidak terbaca. Skrip ini hanya berjalan di proyek ${DEMO.label}.`);
+}
+
+const ambil = (kunci) => {
+  const cocok = berkasEnv.match(new RegExp("^" + kunci + "=(.*)$", "m"));
+  return (cocok ? cocok[1] : "").trim().replace(/^["']|["']$/g, "");
+};
+
+const url = ambil("NEXT_PUBLIC_SUPABASE_URL").replace(/\/$/, "");
+const anonKey = ambil("NEXT_PUBLIC_SUPABASE_ANON_KEY") || ambil("NEXT_PUBLIC_ANON_KEY");
+const serviceKey = ambil("SUPABASE_SERVICE_ROLE_KEY");
 const DEFAULT_PASSWORD = "PasswordBerkembang2026!";
 
 if (!url || !serviceKey || !anonKey) {
-  console.error("Konfigurasi Supabase tidak lengkap di .env/.env.local");
-  process.exit(1);
+  berhenti(
+    `${DEMO.envFile} belum memuat NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, dan SUPABASE_SERVICE_ROLE_KEY.`,
+  );
 }
+
+const ref = url.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? "";
+if (ref !== DEMO.ref) {
+  berhenti(
+    `MENOLAK BERJALAN: ${DEMO.envFile} menunjuk proyek "${ref}", bukan proyek ${DEMO.label} (${DEMO.ref}).`,
+    "",
+    "Skrip ini membuat 40 usaha karangan beserta pemilik, jurnal, dan dokumen",
+    "legalitasnya. Dijalankan di produksi, keempat puluhnya muncul di dasbor",
+    "dinas sungguhan sebagai kandidat -- dan tidak ada galat yang memberitahu.",
+  );
+}
+
+console.log(`Sasaran: proyek ${DEMO.label} (${ref}).\n`);
 
 const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
