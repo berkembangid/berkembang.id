@@ -19,6 +19,30 @@
  * Melewati dan menyelesaikan MENANDAI HAL YANG SAMA. Perkenalan yang muncul
  * lagi karena dilewati -- bukan diselesaikan -- adalah perkenalan yang
  * menghukum orang karena tidak membacanya.
+ *
+ * DI PONSEL IA LEMBAR BAWAH, MENGIKUTI POLA YANG SUDAH ADA DI APLIKASI INI.
+ *
+ * Dialog catat transaksi dan tutup kas di `/umkm/laporan` sudah memakai
+ * bentuk yang sama: menempel ke tepi bawah, sudut atas saja yang membulat,
+ * tingginya dibatasi dan isinya bisa digulir, dengan ruang aman di bawah.
+ *
+ * Perkenalan ini sebelumnya satu-satunya yang menyimpang -- kartu melayang
+ * bersudut penuh dengan jarak 16px dari tepi bawah. Tiga akibatnya:
+ *
+ *   1. Jarak 16px itu jatuh tepat di area gestur iPhone, tempat sapuan ke
+ *      atas dibaca sistem, bukan halaman.
+ *   2. Tanpa batas tinggi dan tanpa gulir, pemilik yang memperbesar huruf
+ *      ponselnya -- yang justru sering dilakukan -- bisa kehilangan tombolnya
+ *      tanpa cara apa pun mencapainya.
+ *   3. Bentuk yang berbeda dari lembar lain di aplikasi yang sama membuat
+ *      orang ragu sejenak setiap kali melihatnya.
+ *
+ * TOMBOL TUTUP 44px, BUKAN 36px.
+ *
+ * Yang menutup perkenalan ini sedang memegang ponsel dengan satu tangan,
+ * sering sambil berdiri di warungnya. Sasaran sentuh di bawah 44px membuat
+ * ketukan meleset, dan yang meleset pada tombol tutup berarti terjebak satu
+ * ketukan lebih lama di layar yang memang ingin ia lewati.
  */
 
 import { useState } from "react";
@@ -93,12 +117,12 @@ export function WelcomeTour({ ownerName, onClose }: { ownerName?: string | null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 md:items-center md:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="sambutan-judul"
     >
-      <section className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+      <section className="max-h-[88dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-5 pb-[calc(env(safe-area-inset-bottom)+20px)] shadow-2xl md:max-h-[88vh] md:max-w-md md:rounded-3xl md:p-6">
         <div className="flex items-start justify-between gap-3">
           <p className="text-[11px] font-bold uppercase tracking-wide text-[#0b5f86]">
             Selamat datang{ownerName ? `, ${ownerName.split(" ")[0]}` : ""}
@@ -109,19 +133,24 @@ export function WelcomeTour({ ownerName, onClose }: { ownerName?: string | null;
             onClick={() => void finish()}
             disabled={busy}
             aria-label="Lewati perkenalan"
-            className="-mr-1 -mt-1 grid size-9 shrink-0 place-items-center rounded-xl text-[#6e859e] hover:bg-slate-100 disabled:opacity-50"
+            className="-mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-xl text-[#6e859e] hover:bg-slate-100 disabled:opacity-50"
           >
-            <X size={17} />
+            <X size={18} />
           </button>
         </div>
 
-        <span className="mt-3 grid size-11 place-items-center rounded-2xl bg-[#eef8fd] text-[#0f73a3]">
-          <Icon size={20} />
+        <span className="mt-4 grid size-12 place-items-center rounded-2xl bg-[#eef8fd] text-[#0f73a3]">
+          <Icon size={22} />
         </span>
-        <h2 id="sambutan-judul" className="mt-3 text-base font-bold leading-snug text-[#1b2a3a]">
+        <h2 id="sambutan-judul" className="mt-4 text-lg font-bold leading-snug text-[#1b2a3a] md:text-base">
           {current.title}
         </h2>
-        <p className="mt-1.5 text-xs leading-relaxed text-[#6e859e]">{current.body}</p>
+        {/*
+          14px di ponsel, bukan 12px. Yang membaca ini pemilik warung, sering
+          di bawah cahaya matahari dan tidak selalu bermata muda; dua piksel
+          itu bedanya antara dibaca dan dilewati.
+        */}
+        <p className="mt-2 text-sm leading-relaxed text-[#5a7186]">{current.body}</p>
 
         <div className="mt-4 flex gap-1.5" aria-label={`Langkah ${step + 1} dari ${STEPS.length}`}>
           {STEPS.map((item, index) => (
@@ -132,12 +161,12 @@ export function WelcomeTour({ ownerName, onClose }: { ownerName?: string | null;
           ))}
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-3">
+        <div className="mt-6 flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => void finish()}
             disabled={busy}
-            className="min-h-11 text-xs font-bold text-[#6e859e] underline underline-offset-2 disabled:opacity-50"
+            className="-ml-2 min-h-11 rounded-xl px-2 text-sm font-bold text-[#6e859e] underline underline-offset-2 hover:bg-slate-50 disabled:opacity-50 md:text-xs"
           >
             Lewati
           </button>
@@ -145,7 +174,7 @@ export function WelcomeTour({ ownerName, onClose }: { ownerName?: string | null;
             type="button"
             onClick={() => (last ? void finish() : setStep(step + 1))}
             disabled={busy}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-[#0b5f86] px-5 text-xs font-bold text-white disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-[#0b5f86] px-5 text-sm font-bold text-white disabled:opacity-50 md:text-xs"
           >
             {last ? <><Check size={15} /> Mulai lengkapi profil</> : <>Lanjut <ArrowRight size={15} /></>}
           </button>
