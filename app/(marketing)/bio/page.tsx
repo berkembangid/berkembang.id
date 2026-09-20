@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, FlaskConical, Globe, Mail, Users } from "lucide-react";
 import { isi } from "@/content/team";
-import { BarisAkun } from "./akun-demo";
+import { BarisPeran, BarisSandi } from "./akun-demo";
 
 /**
  * Halaman tujuan QR poster (gaya linktree).
@@ -41,10 +41,41 @@ export const metadata = {
 const ALAMAT_LIVE = "https://www.berkembang.id";
 const ALAMAT_DEMO = "https://demo.berkembang.id";
 
-/** Akun bersama di lingkungan demo. Alasannya ada di `akun-demo.tsx`. */
+/** Satu sandi untuk seluruh persona demo -- lihat `akun-demo.tsx`. */
+const SANDI_DEMO = "Demo-Berkembang-2026";
+
+/**
+ * Tiga akun, karena ada TIGA portal -- bukan lima, walau personanya lima.
+ *
+ * Seeder demo membuat lima: UMKM, koperasi, bank, CVC, dan dinas. Tapi
+ * koperasi, bank, dan dinas mendarat di portal lembaga yang sama persis,
+ * dengan menu yang sama persis; yang berbeda hanya keadaan datanya. Memajang
+ * ketiganya di halaman poster berarti tiga baris yang mengantar ke layar yang
+ * sama, dan orang yang mencobanya akan mengira ia salah menekan.
+ *
+ * Jadi yang ditampilkan satu akun per portal: pemilik usaha, lembaga, dan
+ * investor. Koperasi (`demo.institusi@`) dan bank (`demo.bank@`) tetap hidup
+ * untuk peragaan yang butuh keadaan izin yang berbeda.
+ */
 const AKUN_DEMO = [
-  { label: "Surel", nilai: "demo.umkm@berkembang.id" },
-  { label: "Kata sandi", nilai: "Demo-Berkembang-2026" },
+  {
+    peran: "Pemilik usaha",
+    lembaga: "Dapur Bu Nita",
+    lihat: "Catat lewat suara, lihat untung dan kesiapan usaha",
+    email: "demo.umkm@berkembang.id",
+  },
+  {
+    peran: "Dinas / lembaga",
+    lembaga: "Dinas Koperasi & UKM Kota Depok",
+    lihat: "Kandidat tersamar, program, dan analitik wilayah",
+    email: "demo.dinas@berkembang.id",
+  },
+  {
+    peran: "Investor",
+    lembaga: "BNI Ventures",
+    lihat: "Katalog UMKM, kemitraan, dan pengajuan minat",
+    email: "demo.cvc@berkembang.id",
+  },
 ];
 
 /**
@@ -176,12 +207,15 @@ export default function BioPage() {
         <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <Judul>Akun untuk mencoba</Judul>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            Dipakai bersama-sama di lingkungan demo. Datanya contoh, boleh diubah, dan
-            direset kapan saja.
+            Tiga sisi yang bisa dicoba di lingkungan demo. Dipakai bersama-sama, datanya
+            contoh, boleh diubah, dan direset kapan saja.
           </p>
-          <div className="mt-4 space-y-3">
-            {AKUN_DEMO.map((baris) => (
-              <BarisAkun key={baris.label} label={baris.label} nilai={baris.nilai} />
+          <div className="mt-4">
+            <BarisSandi nilai={SANDI_DEMO} />
+          </div>
+          <div className="mt-3 space-y-2">
+            {AKUN_DEMO.map((akun) => (
+              <BarisPeran key={akun.email} {...akun} />
             ))}
           </div>
         </section>
