@@ -248,7 +248,7 @@ export default function InstitutionOrganizationPage() {
               key={row.institutionId}
               onClick={() => select(row.institutionId)}
               aria-pressed={row.institutionId === selectedId}
-              className={`min-h-10 rounded-full px-4 text-xs font-bold ${
+              className={`min-h-11 rounded-full px-4 text-xs font-bold ${
                 row.institutionId === selectedId
                   ? "bg-[#0b5f86] text-white"
                   : "border border-slate-300 bg-white text-slate-600"
@@ -372,7 +372,7 @@ export default function InstitutionOrganizationPage() {
                           <button
                             onClick={() => void keluarkan(member)}
                             aria-label={`Keluarkan ${sebutan(member)}`}
-                            className="grid size-9 place-items-center rounded-lg border border-slate-300 bg-white text-slate-500 hover:border-red-300 hover:text-red-600"
+                            className="grid size-11 place-items-center rounded-lg border border-slate-300 bg-white text-slate-500 hover:border-red-300 hover:text-red-600"
                           >
                             <Trash2 className="h-3.5 w-3.5" aria-hidden />
                           </button>
@@ -397,14 +397,14 @@ export default function InstitutionOrganizationPage() {
                         onChange={(event) => setEmail(event.target.value)}
                         placeholder="nama@dinas.go.id"
                         disabled={kursiPenuh}
-                        className="min-h-10 w-56 font-normal outline-none disabled:bg-transparent"
+                        className="min-h-11 w-56 font-normal outline-none disabled:bg-transparent"
                       />
                     </div>
                   </label>
                   <button
                     disabled={busy || kursiPenuh || !email.trim()}
                     onClick={() => void tambah()}
-                    className="flex min-h-10 items-center gap-1.5 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-50"
+                    className="flex min-h-11 items-center gap-1.5 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-50"
                   >
                     <UserPlus size={14} />
                     {busy ? "Menyimpan..." : "Tambah anggota"}

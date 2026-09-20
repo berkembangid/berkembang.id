@@ -8,7 +8,7 @@ export function EmptyState({ icon, title, description, action }: { icon: LucideI
       <IconBadge icon={icon} />
       <h2 className="mt-3 text-sm font-bold text-[#1b2a3a]">{title}</h2>
       <p className="mt-1 max-w-sm text-xs leading-relaxed text-[#6e859e]">{description}</p>
-      {action && <Link href={action.href} className="mt-4 inline-flex min-h-10 items-center rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white">{action.label}</Link>}
+      {action && <Link href={action.href} className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white">{action.label}</Link>}
     </div>
   );
 }

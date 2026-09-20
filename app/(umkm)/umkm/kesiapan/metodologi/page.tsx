@@ -86,7 +86,7 @@ export default function MetodologiPage() {
         actions={
           <Link
             href="/umkm/kesiapan"
-            className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"
           >
             <ArrowLeft size={14} /> Kembali
           </Link>

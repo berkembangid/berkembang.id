@@ -109,7 +109,7 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
     return (
       <div role="alert" className="flex items-center gap-2 rounded-2xl border border-[#f3c6cf] bg-[#fdf1f3] p-4 text-xs font-semibold text-[#b4304a]">
         <AlertCircle size={16} /> {error || "Kondisi usaha belum dapat dimuat."}
-        <button onClick={() => void load()} className="ml-auto inline-flex min-h-10 items-center gap-1 rounded-lg px-2 font-bold">
+        <button onClick={() => void load()} className="ml-auto inline-flex min-h-11 items-center gap-1 rounded-lg px-2 font-bold">
           <RefreshCcw size={13} /> Coba lagi
         </button>
       </div>
@@ -158,7 +158,7 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
         <button
           type="button"
           onClick={() => setView("register")}
-          className="min-h-10 text-xs font-bold text-[#0b5f86]"
+          className="min-h-11 text-xs font-bold text-[#0b5f86]"
         >
           Alat usaha &amp; pinjaman
         </button>

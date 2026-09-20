@@ -99,7 +99,7 @@ export function AssetLoanRegister({
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex min-h-10 items-center gap-1.5 text-xs font-bold text-[#0b5f86]"
+        className="inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-[#0b5f86]"
       >
         <ArrowLeft size={14} /> Kembali ke kondisi usaha
       </button>
@@ -249,7 +249,7 @@ function AssetRow({
             <button
               type="button"
               onClick={() => setMode("dispose")}
-              className="min-h-10 rounded-lg px-2 text-[11px] font-bold text-[#6e859e]"
+              className="min-h-11 rounded-lg px-2 text-[11px] font-bold text-[#6e859e]"
             >
               Sudah tidak dipakai
             </button>

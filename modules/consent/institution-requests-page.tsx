@@ -91,6 +91,6 @@ function RequestCard({ request, status, busy, onRefresh }: { request: Request; s
       <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">{status}</span>
     </div>
     <div className="mt-3 flex flex-wrap gap-2">{request.requested_scopes.map((scope) => <span key={scope} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{consentScopeLabels[scope as ConsentScope]?.label ?? scope}</span>)}</div>
-    {canRefresh && <button disabled={busy} onClick={onRefresh} className="mt-3 flex min-h-10 items-center gap-1 text-xs font-bold text-[#0b5f86] underline disabled:opacity-50"><RefreshCw size={13} />{busy ? "Mengirim..." : "Minta pembaruan (snapshot baru)"}</button>}
+    {canRefresh && <button disabled={busy} onClick={onRefresh} className="mt-3 flex min-h-11 items-center gap-1 text-xs font-bold text-[#0b5f86] underline disabled:opacity-50"><RefreshCw size={13} />{busy ? "Mengirim..." : "Minta pembaruan (snapshot baru)"}</button>}
   </article>;
 }

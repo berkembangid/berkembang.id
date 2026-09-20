@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { gagal } from "@/lib/api/galat";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
@@ -7,7 +8,7 @@ export async function POST(request: Request) {
     const identifier = body?.identifier?.trim() || "";
 
     if (!identifier) {
-      return NextResponse.json({ error: "IDENTIFIER_REQUIRED" }, { status: 400 });
+      return gagal("IDENTIFIER_REQUIRED", 400);
     }
 
     if (identifier.includes("@")) {
@@ -35,6 +36,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ email: `${clean}@lembaga.berkembang.id` });
   } catch (error) {
     console.error("Resolve identifier error:", error);
-    return NextResponse.json({ error: "INTERNAL_ERROR" }, { status: 500 });
+    return gagal("INTERNAL_ERROR", 500);
   }
 }

@@ -57,7 +57,7 @@ export default function InstitutionProfilesPage() {
     fetch("/api/v1/institution/dossiers", { cache: "no-store", signal: controller.signal, headers: institutionHeaders(selectedId) })
       .then(async (response) => ({ response, body: await response.json() }))
       .then(({ response, body }) => {
-        if (!response.ok) throw new Error(body.error ?? "Dossier belum dapat dimuat.");
+        if (!response.ok) throw new Error(body.error?.message ?? "Dossier belum dapat dimuat.");
         setDossiers(body.data ?? []);
         void fetch("/api/v1/institution/audit", {
           method: "POST",
@@ -78,7 +78,7 @@ export default function InstitutionProfilesPage() {
     try {
       const response = await fetch(`/api/v1/institution/dossiers/${dossier.id}`, { cache: "no-store", headers: institutionHeaders(selectedId) });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error?.message ?? body.error ?? "Dossier belum dapat dibuka.");
+      if (!response.ok) throw new Error(body.error?.message ?? "Dossier belum dapat dibuka.");
       setDetail(body.data as DossierDetail);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Dossier belum dapat dibuka.";
@@ -171,16 +171,16 @@ export default function InstitutionProfilesPage() {
           <span className="h-fit rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Diizinkan</span>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <button onClick={() => void open(dossier)} className="flex min-h-10 items-center gap-1 rounded-lg bg-[#0b5f86] px-4 text-xs font-bold text-white"><Eye size={14} />Buka dossier</button>
+          <button onClick={() => void open(dossier)} className="flex min-h-11 items-center gap-1 rounded-lg bg-[#0b5f86] px-4 text-xs font-bold text-white"><Eye size={14} />Buka dossier</button>
           <button
             onClick={() => void downloadPdf(dossier)}
             disabled={downloading === dossier.id}
-            className="flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs font-bold text-[#0b5f86] transition-colors hover:bg-slate-50 disabled:opacity-50"
+            className="flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs font-bold text-[#0b5f86] transition-colors hover:bg-slate-50 disabled:opacity-50"
           >
             <Download size={14} />
             {downloading === dossier.id ? "Menyiapkan..." : "Unduh Dossier PDF"}
           </button>
-          <button onClick={() => void requestRefresh(dossier)} className="flex min-h-10 items-center gap-1 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"><RefreshCw size={13} />Minta pembaruan</button>
+          <button onClick={() => void requestRefresh(dossier)} className="flex min-h-11 items-center gap-1 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"><RefreshCw size={13} />Minta pembaruan</button>
         </div>
       </article>)}</div>
       {dossiers.length === 0 && <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white py-10 text-center"><LockKeyhole className="mx-auto text-slate-400" /><p className="mt-2 text-sm text-slate-600">Belum ada dossier aktif. Ajukan akses dari halaman Temukan.</p></div>}

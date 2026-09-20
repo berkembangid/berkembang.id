@@ -82,7 +82,7 @@ export default function UmkmHeader({
             <Link
               href={heading.parentHref}
               aria-label={`Kembali ke ${heading.parentLabel}`}
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#e3e9f0] text-[#4a6280] transition-colors hover:bg-[#f3f6f9] hover:text-[#1b2a3a]"
+              className="grid size-11 shrink-0 place-items-center rounded-xl border border-[#e3e9f0] text-[#4a6280] transition-colors hover:bg-[#f3f6f9] hover:text-[#1b2a3a]"
             >
               <ArrowLeft size={16} />
             </Link>
@@ -102,7 +102,7 @@ export default function UmkmHeader({
           {!onCapture && (
             <Link
               href="/umkm/catat"
-              className="mr-1 inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#0b5f86] px-3.5 text-xs font-bold text-white transition-colors hover:bg-[#0a5375]"
+              className="mr-1 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#0b5f86] px-3.5 text-xs font-bold text-white transition-colors hover:bg-[#0a5375]"
             >
               <Mic size={15} /> Catat transaksi
             </Link>
@@ -115,7 +115,7 @@ export default function UmkmHeader({
             <button
               type="button"
               aria-label="Menu akun"
-              className="ml-1 grid h-9 w-9 place-items-center rounded-full bg-[#d6eefa] text-[10px] font-extrabold text-[#0b5f86]"
+              className="ml-1 grid size-11 place-items-center rounded-full bg-[#d6eefa] text-[10px] font-extrabold text-[#0b5f86]"
             >
               {initials(userName)}
             </button>
@@ -125,7 +125,7 @@ export default function UmkmHeader({
 
       <header className={`${styles.mobileHeader} ${onHome ? "" : styles.mobileHeaderLight}`}>
         {onHome ? (
-          <Link href="/umkm" className={styles.mobileBrand} aria-label="Berkembang.id">
+          <Link href="/umkm" className={`${styles.mobileBrand} py-2`} aria-label="Berkembang.id">
             <Image
               src="/logo/logo berkembang.webp"
               alt="Berkembang.id"
@@ -140,7 +140,7 @@ export default function UmkmHeader({
             <Link
               href={heading.parentHref ?? "/umkm"}
               aria-label={`Kembali ke ${heading.parentLabel ?? "Beranda"}`}
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-[#4a6280] active:bg-[#eef2f6]"
+              className="grid size-11 shrink-0 place-items-center rounded-xl text-[#4a6280] active:bg-[#eef2f6]"
             >
               <ArrowLeft size={19} />
             </Link>
@@ -158,7 +158,7 @@ export default function UmkmHeader({
             <button
               type="button"
               aria-label="Menu akun"
-              className="grid h-9 w-9 place-items-center rounded-full bg-[#d6eefa] text-[10px] font-extrabold text-[#0b5f86]"
+              className="grid size-11 place-items-center rounded-full bg-[#d6eefa] text-[10px] font-extrabold text-[#0b5f86]"
             >
               {initials(userName)}
             </button>

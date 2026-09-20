@@ -69,7 +69,12 @@
 
 .navLink {
   display: flex;
-  min-height: 42px;
+  /*
+    44px. Ambang sasaran sentuh yang dipakai seluruh aplikasi ini; menu samping
+    dua piksel di bawahnya, dan dua piksel itu bedanya antara ketukan yang
+    kena dan yang meleset ke tautan sebelahnya.
+  */
+  min-height: 44px;
   align-items: center;
   gap: 12px;
   margin: 2px 10px;
@@ -162,8 +167,13 @@
 .iconButton {
   position: relative;
   display: grid;
-  width: 38px;
-  height: 38px;
+  /*
+    Dipakai tombol panduan dan lonceng di header ponsel -- dua sasaran yang
+    ditekan sambil memegang ponsel dengan satu tangan, sering sambil berdiri
+    di warung. 38px terlalu kecil untuk itu.
+  */
+  width: 44px;
+  height: 44px;
   place-items: center;
   border-radius: 999px;
   color: inherit;

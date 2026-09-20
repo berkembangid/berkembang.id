@@ -26,7 +26,7 @@ export default function InstitutionAuditPage() {
     fetch("/api/v1/institution/audit", { cache: "no-store", signal: controller.signal, headers: institutionHeaders(selectedId) })
       .then(async (response) => ({ response, body: await response.json() }))
       .then(({ response, body }) => {
-        if (!response.ok) throw new Error(body.error ?? "Log audit belum dapat dimuat.");
+        if (!response.ok) throw new Error(body.error?.message ?? "Log audit belum dapat dimuat.");
         setLogs(body.data ?? []);
       })
       .catch((error) => { if (error instanceof Error && error.name !== "AbortError") setLoadError(error.message); });

@@ -420,7 +420,7 @@ export function OpeningBalanceWizard({
                 <button
                   type="button"
                   onClick={() => editKind(kind, (group) => ({ ...group, items: [...group.items, { name: "", amount: null }] }))}
-                  className="mt-2 min-h-10 text-[11px] font-bold text-[#0b5f86]"
+                  className="mt-2 min-h-11 text-[11px] font-bold text-[#0b5f86]"
                 >
                   + Sebutkan barangnya
                 </button>
@@ -596,7 +596,7 @@ export function OpeningBalanceWizard({
           {Math.min(step + 1, steps.length)} dari {steps.length}
         </p>
         {onSkip && !isSummary && (
-          <button type="button" onClick={onSkip} className="min-h-10 text-[11px] font-bold text-[#6e859e]">
+          <button type="button" onClick={onSkip} className="min-h-11 text-[11px] font-bold text-[#6e859e]">
             Nanti saja
           </button>
         )}

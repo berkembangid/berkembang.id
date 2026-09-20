@@ -195,7 +195,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
               <p className="truncate text-xs font-bold text-[#1b2a3a]">{userName}</p>
               <p className="truncate text-[10px] text-[#6e859e]">{businessName || "Kelola profil usaha"}</p>
             </Link>
-            <button onClick={() => void signOut()} aria-label="Keluar dari akun" className="grid h-9 w-9 place-items-center rounded-lg text-[#9fb0c2] hover:bg-[#f3f6f9] hover:text-[#34496a]"><LogOut size={15} /></button>
+            <button onClick={() => void signOut()} aria-label="Keluar dari akun" className="grid size-11 place-items-center rounded-lg text-[#9fb0c2] hover:bg-[#f3f6f9] hover:text-[#34496a]"><LogOut size={15} /></button>
           </div>
         </div>
       </aside>

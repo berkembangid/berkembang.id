@@ -134,7 +134,7 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
           <button
             type="button"
             onClick={() => void cancelDeletion()}
-            className="mt-2.5 min-h-10 w-full rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white"
+            className="mt-2.5 min-h-11 w-full rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white"
           >
             Batalkan penghapusan
           </button>
@@ -154,14 +154,14 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
             <button
               type="button"
               onClick={() => setStage("idle")}
-              className="min-h-10 flex-1 rounded-xl border border-[#c8d3de] bg-white text-xs font-bold text-[#4a6280]"
+              className="min-h-11 flex-1 rounded-xl border border-[#c8d3de] bg-white text-xs font-bold text-[#4a6280]"
             >
               Batal
             </button>
             <button
               type="button"
               onClick={() => void requestDeletion()}
-              className="min-h-10 flex-1 rounded-xl bg-[#b4304a] text-xs font-bold text-white"
+              className="min-h-11 flex-1 rounded-xl bg-[#b4304a] text-xs font-bold text-white"
             >
               Ya, hapus akun saya
             </button>

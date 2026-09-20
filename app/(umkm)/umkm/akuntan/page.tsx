@@ -95,13 +95,13 @@ export default function AkuntanPage() {
           <>
             <Link
               href="/umkm/laporan"
-              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280]"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280]"
             >
               <ArrowLeft size={14} /> Kembali ke Laporan
             </Link>
             <a
               href={journalExportUrl(from, to)}
-              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#a9ebd0] bg-[#edfbf5] px-3 text-xs font-bold text-[#0b7a55]"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#a9ebd0] bg-[#edfbf5] px-3 text-xs font-bold text-[#0b7a55]"
             >
               <Download size={14} /> Unduh jurnal (CSV)
             </a>
@@ -117,7 +117,7 @@ export default function AkuntanPage() {
             value={from}
             max={to}
             onChange={(event) => setFrom(event.target.value)}
-            className="mt-1.5 block min-h-10 rounded-xl border border-[#d8dcff] px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
+            className="mt-1.5 block min-h-11 rounded-xl border border-[#d8dcff] px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
           />
         </label>
         <label className="text-[11px] font-bold text-[#4a6280]">
@@ -128,7 +128,7 @@ export default function AkuntanPage() {
             min={from}
             max={today}
             onChange={(event) => setTo(event.target.value)}
-            className="mt-1.5 block min-h-10 rounded-xl border border-[#d8dcff] px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
+            className="mt-1.5 block min-h-11 rounded-xl border border-[#d8dcff] px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
           />
         </label>
         {/*
@@ -149,7 +149,7 @@ export default function AkuntanPage() {
             type="button"
             onClick={() => setView(item.id)}
             aria-current={view === item.id ? "page" : undefined}
-            className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-bold transition-colors ${
+            className={`min-h-11 flex-1 rounded-lg px-3 text-xs font-bold transition-colors ${
               view === item.id ? "bg-[#eef8fd] text-[#0b5f86] shadow-sm" : "text-[#6e859e] hover:bg-[#f3f6f9]"
             }`}
           >
@@ -180,7 +180,7 @@ function Failure({ message, onRetry }: { message: string; onRetry: () => void })
       className="flex items-center gap-2 rounded-2xl border border-[#f3c6cf] bg-[#fdf1f3] p-4 text-xs font-semibold text-[#b4304a]"
     >
       <AlertCircle size={16} /> {message}
-      <button onClick={onRetry} className="ml-auto inline-flex min-h-10 items-center gap-1 rounded-lg px-2 font-bold">
+      <button onClick={onRetry} className="ml-auto inline-flex min-h-11 items-center gap-1 rounded-lg px-2 font-bold">
         <RefreshCcw size={13} /> Coba lagi
       </button>
     </div>
@@ -346,7 +346,7 @@ function LedgerPanel({ from, to }: { from: string; to: string }) {
           <select
             value={accountCode}
             onChange={(event) => setAccountCode(event.target.value)}
-            className="mt-1.5 block min-h-10 w-full rounded-xl border border-[#d8dcff] px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
+            className="mt-1.5 block min-h-11 w-full rounded-xl border border-[#d8dcff] px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
           >
             {chartOfAccounts.map((account) => (
               <option key={account.code} value={account.code}>

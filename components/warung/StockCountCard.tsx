@@ -182,7 +182,7 @@ export function StockCountCard({
                   setChosen(event.target.value);
                   setEditing(false);
                 }}
-                className="mt-1 block min-h-10 w-full max-w-xs rounded-xl border border-[#d5dfe9] bg-white px-3 text-xs font-medium outline-none focus:border-[#0b5f86]"
+                className="mt-1 block min-h-11 w-full max-w-xs rounded-xl border border-[#d5dfe9] bg-white px-3 text-xs font-medium outline-none focus:border-[#0b5f86]"
               >
                 {selectable.map((option) => (
                   <option key={option} value={option}>

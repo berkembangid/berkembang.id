@@ -325,7 +325,7 @@ export default function ProfilPage() {
           actions={
             <button
               onClick={handleSignOut}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-[#c8d3de] bg-white px-4 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9] transition-colors"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#c8d3de] bg-white px-4 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9] transition-colors"
             >
               <LogOut size={14} /> Keluar
             </button>

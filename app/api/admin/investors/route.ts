@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { gagal } from "@/lib/api/galat";
 import { z } from "zod";
 import { getEffectivePortalRole } from "@/lib/auth/authorization";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
@@ -9,14 +10,14 @@ export async function GET(request: Request) {
   const {
     data: { user },
   } = await sessionClient.auth.getUser();
-  if (!user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!user) return gagal("UNAUTHENTICATED", 401);
 
   try {
     if ((await getEffectivePortalRole(sessionClient, user.id)) !== "admin") {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+      return gagal("FORBIDDEN", 403);
     }
   } catch {
-    return NextResponse.json({ error: "AUTHORIZATION_UNAVAILABLE" }, { status: 503 });
+    return gagal("AUTHORIZATION_UNAVAILABLE", 503);
   }
 
   const { searchParams } = new URL(request.url);
@@ -142,19 +143,19 @@ export async function POST(request: Request) {
   const {
     data: { user },
   } = await sessionClient.auth.getUser();
-  if (!user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!user) return gagal("UNAUTHENTICATED", 401);
 
   try {
     if ((await getEffectivePortalRole(sessionClient, user.id)) !== "admin") {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+      return gagal("FORBIDDEN", 403);
     }
   } catch {
-    return NextResponse.json({ error: "AUTHORIZATION_UNAVAILABLE" }, { status: 503 });
+    return gagal("AUTHORIZATION_UNAVAILABLE", 503);
   }
 
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "INVALID_PAYLOAD" }, { status: 400 });
+    return gagal("INVALID_PAYLOAD", 400);
   }
 
   try {

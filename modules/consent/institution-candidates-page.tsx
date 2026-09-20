@@ -185,14 +185,20 @@ export default function InstitutionCandidatesPage() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message ?? "Permintaan belum dapat dikirim.");
-      setCandidates((current) => current.map((item) => item.candidateCode === selected.candidateCode ? { ...item, requestStatus: "pending" } : item));
       setSelected(null);
       notifySuccess("Ketertarikan terkirim", {
         description: "Admin platform akan meninjaunya. Anda diberi tahu setelah ada keputusan.",
         duration: 7000,
       });
     } catch (error) { notifyFromError(error, "Permintaan belum dapat dikirim."); }
-    finally { setSending(false); }
+    finally {
+      setSending(false);
+      // Statusnya dibaca ulang, bukan ditebak "pending". Server bisa menolak
+      // secara berbeda -- kuota kredit, izin yang sudah ada, permintaan kembar
+      // -- dan kartu yang terlanjur menulis "menunggu" akan menyembunyikan
+      // tombolnya dari orang yang sebenarnya masih perlu menekannya.
+      load();
+    }
   }
 
   return <DashboardPage>
@@ -222,14 +228,14 @@ export default function InstitutionCandidatesPage() {
     />
 
     {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
-    <div className="mb-5 flex flex-wrap gap-2" aria-label="Saring berdasarkan bidang usaha">{sectors.map((item) => <button key={item} onClick={() => apply({ sector: item })} className={`min-h-10 rounded-full px-4 text-xs font-bold ${sector === item ? "bg-[#0b5f86] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>{item}</button>)}</div>
+    <div className="mb-5 flex flex-wrap gap-2" aria-label="Saring berdasarkan bidang usaha">{sectors.map((item) => <button key={item} onClick={() => apply({ sector: item })} className={`min-h-11 rounded-full px-4 text-xs font-bold ${sector === item ? "bg-[#0b5f86] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>{item}</button>)}</div>
     <div className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[auto_1fr_1fr_1fr_1fr_auto] md:items-end">
       <div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal size={15} className="text-[#0b5f86]" />Saring kandidat</div>
-      <label className="text-xs font-bold text-slate-600">Wilayah<select value={region} onChange={(event) => apply({ region: event.target.value })} className="mt-1.5 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal"><option value="Semua">Semua wilayah</option>{regions.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
-      <label className="text-xs font-bold text-slate-600">Kesiapan min.<select value={readinessFilter} onChange={(event) => apply({ readiness: event.target.value })} className="mt-1.5 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal"><option value="Semua">Semua tingkat</option>{readinessBands.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
-      <label className="text-xs font-bold text-slate-600">Umur catatan<select value={recordingFilter} onChange={(event) => apply({ recording: event.target.value })} className="mt-1.5 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal"><option value="Semua">Semua</option>{recordingLevels.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
-      <label className="text-xs font-bold text-slate-600">Legalitas<select value={legalFilter} onChange={(event) => apply({ legal: event.target.value })} className="mt-1.5 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal"><option>Semua</option><option>Lengkap</option><option>Belum</option></select></label>
-      <label className="flex items-center gap-2 text-xs font-bold text-slate-600"><ArrowDownUp size={14} /><select aria-label="Urutkan kandidat" value={sortBy} onChange={(event) => apply({ sort: event.target.value })} className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 font-normal"><option value="newest">Terbaru bergabung</option><option value="region">Wilayah</option></select></label>
+      <label className="text-xs font-bold text-slate-600">Wilayah<select value={region} onChange={(event) => apply({ region: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal"><option value="Semua">Semua wilayah</option>{regions.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
+      <label className="text-xs font-bold text-slate-600">Kesiapan min.<select value={readinessFilter} onChange={(event) => apply({ readiness: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal"><option value="Semua">Semua tingkat</option>{readinessBands.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
+      <label className="text-xs font-bold text-slate-600">Umur catatan<select value={recordingFilter} onChange={(event) => apply({ recording: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal"><option value="Semua">Semua</option>{recordingLevels.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
+      <label className="text-xs font-bold text-slate-600">Legalitas<select value={legalFilter} onChange={(event) => apply({ legal: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal"><option>Semua</option><option>Lengkap</option><option>Belum</option></select></label>
+      <label className="flex items-center gap-2 text-xs font-bold text-slate-600"><ArrowDownUp size={14} /><select aria-label="Urutkan kandidat" value={sortBy} onChange={(event) => apply({ sort: event.target.value })} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 font-normal"><option value="newest">Terbaru bergabung</option><option value="region">Wilayah</option></select></label>
     </div>
     <div className="mb-4 flex items-center justify-between text-xs text-slate-500"><span>{visible.length} dari {total} kandidat tampil</span><span className="flex items-center gap-1 font-semibold text-[#0b5f86]"><Bookmark size={13} />{shortlist.length} tersimpan</span></div>
     {loading ? <p className="py-16 text-center text-sm text-slate-500">Memuat daftar usaha...</p> : <div className="grid gap-4 lg:grid-cols-2">{visible.map((candidate) => <article key={candidate.candidateCode} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -261,7 +267,7 @@ export default function InstitutionCandidatesPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" aria-label={shortlist.includes(candidate.candidateCode) ? "Hapus dari shortlist" : "Simpan ke shortlist"} onClick={() => void toggleShortlist(candidate.candidateCode)} className={`flex h-9 w-9 items-center justify-center rounded-lg border ${shortlist.includes(candidate.candidateCode) ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-400 hover:text-[#0b5f86]"}`} title={shortlist.includes(candidate.candidateCode) ? "Tersimpan" : "Simpan kandidat"}>{shortlist.includes(candidate.candidateCode) ? <Check size={16} /> : <Bookmark size={16} />}</button>
+          <button type="button" aria-label={shortlist.includes(candidate.candidateCode) ? "Hapus dari shortlist" : "Simpan ke shortlist"} onClick={() => void toggleShortlist(candidate.candidateCode)} className={`flex h-11 w-11 items-center justify-center rounded-lg border ${shortlist.includes(candidate.candidateCode) ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-400 hover:text-[#0b5f86]"}`} title={shortlist.includes(candidate.candidateCode) ? "Tersimpan" : "Simpan kandidat"}>{shortlist.includes(candidate.candidateCode) ? <Check size={16} /> : <Bookmark size={16} />}</button>
           <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{candidate.readinessLevel}</span>
         </div>
       </div>

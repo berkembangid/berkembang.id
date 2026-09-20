@@ -377,7 +377,7 @@ export default function UploadPage() {
       <PageHeader title="Dokumen usaha" description="Simpan dan perbarui dokumen usaha di satu tempat. Anda tetap mengendalikan siapa yang dapat mengaksesnya." icon={FileText} actions={<button
           type="button"
           onClick={() => void loadDocuments()}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"
         >
           <RefreshCcw size={14} /> Muat ulang
         </button>} />

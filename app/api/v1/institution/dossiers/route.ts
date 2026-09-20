@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { gagal } from "@/lib/api/galat";
 import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
 
 function selectedInstitution(request: Request): string | null {
@@ -8,7 +9,7 @@ function selectedInstitution(request: Request): string | null {
 
 /** Daftar snapshot aktif milik organisasi terpilih. */
 export async function GET(request: Request) {
-  if (!await getAuthenticatedUser()) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!await getAuthenticatedUser()) return gagal("UNAUTHENTICATED", 401);
   const client = await createServerSupabaseClient();
   let query = client.from("dossiers")
     .select("id,request_id,grant_id,business_id,status,expires_at,generated_at")
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
   const selected = selectedInstitution(request);
   if (selected) query = query.eq("institution_id", selected);
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: "DOSSIERS_UNAVAILABLE" }, { status: 503 });
+  if (error) return gagal("DOSSIERS_UNAVAILABLE", 503);
   const businessIds = [...new Set((data ?? []).map((row) => row.business_id))];
   const grantIds = [...new Set((data ?? []).map((row) => row.grant_id).filter(Boolean))];
   const [optins, grants] = await Promise.all([

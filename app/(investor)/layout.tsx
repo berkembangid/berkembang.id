@@ -84,7 +84,7 @@ function SidebarShell({
       )}
       <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ""}`}>
         <div className={styles.brand}>
-          <Link href="/investor" className="flex items-center gap-3" aria-label="Berkembang.id">
+          <Link href="/investor" className="flex items-center gap-3 py-1.5" aria-label="Berkembang.id">
             <Image
               src="/logo/logo berkembang.webp"
               alt="Berkembang.id"
@@ -98,7 +98,7 @@ function SidebarShell({
             type="button"
             aria-label="Tutup menu"
             onClick={() => setMobileOpen(false)}
-            className="ml-auto grid size-9 place-items-center rounded-lg text-[#6e859e] md:hidden"
+            className="ml-auto grid size-11 place-items-center rounded-lg text-[#6e859e] md:hidden"
           >
             <X size={17} />
           </button>

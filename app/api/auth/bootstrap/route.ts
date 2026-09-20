@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { gagal } from "@/lib/api/galat";
 import { bootstrapAccountFromSignupMetadata } from "@/lib/auth/bootstrap";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { portalPathForRole } from "@/modules/auth/role-resolution";
@@ -11,7 +12,7 @@ export async function POST() {
   } = await supabase.auth.getUser();
 
   if (error || !user) {
-    return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+    return gagal("UNAUTHENTICATED", 401);
   }
 
   try {

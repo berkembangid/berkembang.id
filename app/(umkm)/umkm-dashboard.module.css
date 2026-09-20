@@ -49,7 +49,8 @@
 .quickActions { position: absolute; inset: auto 14px 14px; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; }
 .quickAction {
   display: flex;
-  min-height: 43px;
+  /* 44px, bukan 43px. Satu piksel, tapi ambangnya memang 44. */
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 7px;
@@ -62,7 +63,7 @@
   font-weight: 700;
   backdrop-filter: blur(12px);
 }
-.quickActionRound { width: 43px; padding: 0; }
+.quickActionRound { width: 44px; padding: 0; }
 
 .whiteCard {
   padding: 19px;

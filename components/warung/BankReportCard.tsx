@@ -412,7 +412,7 @@ function ReadinessChecklist({
               <button
                 type="button"
                 onClick={item.action.run}
-                className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 text-[11px] font-bold text-[#0b5f86]"
+                className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 text-[11px] font-bold text-[#0b5f86]"
               >
                 {item.action.label} <ArrowRight size={12} />
               </button>

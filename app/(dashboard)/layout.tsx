@@ -50,7 +50,7 @@ function SidebarShell({ pathname, mobileOpen, setMobileOpen, unread, contextName
   return <>
     {mobileOpen && <button type="button" aria-label="Tutup menu" className={styles.backdrop} onClick={() => setMobileOpen(false)} />}
     <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ""}`}>
-      <div className={styles.brand}><Link href="/institusi" className="flex items-center gap-3" aria-label="Berkembang.id"><Image src="/logo/logo berkembang.webp" alt="Berkembang.id" width={150} height={38} priority className="h-8 w-auto object-contain" /></Link><button type="button" aria-label="Tutup menu" onClick={() => setMobileOpen(false)} className="ml-auto grid size-9 place-items-center rounded-lg text-[#6e859e] md:hidden"><X size={17} /></button></div>
+      <div className={styles.brand}><Link href="/institusi" className="flex items-center gap-3 py-1.5" aria-label="Berkembang.id"><Image src="/logo/logo berkembang.webp" alt="Berkembang.id" width={150} height={38} priority className="h-8 w-auto object-contain" /></Link><button type="button" aria-label="Tutup menu" onClick={() => setMobileOpen(false)} className="ml-auto grid size-11 place-items-center rounded-lg text-[#6e859e] md:hidden"><X size={17} /></button></div>
       <div className={styles.context}><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#eef8fd] text-[#0f73a3]"><Building2 size={17} /></span><div className="min-w-0"><p className={styles.contextTitle}>{contextName}</p><InstitutionSwitcher /></div></div></div>
       <nav aria-label="Menu portal lembaga" className={styles.group}>
         <p className={styles.groupLabel}>Ruang kerja</p>

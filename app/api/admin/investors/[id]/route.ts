@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { gagal } from "@/lib/api/galat";
 import { z } from "zod";
 import { getEffectivePortalRole } from "@/lib/auth/authorization";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
@@ -18,14 +19,14 @@ export async function GET(
   const {
     data: { user },
   } = await sessionClient.auth.getUser();
-  if (!user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!user) return gagal("UNAUTHENTICATED", 401);
 
   try {
     if ((await getEffectivePortalRole(sessionClient, user.id)) !== "admin") {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+      return gagal("FORBIDDEN", 403);
     }
   } catch {
-    return NextResponse.json({ error: "AUTHORIZATION_UNAVAILABLE" }, { status: 503 });
+    return gagal("AUTHORIZATION_UNAVAILABLE", 503);
   }
 
   const { id: rawId } = await params;
@@ -36,7 +37,7 @@ export async function GET(
     if (source === "institutions") {
       const { data, error } = await admin.from("institutions").select("*").eq("id", id).maybeSingle();
       if (error) throw error;
-      if (!data) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+      if (!data) return gagal("NOT_FOUND", 404);
 
       return NextResponse.json({
         id: `institution:${data.id}`,
@@ -54,7 +55,7 @@ export async function GET(
     } else {
       const { data, error } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
       if (error) throw error;
-      if (!data) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+      if (!data) return gagal("NOT_FOUND", 404);
 
       return NextResponse.json({
         id: `profile:${data.id}`,
@@ -94,21 +95,21 @@ export async function PUT(
   const {
     data: { user },
   } = await sessionClient.auth.getUser();
-  if (!user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!user) return gagal("UNAUTHENTICATED", 401);
 
   try {
     if ((await getEffectivePortalRole(sessionClient, user.id)) !== "admin") {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+      return gagal("FORBIDDEN", 403);
     }
   } catch {
-    return NextResponse.json({ error: "AUTHORIZATION_UNAVAILABLE" }, { status: 503 });
+    return gagal("AUTHORIZATION_UNAVAILABLE", 503);
   }
 
   const { id: rawId } = await params;
   const { source, id } = parseInvestorId(rawId);
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "INVALID_PAYLOAD" }, { status: 400 });
+    return gagal("INVALID_PAYLOAD", 400);
   }
 
   const admin = createServiceRoleClient();
@@ -116,7 +117,7 @@ export async function PUT(
 
   try {
     if (source === "institutions") {
-      const { error } = await admin
+      const { data, error } = await admin
         .from("institutions")
         .update({
           name: d.name,
@@ -128,10 +129,12 @@ export async function PUT(
           status: d.status === "active" ? "active" : "inactive",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", id);
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) return gagal("NOT_FOUND");
     } else {
-      const { error } = await admin
+      const { data, error } = await admin
         .from("profiles")
         .update({
           name: d.name,
@@ -144,14 +147,18 @@ export async function PUT(
           status: d.status,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", id);
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) return gagal("NOT_FOUND");
     }
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "UPDATE_FAILED";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    // Pesan PostgreSQL bisa memuat nama kolom, nama batasan, dan nilai baris.
+    // Ia berguna di log server, bukan di layar.
+    console.error("[admin/investors PATCH]", err);
+    return gagal("INTERNAL_ERROR");
   }
 }
 
@@ -163,14 +170,14 @@ export async function DELETE(
   const {
     data: { user },
   } = await sessionClient.auth.getUser();
-  if (!user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!user) return gagal("UNAUTHENTICATED", 401);
 
   try {
     if ((await getEffectivePortalRole(sessionClient, user.id)) !== "admin") {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+      return gagal("FORBIDDEN", 403);
     }
   } catch {
-    return NextResponse.json({ error: "AUTHORIZATION_UNAVAILABLE" }, { status: 503 });
+    return gagal("AUTHORIZATION_UNAVAILABLE", 503);
   }
 
   const { id: rawId } = await params;

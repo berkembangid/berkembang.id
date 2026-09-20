@@ -172,11 +172,11 @@ export default function AdminBroadcastPanel() {
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button type="button" disabled={busy} onClick={() => void putuskan(row, true)}
-                      className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-50">
+                      className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-50">
                       <Check size={14} /> Setujui dan kirim
                     </button>
                     <button type="button" disabled={busy} onClick={() => void putuskan(row, false)}
-                      className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-[#c8d3de] px-4 text-xs font-bold text-[#34496a] disabled:opacity-50">
+                      className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#c8d3de] px-4 text-xs font-bold text-[#34496a] disabled:opacity-50">
                       <ShieldX size={14} /> Tidak setujui
                     </button>
                   </div>
