@@ -4,11 +4,12 @@ import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { ConsentOperationError, consentErrorResponse } from "@/modules/consent/consent-errors";
 import { buildDocumentUid } from "@/modules/accounting/report-issue";
 import {
-  buildDossierDocumentData,
+  buildDossierDocument,
   dossierFormulaVersion,
   resolveInstitutionContext,
 } from "@/modules/institution/dossier-repository";
-import { dossierFileName, renderInstitutionDossierPdf } from "@/modules/institution/dossier-pdf";
+import { dossierFileName, dossierTemplateIssuedAt } from "@/modules/institution/dossier-file";
+import { renderFinancialStatementsPdf } from "@/modules/accounting/statement-pdf";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,33 +32,37 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     if (!dossier.downloadAllowed) throw new ConsentOperationError("DOWNLOAD_NOT_APPROVED");
 
     const client = withPortalRpc(await createServerSupabaseClient());
-    const { data: existing } = await client
-      .from("report_issues")
-      .select("document_uid,document_id")
-      .eq("audience", "institution")
-      .eq("institution_id", dossier.institutionId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
     const printedAt = new Date().toISOString();
-    const existingRow = existing as unknown as { document_uid: string; document_id: string | null } | null;
     // Baris arsip dihubungkan ke dossier lewat RPC record (kolom dossier_id
     // ada setelah migrasi 0058). Filter dossier dilakukan di memori supaya
     // select tetap valid pada DB yang belum dimigrasi.
     const { data: dossierIssues } = await client
       .from("report_issues")
-      .select("document_uid,document_id,dossier_id" as never)
+      .select("document_uid,document_id,dossier_id,created_at" as never)
       .eq("audience", "institution")
       .eq("institution_id", dossier.institutionId)
       .order("created_at", { ascending: false })
       .limit(20);
     const url = new URL(request.url);
     const forceFresh = url.searchParams.get("fresh") === "true" || url.searchParams.get("fresh") === "1";
-    const match = forceFresh
-      ? null
-      : ((dossierIssues ?? []) as unknown as Array<{ document_uid: string; document_id: string | null; dossier_id?: string | null }>)
-          .find((row) => row.dossier_id === dossier.dossierId);
+    const archived = ((dossierIssues ?? []) as unknown as Array<{
+      document_uid: string;
+      document_id: string | null;
+      dossier_id?: string | null;
+      created_at: string;
+    }>).find((row) => row.dossier_id === dossier.dossierId);
+
+    // Arsip disajikan apa adanya supaya satu nomor dokumen selalu berarti satu
+    // berkas yang sama -- tetapi hanya selama ia masih menggambarkan keadaan.
+    // Dua hal membuatnya kedaluwarsa: bahan dossier berubah (pemilik mengganti
+    // nama usahanya, atau mengunggah dokumen baru), atau tampilan dossier
+    // sendiri berubah. Keduanya menerbitkan dokumen baru bernomor baru pada
+    // unduhan berikutnya; yang lama tetap tersimpan.
+    const supersededAt = [dossier.sourceUpdatedAt, dossierTemplateIssuedAt]
+      .map((value) => new Date(value).getTime())
+      .reduce((a, b) => Math.max(a, b));
+    const outdated = Boolean(archived && new Date(archived.created_at).getTime() < supersededAt);
+    const match = forceFresh || outdated ? null : archived;
     const documentUid = match?.document_uid ?? buildDocumentUid(printedAt);
     const documentId = match?.document_id ?? crypto.randomUUID();
 
@@ -84,8 +89,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       }
     }
 
-    const document = await buildDossierDocumentData(dossier, documentUid, printedAt);
-    const pdf = await renderInstitutionDossierPdf(document, {
+    const document = await buildDossierDocument(dossier, documentUid, printedAt);
+    const pdf = await renderFinancialStatementsPdf(document, {
       institutionName: dossier.institutionName,
       memberLabel: dossier.memberLabel,
       downloadedAt: printedAt,

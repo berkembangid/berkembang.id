@@ -10,7 +10,8 @@ import type { IncomeStatementView } from "@/modules/accounting/reports";
 import type { IndicatorMonthlyRow, NotesPayload } from "@/modules/accounting/period";
 import { monthBounds, monthsEndingAt } from "@/modules/accounting/warung";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
-import type { DossierDocumentData, LegalitasItem } from "@/modules/institution/dossier-document";
+import { buildLegalitasItems, latestEvidenceUpdate } from "@/modules/institution/dossier-evidence";
+import { loadDossierIdentity, type DossierIdentity, type IdentitySnapshot } from "@/modules/institution/dossier-identity";
 
 export type DossierContext = {
   dossierId: string;
@@ -26,7 +27,28 @@ export type DossierContext = {
   expiresAt: string | null;
   snapshotAt: string | null;
   items: Record<string, Record<string, unknown>>;
+  /** Identitas yang berlaku hari ini, bukan yang berlaku saat izin disetujui. */
+  identity: DossierIdentity;
+  /**
+   * Waktu perubahan terakhir pada bahan dossier -- identitas usaha maupun
+   * pindaian dokumen. PDF yang diarsipkan sebelum waktu ini sudah kedaluwarsa
+   * dan harus diterbitkan ulang.
+   */
+  sourceUpdatedAt: string;
 };
+
+/**
+ * Waktu terbaru di antara beberapa cap waktu. Dibandingkan sebagai tanggal,
+ * bukan sebagai teks: Postgres mengembalikan "+00:00" sedangkan JavaScript
+ * menulis "Z", dan urutan abjad keduanya tidak sama dengan urutan waktunya.
+ */
+function latestOf(values: Array<string | null>): string {
+  let latest = new Date(0).toISOString();
+  for (const value of values) {
+    if (value && new Date(value) > new Date(latest)) latest = value;
+  }
+  return latest;
+}
 
 function fail(message: string): never {
   throw new ConsentOperationError(message as ConsentOperationError["code"]);
@@ -74,10 +96,11 @@ export async function resolveInstitutionContext(
   const isPlatformAdmin = profile?.role === "admin";
   if (!member && !isPlatformAdmin) fail("ACCESS_DENIED");
 
-  const [grantResult, institutionResult, businessResult, itemsResult] = await Promise.all([
+  // Baris `businesses` tidak lagi dibaca di sini untuk namanya; `loadDossierIdentity`
+  // mengambilnya bersama profil pemilik yang justru disunting pemilik.
+  const [grantResult, institutionResult, itemsResult] = await Promise.all([
     admin.from("consent_grants").select("id,scopes,status,expires_at,download_allowed").eq("id", dossier.grant_id).maybeSingle(),
     admin.from("institutions").select("id,name").eq("id", dossier.institution_id).maybeSingle(),
-    admin.from("businesses").select("id,name").eq("id", dossier.business_id).maybeSingle(),
     admin.from("dossier_items").select("item_type,snapshot").eq("dossier_id", dossierId),
   ]);
   const grant = grantResult.data;
@@ -90,21 +113,34 @@ export async function resolveInstitutionContext(
     items[row.item_type] = (row.snapshot ?? {}) as Record<string, unknown>;
   }
 
+  const scopes = (grant.scopes ?? []) as ConsentScope[];
+
+  // Nama usaha tidak lagi dibaca dari `businesses.name`. Baris itu ditulis
+  // sekali saat akun disediakan dan tidak pernah disegarkan ketika pemilik
+  // mengganti nama usahanya -- lihat `dossier-identity.ts`.
+  const identity = await loadDossierIdentity(
+    dossier.business_id,
+    (items["business_identity"] ?? {}) as IdentitySnapshot,
+  );
+  const evidenceUpdatedAt = await latestEvidenceUpdate(dossier.business_id, scopes);
+
   return {
     dossierId: dossier.id,
     grantId: dossier.grant_id,
     requestId: dossier.request_id,
     businessId: dossier.business_id,
-    businessName: businessResult.data?.name ?? "Usaha",
+    businessName: identity.businessName,
     institutionId: dossier.institution_id,
     institutionName: institutionResult.data?.name ?? "Lembaga",
     memberLabel: member ? `anggota (${member.role})` : isPlatformAdmin ? "admin platform" : "anggota lembaga",
-    scopes: (grant.scopes ?? []) as ConsentScope[],
+    scopes,
     // Jika sudah masuk /institusi/dossiers (dossier status 'ready' dan grant disetujui), unduhan diizinkan
     downloadAllowed: true,
     expiresAt: dossier.expires_at,
     snapshotAt: dossier.generated_at,
     items,
+    identity,
+    sourceUpdatedAt: latestOf([identity.updatedAt, evidenceUpdatedAt, dossier.generated_at]),
   };
 }
 
@@ -256,7 +292,10 @@ export async function buildDossierDocument(
   documentUid: string,
   printedAt: string,
 ): Promise<StatementDocumentData> {
-  const live = await liveNumbers(context.businessId, context.businessName);
+  const [live, legalitas] = await Promise.all([
+    liveNumbers(context.businessId, context.businessName),
+    buildLegalitasItems(context.businessId, context.scopes),
+  ]);
   const today = jakartaDate();
   const window = monthsEndingAt(today.slice(0, 7), 6);
   const from = monthBounds(window[0]).startDate;
@@ -274,195 +313,10 @@ export async function buildDossierDocument(
     indicators: live.indicators,
     includeIndicators: true,
     hasEvidence: live.hasEvidence,
+    legalitas,
   };
 }
 
 export function dossierFormulaVersion(): string {
   return indicatorFormulaVersion;
-}
-
-// ── Snapshot helpers ───────────────────────────────────────────────────────
-
-function snapshotStr(items: Record<string, Record<string, unknown>>, itemType: string, key: string): string | null {
-  const val = items[itemType]?.[key];
-  return typeof val === "string" && val.trim() ? val.trim() : null;
-}
-
-function snapshotNum(items: Record<string, Record<string, unknown>>, itemType: string, key: string): number | null {
-  const val = items[itemType]?.[key];
-  if (val === null || val === undefined) return null;
-  const n = Number(val);
-  return isNaN(n) ? null : n;
-}
-
-/**
- * Anak tangga rekening usaha, dibaca dari potret kesiapan yang sudah beku.
- *
- * TIDAK ADA KUERI BARU, DAN TIDAK ADA LINGKUP CONSENT BARU. Potret `readiness`
- * sudah memuat seluruh komponen apa adanya sejak `0063`, jadi B5 sampai ke
- * dossier begitu ia menjadi komponen. Yang dibaca lembaga hanya statusnya --
- * nama bank dan empat digitnya tidak pernah ikut ke potret mana pun.
- */
-function bankAccountFromSnapshot(
-  items: Record<string, Record<string, unknown>>,
-): "berbukti" | "tercatat" | "belum" | null {
-  const components = items.readiness?.components;
-  if (!Array.isArray(components)) return null;
-  const b5 = components.find(
-    (item): item is { id: string; value: unknown } =>
-      typeof item === "object" && item !== null && (item as { id?: unknown }).id === "B5",
-  );
-  // Potret yang dibuat sebelum `0098` tidak punya B5 sama sekali. Itu bukan
-  // "belum punya rekening" -- itu "tidak ditanyakan waktu itu", dan dossier
-  // lama tidak boleh berubah arti karena kita menambah komponen hari ini.
-  if (!b5) return null;
-  const value = Number(b5.value ?? 0);
-  if (value >= 2) return "berbukti";
-  if (value >= 1) return "tercatat";
-  return "belum";
-}
-
-/**
- * Membangun DossierDocumentData (format PDF ringkas 1-2 halaman) dari konteks
- * dossier yang sudah di-resolve beserta data live keuangan.
- *
- * Snapshot legalitas, identitas, dan kesiapan diambil dari `dossier_items`;
- * angka keuangan diambil live dari fungsi SQL yang sama dengan layar UMKM.
- */
-export async function buildDossierDocumentData(
-  context: DossierContext,
-  documentUid: string,
-  printedAt: string,
-): Promise<DossierDocumentData> {
-  // Reuse liveNumbers via buildDossierDocument to avoid duplicating RPC calls
-  const statementDoc = await buildDossierDocument(context, documentUid, printedAt);
-  const { items } = context;
-
-  // ── Identitas dari snapshot ──────────────────────────────────────────────
-  const ownerName =
-    snapshotStr(items, "owner_identity", "name") ??
-    snapshotStr(items, "business_identity", "owner_name");
-  const businessForm =
-    snapshotStr(items, "business_identity", "business_form") ??
-    snapshotStr(items, "business_identity", "entity_type");
-  const sector =
-    snapshotStr(items, "business_identity", "sector") ??
-    statementDoc.notes?.business?.sector ?? null;
-  const city =
-    snapshotStr(items, "business_identity", "city") ??
-    snapshotStr(items, "business_identity", "location") ??
-    statementDoc.notes?.business?.location ?? null;
-  const yearStarted = snapshotNum(items, "business_identity", "year_started");
-  const employeeCount = snapshotNum(items, "business_identity", "employee_count");
-  const contactEmail = snapshotStr(items, "business_identity", "contact_email");
-  const contactPhone =
-    snapshotStr(items, "business_identity", "contact_phone") ??
-    snapshotStr(items, "business_identity", "whatsapp");
-
-  // ── Kesiapan dari snapshot ────────────────────────────────────────────────
-  const readinessLevel = snapshotStr(items, "readiness", "level");
-  const readinessScore = snapshotNum(items, "readiness", "score");
-  const readinessDate = snapshotStr(items, "readiness", "calculated_at");
-  const separateBankAccount = bankAccountFromSnapshot(items);
-
-  // ── Legalitas dari snapshot ───────────────────────────────────────────────
-  const legalitas: LegalitasItem[] = [];
-
-  // KTP Pemilik
-  const ktpStatus = snapshotStr(items, "owner_identity", "verification_status");
-  legalitas.push({
-    label: "KTP Pemilik",
-    status: ktpStatus === "verified" ? "verified" : ktpStatus ? "available" : "unavailable",
-    detail: snapshotStr(items, "owner_identity", "verified_at")
-      ? `Dikonfirmasi ${snapshotStr(items, "owner_identity", "verified_at")?.slice(0, 10) ?? ""}`
-      : snapshotStr(items, "owner_identity", "nik_masked") ?? undefined,
-  });
-
-  // NIB
-  const nibNumber = snapshotStr(items, "nib", "nib_number");
-  const nibStatus = snapshotStr(items, "nib", "status");
-  legalitas.push({
-    label: "NIB (Nomor Induk Berusaha)",
-    status: nibNumber ? "verified" : nibStatus ? "available" : "unavailable",
-    detail: nibNumber ?? nibStatus ?? undefined,
-  });
-
-  // NPWP
-  const npwpNumber = snapshotStr(items, "npwp", "npwp_number") ?? snapshotStr(items, "npwp", "npwp_masked");
-  const npwpStatus = snapshotStr(items, "npwp", "status");
-  legalitas.push({
-    label: "NPWP Usaha / Pemilik",
-    status: npwpNumber ? "verified" : npwpStatus ? "available" : "unavailable",
-    detail: npwpNumber ?? npwpStatus ?? undefined,
-  });
-
-  // Sertifikasi sektor (PIRT, Halal, Izin Edar, dll)
-  const certificates = items["sector_certificates"];
-  if (certificates && typeof certificates === "object") {
-    const certList = Array.isArray(certificates["items"])
-      ? (certificates["items"] as Array<Record<string, unknown>>)
-      : [];
-    for (const cert of certList) {
-      const certName = typeof cert["name"] === "string" ? cert["name"] : "Sertifikasi";
-      const certStatus = typeof cert["status"] === "string" ? cert["status"] : "";
-      legalitas.push({
-        label: certName,
-        status: certStatus === "verified" ? "verified" : certStatus ? "available" : "unavailable",
-        detail: typeof cert["number"] === "string" ? cert["number"] : undefined,
-      });
-    }
-  }
-
-  // Fallback: minimal 3 baris agar tabel tidak kosong
-  if (legalitas.length < 3) {
-    const missing = 3 - legalitas.length;
-    for (let i = 0; i < missing; i++) {
-      legalitas.push({ label: "Sertifikasi Lainnya", status: "unavailable" });
-    }
-  }
-
-  // ── Ringkasan Keuangan dari liveNumbers ──────────────────────────────────
-  const income = statementDoc.incomeStatement.current;
-  const financialRows = [
-    { label: "Total Pendapatan Usaha", amountIdr: income.operatingRevenueIdr },
-    { label: "Total Pendapatan Lain-lain", amountIdr: income.otherRevenueIdr },
-    { label: "Total Beban Usaha", amountIdr: income.operatingExpenseIdr },
-    { label: "Total Beban Lain-lain", amountIdr: income.otherExpenseIdr },
-    { label: "Estimasi Laba Bersih", amountIdr: income.profitAfterTaxIdr },
-  ];
-
-  // Indikator: total dari 6 bulan
-  const indicators = statementDoc.indicators;
-  const totalDaysRecorded = indicators.reduce((sum, m) => sum + (m.daysRecorded ?? 0), 0);
-  const avgNoncashRatio = (() => {
-    const validMonths = indicators.filter((m) => m.noncashSalesRatio !== null);
-    if (validMonths.length === 0) return null;
-    return validMonths.reduce((sum, m) => sum + (m.noncashSalesRatio ?? 0), 0) / validMonths.length;
-  })();
-
-  return {
-    documentId: statementDoc.documentId,
-    documentUid,
-    printedAt,
-    period: statementDoc.period,
-    businessName: context.businessName,
-    ownerName,
-    businessForm,
-    sector,
-    city,
-    yearStarted,
-    employeeCount,
-    contactEmail,
-    contactPhone,
-    readinessLevel,
-    readinessScore,
-    readinessDate,
-    separateBankAccount,
-    legalitas,
-    financialRows,
-    transactionCount: null, // tidak ada RPC khusus, bisa ditambahkan nanti
-    noncashRatio: avgNoncashRatio,
-    daysRecorded: totalDaysRecorded > 0 ? totalDaysRecorded : null,
-    hasEvidence: statementDoc.hasEvidence,
-  };
 }

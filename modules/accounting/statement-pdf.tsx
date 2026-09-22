@@ -15,6 +15,7 @@ import "server-only";
 
 import {
   Document,
+  Image,
   Page,
   StyleSheet,
   Text,
@@ -31,6 +32,7 @@ import {
   type StatementDocumentData,
 } from "@/modules/accounting/statement-document";
 import type { IncomeStatementView } from "@/modules/accounting/reports";
+import type { LegalitasItem } from "@/modules/institution/dossier-document";
 
 const palette = {
   ink: "#111111",
@@ -187,6 +189,40 @@ const styles = StyleSheet.create({
   coverTitle: { fontSize: 18, fontFamily: "Helvetica-Bold", textAlign: "center" },
   coverLine: { fontSize: 10, marginTop: 6, textAlign: "center" },
   coverNote: { fontSize: 8, color: palette.muted, marginTop: 4, textAlign: "center", maxWidth: 360 },
+  // Lampiran pindaian dokumen di halaman sampul. Hanya terisi pada berkas
+  // ber-cap lembaga; laporan yang dicetak pemilik untuk dirinya sendiri tidak
+  // membawa berkas legalitasnya.
+  scanSection: { marginTop: 26 },
+  scanSectionTitle: {
+    fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: 0.6,
+    borderBottomWidth: 0.6,
+    borderBottomColor: palette.rule,
+    paddingBottom: 3,
+    marginBottom: 4,
+  },
+  scanSectionNote: { fontSize: 7.5, color: palette.muted, marginBottom: 6 },
+  scanGrid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -3 },
+  // Lebar kartu mengikuti banyaknya pindaian: dua berkas tidak perlu dicetak
+  // sekecil empat. Empat adalah batas atas (dossier-evidence.ts).
+  scanCardHalf: { width: "50%", paddingHorizontal: 3, marginBottom: 6 },
+  scanCardThird: { width: "33.333%", paddingHorizontal: 3, marginBottom: 6 },
+  scanCardQuarter: { width: "25%", paddingHorizontal: 3, marginBottom: 6 },
+  scanCardBox: { borderWidth: 0.5, borderColor: palette.faint },
+  scanCaption: {
+    fontSize: 6.5,
+    fontFamily: "Helvetica-Bold",
+    paddingVertical: 2.5,
+    paddingHorizontal: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: palette.faint,
+  },
+  scanBoxTall: { height: 150, padding: 4 },
+  scanBoxMedium: { height: 120, padding: 3 },
+  scanBoxShort: { height: 100, padding: 3 },
+  scanImage: { width: "100%", height: "100%", objectFit: "contain" },
+  scanFoot: { fontSize: 6, color: palette.muted, paddingVertical: 2, paddingHorizontal: 4, borderTopWidth: 0.4, borderTopColor: palette.faint },
   warning: {
     borderWidth: 0.8,
     borderColor: palette.warning,
@@ -787,7 +823,50 @@ function MethodologyPage({ data, watermark }: { data: StatementDocumentData; wat
   );
 }
 
+/**
+ * Pindaian dokumen legalitas di halaman sampul.
+ *
+ * Petugas lembaga memeriksa dokumen dengan matanya sendiri; baris "NIB:
+ * tersedia" tidak pernah menjawab pertanyaan yang ia bawa. Berkas yang dicetak
+ * di sini adalah yang diunggah pemilik, dipagari izin yang ia setujui
+ * (modules/institution/dossier-evidence.ts).
+ *
+ * Bagian ini hilang sama sekali pada laporan yang dicetak pemilik untuk dirinya
+ * sendiri: data.legalitas hanya terisi pada berkas ber-cap lembaga.
+ */
+function CoverScans({ items }: { items: LegalitasItem[] }) {
+  const scans = items.filter((item) => item.image);
+  if (scans.length === 0) return null;
+  const card =
+    scans.length <= 2 ? styles.scanCardHalf : scans.length === 3 ? styles.scanCardThird : styles.scanCardQuarter;
+  const box =
+    scans.length <= 2 ? styles.scanBoxTall : scans.length === 3 ? styles.scanBoxMedium : styles.scanBoxShort;
+  return (
+    <View style={styles.scanSection}>
+      <Text style={styles.scanSectionTitle}>LAMPIRAN PINDAIAN DOKUMEN</Text>
+      <Text style={styles.scanSectionNote}>
+        Berkas di bawah ini adalah pindaian yang diunggah pemilik usaha, dicetak apa adanya.
+      </Text>
+      <View style={styles.scanGrid}>
+        {scans.map((item, index) => (
+          <View key={index} style={card} wrap={false}>
+            <View style={styles.scanCardBox}>
+              <Text style={styles.scanCaption}>{item.label}</Text>
+              <View style={box}>
+                {/* eslint-disable-next-line jsx-a11y/alt-text -- Image React-PDF, bukan <img> DOM */}
+                <Image src={item.image as string} style={styles.scanImage} />
+              </View>
+              <Text style={styles.scanFoot}>{item.detail ?? "Pindaian asli dari pemilik"}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function StatementDocument({ data, watermark }: { data: StatementDocumentData; watermark?: StatementWatermark }) {
+  const hasScans = (data.legalitas ?? []).some((item) => item.image);
   return (
     <Document
       title={watermark ? `Dossier ${data.businessName} untuk ${watermark.institutionName}` : `Laporan Keuangan ${data.businessName}`}
@@ -798,7 +877,9 @@ function StatementDocument({ data, watermark }: { data: StatementDocumentData; w
     >
       <Page size="A4" style={pageStyle(watermark)}>
         <PageChrome data={data} watermark={watermark} />
-        <View style={styles.cover}>
+        {/* Sampul turun ke atas begitu ada lampiran pindaian; tanpa itu ia
+            tetap di tengah halaman seperti semula. */}
+        <View style={[styles.cover, hasScans ? { marginTop: 40 } : {}]}>
           <Text style={styles.coverTitle}>{data.businessName}</Text>
           <Text style={styles.coverLine}>LAPORAN KEUANGAN</Text>
           <Text style={styles.coverLine}>
@@ -812,6 +893,7 @@ function StatementDocument({ data, watermark }: { data: StatementDocumentData; w
             </Text>
           )}
         </View>
+        <CoverScans items={data.legalitas ?? []} />
       </Page>
       <BalanceSheetPage data={data} watermark={watermark} />
       <IncomeStatementPage data={data} watermark={watermark} />

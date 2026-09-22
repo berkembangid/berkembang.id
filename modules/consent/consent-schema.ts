@@ -13,15 +13,24 @@ export const consentScopeSchema = z.enum([
 
 export type ConsentScope = z.infer<typeof consentScopeSchema>;
 
+/**
+ * Kalimat-kalimat ini adalah janji, bukan keterangan. Sejak halaman 1 dossier
+ * PDF mencetak pindaian dokumen yang diunggah pemilik, empat di antaranya
+ * diperbarui: sebelumnya tertulis "file dan nomor lengkap tidak dibagikan",
+ * dan itu sudah tidak benar.
+ *
+ * Bila suatu saat isi dossier berubah lagi, kalimat di sini yang pertama harus
+ * menyusul -- bukan yang terakhir.
+ */
 export const consentScopeLabels: Record<ConsentScope, { label: string; description: string }> = {
   business_identity: { label: "Identitas dan kontak usaha", description: "Nama usaha, nama kontak, email, telepon, sektor, dan wilayah umum setelah disetujui admin." },
   readiness: { label: "Kesiapan data usaha", description: "Nilai kesiapan dan ringkasan bukti pendukung." },
   financial_summary: { label: "Ringkasan keuangan", description: "Jumlah pemasukan, pengeluaran, dan transaksi selama 90 hari; bukan catatan satu per satu." },
-  nib: { label: "Bukti NIB", description: "Status ketersediaan dan konfirmasi pemilik; file dan nomor lengkap tidak dibagikan." },
-  npwp: { label: "Bukti NPWP", description: "Status ketersediaan dan konfirmasi pemilik; file dan nomor lengkap tidak dibagikan." },
-  owner_identity: { label: "Bukti identitas pemilik", description: "Status ketersediaan KTP; foto dan NIK lengkap tidak dibagikan." },
+  nib: { label: "Bukti NIB", description: "Status ketersediaan, nomor NIB, dan pindaian yang diunggah pemilik. Berkasnya ikut tercetak di dossier PDF yang diunduh lembaga." },
+  npwp: { label: "Bukti NPWP", description: "Status ketersediaan, nomor NPWP, dan pindaian yang diunggah pemilik. Berkasnya ikut tercetak di dossier PDF yang diunduh lembaga." },
+  owner_identity: { label: "Bukti identitas pemilik", description: "Status ketersediaan dan pindaian KTP pemilik. Foto KTP beserta NIK yang terbaca di dalamnya ikut tercetak di dossier PDF yang diunduh lembaga." },
   qris_history: { label: "Ringkasan aktivitas pembayaran", description: "Ringkasan catatan transaksi; bukan riwayat pembayaran mentah." },
-  sector_certificates: { label: "Bukti izin sesuai sektor", description: "Ketersediaan PIRT, halal, atau izin edar yang relevan." },
+  sector_certificates: { label: "Bukti izin sesuai sektor", description: "Ketersediaan dan pindaian PIRT, halal, atau izin edar yang relevan. Berkasnya ikut tercetak di dossier PDF yang diunduh lembaga." },
 };
 
 export const createConsentRequestSchema = z.object({

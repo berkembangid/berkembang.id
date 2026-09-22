@@ -14,6 +14,7 @@
 
 import type { BalanceSheetView, CashFlowView } from "@/modules/accounting/balance-sheet";
 import type { IncomeStatementView } from "@/modules/accounting/reports";
+import type { LegalitasItem } from "@/modules/institution/dossier-document";
 import type { NotesPayload } from "@/modules/accounting/period";
 import type { IndicatorMonthlyRow } from "@/modules/accounting/period";
 
@@ -177,4 +178,12 @@ export type StatementDocumentData = {
    * dikutip pembaca berkas ini, bukan id internalnya.
    */
   documentUid: string;
+  /**
+   * Pindaian dokumen legalitas yang ikut tercetak di halaman sampul.
+   *
+   * Hanya terisi pada berkas ber-cap lembaga (dossier). Laporan yang dicetak
+   * pemilik untuk dirinya sendiri membiarkannya kosong, dan halaman sampulnya
+   * tetap seperti semula.
+   */
+  legalitas?: LegalitasItem[];
 };

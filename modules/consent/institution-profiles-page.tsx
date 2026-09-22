@@ -234,7 +234,7 @@ export default function InstitutionProfilesPage() {
             <p className="mt-2 text-[11px] text-slate-500">{detail.financial6m.note}</p>
           </Block>
 
-          <Block title="Legalitas (nomor & masa berlaku tidak dibagikan)">
+          <Block title="Legalitas (pindaian lengkapnya ada di dossier PDF)">
             {(!detail.legalitas || detail.legalitas.length === 0) && <p className="text-xs text-slate-500">Tidak ada cakupan legalitas pada izin ini.</p>}
             {detail.legalitas?.map((item, index) => <div key={index} className="rounded-xl bg-slate-50 p-3 text-xs">
               <p className="font-bold text-slate-800">{consentScopeLabels[(item.scope ?? item.documentType) as ConsentScope]?.label ?? String(item.scope ?? item.documentType ?? "Dokumen")}</p>

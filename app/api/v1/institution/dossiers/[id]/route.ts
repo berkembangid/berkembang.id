@@ -22,7 +22,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const readiness = (dossier.items.readiness ?? {}) as Record<string, unknown>;
     const financial = (dossier.items.financial_summary ?? {}) as Record<string, unknown>;
     const qris = (dossier.items.qris_history ?? {}) as Record<string, unknown>;
-    const identity = (dossier.items.business_identity ?? {}) as Record<string, unknown>;
+    // Identitas hidup, bukan potret: layar lembaga dan PDF harus menyebut nama
+    // yang sama, dan potret membeku sejak izin disetujui.
 
     const legalScopes = ["nib", "npwp", "owner_identity", "sector_certificates"] as const;
     const legalitas = legalScopes
@@ -49,7 +50,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           expiresAt: dossier.expiresAt,
           scopes: dossier.scopes,
           downloadAllowed: dossier.downloadAllowed,
-          identity: dossier.scopes.includes("business_identity") ? identity : null,
+          identity: dossier.scopes.includes("business_identity") ? dossier.identity : null,
         },
         readiness: {
           snapshot: readiness,
@@ -62,7 +63,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           note: "Angka ringkas dari snapshot yang dibekukan saat admin menyetujui. PDF lengkap memuat 6 bulan dari fungsi SQL yang sama.",
         },
         legalitas,
-        legalitasNote: "Status ketersediaan dan keyakinan dokumen; file dan nomor lengkap tidak dibagikan. Keyakinan bukan jaminan keaslian.",
+        legalitasNote: "Status dan keyakinan dokumen. Pindaian beserta nomornya ikut tercetak di dossier PDF yang diunduh. Keyakinan bukan jaminan keaslian.",
         dataQuality: {
           activeDays: (financial.activeDays as number | undefined) ?? null,
           transactionCount: (financial.transactionCount as number | undefined) ?? null,

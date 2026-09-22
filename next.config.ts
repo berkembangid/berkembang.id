@@ -21,7 +21,9 @@ const nextConfig: NextConfig = {
   // @react-pdf/renderer memuat metrik font bawaan dari berkas di dalam paketnya.
   // Membundelnya lewat webpack merusak resolusi berkas itu, jadi paketnya
   // dibiarkan dimuat langsung oleh Node di sisi server.
-  serverExternalPackages: ["@react-pdf/renderer"],
+  // `sharp` mengecilkan pindaian dokumen sebelum ditanam ke PDF dossier. Ia
+  // punya binary native, jadi ia dimuat Node langsung, bukan dibundel webpack.
+  serverExternalPackages: ["@react-pdf/renderer", "sharp"],
   // Increase max header size to avoid HTTP 431 with Supabase SSR cookies
   experimental: {
     serverActions: {
