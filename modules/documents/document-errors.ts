@@ -96,6 +96,13 @@ export function documentOperationError(error: unknown, fallback: DocumentErrorCo
 
 export function documentErrorResponse(error: unknown, fallback: DocumentErrorCode = "INTERNAL_ERROR") {
   const operationError = documentOperationError(error, fallback);
+  // Galat 5xx dicatat beserta sebabnya. Tanpa ini sebuah 500 hanya tampak
+  // sebagai "Terjadi gangguan saat memproses dokumen" di layar dan tidak
+  // meninggalkan apa pun di log -- satu-satunya cara mencari sebabnya adalah
+  // menebak, lalu bertanya langsung ke basis data.
+  if (operationError.status >= 500) {
+    console.error("[documents]", operationError.code, operationError.cause ?? operationError);
+  }
   return Response.json(
     {
       error: {

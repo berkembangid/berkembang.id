@@ -336,6 +336,32 @@ function parseDocumentBase(
   };
 }
 
+/**
+ * Sama seperti parseDocumentBase, tetapi mengembalikan null alih-alih melempar.
+ *
+ * Lemari dokumen disusun MENURUT jenis dokumen. Baris yang jenisnya tidak
+ * dikenal aplikasi tidak punya rak untuk ditempati -- tetapi menjatuhkan
+ * seluruh lemari karenanya adalah pertukaran yang salah, dan itulah yang
+ * terjadi sampai sekarang: satu baris warisan ber-doc_type "other" membuat
+ * GET /api/v1/documents menjawab 500, dan pemilik melihat "Terjadi gangguan"
+ * alih-alih kesembilan dokumennya yang lain.
+ *
+ * Barisnya dilewati, tidak dihapus, dan dicatat dengan id serta nilainya supaya
+ * ia bisa diperbaiki -- bukan hilang diam-diam dari kesadaran siapa pun.
+ */
+function parseDocumentBaseOrNull(
+  row: Database["public"]["Tables"]["documents"]["Row"],
+): Omit<DocumentView, "versions" | "currentExtraction"> | null {
+  if (documentTypeSchema.safeParse(row.doc_type).success && documentStatusSchema.safeParse(row.status).success) {
+    return parseDocumentBase(row);
+  }
+  console.error(
+    "[documents] baris dilewati karena jenis atau statusnya tidak dikenal:",
+    { id: row.id, docType: row.doc_type, status: row.status },
+  );
+  return null;
+}
+
 export async function listDocumentRecords(): Promise<DocumentView[]> {
   const client = await createServerSupabaseClient();
   const { data, error } = await client
@@ -368,11 +394,13 @@ export async function listDocumentRecords(): Promise<DocumentView[]> {
     (extractionsResult.data ?? []).map((extraction) => [extraction.document_version_id, extraction]),
   );
   const versionByDocument = new Map(currentVersions.map((version) => [version.document_id, version]));
-  return documents.map((row) => {
+  return documents.flatMap((row) => {
+    const base = parseDocumentBaseOrNull(row);
+    if (!base) return [];
     const version = versionByDocument.get(row.id);
     const extraction = version ? extractionByVersion.get(version.id) : null;
     return {
-      ...parseDocumentBase(row),
+      ...base,
       currentExtraction: version && extraction ? {
         versionId: version.id,
         status: extraction.status,
