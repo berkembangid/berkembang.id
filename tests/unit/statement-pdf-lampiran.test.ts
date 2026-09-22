@@ -73,7 +73,7 @@ function documentData(legalitas?: LegalitasItem[]): StatementDocumentData {
 }
 
 const watermark: StatementWatermark = {
-  institutionName: "BNI Ventures",
+  institutionName: "Ventura Mitra Usaha",
   memberLabel: "anggota (analyst)",
   downloadedAt: "2026-09-03T00:00:00.000Z",
   documentUid: buildDocumentUid("2026-09-03T00:00:00.000Z"),

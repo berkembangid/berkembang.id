@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, FlaskConical, Globe, Mail, Users } from "lucide-react";
 import { isi } from "@/content/team";
-import { BarisPeran, BarisSandi } from "./akun-demo";
+import { AkunDemo } from "./akun-demo";
 
 /**
  * Halaman tujuan QR poster (gaya linktree).
@@ -41,42 +41,17 @@ export const metadata = {
 const ALAMAT_LIVE = "https://www.berkembang.id";
 const ALAMAT_DEMO = "https://demo.berkembang.id";
 
-/** Satu sandi untuk seluruh persona demo -- lihat `akun-demo.tsx`. */
-const SANDI_DEMO = "Demo-Berkembang-2026";
-
-/**
- * Tiga akun, karena ada TIGA portal -- bukan lima, walau personanya lima.
+/*
+ * Sandi dan ketiga akun demo TIDAK lagi ditulis di sini.
  *
- * Seeder demo membuat lima: UMKM, koperasi, bank, CVC, dan dinas. Tapi
- * koperasi, bank, dan dinas mendarat di portal lembaga yang sama persis,
- * dengan menu yang sama persis; yang berbeda hanya keadaan datanya. Memajang
- * ketiganya di halaman poster berarti tiga baris yang mengantar ke layar yang
- * sama, dan orang yang mencobanya akan mengira ia salah menekan.
+ * Selama mereka dirender di halaman ini, mereka ikut terkirim di HTML-nya --
+ * terbaca siapa pun yang membuka "view source", formulir atau tidak. Memasang
+ * formulir di depan teks yang sudah ada di sumber halaman bukan pencatatan
+ * minat, melainkan hiasan.
  *
- * Jadi yang ditampilkan satu akun per portal: pemilik usaha, lembaga, dan
- * investor. Koperasi (`demo.institusi@`) dan bank (`demo.bank@`) tetap hidup
- * untuk peragaan yang butuh keadaan izin yang berbeda.
+ * Daftarnya sekarang di modules/marketing/demo-access-repository.ts, dan
+ * POST /api/v1/demo-access yang mengirimkannya setelah namanya tercatat.
  */
-const AKUN_DEMO = [
-  {
-    peran: "Pemilik usaha",
-    lembaga: "Dapur Bu Nita",
-    lihat: "Catat lewat suara, lihat untung dan kesiapan usaha",
-    email: "demo.umkm@berkembang.id",
-  },
-  {
-    peran: "Dinas / lembaga",
-    lembaga: "Dinas Koperasi & UKM Kota Depok",
-    lihat: "Kandidat tersamar, program, dan analitik wilayah",
-    email: "demo.dinas@berkembang.id",
-  },
-  {
-    peran: "Investor",
-    lembaga: "BNI Ventures",
-    lihat: "Katalog UMKM, kemitraan, dan pengajuan minat",
-    email: "demo.cvc@berkembang.id",
-  },
-];
 
 /**
  * Sosial media produk.
@@ -208,16 +183,9 @@ export default function BioPage() {
           <Judul>Akun untuk mencoba</Judul>
           <p className="mt-2 text-xs leading-5 text-slate-500">
             Tiga sisi yang bisa dicoba di lingkungan demo. Dipakai bersama-sama, datanya
-            contoh, boleh diubah, dan direset kapan saja.
+            contoh, boleh diubah, dan direset kapan saja. Isi nama dan surel Anda dulu.
           </p>
-          <div className="mt-4">
-            <BarisSandi nilai={SANDI_DEMO} />
-          </div>
-          <div className="mt-3 space-y-2">
-            {AKUN_DEMO.map((akun) => (
-              <BarisPeran key={akun.email} {...akun} />
-            ))}
-          </div>
+          <AkunDemo />
         </section>
 
         {/* -- Sosial media -------------------------------------------- */}

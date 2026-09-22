@@ -180,7 +180,7 @@ const demo = {
     email: "demo.cvc@berkembang.id",
     metadata: {
       signup_account_type: "institution",
-      nama_institusi: "BNI Ventures",
+      nama_institusi: "Ventura Mitra Usaha",
       jenis_institusi: "CVC",
       nama_contact: "Dimas Arya",
       lokasi: "Kota Jakarta Selatan",
@@ -316,7 +316,7 @@ async function bootstrapProfile(userId, email, metadata) {
         // pada `type`. Jenis persona CVC di sini "CVC" -- tidak memuat
         // "investor", "offtaker", "ventura", maupun "buyer" -- jadi BNI
         // Ventures selalu mendarat di portal lembaga, dan bagian peragaan
-        // "Portal BNI Ventures: dossier aktif -> unduh PDF ber-watermark ->
+        // "Portal Ventura Mitra Usaha: dossier aktif -> unduh PDF ber-watermark ->
         // revoke" tidak pernah bisa ditunjukkan di portal yang benar.
         portal_kind: metadata.jenis_institusi === "CVC" ? "investor" : "institution",
         contact_name: metadata.nama_contact,
@@ -733,19 +733,19 @@ async function seedConsent({ koperasiClient, bankClient, ownerClient, businessId
 }
 
 // ---------------------------------------------------------------------------
-// Persona SPEC Portal Institusi I12: BNI Ventures (CVC) + Dinas Depok (program)
+// Persona SPEC Portal Institusi I12: Ventura Mitra Usaha (CVC) + Dinas Depok (program)
 // ---------------------------------------------------------------------------
 
 /**
  * Alur demo lengkap: opt-in → discovery → request → admin approve → dossier
- * → download (PDF watermark) → revoke. BNI Ventures memegang dossier aktif
+ * → download (PDF watermark) → revoke. Ventura Mitra Usaha memegang dossier aktif
  * (siap dibuka + diunduh), Dinas memegang program dengan kode gabung.
  */
 async function seedSpecPersonas({ cvcClient, dinasClient, ownerClient, businessId, institutionIds }) {
   // UMKM bersedia ditemukan supaya muncul di Temukan.
   await ownerClient.rpc("set_my_discovery_optin", { p_opted_in: true });
 
-  // BNI Ventures: minta → disetujui → dossier aktif siap dibuka/diunduh.
+  // Ventura Mitra Usaha: minta → disetujui → dossier aktif siap dibuka/diunduh.
   const cvcScopes = ["business_identity", "readiness", "financial_summary"];
   let cvc = await findExistingRequest(institutionIds.cvc, businessId);
   if (!cvc) {
@@ -761,7 +761,7 @@ async function seedSpecPersonas({ cvcClient, dinasClient, ownerClient, businessI
       p_idempotency_key: "demo-request-bni-ventures",
       p_institution_id: institutionIds.cvc,
     });
-    if (created.error) throw new Error(`Permintaan BNI Ventures gagal: ${created.error.message}`);
+    if (created.error) throw new Error(`Permintaan Ventura Mitra Usaha gagal: ${created.error.message}`);
     cvc = { id: created.data?.requestId, status: created.data?.status ?? "pending" };
   }
   if (cvc.status === "pending") {
@@ -771,10 +771,10 @@ async function seedSpecPersonas({ cvcClient, dinasClient, ownerClient, businessI
       p_approved_scopes: cvcScopes,
       p_download_allowed: true,
     });
-    if (decision.error) throw new Error(`Persetujuan BNI Ventures gagal: ${decision.error.message}`);
-    console.log("  izin akses          BNI Ventures disetujui pemilik (dossier aktif)");
+    if (decision.error) throw new Error(`Persetujuan Ventura Mitra Usaha gagal: ${decision.error.message}`);
+    console.log("  izin akses          Ventura Mitra Usaha disetujui pemilik (dossier aktif)");
   } else {
-    console.log("  izin akses          BNI Ventures sudah disetujui sebelumnya");
+    console.log("  izin akses          Ventura Mitra Usaha sudah disetujui sebelumnya");
   }
 
   // Dinas: buat program + kode gabung + UMKM bergabung.
@@ -883,7 +883,7 @@ async function main() {
     - Portal koperasi: profil usaha yang sudah disetujui, siap dibuka
     - Portal bank: permintaan menunggu, siap disetujui pemilik di depan penonton
       (id ${consent.pendingRequestId ?? "lihat daftar permintaan"})
-    - Portal BNI Ventures: dossier aktif → buka → unduh PDF ber-watermark → revoke
+    - Portal Ventura Mitra Usaha: dossier aktif → buka → unduh PDF ber-watermark → revoke
     - Portal Dinas: program "Pembinaan UMKM Depok 2026" → dashboard agregat non-rupiah
 `);
 }

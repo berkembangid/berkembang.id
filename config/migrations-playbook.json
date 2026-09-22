@@ -118,6 +118,7 @@
     "0097_anggota_lembaga_dikenali_dan_diundang_lewat_surel.sql",
     "0098_rekening_usaha_terpisah.sql",
     "0099_potret_dosir_hanya_transaksi_dikonfirmasi.sql",
-    "0100_service_role_bisa_melihat_skema_private.sql"
+    "0100_service_role_bisa_melihat_skema_private.sql",
+    "0102_siapa_yang_mencoba_demo.sql"
   ]
 }

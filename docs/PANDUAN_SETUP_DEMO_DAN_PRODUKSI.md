@@ -857,7 +857,7 @@ Empat hal tentang perintah itu:
   `VAR=nilai npm run seed:demo -- --project ...` dalam satu baris — di situ
   nilainya hanya berlaku untuk perintah itu.
 
-Skripnya mencetak enam akun ketika selesai: UMKM, koperasi, bank, BNI Ventures,
+Skripnya mencetak enam akun ketika selesai: UMKM, koperasi, bank, Ventura Mitra Usaha,
 dinas, dan sandinya. **Simpan keluaran itu** — itu daftar login untuk
 presentasi Anda.
 

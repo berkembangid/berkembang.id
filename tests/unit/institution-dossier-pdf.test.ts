@@ -66,7 +66,7 @@ function documentData(): StatementDocumentData {
 }
 
 const watermark: StatementWatermark = {
-  institutionName: "BNI Ventures",
+  institutionName: "Ventura Mitra Usaha",
   memberLabel: "anggota (analyst)",
   downloadedAt: "2026-09-03T00:00:00.000Z",
   documentUid: buildDocumentUid("2026-09-03T00:00:00.000Z"),
@@ -120,7 +120,7 @@ describe("institution dossier PDF contract", () => {
 
   it("embeds the institution watermark fields on the page", async () => {
     const text = extractText(await renderFinancialStatementsPdf(documentData(), watermark));
-    expect(text).toContain("BNI Ventures");
+    expect(text).toContain("Ventura Mitra Usaha");
     expect(text).toContain(watermark.documentUid);
     expect(text).toContain("bukan penilaian kelayakan");
   }, 60_000);
