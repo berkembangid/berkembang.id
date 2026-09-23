@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LedgerOperationError, ledgerOperationError } from "@/modules/ledger/ledger-errors";
 import { categoryGroupLabels, categoryLabels, paymentMethodLabels, type CloseLedgerDayInput, type LedgerRange, type LedgerTransactionInput } from "@/modules/ledger/ledger-schema";
+import { categoryLabel as emkmCategoryLabel } from "@/modules/accounting/templates";
 
 const mutationResultSchema = z.object({ transactionId: z.uuid(), idempotent: z.boolean().optional(), status: z.string().optional(), journalEntryId: z.uuid().nullable().optional() });
 const closingResultSchema = z.object({ closingId: z.uuid(), status: z.literal("closed"), idempotent: z.boolean() });
@@ -47,6 +48,8 @@ export type LedgerTransactionView = {
   categoryGroup: string; categoryCode: string; categoryLabel: string; description: string;
   quantity: number | null; unit: string | null; unitPriceIdr: number | null; paymentMethod: string | null;
   salesChannel: string | null; counterparty: string | null; status: "confirmed" | "cancelled";
+  /** Kategori bahasa warung (1..10) -- yang dipilih di Catat. Null untuk catatan sangat lama. */
+  emkmCategoryCode: number | null; emkmCategorySubtype: string | null;
   changeCount: number; createdAt: string; updatedAt: string;
   /** Berapa bukti yang menempel. Dihitung bersama daftarnya, bukan per baris. */
   attachmentCount: number;
@@ -69,7 +72,7 @@ export async function getLedgerReport(userId: string, range: LedgerRange): Promi
   const client = await createServerSupabaseClient();
   const businessId = await activeBusinessId(userId);
   const [transactionResult, closingResult] = await Promise.all([
-    client.from("transactions").select("id,direction,type,amount_idr,nominal,transaction_date,tanggal,category_group,category_code,category,kategori,item,quantity,unit,unit_price_idr,payment_method,sales_channel,counterparty,ledger_status,created_at,updated_at")
+    client.from("transactions").select("id,direction,type,amount_idr,nominal,transaction_date,tanggal,category_group,category_code,category,kategori,item,quantity,unit,unit_price_idr,payment_method,sales_channel,counterparty,ledger_status,created_at,updated_at,emkm_category_code,emkm_category_subtype")
       .eq("business_id", businessId).gte("transaction_date", range.startDate).lte("transaction_date", range.endDate)
       .order("transaction_date", { ascending: false }).order("created_at", { ascending: false }),
     client.from("daily_closings").select("id,closing_date,system_cash_in_idr,system_cash_out_idr,opening_cash_idr,expected_cash_idr,physical_cash_idr,difference_idr,transaction_count,note,closed_at")
@@ -101,7 +104,10 @@ export async function getLedgerReport(userId: string, range: LedgerRange): Promi
       id: row.id, transactionType: direction, amountIdr: Number(row.amount_idr ?? row.nominal ?? 0),
       transactionDate: row.transaction_date ?? row.tanggal ?? range.startDate,
       categoryGroup: row.category_group ?? (direction === "income" ? "sales" : "other"), categoryCode: code,
-      categoryLabel: categoryLabels[code] ?? row.category ?? row.kategori ?? categoryGroupLabels[row.category_group ?? "other"],
+      // Label bahasa warung lebih dulu: itu yang dipilih pemilik di Catat, dan
+      // Buku Kas dulu menampilkan kata yang berbeda untuk transaksi yang sama.
+      categoryLabel: row.emkm_category_code ? emkmCategoryLabel(row.emkm_category_code, row.emkm_category_subtype) : categoryLabels[code] ?? row.category ?? row.kategori ?? categoryGroupLabels[row.category_group ?? "other"],
+      emkmCategoryCode: row.emkm_category_code ?? null, emkmCategorySubtype: row.emkm_category_subtype ?? null,
       description: row.item, quantity: row.quantity === null ? null : Number(row.quantity), unit: row.unit,
       unitPriceIdr: row.unit_price_idr === null ? null : Number(row.unit_price_idr), paymentMethod: row.payment_method,
       salesChannel: row.sales_channel, counterparty: row.counterparty,
@@ -113,13 +119,19 @@ export async function getLedgerReport(userId: string, range: LedgerRange): Promi
   const active = transactions.filter((item) => item.status === "confirmed");
   const incomeIdr = active.filter((item) => item.transactionType === "income").reduce((sum, item) => sum + item.amountIdr, 0);
   const expenseIdr = active.filter((item) => item.transactionType === "expense").reduce((sum, item) => sum + item.amountIdr, 0);
+  // Kategori dikelompokkan menurut LABEL yang tampil, bukan kode lama: dua
+  // catatan "Gaji / upah" -- satu dari suara, satu dari formulir -- dulu bisa
+  // jatuh ke dua baris berbeda karena kode lamanya tidak sama.
   const aggregate = (key: "categoryCode" | "paymentMethod") => {
-    const totals = new Map<string, number>();
+    const totals = new Map<string, { label: string; amountIdr: number }>();
     for (const item of active) {
-      const code = key === "paymentMethod" ? item.paymentMethod ?? "unknown" : item.categoryCode;
-      totals.set(code, (totals.get(code) ?? 0) + item.amountIdr);
+      const code = key === "paymentMethod" ? item.paymentMethod ?? "unknown" : item.categoryLabel;
+      const label = key === "paymentMethod" ? paymentMethodLabels[code] ?? code : item.categoryLabel;
+      const entry = totals.get(code) ?? { label, amountIdr: 0 };
+      entry.amountIdr += item.amountIdr;
+      totals.set(code, entry);
     }
-    return [...totals.entries()].map(([code, amountIdr]) => ({ code, label: key === "paymentMethod" ? paymentMethodLabels[code] ?? code : categoryLabels[code] ?? code, amountIdr })).sort((a, b) => b.amountIdr - a.amountIdr);
+    return [...totals.entries()].map(([code, entry]) => ({ code, label: entry.label, amountIdr: entry.amountIdr })).sort((a, b) => b.amountIdr - a.amountIdr);
   };
   return {
     range, transactions,
@@ -171,8 +183,45 @@ export function csvCell(value: string | number) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 export function ledgerReportCsv(report: LedgerReportView) {
-  const rows = [["Tanggal","Keterangan","Jenis","Nominal (Rp)","Kategori","Pembayaran","Status"],
-    ...report.transactions.map((item) => [item.transactionDate,item.description,item.transactionType === "income" ? "Pemasukan" : "Pengeluaran",item.amountIdr,item.categoryLabel,paymentMethodLabels[item.paymentMethod ?? "unknown"] ?? "Belum dicatat",item.status === "cancelled" ? "Dibatalkan" : "Aktif"]),
+  // Pihak lawan ikut: bank dan koperasi yang menerima berkas ini menanyakan
+  // "dibayar siapa" dan "dijual ke siapa" untuk piutang dan utang.
+  const rows = [["Tanggal","Keterangan","Jenis","Nominal (Rp)","Kategori","Pembayaran","Pelanggan / pemasok","Status"],
+    ...report.transactions.map((item) => [item.transactionDate,item.description,item.transactionType === "income" ? "Pemasukan" : "Pengeluaran",item.amountIdr,item.categoryLabel,paymentMethodLabels[item.paymentMethod ?? "unknown"] ?? "Belum dicatat",item.counterparty ?? "",item.status === "cancelled" ? "Dibatalkan" : "Aktif"]),
     [],["TOTAL PEMASUKAN","","",report.summary.incomeIdr],["TOTAL PENGELUARAN","","",report.summary.expenseIdr],["SELISIH BERSIH","","",report.summary.netIdr]];
   return `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
+}
+
+export type TransactionChangeView = {
+  id: string;
+  action: "created" | "updated" | "cancelled" | "adjusted" | string;
+  reason: string | null;
+  createdAt: string;
+  before: { amountIdr?: number; type?: string; date?: string; emkmCategoryCode?: number | null } | null;
+  after: { amountIdr?: number; type?: string; date?: string; emkmCategoryCode?: number | null } | null;
+};
+
+/**
+ * Riwayat perubahan satu transaksi, terbaru dulu.
+ *
+ * Lencana « Pernah diubah » sudah lama tampil di Buku Kas, tetapi isinya tidak
+ * bisa dibuka -- padahal alasan perubahan wajib ditulis justru supaya bisa
+ * dibaca kembali. RLS `transaction_changes_select` membatasi ke usaha sendiri.
+ */
+export async function listTransactionChanges(transactionId: string): Promise<TransactionChangeView[]> {
+  const client = await createServerSupabaseClient();
+  const { data, error } = await client
+    .from("transaction_changes")
+    .select("id,action,reason,created_at,previous_values,new_values")
+    .eq("transaction_id", transactionId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw new LedgerOperationError("SERVICE_UNAVAILABLE", error);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    action: row.action,
+    reason: row.reason,
+    createdAt: row.created_at,
+    before: (row.previous_values ?? null) as TransactionChangeView["before"],
+    after: (row.new_values ?? null) as TransactionChangeView["after"],
+  }));
 }

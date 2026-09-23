@@ -1,5 +1,5 @@
 import type { CloseLedgerDayInput, LedgerRange, LedgerTransactionInput } from "@/modules/ledger/ledger-schema";
-import type { LedgerReportView } from "@/modules/ledger/ledger-repository";
+import type { LedgerReportView, TransactionChangeView } from "@/modules/ledger/ledger-repository";
 
 export class LedgerClientError extends Error { constructor(readonly code: string, message: string, readonly retryable: boolean) { super(message); } }
 async function requestData<T>(url: string, init?: RequestInit): Promise<T> {
@@ -14,3 +14,4 @@ export const createLedgerTransactionClient = (data: LedgerTransactionInput) => r
 export const updateLedgerTransactionClient = (id: string, data: LedgerTransactionInput, reason: string) => requestData<{ transactionId: string }>(`/api/v1/ledger/transactions/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data, reason }) });
 export const cancelLedgerTransactionClient = (id: string, reason: string) => requestData<{ transactionId: string }>(`/api/v1/ledger/transactions/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
 export const closeLedgerDayClient = (data: CloseLedgerDayInput) => requestData<{ closingId: string }>("/api/v1/ledger/daily-closing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+export const getTransactionChangesClient = (id: string) => requestData<TransactionChangeView[]>(`/api/v1/ledger/transactions/${id}`, { cache: "no-store" });

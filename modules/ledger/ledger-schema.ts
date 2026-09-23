@@ -125,3 +125,40 @@ export const categoryGroupLabels: Record<string, string> = {
 export const paymentMethodLabels: Record<string, string> = {
   cash: "Tunai", qris: "QRIS", bank_transfer: "Transfer bank", ewallet: "Dompet digital", edc: "Mesin EDC", credit: "Tempo", unpaid: "Belum dibayar", other: "Lainnya", unknown: "Belum dicatat",
 };
+
+type LedgerCategoryCode = z.infer<typeof ledgerCategoryCodeSchema>;
+type LedgerCategoryGroup = z.infer<typeof categoryGroupSchema>;
+
+/**
+ * Pasangan kategori lama untuk satu pilihan kategori bahasa warung.
+ *
+ * Catat memakai sepuluh kategori bahasa warung (1..10), sedangkan formulir
+ * manual di Laporan dulu memakai daftar lama tiga belas kode -- dua sistem
+ * kategori untuk transaksi yang sama, dan label yang berbeda di dua layar.
+ * Formulir manual kini ikut memakai kategori bahasa warung. Kolom lama tetap
+ * wajib di API, jadi nilainya diturunkan dari sini, dengan jenis transaksi
+ * yang selalu cocok dengan aturan `ledgerTransactionInputSchema`.
+ */
+export function legacyCategoryForEmkm(
+  emkmCode: number,
+  subtype: string | null,
+): { categoryGroup: LedgerCategoryGroup; categoryCode: LedgerCategoryCode } {
+  if (emkmCode === 1 || emkmCode === 10) return { categoryGroup: "sales", categoryCode: "sales_direct" };
+  if (emkmCode === 5) return { categoryGroup: "cost_of_goods", categoryCode: "raw_material" };
+  if (emkmCode === 8) return { categoryGroup: "asset", categoryCode: "equipment" };
+  if (emkmCode === 6) {
+    const bySubtype: Record<string, { categoryGroup: LedgerCategoryGroup; categoryCode: LedgerCategoryCode }> = {
+      "5210": { categoryGroup: "operating_expense", categoryCode: "transport" },
+      "5220": { categoryGroup: "operating_expense", categoryCode: "utilities" },
+      "5230": { categoryGroup: "operating_expense", categoryCode: "wage" },
+      "5240": { categoryGroup: "operating_expense", categoryCode: "rent" },
+      "5250": { categoryGroup: "cost_of_goods", categoryCode: "packaging" },
+      "5260": { categoryGroup: "operating_expense", categoryCode: "transport" },
+      "5270": { categoryGroup: "operating_expense", categoryCode: "promotion" },
+    };
+    return bySubtype[subtype ?? ""] ?? { categoryGroup: "other", categoryCode: "other" };
+  }
+  // Pemasukan lain, piutang dibayar, modal/pinjaman, bayar utang, ambil untuk
+  // rumah: tidak punya padanan di daftar lama. "Lainnya" berlaku dua arah.
+  return { categoryGroup: "other", categoryCode: "other" };
+}

@@ -880,7 +880,8 @@ describe("sector-aware template contract (0038)", () => {
 
 describe("rupiah input contract", () => {
   const moneyScreens = [
-    join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "page.tsx"),
+    join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "transaction-dialog.tsx"),
+    join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "closing-dialog.tsx"),
     join(process.cwd(), "app", "(umkm)", "umkm", "catat", "page.tsx"),
     join(process.cwd(), "app", "(admin)", "admin", "rules", "page.tsx"),
   ];
@@ -896,7 +897,9 @@ describe("rupiah input contract", () => {
 
   it("leaves no plain number input anywhere in the owner's screens", () => {
     const owner = [
-      join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "page.tsx"),
+    join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "page.tsx"),
+      join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "transaction-dialog.tsx"),
+      join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "cash-book.tsx"),
       join(process.cwd(), "app", "(umkm)", "umkm", "catat", "page.tsx"),
     ];
     for (const file of owner) {
@@ -918,7 +921,9 @@ describe("rupiah input contract", () => {
 describe("owner screen design-system contract", () => {
   const warungDirectory = join(process.cwd(), "components", "warung");
   const ownerScreens = [
+    join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "cash-book.tsx"),
     join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "page.tsx"),
+    join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "transaction-dialog.tsx"),
     join(process.cwd(), "app", "(umkm)", "umkm", "akuntan", "page.tsx"),
     ...readdirSync(warungDirectory)
       .filter((name) => name.endsWith(".tsx"))
@@ -961,7 +966,7 @@ describe("owner screen design-system contract", () => {
     // Dua batang pada satu tanggal memakan ratusan piksel tinggi tanpa
     // memberi tahu apa pun yang belum tertulis di kartu ringkasan di atasnya.
     const report = readFileSync(ownerScreens[0], "utf8");
-    expect(report).toContain("cashFlowData(report.transactions).length >= 2");
+    expect(report).toContain("flow.length >= 2");
   });
 });
 
