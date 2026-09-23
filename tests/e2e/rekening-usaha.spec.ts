@@ -73,7 +73,9 @@ test("nomor lengkap yang diketik hanya tersimpan empat angkanya", async ({ page 
 
   await page.goto("/umkm/profil/rekening");
   await page.getByRole("button", { name: /Sudah punya rekening usaha/ }).click();
-  await page.getByRole("button", { name: "BRI", exact: true }).click();
+  await page.getByRole("button", { name: "Bank", exact: true }).click();
+  await page.getByRole("combobox", { name: "Cari bank" }).fill("rakyat");
+  await page.getByRole("option", { name: /^BRI/ }).click();
   await page.getByPlaceholder(/tertulis di buku tabungan/i).fill("Sri Wahyuni");
   await page.getByPlaceholder(/nomor lengkapnya/i).fill("0201-0123-4821");
 

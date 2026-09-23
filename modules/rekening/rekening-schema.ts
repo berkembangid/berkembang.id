@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DAFTAR_BANK } from "./daftar-bank";
 
 /**
  * Rekening usaha yang terpisah dari rekening rumah.
@@ -35,27 +36,15 @@ export type RekeningUsaha = {
 };
 
 /**
- * Daftar bank yang paling sering dipakai UMKM, dan satu pintu keluar.
+ * Daftar bank umum di Indonesia (`daftar-bank.ts`), dan satu pintu keluar.
  *
  * Daftarnya ada supaya nama bank tidak masuk dalam dua puluh ejaan berbeda
  * ("BRI", "bri", "Bank BRI", "B.R.I"), yang membuat angka di portal admin
- * tidak bisa dijumlahkan. Pintu keluarnya ada karena daftar tertutup akan
- * menolak BPD, bank daerah, dan koperasi -- dan pemilik yang rekeningnya tidak
- * ada di daftar akan menyimpulkan bahwa rekeningnya tidak dihitung.
+ * tidak bisa dijumlahkan. Pintu keluarnya ada karena BPR, BPRS, dan koperasi
+ * terlalu banyak untuk didaftar -- dan pemilik yang rekeningnya tidak ada di
+ * daftar akan menyimpulkan bahwa rekeningnya tidak dihitung.
  */
-export const BANK_PILIHAN = [
-  "BRI",
-  "BNI",
-  "Bank Mandiri",
-  "BCA",
-  "BSI",
-  "BTN",
-  "Bank Jago",
-  "SeaBank",
-  "Bank Jatim",
-  "Bank BJB",
-  "Bank DKI",
-] as const;
+export const BANK_PILIHAN: readonly string[] = DAFTAR_BANK.map((bank) => bank.value);
 
 export const BANK_LAINNYA = "Bank lain";
 

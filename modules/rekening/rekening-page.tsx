@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { DashboardPage, DashboardPanel, PageHeader, PanelHeader } from "@/components/dashboard";
+import SearchableSelect from "@/components/SearchableSelect";
 import { useConfirm } from "@/components/ui/confirm";
 import { dismissNotice, notifyBusy, notifyFromError, notifySuccess } from "@/lib/notify";
 import { listDocuments } from "@/modules/documents/document-client";
@@ -33,6 +34,12 @@ import {
   rekeningStageCopy,
   type RekeningUsaha,
 } from "@/modules/rekening/rekening-schema";
+import { DAFTAR_BANK } from "@/modules/rekening/daftar-bank";
+
+const PILIHAN_BANK = [
+  ...DAFTAR_BANK,
+  { value: BANK_LAINNYA, hint: "BPR, BPRS, koperasi, atau bank yang tidak ada di daftar", alwaysShow: true },
+];
 
 /**
  * Layar Rekening usaha.
@@ -357,24 +364,20 @@ export default function RekeningUsahaPage() {
                 }}
               >
                 <div>
-                  <p id="rekening-bank-label" className="block text-xs font-bold text-umkm-ink">Bank</p>
-                  <div role="group" aria-labelledby="rekening-bank-label" className="mt-2 flex flex-wrap gap-1.5">
-                    {[...BANK_PILIHAN, BANK_LAINNYA].map((pilihan) => (
-                      <button
-                        key={pilihan}
-                        type="button"
-                        aria-pressed={bank === pilihan}
-                        onClick={() => setBank(pilihan)}
-                        className={`inline-flex min-h-11 items-center rounded-full border px-4 text-xs font-semibold transition-colors ${
-                          bank === pilihan
-                            ? "border-umkm-brand bg-umkm-brand text-white"
-                            : "border-umkm-line bg-white text-umkm-muted hover:bg-umkm-surface"
-                        }`}
-                      >
-                        {pilihan}
-                      </button>
-                    ))}
-                  </div>
+                  <label htmlFor="rekening-bank" className="block text-xs font-bold text-umkm-ink">Bank</label>
+                  <SearchableSelect
+                    id="rekening-bank"
+                    className="mt-1.5"
+                    options={PILIHAN_BANK}
+                    value={bank}
+                    onChange={setBank}
+                    icon={Landmark}
+                    placeholder="Pilih bank"
+                    searchLabel="Cari bank"
+                    searchPlaceholder="Cari nama bank, misalnya BRI atau Bank Jateng"
+                    listLabel="Bank"
+                    emptyText="Bank tidak ditemukan. Pilih « Bank lain » dan tulis namanya."
+                  />
                   {bank === BANK_LAINNYA && (
                     <input
                       value={bankLain}
