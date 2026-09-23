@@ -43,8 +43,20 @@ export function consentOperationError(error: unknown) {
   return new ConsentOperationError("SERVICE_UNAVAILABLE", error);
 }
 
+/**
+ * `requestId` dicatat di log server bersama penyebabnya. Dulu ia dibuat lalu
+ * hanya dikirim ke layar -- orang yang melaporkan "kode galat abc-123" tidak
+ * bisa dicocokkan dengan apa pun di log, karena log tidak pernah mengenalnya.
+ * Yang dicatat hanya kode dan pesan penyebab, bukan objek galat utuh (yang
+ * bisa memuat isi baris).
+ */
 export function consentErrorResponse(error: unknown) {
   const parsed = consentOperationError(error);
-  return Response.json({ error: { code: parsed.code, message: parsed.message, requestId: crypto.randomUUID() } }, { status: parsed.status });
+  const requestId = crypto.randomUUID();
+  if (parsed.status >= 500 || parsed.code === "ACCESS_DENIED") {
+    const cause = parsed.cause instanceof Error ? parsed.cause.message : typeof parsed.cause === "string" ? parsed.cause : undefined;
+    console.error(`[consent] ${parsed.code} requestId=${requestId}${cause ? ` cause=${cause}` : ""}`);
+  }
+  return Response.json({ error: { code: parsed.code, message: parsed.message, requestId } }, { status: parsed.status });
 }
 

@@ -26,7 +26,6 @@ export async function GET(request: Request) {
     const result = await listAnonymousCandidates(parsed.data);
     return Response.json({ data: result }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
-    console.error("[Candidates API Error]:", error);
     return consentErrorResponse(error);
   }
 }

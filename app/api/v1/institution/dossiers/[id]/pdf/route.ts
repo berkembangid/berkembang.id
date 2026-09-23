@@ -150,7 +150,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       },
     });
   } catch (error) {
-    console.error("[institution/dossiers/[id]/pdf GET ERROR]", error);
     return consentErrorResponse(error);
   }
 }

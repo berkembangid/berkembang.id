@@ -17,15 +17,27 @@ describe("WP-10 consent request contract", () => {
     expect(result.requestedDurationDays).toBe(14);
   });
 
-  it("rejects an unknown data section and access longer than 30 days", () => {
+  // Dua aturan, dua uji. Dulu keduanya satu uji bernama "lebih dari 30 hari"
+  // -- padahal batasnya 90 -- dan uji itu lulus hanya karena lingkupnya salah.
+  it("rejects an unknown data section", () => {
     const result = createConsentRequestSchema.safeParse({
       candidateCode,
       purposeCode: "review",
       purposeDescription: "Menilai kecocokan untuk sebuah program.",
       requestedScopes: ["raw_transactions"],
-      requestedDurationDays: 31,
     });
     expect(result.success).toBe(false);
+  });
+
+  it("accepts access up to 90 days and rejects anything longer", () => {
+    const base = {
+      candidateCode,
+      purposeCode: "review",
+      purposeDescription: "Menilai kecocokan untuk sebuah program.",
+      requestedScopes: ["readiness"],
+    };
+    expect(createConsentRequestSchema.safeParse({ ...base, requestedDurationDays: 90 }).success).toBe(true);
+    expect(createConsentRequestSchema.safeParse({ ...base, requestedDurationDays: 91 }).success).toBe(false);
   });
 
   it("requires every required section to also be requested", () => {
