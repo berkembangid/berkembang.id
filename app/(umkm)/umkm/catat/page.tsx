@@ -3,10 +3,11 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Mic, RefreshCw, Trash2, Edit2, Check, X,
-  Sparkles, Type, Square, Volume2, PenLine, RotateCcw, AlertCircle, CheckCircle2, Camera,
+  Mic, Plus, RefreshCw, X,
+  Sparkles, Type, Volume2, PenLine, RotateCcw, AlertCircle, CheckCircle2, Camera,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { formatTanggal } from "@/lib/format";
 import {
   cancelCapture,
   confirmCapture,
@@ -16,49 +17,48 @@ import {
   CaptureClientError,
   type CaptureClientView,
 } from "@/modules/ledger/capture-client";
-import {
-  categoryLabels,
-  type TransactionDraftItem,
-} from "@/modules/ledger/capture-schema";
-import { CategoryChips, emptySelection, type CategorySelection } from "@/components/warung/CategoryChips";
-import { InlineMoneyInput } from "@/components/warung/MoneyInput";
-import { categoryLabel, normalizeCategory, sectorFromAnswer } from "@/modules/accounting/templates";
+import { sectorFromAnswer } from "@/modules/accounting/templates";
 import { pilotSector, type AccountingSector } from "@/modules/accounting/coa";
 import { DashboardPage, PageHeader } from "@/components/dashboard";
 import { useConfirm } from "@/components/ui/confirm";
-import { notifyInfo, notifySuccess, notifyWarning } from "@/lib/notify";
+import { notifyFromError, notifyInfo, notifySuccess, notifyWarning } from "@/lib/notify";
+import { createLedgerTransactionClient } from "@/modules/ledger/ledger-client";
+import { jakartaDate, ledgerTransactionInputSchema } from "@/modules/ledger/ledger-schema";
+import { emptyTransactionForm, TransactionDialog, transactionInputFrom, type TransactionFormState } from "@/components/warung/TransactionDialog";
 import { EvidencePrompt, type EvidenceTarget } from "@/components/warung/EvidencePrompt";
 import { nudgeCopy, nudgeLevelForBatch, type NudgeLevel } from "@/modules/ledger/evidence-nudge";
 import { compressImageFile } from "@/modules/documents/image-compression";
 import { attachDocumentTo, uploadEvidencePhoto } from "@/modules/documents/evidence-client";
 import { CATAT_RESTART_EVENT } from "../../umkm-navigation";
+import { RecordingCard } from "./_components/recording-card";
+import { ReviewItem } from "./_components/review-item";
+import { CaptionWithEvidence } from "./_components/caption-with-evidence";
+import {
+  ACTIVE_CAPTURE_STORAGE_KEY, blankItem, captureErrorMessage, evidenceSpansFromDrafts, formatDraftItems, incompleteItems,
+  itemTotals, normalizedAudioMimeType, toDraftItems,
+  type ExtractedItem, type InputMode, type Step,
+} from "./_lib/capture-items";
 
-// ───────── TYPES ─────────
 /**
- * Tiga cara mencatat, dan tiap-tiapnya bisa dimatikan dari Ruang Mesin.
- * Ketik tidak punya sakelar dan memang tidak boleh punya: ia jaring pengaman
- * ketika dua lainnya mati.
+ * Transaksi yang sudah ada dengan nominal dan tanggal yang sama.
+ * Gagal membaca bukan alasan menahan penyimpanan: hasil kosong berarti
+ * « tidak diketahui », dan pemilik tetap bisa menyimpan.
  */
-type InputMode = "voice" | "camera" | "text";
-
-type Step = "ready" | "recording" | "uploading" | "processing" | "needs_review" | "saving" | "success" | "failed";
-
-interface ExtractedItem {
-  id: number;
-  clientItemId: string;
-  item: string;
-  qty: string;
-  type: "masuk" | "keluar";
-  nominal: number;
-  kategori: "Penjualan" | "Bahan" | "Operasional" | "Gaji" | "Lainnya";
-  transactionDate: string;
-  categoryCode: TransactionDraftItem["categoryCode"];
-  quantity: number | null;
-  unit: string | null;
-  unitPriceIdr: number | null;
-  paymentMethod: TransactionDraftItem["paymentMethod"];
-  salesChannel: string | null;
-  category: CategorySelection;
+async function findLikelyDuplicates(items: readonly ExtractedItem[]) {
+  const amounts = [...new Set(items.map((item) => item.nominal))];
+  const dates = [...new Set(items.map((item) => item.transactionDate))];
+  if (amounts.length === 0) return [];
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("item,amount_idr,transaction_date")
+    .in("amount_idr", amounts)
+    .in("transaction_date", dates)
+    .neq("ledger_status", "cancelled")
+    .limit(5);
+  if (error || !data) return [];
+  return data
+    .filter((row) => items.some((item) => item.nominal === Number(row.amount_idr) && item.transactionDate === row.transaction_date))
+    .map((row) => ({ item: row.item, amount: Number(row.amount_idr), date: row.transaction_date ?? "" }));
 }
 
 // ───────── CONSTANTS ─────────
@@ -68,99 +68,8 @@ const SUGGESTIONS = [
   { label: "Bayar token listrik kios 100rb", text: "Bayar token listrik kios usaha 100 ribu rupiah." },
 ];
 
-const WAVE_BARS = [40, 80, 60, 100, 75, 45, 90, 65, 30];
-const CAPTION_SKELETON = [1, 2, 3, 4, 5];
-const ACTIVE_CAPTURE_STORAGE_KEY = "berkembang.active-ledger-capture";
-
-// ───────── HELPER: map raw API items to ExtractedItem[] ─────────
-function formatDraftItems(items: TransactionDraftItem[]): ExtractedItem[] {
-  return items.map((it, idx) => ({
-    id: idx + 1,
-    clientItemId: it.clientItemId,
-    item: it.description,
-    qty: it.quantity
-      ? `${it.quantity}${it.unit ? ` ${it.unit}` : ""}`
-      : (it.unit ?? ""),
-    type: it.transactionType === "income" ? "masuk" : "keluar",
-    nominal: it.amountIdr,
-    kategori: categoryLabels[it.categoryCode] as ExtractedItem["kategori"],
-    transactionDate: it.transactionDate,
-    categoryCode: it.categoryCode,
-    quantity: it.quantity ?? null,
-    unit: it.unit ?? null,
-    unitPriceIdr: it.unitPriceIdr ?? null,
-    paymentMethod: it.paymentMethod ?? null,
-    salesChannel: it.salesChannel ?? null,
-    category: {
-      ...emptySelection(it.transactionType),
-      ...(it.emkmCategoryCode
-        ? { emkmCategoryCode: it.emkmCategoryCode, emkmCategorySubtype: it.emkmCategorySubtype ?? null }
-        : {}),
-      counterpartyName: it.counterpartyName ?? null,
-      interestAmountIdr: it.interestAmountIdr ?? 0,
-      assetCategory: it.assetCategory ?? null,
-      assetUsefulLifeYears: it.assetUsefulLifeMonths ? Math.round(it.assetUsefulLifeMonths / 12) : null,
-    },
-  }));
-}
-
-function toDraftItems(items: ExtractedItem[]): TransactionDraftItem[] {
-  return items.map((item) => {
-    // Kategori menentukan arah uang, bukan sebaliknya: jualan yang belum
-    // dibayar tetap tercatat sebagai pelanggan yang belum bayar.
-    const category = normalizeCategory(
-      item.category.emkmCategoryCode,
-      item.category.emkmCategorySubtype,
-      item.paymentMethod,
-    );
-    return {
-      clientItemId: item.clientItemId,
-      transactionType: category.direction,
-      amountIdr: item.nominal,
-      transactionDate: item.transactionDate,
-      categoryCode: item.categoryCode,
-      description: item.item,
-      quantity: item.quantity,
-      unit: item.unit,
-      unitPriceIdr: item.unitPriceIdr,
-      paymentMethod: category.paymentMethod,
-      salesChannel: item.salesChannel,
-      emkmCategoryCode: category.categoryCode,
-      emkmCategorySubtype: category.subtype as TransactionDraftItem["emkmCategorySubtype"],
-      counterpartyName: item.category.counterpartyName,
-      interestAmountIdr: item.category.interestAmountIdr || null,
-      // Pemilik menjawab dalam TAHUN; pembukuan menghitung dalam bulan.
-      assetCategory: category.categoryCode === 8
-        ? (item.category.assetCategory as TransactionDraftItem["assetCategory"]) ?? "peralatan"
-        : null,
-      assetUsefulLifeMonths: category.categoryCode === 8
-        ? (item.category.assetUsefulLifeYears ?? 4) * 12
-        : null,
-    };
-  });
-}
-
-function captureErrorMessage(error: unknown, fallback: string) {
-  return error instanceof CaptureClientError ? error.message : fallback;
-}
-
-function normalizedAudioMimeType(value: string) {
-  const mimeType = value.toLowerCase().split(";", 1)[0];
-  return ["audio/webm", "audio/mp4", "audio/ogg", "audio/mpeg"].includes(mimeType)
-    ? (mimeType as "audio/webm" | "audio/mp4" | "audio/ogg" | "audio/mpeg")
-    : "audio/webm";
-}
-
-function parseQuantity(value: string) {
-  const match = value.trim().match(/^(\d+(?:[.,]\d+)?)\s*(.*)$/);
-  if (!match) return { quantity: null, unit: value.trim() || null };
-  const quantity = Number(match[1].replace(",", "."));
-  return {
-    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : null,
-    unit: match[2].trim() || null,
-  };
-}
-
+/** Batas panjang satu rekaman. */
+const MAX_RECORD_SECONDS = 120;
 // ─────────────────────────────────────────────────────────────────
 export default function CatatPage() {
   const router = useRouter();
@@ -177,10 +86,17 @@ export default function CatatPage() {
   const receiptPhotoRef = useRef<File | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [typedText, setTypedText] = useState("");
+  const typedTextRef = useRef<HTMLTextAreaElement>(null);
+  // Formulir terstruktur tanpa AI -- sama dengan yang dipakai Buku Kas.
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualForm, setManualForm] = useState<TransactionFormState>(emptyTransactionForm);
+  const [manualBusy, setManualBusy] = useState(false);
   const { confirm } = useConfirm();
   const [items, setItems] = useState<ExtractedItem[]>([]);
   const [transcription, setTranscription] = useState("");
   const [editableCaption, setEditableCaption] = useState("");
+  // Sorotan kata-bukti; hanya berlaku untuk teks yang persis sama dengan yang dibaca.
+  const [evidence, setEvidence] = useState<{ text: string; spans: Array<[number, number]> } | null>(null);
   const [isEditingCaption, setIsEditingCaption] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
   // Sektor yang dijawab pemilik di halaman Profil menentukan kata-kata chip
@@ -204,8 +120,8 @@ export default function CatatPage() {
     };
   }, []);
 
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editFields, setEditFields] = useState<{ item: string; qty: string; nominal: number }>({ item: "", qty: "", nominal: 0 });
+  // Baris yang baru ditambahkan pemilik langsung terbuka dalam mode ubah.
+  const [freshItemId, setFreshItemId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   // Transaksi yang baru tersimpan. Satu nota belanja sering memuat beberapa
   // barang yang tercatat sebagai beberapa transaksi, jadi fotonya menempel
@@ -222,6 +138,10 @@ export default function CatatPage() {
   const [recordSeconds, setRecordSeconds] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  // Rekaman yang dibatalkan dibuang saat berhenti, bukan dikirim.
+  const discardRecordingRef = useRef(false);
+  // Aliran mikrofon untuk meter suara; null di luar langkah merekam.
+  const [recordingStream, setRecordingStream] = useState<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -315,16 +235,24 @@ export default function CatatPage() {
     };
   }, [applyCapture, pollCapture]);
 
-  // ── Process audio via AI ────────────────────────────────────────
-  const processAudioWithAI = useCallback(async (blob: Blob, actualMime?: string) => {
-    setStep("uploading");
-    setErrorMessage("");
+  // ── Unggah berkas lalu baca ─────────────────────────────────────
+  /**
+   * Satu jalur untuk rekaman suara dan foto nota. Keduanya dulu dua salinan
+   * enam puluh baris yang hanya berbeda di tiga kata; perbaikan di satu
+   * salinan tidak pernah sampai ke yang lain.
+   */
+  const uploadAndProcess = useCallback(async ({ inputMethod, file, mimeType, noun }: {
+    inputMethod: "voice" | "camera";
+    file: Blob;
+    mimeType: "audio/webm" | "audio/mp4" | "audio/ogg" | "audio/mpeg" | "image/jpeg" | "image/png";
+    /** « Rekaman » atau « Foto », untuk pesan galat. */
+    noun: string;
+  }) => {
     let createdCaptureId: string | null = null;
     let processingScheduled = false;
     try {
-      const mimeType = normalizedAudioMimeType(actualMime || blob.type || "audio/webm");
       const created = await createCapture(
-        { inputMethod: "voice", file: { mimeType, size: blob.size } },
+        { inputMethod, file: { mimeType, size: file.size } },
         `capture:${crypto.randomUUID()}`,
       );
       createdCaptureId = created.capture.id;
@@ -332,25 +260,16 @@ export default function CatatPage() {
       localStorage.setItem(ACTIVE_CAPTURE_STORAGE_KEY, created.capture.id);
 
       if (!created.upload) {
-        throw new CaptureClientError(
-          "UPLOAD_SESSION_UNAVAILABLE",
-          "Sesi upload rekaman tidak tersedia. Silakan coba lagi.",
-          true,
-        );
+        throw new CaptureClientError("UPLOAD_SESSION_UNAVAILABLE", `Tempat menyimpan ${noun.toLowerCase()} belum siap. Silakan coba lagi.`, true);
       }
-
       const { error: uploadError } = await supabase.storage
         .from(created.upload.bucket)
-        .uploadToSignedUrl(created.upload.path, created.upload.token, new Blob([blob], { type: mimeType }), {
+        .uploadToSignedUrl(created.upload.path, created.upload.token, new Blob([file], { type: mimeType }), {
           contentType: mimeType,
           upsert: false,
         });
       if (uploadError) {
-        throw new CaptureClientError(
-          "AUDIO_UPLOAD_FAILED",
-          "Rekaman belum berhasil diunggah. Silakan coba lagi.",
-          true,
-        );
+        throw new CaptureClientError("UPLOAD_FAILED", `${noun} belum berhasil dikirim. Periksa sinyal, lalu coba lagi.`, true);
       }
 
       setStep("processing");
@@ -363,15 +282,21 @@ export default function CatatPage() {
         localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
         setCaptureId(null);
       }
-      setErrorMessage(
-        captureErrorMessage(
-          error,
-          "Rekaman belum dapat diproses. Silakan coba lagi atau gunakan input manual.",
-        ),
-      );
+      setErrorMessage(captureErrorMessage(error, `${noun} belum dapat diproses. Silakan coba lagi, atau tulis transaksinya.`));
       setStep("failed");
     }
   }, [pollCapture]);
+
+  const processAudioWithAI = useCallback(async (blob: Blob, actualMime?: string) => {
+    setStep("uploading");
+    setErrorMessage("");
+    await uploadAndProcess({
+      inputMethod: "voice",
+      file: blob,
+      mimeType: normalizedAudioMimeType(actualMime || blob.type || "audio/webm"),
+      noun: "Rekaman",
+    });
+  }, [uploadAndProcess]);
 
   // ── Recording ───────────────────────────────────────────────────
   const startMediaRecording = useCallback(async () => {
@@ -383,6 +308,7 @@ export default function CatatPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
+      discardRecordingRef.current = false;
 
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
@@ -399,14 +325,24 @@ export default function CatatPage() {
       };
 
       mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setRecordingStream(null);
+        // « Batal » saat merekam: rekamannya dibuang di sini, tidak pernah
+        // dikirim. Dulu satu-satunya tombol adalah « Selesai », jadi salah
+        // mulai berarti menunggu AI membaca rekaman yang memang tidak dimaksud.
+        if (discardRecordingRef.current) {
+          audioChunksRef.current = [];
+          setStep("ready");
+          return;
+        }
         const actualMime = mediaRecorder.mimeType || mimeType || "audio/webm";
         const audioBlob = new Blob(audioChunksRef.current, { type: actualMime });
-        stream.getTracks().forEach((t) => t.stop());
         await processAudioWithAI(audioBlob, actualMime);
       };
 
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(200);
+      setRecordingStream(stream);
       setStep("recording");
       setRecordSeconds(0);
 
@@ -424,6 +360,22 @@ export default function CatatPage() {
       try { mr.stop(); } catch {}
     }
   }, []);
+
+  const cancelRecording = useCallback(() => {
+    discardRecordingRef.current = true;
+    stopMediaRecording();
+  }, [stopMediaRecording]);
+
+  // Batas panjang rekaman. Cerita transaksi sehari jarang lebih dari satu
+  // menit; rekaman yang lupa dihentikan berjalan terus sampai berkasnya
+  // tidak diterima server karena terlalu besar. Di batas ini rekaman dikirim
+  // sendiri, bukan dibuang -- isinya tetap milik pemilik.
+  useEffect(() => {
+    if (step === "recording" && recordSeconds >= MAX_RECORD_SECONDS) {
+      notifyInfo("Rekaman dihentikan otomatis setelah 2 menit", { description: "Isinya tetap dikirim untuk dibaca." });
+      stopMediaRecording();
+    }
+  }, [recordSeconds, step, stopMediaRecording]);
 
   // ── Re-process from edited caption ─────────────────────────────
   // ── Typed text / suggestion ─────────────────────────────────────
@@ -451,6 +403,7 @@ export default function CatatPage() {
       );
       setCaptureId(created.capture.id);
       localStorage.setItem(ACTIVE_CAPTURE_STORAGE_KEY, created.capture.id);
+      setEvidence({ text: text.trim(), spans: evidenceSpansFromDrafts(created.drafts) });
       await processCapture(created.capture.id);
       await pollCapture(created.capture.id);
     } catch (error) {
@@ -475,10 +428,16 @@ export default function CatatPage() {
     [typedText, processText]
   );
 
-  const handleSuggestionClick = useCallback(
-    (text: string) => { setTypedText(text); processText(text); },
-    [processText]
-  );
+  /**
+   * Contoh kalimat hanya MENGISI kotak tulisan. Dulu satu ketukan langsung
+   * dikirim dan dibaca, sehingga « Beli cabe & ayam 150rb » milik contoh bisa
+   * tersimpan sebagai transaksi sungguhan oleh pemilik yang sekadar mencoba.
+   */
+  const handleSuggestionClick = useCallback((text: string) => {
+    setInputMode("text");
+    setTypedText(text);
+    window.setTimeout(() => typedTextRef.current?.focus(), 0);
+  }, []);
 
   /**
    * Galat tampil sebagai toast, bukan kotak merah mengambang bikinan sendiri.
@@ -540,60 +499,25 @@ export default function CatatPage() {
   const processPhotoWithAI = useCallback(async (file: File) => {
     setStep("uploading");
     setErrorMessage("");
-    let createdCaptureId: string | null = null;
-    let processingScheduled = false;
+    let photo: File;
     try {
-      const compressed = await compressImageFile(file);
-      const photo = compressed.file;
-      receiptPhotoRef.current = photo;
-      const mimeType = photo.type === "image/png" ? "image/png" : "image/jpeg";
-
-      const created = await createCapture(
-        { inputMethod: "camera", file: { mimeType, size: photo.size } },
-        `capture:${crypto.randomUUID()}`,
-      );
-      createdCaptureId = created.capture.id;
-      setCaptureId(created.capture.id);
-      localStorage.setItem(ACTIVE_CAPTURE_STORAGE_KEY, created.capture.id);
-
-      if (!created.upload) {
-        throw new CaptureClientError(
-          "UPLOAD_SESSION_UNAVAILABLE",
-          "Tempat menyimpan foto belum siap. Silakan coba lagi.",
-          true,
-        );
-      }
-
-      const { error: uploadError } = await supabase.storage
-        .from(created.upload.bucket)
-        .uploadToSignedUrl(created.upload.path, created.upload.token, photo, {
-          contentType: mimeType,
-          upsert: false,
-        });
-      if (uploadError) {
-        throw new CaptureClientError(
-          "PHOTO_UPLOAD_FAILED",
-          "Foto belum berhasil diunggah. Silakan coba lagi.",
-          true,
-        );
-      }
-
-      setStep("processing");
-      await processCapture(created.capture.id);
-      processingScheduled = true;
-      await pollCapture(created.capture.id);
-    } catch (error) {
-      if (createdCaptureId && !processingScheduled) {
-        try { await cancelCapture(createdCaptureId); } catch {}
-        localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
-        setCaptureId(null);
-      }
-      setErrorMessage(
-        captureErrorMessage(error, "Foto notanya belum dapat dibaca. Coba potret ulang atau tulis transaksinya."),
-      );
+      photo = (await compressImageFile(file)).file;
+    } catch {
+      // Pengecilan gagal bukan berarti notanya tidak terbaca -- fotonya
+      // bahkan belum dikirim. Pesan lama « belum dapat dibaca » menyuruh
+      // pemilik memotret ulang nota yang mungkin sudah jelas.
+      setErrorMessage("Foto ini belum bisa disiapkan untuk dikirim. Coba pilih foto lain (JPG atau PNG), atau tulis transaksinya.");
       setStep("failed");
+      return;
     }
-  }, [pollCapture]);
+    receiptPhotoRef.current = photo;
+    await uploadAndProcess({
+      inputMethod: "camera",
+      file: photo,
+      mimeType: photo.type === "image/png" ? "image/png" : "image/jpeg",
+      noun: "Foto",
+    });
+  }, [uploadAndProcess]);
 
   const handlePhotoSelected = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -606,6 +530,27 @@ export default function CatatPage() {
 
   // ── Save ────────────────────────────────────────────────────────
   const handleConfirmSave = async () => {
+    // Satu baris tanpa nominal atau keterangan membuat server tidak menerima SELURUH draf.
+    // Ditunjuk di sini, sebelum dikirim, supaya yang diperbaiki satu baris itu.
+    const incomplete = incompleteItems(items);
+    if (incomplete.length > 0) {
+      notifyWarning(`${incomplete.length} baris belum lengkap`, { description: "Isi nominal dan keterangannya, atau hapus baris itu." });
+      return;
+    }
+    // Catatan kembar: nominal dan tanggal yang sama dengan yang sudah ada di
+    // buku kas. Sering terjadi saat satu penjualan diceritakan dua kali, atau
+    // rekaman dikirim ulang setelah sinyal putus. Hanya ditanyakan, tidak
+    // pernah dicegah -- dua pembeli bisa membayar jumlah yang sama.
+    const twins = await findLikelyDuplicates(items);
+    if (twins.length > 0) {
+      const yes = await confirm({
+        title: twins.length > 1 ? `${twins.length} catatan mirip sudah ada` : "Catatan mirip sudah ada",
+        description: `Di buku kas sudah ada ${twins.map((twin) => `« ${twin.item} » Rp${twin.amount.toLocaleString("id-ID")} pada ${formatTanggal(twin.date)}`).join(", ")}. Tetap simpan sebagai catatan baru?`,
+        confirmLabel: "Tetap simpan",
+        cancelLabel: "Periksa lagi",
+      });
+      if (!yes) return;
+    }
     setSaving(true);
     setStep("saving");
     setErrorMessage("");
@@ -756,6 +701,35 @@ export default function CatatPage() {
     setStep("ready");
   };
 
+  // ── Formulir tanpa AI ───────────────────────────────────────────
+  const openManualForm = () => {
+    setManualForm({ ...emptyTransactionForm(), description: typedText.trim().slice(0, 160) });
+    setManualOpen(true);
+  };
+
+  const saveManual = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const input = ledgerTransactionInputSchema.safeParse(transactionInputFrom(manualForm));
+    if (!input.success) { notifyWarning(input.error.issues[0]?.message ?? "Periksa kembali isian formulir."); return; }
+    setManualBusy(true);
+    try {
+      const saved = await createLedgerTransactionClient(input.data);
+      setManualOpen(false);
+      setTypedText("");
+      notifySuccess("Catatan tersimpan", { description: "Sudah masuk buku kas dan ikut dihitung di laporan bulan ini." });
+      // Layar berhasil yang sama dengan jalur suara, termasuk ajakan
+      // menempelkan foto nota selagi notanya masih di tangan.
+      setSavedTargets([{ targetType: "transaction", targetId: saved.transactionId }]);
+      setSavedNudge(nudgeLevelForBatch([{ amountIdr: input.data.amountIdr, categoryCode: input.data.emkmCategoryCode ?? null, isLoanDisbursement: input.data.emkmCategorySubtype === "4b" }]));
+      setSavedIsAsset(input.data.emkmCategoryCode === 8);
+      setStep("success");
+    } catch (error) {
+      notifyFromError(error, "Catatan belum berhasil disimpan.");
+    } finally {
+      setManualBusy(false);
+    }
+  };
+
   // ── Item editing ────────────────────────────────────────────────
   /**
    * Menghapus satu baris draf tidak perlu dialog: dialog untuk hal sekecil ini
@@ -784,24 +758,6 @@ export default function CatatPage() {
     [items],
   );
 
-  // Kategori menentukan arah uang, jadi tanda + / - ikut berubah saat dipilih.
-  const updateItemCategory = useCallback((id: number, category: CategorySelection) => {
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.id !== id) return item;
-        const normalized = normalizeCategory(
-          category.emkmCategoryCode,
-          category.emkmCategorySubtype,
-          item.paymentMethod,
-        );
-        return {
-          ...item,
-          category,
-          type: normalized.direction === "income" ? "masuk" : "keluar",
-        };
-      }),
-    );
-  }, []);
 
   const availableModes = useMemo<InputMode[]>(
     () => [
@@ -825,39 +781,14 @@ export default function CatatPage() {
     notifyInfo(`Nominal disetel ke Rp${amount.toLocaleString("id-ID")}`);
   }, []);
 
-  const startEditing = useCallback((item: ExtractedItem) => {
-    setEditingId(item.id);
-    setEditFields({ item: item.item, qty: item.qty, nominal: item.nominal });
-  }, []);
+  const addBlankItem = useCallback(() => {
+    const nextId = items.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+    setItems((prev) => [...prev, blankItem(nextId, prev[0]?.transactionDate ?? jakartaDate())]);
+    setFreshItemId(nextId);
+  }, [items]);
 
-  const saveEditing = useCallback((id: number) => {
-    const parsedQuantity = parseQuantity(editFields.qty);
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              item: editFields.item,
-              qty: editFields.qty,
-              nominal: Number(editFields.nominal) || 0,
-              quantity: parsedQuantity.quantity,
-              unit: parsedQuantity.unit,
-              unitPriceIdr: null,
-            }
-          : item
-      )
-    );
-    setEditingId(null);
-  }, [editFields]);
+  const { totalMasuk, totalKeluar } = useMemo(() => itemTotals(items), [items]);
 
-  // ── Computed totals (memoized) ──────────────────────────────────
-  const { totalMasuk, totalKeluar } = useMemo(() => ({
-    totalMasuk: items.filter((i) => i.type === "masuk").reduce((s, i) => s + i.nominal, 0),
-    totalKeluar: items.filter((i) => i.type === "keluar").reduce((s, i) => s + i.nominal, 0),
-  }), [items]);
-
-  const formatSeconds = (sec: number) =>
-    `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
 
   // ────────────────────────────────────────────────────────────────
   return (
@@ -958,7 +889,10 @@ export default function CatatPage() {
                   <Sparkles size={18} className="text-umkm-brand" />
                   <h2 className="font-headline text-base font-bold text-umkm-ink">Tulis transaksi dengan kalimat bebas</h2>
                 </div>
+                <label htmlFor="catat-tulisan" className="sr-only">Transaksi dalam kalimat bebas</label>
                 <textarea
+                  id="catat-tulisan"
+                  ref={typedTextRef}
                   rows={4}
                   value={typedText}
                   onChange={(e) => setTypedText(e.target.value)}
@@ -966,13 +900,17 @@ export default function CatatPage() {
                   className="w-full p-4 rounded-2xl border border-umkm-line-strong text-sm focus:border-umkm-brand focus:outline-none"
                   required
                 />
-                <div className="flex justify-end">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {/* Jalan tanpa AI: formulir yang sama dengan Buku Kas. */}
+                  <button type="button" onClick={openManualForm} className="inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-umkm-brand">
+                    <PenLine size={14} aria-hidden /> Isi formulir sendiri
+                  </button>
                   <button
                     type="submit"
                     disabled={!typedText.trim()}
-                    className="bg-umkm-brand text-white font-bold px-6 py-3 rounded-xl text-xs hover:bg-umkm-brand-hover transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-umkm-brand px-6 text-xs font-bold text-white transition-colors hover:bg-umkm-brand-hover disabled:opacity-50"
                   >
-                    <Sparkles size={14} /> Baca transaksi
+                    <Sparkles size={14} aria-hidden /> Baca transaksi
                   </button>
                 </div>
               </form>
@@ -992,7 +930,7 @@ export default function CatatPage() {
                     className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-umkm-line bg-umkm-brand-soft p-3 text-left text-xs font-semibold text-umkm-ink transition-colors hover:bg-umkm-brand-soft cursor-pointer"
                   >
                     <span>{sug.label}</span>
-                    <span className="text-xs font-bold text-umkm-brand">Coba →</span>
+                    <span className="text-xs font-bold text-umkm-brand">Pakai contoh →</span>
                   </button>
                 ))}
               </div>
@@ -1002,57 +940,13 @@ export default function CatatPage() {
 
         {/* ── RECORDING ──────────────────────────────────────────── */}
         {step === "recording" && (
-          <div role="status" aria-live="polite" className="bg-white rounded-3xl p-8 border border-umkm-line shadow-card text-center space-y-5 animate-fade-in">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-20 h-20 rounded-full bg-umkm-brand-tint text-umkm-brand-hover flex items-center justify-center border-4 border-umkm-sky animate-pulse">
-                <Mic size={36} />
-              </div>
-              <div>
-                <div className="inline-flex items-center gap-2 bg-umkm-brand-soft border border-umkm-brand-line px-3 py-1 rounded-full mb-2">
-                  <span className="w-2 h-2 rounded-full bg-umkm-danger animate-ping" />
-                  <span aria-hidden className="text-xs font-mono font-bold text-umkm-brand">{formatSeconds(recordSeconds)}</span>
-                </div>
-                <h2 className="font-headline text-xl font-bold text-umkm-brand">Sedang mendengarkan...</h2>
-                <p className="text-xs text-umkm-muted mt-1">Bicaralah dengan jelas dan natural. Tekan tombol di bawah jika sudah selesai.</p>
-              </div>
-            </div>
-
-            {/* Wave bars */}
-            <div aria-hidden className="flex items-center justify-center gap-1.5 h-10">
-              {WAVE_BARS.map((h, idx) => (
-                <div
-                  key={idx}
-                  className="w-1.5 bg-umkm-sky rounded-full animate-bounce"
-                  style={{ height: `${h}%`, animationDelay: `${idx * 0.1}s` }}
-                />
-              ))}
-            </div>
-
-            {/* Caption placeholder */}
-            <div className="bg-umkm-brand-soft border border-umkm-brand-tint rounded-2xl px-4 py-3 text-left">
-              <p className="text-[11px] font-bold text-umkm-brand-hover uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                <Volume2 size={11} /> Transkripsi akan muncul setelah selesai
-              </p>
-              <div className="flex items-center gap-2">
-                {CAPTION_SKELETON.map((i) => (
-                  <div
-                    key={i}
-                    className="h-1.5 rounded-full bg-umkm-brand-line animate-pulse"
-                    style={{ width: `${20 + i * 12}%`, animationDelay: `${i * 0.15}s` }}
-                  />
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-umkm-muted">Setelah selesai, ucapan Anda diubah menjadi catatan untuk Anda periksa.</p>
-            </div>
-
-            <button
-              type="button"
-              onClick={stopMediaRecording}
-              className="bg-umkm-brand text-white text-xs font-bold px-8 py-3.5 rounded-xl hover:bg-umkm-brand-deep transition-colors cursor-pointer shadow-md flex items-center justify-center gap-2 mx-auto"
-            >
-              <Square size={14} className="fill-current" /> Selesai berbicara
-            </button>
-          </div>
+          <RecordingCard
+            seconds={recordSeconds}
+            maxSeconds={MAX_RECORD_SECONDS}
+            stream={recordingStream}
+            onStop={stopMediaRecording}
+            onCancel={cancelRecording}
+          />
         )}
 
         {/* ── PROCESSING ─────────────────────────────────────────── */}
@@ -1203,7 +1097,7 @@ export default function CatatPage() {
                     onChange={(e) => setEditableCaption(e.target.value)}
                     rows={3}
                     className="w-full text-xs text-umkm-ink font-medium bg-white border border-umkm-brand rounded-xl px-3 py-2.5 focus:outline-none resize-none leading-relaxed"
-                    placeholder="Koreksi caption di sini..."
+                    placeholder="Perbaiki tulisannya di sini"
                   />
                   <div className="flex items-center gap-2">
                     <button
@@ -1222,11 +1116,11 @@ export default function CatatPage() {
                     >
                       <X size={11} /> Batal
                     </button>
-                    <span className="text-xs text-umkm-subtle ml-auto">Edit caption → proses ulang item AI</span>
+                    <span className="ml-auto text-xs text-umkm-subtle">Setelah diubah, tulisan dibaca ulang dari awal.</span>
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-umkm-ink font-medium leading-relaxed">&quot;{editableCaption || transcription}&quot;</p>
+                <CaptionWithEvidence text={editableCaption || transcription} evidence={evidence} />
               )}
             </div>
 
@@ -1238,81 +1132,30 @@ export default function CatatPage() {
                   <span className="text-umkm-success bg-umkm-success-soft px-2 py-1 rounded-full border border-umkm-success-line whitespace-nowrap">
                     +Rp{totalMasuk.toLocaleString("id-ID")}
                   </span>
-                  <span className="text-umkm-danger bg-umkm-danger-soft px-2 py-1 rounded-full border border-umkm-danger-line whitespace-nowrap">
-                    -Rp{totalKeluar.toLocaleString("id-ID")}
+                  <span className="text-umkm-ink bg-umkm-surface-muted px-2 py-1 rounded-full border border-umkm-line whitespace-nowrap">
+                    −Rp{totalKeluar.toLocaleString("id-ID")}
                   </span>
                 </div>
               </div>
 
               <div className="space-y-3">
                 {items.map((it) => (
-                  <div key={it.id} className="p-3.5 rounded-xl border border-umkm-line bg-white flex items-start justify-between gap-3">
-                    {editingId === it.id ? (
-                      <div className="flex-1 space-y-2">
-                        <label className="block text-xs font-bold text-umkm-muted">
-                          Nama barang atau keterangan
-                          <input
-                            value={editFields.item}
-                            onChange={(e) => setEditFields((p) => ({ ...p, item: e.target.value }))}
-                            className="mt-1 min-h-11 w-full rounded-lg border border-umkm-brand px-3 text-sm font-normal text-umkm-ink"
-                          />
-                        </label>
-                        <div className="flex gap-2">
-                          <label className="block w-1/2 text-xs font-bold text-umkm-muted">
-                            Jumlah
-                            <input
-                              value={editFields.qty}
-                              onChange={(e) => setEditFields((p) => ({ ...p, qty: e.target.value }))}
-                              className="mt-1 min-h-11 w-full rounded-lg border border-umkm-line-strong px-3 text-sm font-normal text-umkm-ink"
-                            />
-                          </label>
-                          <div className="w-1/2 text-xs font-bold text-umkm-muted">
-                            <span className="block">Nominal</span>
-                            <div className="mt-1">
-                              <InlineMoneyInput
-                                value={editFields.nominal || null}
-                                onChange={(value) => setEditFields((p) => ({ ...p, nominal: value ?? 0 }))}
-                                ariaLabel="Nominal baris ini"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex justify-end gap-2">
-                          <button type="button" onClick={() => setEditingId(null)} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-umkm-line px-3 text-xs font-bold text-umkm-muted hover:bg-umkm-surface"><X size={16} /> Batal</button>
-                          <button type="button" onClick={() => saveEditing(it.id)} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-umkm-brand px-3 text-xs font-bold text-white hover:bg-umkm-brand-deep"><Check size={16} /> Pakai</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="w-full space-y-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="font-bold text-xs text-umkm-ink">{it.item}</p>
-                            <p className="text-xs text-umkm-muted">
-                              {it.qty} · <span className="font-semibold">{categoryLabel(it.category.emkmCategoryCode, it.category.emkmCategorySubtype)}</span>
-                            </p>
-                            <p className={`mt-1 text-sm font-bold ${it.type === "masuk" ? "text-umkm-success" : "text-umkm-danger"}`}>
-                              {it.type === "masuk" ? "+" : "−"}Rp{it.nominal.toLocaleString("id-ID")}
-                            </p>
-                          </div>
-                          {/* Dua sasaran 44px dengan jarak. Dulu dua ikon 14px tanpa
-                              bantalan, berimpitan -- hapus dan ubah terlalu dekat
-                              untuk ibu jari. */}
-                          <div className="flex shrink-0 items-center gap-1">
-                            <button type="button" onClick={() => startEditing(it)} aria-label={`Ubah ${it.item}`} className="grid size-11 place-items-center rounded-lg text-umkm-muted hover:bg-umkm-surface-muted hover:text-umkm-ink"><Edit2 size={16} /></button>
-                            <button type="button" onClick={() => handleDeleteItem(it.id)} aria-label={`Hapus ${it.item}`} className="grid size-11 place-items-center rounded-lg text-umkm-danger hover:bg-umkm-danger-soft"><Trash2 size={16} /></button>
-                          </div>
-                        </div>
-                        <CategoryChips
-                          idPrefix={`item-${it.id}`}
-                          selection={it.category}
-                          amountIdr={it.nominal}
-                          sector={sector}
-                          onChange={(category) => updateItemCategory(it.id, category)}
-                        />
-                      </div>
-                    )}
-                  </div>
+                  <ReviewItem
+                    key={it.id}
+                    item={it}
+                    sector={sector}
+                    startEditing={it.id === freshItemId}
+                    onChange={(next) => setItems((prev) => prev.map((row) => (row.id === it.id ? next : row)))}
+                    onDelete={() => handleDeleteItem(it.id)}
+                  />
                 ))}
+                <button
+                  type="button"
+                  onClick={addBlankItem}
+                  className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-umkm-line-strong text-xs font-bold text-umkm-brand hover:bg-umkm-brand-soft"
+                >
+                  <Plus size={14} aria-hidden /> Tambah baris yang terlewat
+                </button>
               </div>
 
               <div className="flex gap-2 pt-3">
@@ -1336,6 +1179,7 @@ export default function CatatPage() {
           </div>
         )}
       </DashboardPage>
+      <TransactionDialog open={manualOpen} form={manualForm} setForm={setManualForm} editing={null} busy={manualBusy} sector={sector} onClose={() => setManualOpen(false)} onSubmit={(event) => void saveManual(event)} />
     </>
   );
 }

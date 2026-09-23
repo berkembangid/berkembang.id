@@ -19,7 +19,7 @@ import { CashBook, dateRange, formatIdr, type LedgerRangeState, type Preset } fr
 import { ClosingDialog } from "./_components/closing-dialog";
 import {
   emptyTransactionForm, TransactionDialog, transactionFormFrom, transactionInputFrom, type TransactionFormState,
-} from "./_components/transaction-dialog";
+} from "@/components/warung/TransactionDialog";
 
 // Kondisi awal usaha pindah ke menu Profil. Laporan menjawab « bagaimana
 // usaha saya berjalan » dan dibaca berulang kali; kondisi awal menjawab

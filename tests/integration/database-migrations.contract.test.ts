@@ -880,9 +880,9 @@ describe("sector-aware template contract (0038)", () => {
 
 describe("rupiah input contract", () => {
   const moneyScreens = [
-    join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "transaction-dialog.tsx"),
+    join(process.cwd(), "components", "warung", "TransactionDialog.tsx"),
     join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "closing-dialog.tsx"),
-    join(process.cwd(), "app", "(umkm)", "umkm", "catat", "page.tsx"),
+    join(process.cwd(), "app", "(umkm)", "umkm", "catat", "_components", "review-item.tsx"),
     join(process.cwd(), "app", "(admin)", "admin", "rules", "page.tsx"),
   ];
 
@@ -898,9 +898,10 @@ describe("rupiah input contract", () => {
   it("leaves no plain number input anywhere in the owner's screens", () => {
     const owner = [
     join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "page.tsx"),
-      join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "transaction-dialog.tsx"),
+      join(process.cwd(), "components", "warung", "TransactionDialog.tsx"),
       join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "cash-book.tsx"),
       join(process.cwd(), "app", "(umkm)", "umkm", "catat", "page.tsx"),
+      join(process.cwd(), "app", "(umkm)", "umkm", "catat", "_components", "review-item.tsx"),
     ];
     for (const file of owner) {
       expect(readFileSync(file, "utf8"), file).not.toContain('type="number"');
@@ -923,7 +924,7 @@ describe("owner screen design-system contract", () => {
   const ownerScreens = [
     join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "cash-book.tsx"),
     join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "page.tsx"),
-    join(process.cwd(), "app", "(umkm)", "umkm", "laporan", "_components", "transaction-dialog.tsx"),
+    join(process.cwd(), "components", "warung", "TransactionDialog.tsx"),
     join(process.cwd(), "app", "(umkm)", "umkm", "akuntan", "page.tsx"),
     ...readdirSync(warungDirectory)
       .filter((name) => name.endsWith(".tsx"))
