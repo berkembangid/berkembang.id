@@ -16,6 +16,9 @@ export const cancelLedgerTransactionClient = (id: string, reason: string) => req
 export const closeLedgerDayClient = (data: CloseLedgerDayInput) => requestData<{ closingId: string }>("/api/v1/ledger/daily-closing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
 export const getTransactionChangesClient = (id: string) => requestData<TransactionChangeView[]>(`/api/v1/ledger/transactions/${id}`, { cache: "no-store" });
 export const getContactBalancesClient = () => requestData<import("@/modules/ledger/contact-balances").ContactBalance[]>("/api/v1/contacts", { cache: "no-store" });
+export const getContactDirectoryClient = () => requestData<import("@/modules/ledger/contact-balances").ContactDirectory>("/api/v1/contacts/directory", { cache: "no-store" });
+export const mergeContactClient = (from: string, into: string) => requestData<{ from: string; into: string }>("/api/v1/contacts/merge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from, into }) });
+export const unmergeContactClient = (name: string) => requestData<{ name: string; removed: boolean }>(`/api/v1/contacts/merge?name=${encodeURIComponent(name)}`, { method: "DELETE" });
 export const setContactPhoneClient = (name: string, phone: string | null, kind: "PIUTANG" | "UTANG") => requestData<{ name: string; phone: string | null }>("/api/v1/contacts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, phone, kind }) });
 export const listRecurringClient = () => requestData<import("@/modules/ledger/recurring").RecurringView[]>("/api/v1/recurring", { cache: "no-store" });
 export const saveRecurringClient = (input: import("@/modules/ledger/recurring").RecurringInput) => requestData<{ id: string }>("/api/v1/recurring", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });

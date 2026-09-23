@@ -8,6 +8,7 @@
  */
 
 import { MoneyInput } from "@/components/warung/MoneyInput";
+import { ContactNameInput } from "@/components/warung/ContactNameInput";
 import {
   expenseChoicesFor,
   fixedAssetMinimumNotice,
@@ -166,11 +167,9 @@ export function CategoryChips({
       {requiresCounterparty(selection.emkmCategoryCode) && (
         <label className="block text-xs font-bold text-umkm-muted">
           Siapa pelanggannya?
-          <input
+          <ContactNameInput
             value={selection.counterpartyName ?? ""}
-            onChange={(event) =>
-              onChange({ ...selection, counterpartyName: event.target.value || null })
-            }
+            onChange={(value) => onChange({ ...selection, counterpartyName: value || null })}
             placeholder="Contoh: Bu Ani"
             className="mt-1.5 min-h-11 w-full rounded-xl border border-umkm-line-strong px-3 text-sm font-medium outline-none focus:border-umkm-brand"
           />

@@ -54,6 +54,15 @@ export type InstitutionPortalSupplement = {
       };
     };
     Functions: {
+      /** 0113 -- gabung kontak lewat alias. */
+      merge_contact: {
+        Args: { p_from: string; p_into: string };
+        Returns: import("@/types/database.generated").Json;
+      };
+      unmerge_contact: {
+        Args: { p_name: string };
+        Returns: import("@/types/database.generated").Json;
+      };
       /** 0111 -- alat milik sendiri disetor ke usaha, dengan jurnal. */
       contribute_fixed_asset: {
         Args: { p_name: string; p_value_idr: number; p_useful_life_months: number; p_category?: string; p_contributed_on?: string };

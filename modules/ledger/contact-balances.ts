@@ -47,3 +47,10 @@ export function totalsByKind(balances: readonly ContactBalance[]) {
     utangIdr: balances.filter((row) => row.kind === "UTANG").reduce((sum, row) => sum + row.balanceIdr, 0),
   };
 }
+
+export type ContactDirectory = {
+  /** Nama yang disarankan saat mencatat: sudah memakai nama tujuan penggabungan. */
+  names: string[];
+  /** Nama yang sudah digabung, untuk ditampilkan dan dibatalkan. */
+  aliases: Array<{ name: string; into: string }>;
+};

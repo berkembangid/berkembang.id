@@ -5636,6 +5636,44 @@ async function verifyFreshDatabase() {
   // menggeser jumlahnya. Yang menambah data paling banyak dijalankan terakhir.
   await verifyOnboardingMarker();
   await verifyDinasAuthority();
+  await verifyContactMerge();
+}
+
+// 0113: gabung kontak. Dijalankan paling akhir karena mengubah rincian
+// piutang kondisi awal usaha B, yang tidak dibaca pemeriksaan lain.
+async function verifyContactMerge() {
+  const userB = "b0000000-0000-4000-8000-000000000001";
+  const userA = "a0000000-0000-4000-8000-000000000001";
+  const businessB = "b1000000-0000-4000-8000-000000000001";
+  await client.query(`
+    update public.opening_balances
+    set receivable_details = '[{"name":"Bu Sari","amountIdr":100000},{"name":" sari ","amountIdr":40000}]'::jsonb
+    where business_id = '${businessB}'
+  `);
+  const piutang = async () => (await asAuthenticated(
+    userB,
+    `select name, balance_idr::bigint as balance from public.fn_contact_balances('${businessB}') where kind = 'PIUTANG' and lower(name) like '%sari%' order by name`,
+  )).rows.map((row) => `${row.name}=${row.balance}`);
+
+  assert.deepEqual(await piutang(), ["Bu Sari=100000", "sari=40000"], "before merging, two spellings are two people");
+  await asAuthenticatedCommitted(userB, "select public.merge_contact('Sari', 'Bu Sari')");
+  assert.deepEqual(await piutang(), ["Bu Sari=140000"], "after merging, the balances add up under the target name");
+
+  // Tidak bisa menggabungkan ke dirinya sendiri, dan usaha lain tidak ikut.
+  await expectAuthenticatedRejected(userB, "select public.merge_contact('Bu Sari', 'bu sari ')", "22023");
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.counterparty_aliases where business_id <> '${businessB}'`),
+    0,
+    "a merge must only touch the caller's business",
+  );
+  assert.equal(
+    (await asAuthenticated(userA, "select count(*)::int as value from public.counterparty_aliases")).rows[0].value,
+    0,
+    "another owner must not see this business's aliases",
+  );
+
+  await asAuthenticatedCommitted(userB, "select public.unmerge_contact('sari')");
+  assert.deepEqual(await piutang(), ["Bu Sari=100000", "sari=40000"], "unmerging restores the two people");
 }
 
 async function verifyLegacyBackfill() {

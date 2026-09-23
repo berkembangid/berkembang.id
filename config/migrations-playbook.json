@@ -130,6 +130,7 @@
     "0109_saldo_per_kontak.sql",
     "0110_transaksi_rutin.sql",
     "0111_alat_milik_sendiri.sql",
-    "0112_jual_alat_ikut_penyusutan_awal.sql"
+    "0112_jual_alat_ikut_penyusutan_awal.sql",
+    "0113_gabung_kontak.sql"
   ]
 }

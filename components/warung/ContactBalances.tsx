@@ -1,14 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, HandCoins, LoaderCircle, MessageCircle, Phone, Wallet } from "lucide-react";
+import { CheckCircle2, Combine, HandCoins, LoaderCircle, MessageCircle, Phone, Wallet } from "lucide-react";
+import { loadContactDirectory } from "@/components/warung/ContactNameInput";
+import { useConfirm } from "@/components/ui/confirm";
 import { emptySelection } from "@/components/warung/CategoryChips";
 import { TransactionDialog, emptyTransactionForm, transactionInputFrom, type TransactionFormState } from "@/components/warung/TransactionDialog";
 import { formatTanggal } from "@/lib/format";
 import { notifyFromError, notifySuccess, notifyWarning } from "@/lib/notify";
 import type { AccountingSector } from "@/modules/accounting/coa";
-import { totalsByKind, whatsappLink, type ContactBalance } from "@/modules/ledger/contact-balances";
-import { createLedgerTransactionClient, getContactBalancesClient, setContactPhoneClient } from "@/modules/ledger/ledger-client";
+import { totalsByKind, whatsappLink, type ContactBalance, type ContactDirectory } from "@/modules/ledger/contact-balances";
+import {
+  createLedgerTransactionClient, getContactBalancesClient, mergeContactClient, setContactPhoneClient, unmergeContactClient,
+} from "@/modules/ledger/ledger-client";
 import { ledgerTransactionInputSchema } from "@/modules/ledger/ledger-schema";
 
 function formatIdr(value: number) { return `Rp${value.toLocaleString("id-ID")}`; }
@@ -34,10 +38,17 @@ export function ContactBalances({ sector, businessName, onChanged }: {
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<TransactionFormState>(emptyTransactionForm);
   const [settling, setSettling] = useState<ContactBalance | null>(null);
+  const { confirm } = useConfirm();
+  // Gabung kontak (0113): « Sari » dibaca sebagai « Bu Sari ».
+  const [mergeFor, setMergeFor] = useState<ContactBalance | null>(null);
+  const [mergeInto, setMergeInto] = useState("");
+  const [directory, setDirectory] = useState<ContactDirectory>({ names: [], aliases: [] });
 
   const load = useCallback(async () => {
     try {
-      setRows(await getContactBalancesClient());
+      const [balances, names] = await Promise.all([getContactBalancesClient(), loadContactDirectory(true)]);
+      setRows(balances);
+      setDirectory(names);
       setFailed(false);
     } catch {
       setFailed(true);
@@ -96,6 +107,43 @@ export function ContactBalances({ sector, businessName, onChanged }: {
       await load();
     } catch (error) {
       notifyFromError(error, "Nomor belum tersimpan. Periksa lagi angkanya.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const merge = async (row: ContactBalance) => {
+    const into = mergeInto.trim();
+    if (!into || into.toLowerCase() === row.name.trim().toLowerCase()) return;
+    const yes = await confirm({
+      title: `Gabungkan « ${row.name} » ke « ${into} »?`,
+      description: `Semua catatan atas nama « ${row.name} » dihitung sebagai « ${into} ». Catatannya sendiri tidak diubah, dan penggabungan ini bisa dibatalkan kapan saja di bagian bawah halaman ini.`,
+      confirmLabel: "Gabungkan",
+    });
+    if (!yes) return;
+    setBusy(true);
+    try {
+      await mergeContactClient(row.name, into);
+      notifySuccess(`« ${row.name} » sekarang dihitung sebagai « ${into} »`);
+      setMergeFor(null);
+      await load();
+      onChanged?.();
+    } catch (error) {
+      notifyFromError(error, "Kontak belum bisa digabung.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unmerge = async (name: string, into: string) => {
+    setBusy(true);
+    try {
+      await unmergeContactClient(name);
+      notifySuccess(`« ${name} » dipisah lagi dari « ${into} »`);
+      await load();
+      onChanged?.();
+    } catch (error) {
+      notifyFromError(error, "Penggabungan belum bisa dibatalkan.");
     } finally {
       setBusy(false);
     }
@@ -161,7 +209,25 @@ export function ContactBalances({ sector, businessName, onChanged }: {
                       <Phone size={14} aria-hidden /> {row.phone ? "Ubah nomor" : "Simpan nomor"}
                     </button>
                   )}
+                  <button type="button" onClick={() => { setMergeFor(row); setMergeInto(""); }} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-line px-3 text-xs font-bold text-umkm-muted">
+                    <Combine size={14} aria-hidden /> Orang yang sama?
+                  </button>
                 </div>
+                {mergeFor?.kind === row.kind && mergeFor.name === row.name && (
+                  <form onSubmit={(event) => { event.preventDefault(); void merge(row); }} className="mt-2 flex flex-wrap items-end gap-2">
+                    <label className="text-xs font-bold text-umkm-muted">
+                      Gabungkan « {row.name} » ke
+                      <select value={mergeInto} onChange={(event) => setMergeInto(event.target.value)} className="mt-1 block min-h-11 w-56 rounded-lg border border-umkm-line-strong bg-white px-3 text-sm text-umkm-ink">
+                        <option value="">Pilih nama…</option>
+                        {directory.names
+                          .filter((name) => name.trim().toLowerCase() !== row.name.trim().toLowerCase())
+                          .map((name) => <option key={name} value={name}>{name}</option>)}
+                      </select>
+                    </label>
+                    <button type="submit" disabled={busy || !mergeInto} className="min-h-11 rounded-lg bg-umkm-brand px-4 text-xs font-bold text-white disabled:opacity-50">Gabungkan</button>
+                    <button type="button" onClick={() => setMergeFor(null)} className="min-h-11 rounded-lg border border-umkm-line px-3 text-xs font-bold text-umkm-muted">Batal</button>
+                  </form>
+                )}
                 {phoneFor === row.name && (
                   <form onSubmit={(event) => { event.preventDefault(); void savePhone(row); }} className="mt-2 flex flex-wrap items-end gap-2">
                     <label className="text-xs font-bold text-umkm-muted">
@@ -183,10 +249,25 @@ export function ContactBalances({ sector, businessName, onChanged }: {
   return (
     <div className="space-y-4">
       <p className="rounded-xl bg-umkm-surface px-4 py-3 text-xs leading-relaxed text-umkm-muted">
-        Dihitung dari catatan dengan nama pelanggan atau pemasok yang sama. Tulis namanya dengan konsisten saat mencatat supaya saldonya tepat. Pesan WhatsApp tidak dikirim otomatis — Anda yang membaca dan menekan kirim.
+        Dihitung dari catatan dengan nama pelanggan atau pemasok yang sama. Nama yang ditulis berbeda untuk orang yang sama bisa digabung lewat « Orang yang sama? ». Pesan WhatsApp tidak dikirim otomatis — Anda yang membaca dan menekan kirim.
       </p>
       {section("PIUTANG")}
       {section("UTANG")}
+      {directory.aliases.length > 0 && (
+        <section aria-labelledby="kontak-gabungan" className="rounded-2xl border border-umkm-line bg-white px-4 py-4 md:px-5">
+          <h2 id="kontak-gabungan" className="text-sm font-bold text-umkm-ink">Nama yang sudah digabung</h2>
+          <ul className="mt-2 divide-y divide-umkm-line-soft">
+            {directory.aliases.map((alias) => (
+              <li key={alias.name} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span className="text-xs text-umkm-ink">« {alias.name} » dihitung sebagai « {alias.into} »</span>
+                <button type="button" disabled={busy} onClick={() => void unmerge(alias.name, alias.into)} className="min-h-11 rounded-lg px-2 text-xs font-bold text-umkm-muted underline disabled:opacity-50">
+                  Pisahkan lagi
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <TransactionDialog open={settling !== null} form={form} setForm={setForm} editing={null} busy={busy} sector={sector} onClose={() => setSettling(null)} onSubmit={(event) => void saveSettle(event)} />
     </div>
   );
