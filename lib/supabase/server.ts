@@ -5,7 +5,13 @@ import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database.generated";
 
-export async function createServerSupabaseClient() {
+/**
+ * `institutionId` dikirim ke PostgREST sebagai header `x-institution-id`.
+ * `resolve_my_institution_id` (`0104`) membacanya, jadi RPC portal lembaga
+ * yang tidak menerima parameter organisasi tetap memakai organisasi yang
+ * dipilih di layar -- bukan keanggotaan tertua.
+ */
+export async function createServerSupabaseClient(options: { institutionId?: string | null } = {}) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -15,6 +21,7 @@ export async function createServerSupabaseClient() {
 
   const cookieStore = await cookies();
   const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+    ...(options.institutionId ? { global: { headers: { "x-institution-id": options.institutionId } } } : {}),
     cookies: {
       getAll() {
         return cookieStore.getAll();

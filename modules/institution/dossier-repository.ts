@@ -22,7 +22,10 @@ export type DossierContext = {
   institutionId: string;
   institutionName: string;
   memberLabel: string;
+  /** Admin platform membuka dosir lewat jalur pengawasan, bukan sebagai anggota lembaga. */
+  isPlatformAdmin: boolean;
   scopes: ConsentScope[];
+  /** Pilihan pemilik saat menyetujui: `consent_grants.download_allowed`. */
   downloadAllowed: boolean;
   expiresAt: string | null;
   snapshotAt: string | null;
@@ -133,9 +136,13 @@ export async function resolveInstitutionContext(
     institutionId: dossier.institution_id,
     institutionName: institutionResult.data?.name ?? "Lembaga",
     memberLabel: member ? `anggota (${member.role})` : isPlatformAdmin ? "admin platform" : "anggota lembaga",
+    isPlatformAdmin: !member && isPlatformAdmin,
     scopes,
-    // Jika sudah masuk /lembaga/dosir (dossier status 'ready' dan grant disetujui), unduhan diizinkan
-    downloadAllowed: true,
+    // Izin unduh adalah bagian dari persetujuan yang dibaca pemilik. Dosir
+    // yang disetujui tanpa izin unduh hanya boleh DILIHAT -- dulu baris ini
+    // mengembalikan `true` untuk semua, sehingga centang "izinkan unduh" di
+    // layar pemilik tidak berarti apa-apa.
+    downloadAllowed: grant.download_allowed === true,
     expiresAt: dossier.expires_at,
     snapshotAt: dossier.generated_at,
     items,

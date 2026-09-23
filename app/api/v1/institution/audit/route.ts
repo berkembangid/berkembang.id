@@ -2,23 +2,19 @@ import { NextResponse } from "next/server";
 import { gagal } from "@/lib/api/galat";
 import { withPortalRpc } from "@/lib/supabase/portal";
 import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
-
-function selectedInstitution(request: Request): string | null {
-  const value = request.headers.get("x-institution-id")?.trim();
-  return value ? value : null;
-}
+import { institutionHeader, resolveSelectedInstitution } from "@/lib/api/institution";
 
 /** Log audit organisasi: siapa membuka apa, kapan — untuk ADMIN organisasi. */
 export async function GET(request: Request) {
   if (!await getAuthenticatedUser()) return gagal("UNAUTHENTICATED", 401);
   const client = await createServerSupabaseClient();
-  const selected = selectedInstitution(request);
-  let query = client.from("institution_view_logs")
+  const selected = await resolveSelectedInstitution(client, request);
+  if (!selected) return gagal("FORBIDDEN", 403);
+  const { data, error } = await client.from("institution_view_logs")
     .select("id,institution_id,member_id,business_id,artifact,artifact_id,action,occurred_at")
+    .eq("institution_id", selected)
     .order("occurred_at", { ascending: false })
     .limit(100);
-  if (selected) query = query.eq("institution_id", selected);
-  const { data, error } = await query;
   if (error) return gagal("AUDIT_UNAVAILABLE", 503);
   return NextResponse.json({ data: data ?? [] }, { headers: { "Cache-Control": "private, no-store" } });
 }
@@ -29,7 +25,7 @@ export async function POST(request: Request) {
     artifact?: unknown; businessId?: unknown; artifactId?: unknown; action?: unknown;
   } | null;
   if (typeof body?.artifact !== "string") return gagal("INVALID_ARTIFACT", 400);
-  const selected = selectedInstitution(request);
+  const selected = institutionHeader(request);
   if (!selected) return gagal("INSTITUTION_REQUIRED", 400);
   const client = withPortalRpc(await createServerSupabaseClient());
   const { data, error } = await client.rpc("log_institution_view", {

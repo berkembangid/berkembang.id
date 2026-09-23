@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withPortalRpc } from "@/lib/supabase/portal";
 import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
+import { institutionHeader } from "@/lib/api/institution";
 import { broadcastErrorCode, broadcastErrorMessage, broadcastErrorStatus } from "@/modules/broadcast/broadcast-messages";
 
 /**
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
   const band = url.searchParams.get("mencatat");
   const legality = url.searchParams.get("legalitas");
 
-  const client = withPortalRpc(await createServerSupabaseClient());
+  const client = withPortalRpc(await createServerSupabaseClient({ institutionId: institutionHeader(request) }));
   const { data, error } = await client.rpc("dinas_broadcast_audience", {
     p_recording_band: band ? band : undefined,
     p_legal_complete: legality === "lengkap" ? true : legality === "belum" ? false : undefined,

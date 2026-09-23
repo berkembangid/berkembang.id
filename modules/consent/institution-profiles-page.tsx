@@ -26,6 +26,7 @@ type DossierRow = {
   generated_at: string | null;
   downloadAllowed?: boolean;
   business?: BusinessSummary | null;
+  original?: { scopes: string[]; durationDays: number; downloadRequested: boolean } | null;
 };
 
 type DossierDetail = {
@@ -168,10 +169,11 @@ export default function InstitutionProfilesPage() {
           candidateCode: dossier.candidateCode,
           purposeCode: "dossier_refresh",
           purposeDescription: "Meminta pembaruan dossier dengan data terbaru usaha.",
-          requestedScopes: ["business_identity", "readiness", "financial_summary"],
-          requiredScopes: ["financial_summary"],
-          requestedDurationDays: 30,
-          downloadRequested: true,
+          // Lingkup permintaan asal; bawaan hanya bila asalnya tidak terbaca.
+          requestedScopes: dossier.original?.scopes ?? ["business_identity", "readiness", "financial_summary"],
+          requiredScopes: [],
+          requestedDurationDays: dossier.original?.durationDays ?? 30,
+          downloadRequested: dossier.original?.downloadRequested ?? false,
         }),
       });
       const body = await response.json();
@@ -267,9 +269,11 @@ function DossierCard({ dossier, downloading, refreshing, onOpen, onDownload, onR
 
     <div className="mt-auto flex flex-wrap gap-2 pt-4">
       <button type="button" onClick={onOpen} className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#0b5f86] px-4 text-sm font-bold text-white hover:bg-[#094f70]"><Eye size={15} />Buka dosir</button>
-      <button type="button" onClick={onDownload} disabled={downloading} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#d5dee8] bg-white px-4 text-sm font-bold text-[#0b5f86] hover:bg-[#f6f8fb] disabled:opacity-50">
+      {/* Pemilik memutuskan boleh-tidaknya diunduh saat memberi izin. */}
+      {dossier.downloadAllowed ? <button type="button" onClick={onDownload} disabled={downloading} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#d5dee8] bg-white px-4 text-sm font-bold text-[#0b5f86] hover:bg-[#f6f8fb] disabled:opacity-50">
         <Download size={15} />{downloading ? "Menyiapkan…" : "Unduh PDF"}
       </button>
+      : <span title="Pemilik usaha tidak mengizinkan unduhan" className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#d5dee8] px-4 text-xs font-bold text-[#6e859e]"><LockKeyhole size={14} />Hanya lihat</span>}
       <button type="button" onClick={onRefresh} disabled={refreshing} title="Minta snapshot baru dengan data terbaru" className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9] disabled:opacity-50">
         <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />{refreshing ? "Mengirim…" : "Minta pembaruan"}
       </button>

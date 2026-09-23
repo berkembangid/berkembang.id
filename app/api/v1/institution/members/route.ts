@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withPortalRpc } from "@/lib/supabase/portal";
 import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
+import { institutionHeader } from "@/lib/api/institution";
 
 /**
  * Anggota organisasi lembaga.
@@ -49,11 +50,6 @@ function kodeDariPostgres(message: string | undefined): string {
   return "UNKNOWN";
 }
 
-function selectedInstitution(request: Request): string | null {
-  const value = request.headers.get("x-institution-id")?.trim();
-  return value ? value : null;
-}
-
 const roleBack: Record<string, string> = {
   admin: "ADMIN",
   analyst: "ANALYST",
@@ -83,7 +79,7 @@ type BarisDirektori = {
 export async function GET(request: Request) {
   const user = await getAuthenticatedUser();
   if (!user) return gagal("UNAUTHENTICATED", 401);
-  const selected = selectedInstitution(request);
+  const selected = institutionHeader(request);
   if (!selected) return gagal("INSTITUTION_REQUIRED", 400);
 
   const client = await createServerSupabaseClient();
@@ -137,7 +133,7 @@ const tambahSchema = z.object({ email: z.string().trim().min(3).max(320) });
 export async function POST(request: Request) {
   const user = await getAuthenticatedUser();
   if (!user) return gagal("UNAUTHENTICATED", 401);
-  const selected = selectedInstitution(request);
+  const selected = institutionHeader(request);
   if (!selected) return gagal("INSTITUTION_REQUIRED", 400);
 
   const parsed = tambahSchema.safeParse(await request.json().catch(() => null));
@@ -189,7 +185,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const user = await getAuthenticatedUser();
   if (!user) return gagal("UNAUTHENTICATED", 401);
-  const selected = selectedInstitution(request);
+  const selected = institutionHeader(request);
   if (!selected) return gagal("INSTITUTION_REQUIRED", 400);
 
   const body = (await request.json().catch(() => null)) as
@@ -227,7 +223,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const user = await getAuthenticatedUser();
   if (!user) return gagal("UNAUTHENTICATED", 401);
-  const selected = selectedInstitution(request);
+  const selected = institutionHeader(request);
   if (!selected) return gagal("INSTITUTION_REQUIRED", 400);
 
   const memberId = new URL(request.url).searchParams.get("memberId")?.trim();

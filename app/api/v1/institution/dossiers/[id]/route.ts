@@ -3,11 +3,7 @@ import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { ConsentOperationError, consentErrorResponse } from "@/modules/consent/consent-errors";
 import { resolveInstitutionContext } from "@/modules/institution/dossier-repository";
-
-function selectedInstitution(request: Request): string | null {
-  const value = request.headers.get("x-institution-id")?.trim();
-  return value ? value : null;
-}
+import { institutionHeader } from "@/lib/api/institution";
 
 const disclaimer =
   "Data kesiapan, bukan penilaian kelayakan pembiayaan. Keputusan pembiayaan sepenuhnya milik lembaga.";
@@ -17,7 +13,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   try {
     if (!await getAuthenticatedUser()) throw new ConsentOperationError("UNAUTHENTICATED");
     const { id } = await context.params;
-    const dossier = await resolveInstitutionContext(id, selectedInstitution(request));
+    const dossier = await resolveInstitutionContext(id, institutionHeader(request));
 
     const readiness = (dossier.items.readiness ?? {}) as Record<string, unknown>;
     const financial = (dossier.items.financial_summary ?? {}) as Record<string, unknown>;
@@ -33,7 +29,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const admin = createServiceRoleClient();
     const [issuesResult, stateResult, missionResult] = await Promise.all([
       admin.from("report_issues").select("id,document_uid,report_kind,period_from,period_to,created_at")
-        .eq("audience", "institution").eq("institution_id", dossier.institutionId).order("created_at", { ascending: false }).limit(20),
+        // Per dosir. Dulu disaring per lembaga saja, sehingga jejak satu
+        // dosir memperlihatkan nomor dokumen milik usaha-usaha lain.
+        .eq("audience", "institution").eq("institution_id", dossier.institutionId).eq("dossier_id", dossier.dossierId)
+        .order("created_at", { ascending: false }).limit(20),
       admin.from("business_readiness_state").select("level,level_since,formula_version,updated_at").eq("business_id", dossier.businessId).maybeSingle(),
       admin.from("business_missions").select("status").eq("business_id", dossier.businessId),
     ]);

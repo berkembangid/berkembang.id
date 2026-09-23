@@ -120,5 +120,5 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return <InstitutionProvider><LayoutInner>{children}</LayoutInner></InstitutionProvider>;
+  return <InstitutionProvider portalKind="institution"><LayoutInner>{children}</LayoutInner></InstitutionProvider>;
 }

@@ -30,6 +30,10 @@ export async function getEffectivePortalRole(
       .select("id, institution_id, institutions(portal_kind)")
       .eq("user_id", userId)
       .eq("status", "active")
+      // Keanggotaan tertua, sama dengan `resolve_my_institution_id`. Tanpa
+      // urutan, orang yang bernaung di satu lembaga dan satu investor bisa
+      // dilempar ke portal yang berbeda dari satu permintaan ke berikutnya.
+      .order("created_at", { ascending: true })
       .limit(1)
       .maybeSingle(),
     client

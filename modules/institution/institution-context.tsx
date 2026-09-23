@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export type InstitutionMembership = {
   institutionId: string;
@@ -48,8 +49,35 @@ const InstitutionContext = createContext<InstitutionContextValue>({
 });
 
 const STORAGE_KEY = "berkembang.institution_id";
+/** Sama dengan `INSTITUTION_COOKIE` di `lib/api/institution.ts`. */
+const COOKIE_NAME = "berkembang_institution_id";
 
-export function InstitutionProvider({ children }: { children: React.ReactNode }) {
+/**
+ * Pilihan organisasi juga ditulis ke kuki. Halaman server (Ringkasan wilayah,
+ * Analitik) dan RPC yang tidak menerima parameter organisasi membacanya lewat
+ * `x-institution-id`; localStorage tidak pernah sampai ke server.
+ */
+function rememberSelection(id: string) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    /* penyimpanan lokal tidak tersedia */
+  }
+  document.cookie = `${COOKIE_NAME}=${encodeURIComponent(id)}; path=/; max-age=31536000; samesite=lax`;
+}
+
+/**
+ * Hanya keanggotaan yang cocok dengan portal ini. Tanpa saringan ini, orang
+ * yang bernaung di satu bank dan satu investor bisa memilih bank dari portal
+ * investor -- dan layarnya berganti ke kosakata dan tujuan izin lembaga.
+ */
+function matchesPortal(row: InstitutionMembership, portalKind?: "institution" | "investor") {
+  if (!portalKind) return true;
+  return (row.portalKind === "investor" ? "investor" : "institution") === portalKind;
+}
+
+export function InstitutionProvider({ children, portalKind }: { children: React.ReactNode; portalKind?: "institution" | "investor" }) {
+  const router = useRouter();
   const [institutions, setInstitutions] = useState<InstitutionMembership[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,7 +87,7 @@ export function InstitutionProvider({ children }: { children: React.ReactNode })
     try {
       const response = await fetch("/api/v1/institution/memberships", { cache: "no-store" });
       const body = await response.json().catch(() => null);
-      const rows = (body?.data ?? []) as InstitutionMembership[];
+      const rows = ((body?.data ?? []) as InstitutionMembership[]).filter((row) => matchesPortal(row, portalKind));
       setInstitutions(rows);
       setSelectedId((current) => {
         if (current && rows.some((row) => row.institutionId === current)) return current;
@@ -72,7 +100,7 @@ export function InstitutionProvider({ children }: { children: React.ReactNode })
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [portalKind]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -80,7 +108,7 @@ export function InstitutionProvider({ children }: { children: React.ReactNode })
       .then(async (response) => ({ response, body: await response.json().catch(() => null) }))
       .then(({ response, body }) => {
         if (!response.ok) throw new Error("memberships");
-        const rows = (body?.data ?? []) as InstitutionMembership[];
+        const rows = ((body?.data ?? []) as InstitutionMembership[]).filter((row) => matchesPortal(row, portalKind));
         setInstitutions(rows);
         setSelectedId((current) => {
           if (current && rows.some((row) => row.institutionId === current)) return current;
@@ -92,15 +120,23 @@ export function InstitutionProvider({ children }: { children: React.ReactNode })
       .catch(() => setInstitutions([]))
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, []);
+  }, [portalKind]);
+
+  // Pilihan awal (dari localStorage atau keanggotaan pertama) juga ditulis ke
+  // kuki. Bila kukinya berubah, halaman server dimuat ulang supaya angka
+  // Ringkasan wilayah dan Analitik ikut organisasi yang benar.
+  const lastWritten = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedId || lastWritten.current === selectedId) return;
+    const previous = document.cookie.match(new RegExp(`(?:^|; )${COOKIE_NAME}=([^;]*)`))?.[1];
+    rememberSelection(selectedId);
+    const hadDifferentCookie = lastWritten.current !== null || (previous !== undefined && decodeURIComponent(previous) !== selectedId);
+    lastWritten.current = selectedId;
+    if (hadDifferentCookie) router.refresh();
+  }, [router, selectedId]);
 
   const select = useCallback((id: string) => {
     setSelectedId(id);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, id);
-    } catch {
-      /* penyimpanan lokal tidak tersedia */
-    }
   }, []);
 
   const value = useMemo<InstitutionContextValue>(() => ({

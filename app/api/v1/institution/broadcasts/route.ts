@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withPortalRpc } from "@/lib/supabase/portal";
 import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
+import { institutionHeader } from "@/lib/api/institution";
 import { broadcastErrorCode, broadcastErrorMessage, broadcastErrorStatus } from "@/modules/broadcast/broadcast-messages";
 
 const BANDS = ["Rutin mencatat", "Mulai rutin", "Jarang mencatat", "Belum mulai"];
@@ -14,11 +15,11 @@ function failure(message: string, fallback: string) {
 }
 
 /** Broadcast milik lembaga pemanggil, beserta sisa kuotanya. */
-export async function GET() {
+export async function GET(request: Request) {
   if (!await getAuthenticatedUser()) {
     return NextResponse.json({ error: { code: "UNAUTHENTICATED", message: "Masuk lebih dulu." } }, { status: 401 });
   }
-  const client = withPortalRpc(await createServerSupabaseClient());
+  const client = withPortalRpc(await createServerSupabaseClient({ institutionId: institutionHeader(request) }));
   const { data, error } = await client.rpc("list_institution_broadcasts");
   if (error) return failure(error.message, "Daftar broadcast belum dapat dimuat.");
   return NextResponse.json({ data }, { headers: { "Cache-Control": "private, no-store" } });
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const client = withPortalRpc(await createServerSupabaseClient());
+  const client = withPortalRpc(await createServerSupabaseClient({ institutionId: institutionHeader(request) }));
   const { data, error } = await client.rpc("request_dinas_broadcast", {
     p_message: body.message,
     p_recording_band: typeof body.recordingBand === "string" ? body.recordingBand : undefined,

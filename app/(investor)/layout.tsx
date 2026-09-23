@@ -240,7 +240,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
 export default function InvestorLayout({ children }: { children: React.ReactNode }) {
   return (
-    <InstitutionProvider>
+    <InstitutionProvider portalKind="investor">
       <LayoutInner>{children}</LayoutInner>
     </InstitutionProvider>
   );

@@ -2,11 +2,7 @@ import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { ConsentOperationError, consentErrorResponse } from "@/modules/consent/consent-errors";
 import { listAnonymousCandidates } from "@/modules/consent/consent-repository";
 import { candidateFilterSchema } from "@/modules/consent/consent-schema";
-
-function headerInstitution(request: Request): string | null {
-  const value = request.headers.get("x-institution-id")?.trim();
-  return value ? value : null;
-}
+import { institutionHeader } from "@/lib/api/institution";
 
 export async function GET(request: Request) {
   try {
@@ -14,7 +10,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const legal = url.searchParams.get("legalComplete");
     const parsed = candidateFilterSchema.safeParse({
-      institutionId: headerInstitution(request) ?? url.searchParams.get("institutionId"),
+      institutionId: institutionHeader(request) ?? url.searchParams.get("institutionId"),
       programId: url.searchParams.get("programId"),
       sector: url.searchParams.get("sector") === "Semua" ? null : url.searchParams.get("sector"),
       region: url.searchParams.get("region"),

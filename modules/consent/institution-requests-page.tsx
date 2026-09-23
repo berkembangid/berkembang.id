@@ -15,7 +15,7 @@ import { BusinessFacts, BusinessHeading, CardSkeleton, Empty, SearchBox, formatD
 
 type Request = {
   id: string; institution_id: string; candidateCode: string; purpose_description: string; requested_scopes: string[];
-  requested_duration_days: number; status: string; created_at: string; expires_at: string | null;
+  requested_duration_days: number; download_requested?: boolean; status: string; created_at: string; expires_at: string | null;
   programName?: string | null; business?: BusinessSummary | null;
 };
 
@@ -81,10 +81,13 @@ export default function InstitutionRequestsPage() {
           candidateCode: request.candidateCode,
           purposeCode: "dossier_refresh",
           purposeDescription: "Meminta pembaruan dossier dengan data terbaru usaha.",
+          // Lingkup, masa, dan izin unduh permintaan asal -- bukan "unduh, 30
+          // hari" untuk semua. Pembaruan tidak boleh meminta lebih dari yang
+          // dulu disetujui pemiliknya.
           requestedScopes: request.requested_scopes,
           requiredScopes: [],
-          requestedDurationDays: 30,
-          downloadRequested: true,
+          requestedDurationDays: request.requested_duration_days,
+          downloadRequested: request.download_requested === true,
         }),
       });
       const body = await response.json();

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Building2, EyeOff, Map, ShieldCheck, Users } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { selectedInstitutionFromCookies } from "@/lib/api/institution";
 import {
   DashboardPage, DashboardPanel, EmptyState, FeedbackBanner, MetricCard, PageHeader, PanelHeader,
 } from "@/components/dashboard";
@@ -61,7 +62,7 @@ type Drilldown =
 
 async function loadSummary(): Promise<Summary> {
   try {
-    const client = await createServerSupabaseClient();
+    const client = await createServerSupabaseClient({ institutionId: await selectedInstitutionFromCookies() });
     const { data, error } = await client.rpc("dinas_region_summary");
     if (error) {
       return error.message.includes("BUKAN_LEMBAGA_BERWILAYAH")
@@ -89,7 +90,7 @@ async function loadSummary(): Promise<Summary> {
 
 async function loadDrilldown(band: string | null, legalComplete: boolean | null): Promise<Drilldown> {
   try {
-    const client = await createServerSupabaseClient();
+    const client = await createServerSupabaseClient({ institutionId: await selectedInstitutionFromCookies() });
     const { data, error } = await client.rpc("dinas_region_drilldown", {
       p_recording_band: band ?? undefined,
       p_legal_complete: legalComplete ?? undefined,
@@ -134,8 +135,8 @@ function shellHeader(region: string | null) {
 }
 
 /** Sel yang disembunyikan tidak digambar sebagai nol -- nol adalah kabar lain. */
-function BandRows({ rows, total, minCell, canDrillDown, hrefFor }: {
-  rows: Band[]; total: number; minCell: number; canDrillDown: boolean;
+function BandRows({ rows, total, canDrillDown, hrefFor }: {
+  rows: Band[]; total: number; canDrillDown: boolean;
   hrefFor: (band: string) => string;
 }) {
   return (
@@ -143,7 +144,10 @@ function BandRows({ rows, total, minCell, canDrillDown, hrefFor }: {
       {rows.map((row) => {
         const share = row.count !== null && total > 0 ? (row.count / total) * 100 : null;
         const value = row.suppressed
-          ? <span className="font-medium text-[#6e859e]">kurang dari {minCell} usaha</span>
+          // Tidak ditulis "kurang dari {minCell}": baris bisa disembunyikan
+          // sebagai pelengkap dan bernilai berapa saja (lihat tabel silang di
+          // bawah). Menyebut batasnya justru membocorkan isinya.
+          ? <span className="inline-flex items-center gap-1 font-medium text-[#6e859e]"><EyeOff size={12} aria-hidden />Disembunyikan untuk melindungi identitas</span>
           : <>{row.count} usaha{share !== null && <span className="ml-1.5 font-medium text-[#6e859e]">{share.toFixed(0)}%</span>}</>;
         return (
           <li key={row.band} className="px-5 py-3">
@@ -354,11 +358,11 @@ export default async function RegionSummaryPage({
     <div className="grid gap-4 xl:grid-cols-2">
       <DashboardPanel>
         <PanelHeader title="Kebiasaan mencatat" description="Berapa banyak hari usaha itu mencatat dalam 30 hari terakhir." />
-        <BandRows rows={recording} total={total} minCell={minCell} canDrillDown={canDrillDown} hrefFor={(band) => drilldownHref(band, null)} />
+        <BandRows rows={recording} total={total} canDrillDown={canDrillDown} hrefFor={(band) => drilldownHref(band, null)} />
       </DashboardPanel>
       <DashboardPanel>
         <PanelHeader title="Kelengkapan legalitas" description="Lengkap berarti tiga jenis dokumen izin yang masih berlaku sudah ada." />
-        <BandRows rows={legalityBands} total={total} minCell={minCell} canDrillDown={canDrillDown} hrefFor={(band) => drilldownHref(null, legalityParam(band))} />
+        <BandRows rows={legalityBands} total={total} canDrillDown={canDrillDown} hrefFor={(band) => drilldownHref(null, legalityParam(band))} />
       </DashboardPanel>
     </div>
 
@@ -391,7 +395,7 @@ export default async function RegionSummaryPage({
                   // sebuah sel tersembunyi "karena kecil" sama dengan tahu
                   // isinya 1 sampai 4.
                   const value = cell?.suppressed
-                    ? <span className="inline-flex items-center gap-1 text-[#9fb0c2]" title="Tidak ditampilkan untuk melindungi kelompok kecil"><EyeOff size={11} /> —</span>
+                    ? <span className="inline-flex items-center gap-1 text-[#9fb0c2]" title="Tidak ditampilkan untuk melindungi kelompok kecil"><EyeOff size={11} aria-hidden /><span aria-hidden>—</span><span className="sr-only">Disembunyikan untuk melindungi identitas</span></span>
                     : <span className="font-semibold text-[#1b2a3a]">{cell?.count ?? 0}</span>;
                   return (
                     <td key={legalityRow.band} className="border-b border-[#eef2f6] px-3 py-2.5 text-right tabular-nums">

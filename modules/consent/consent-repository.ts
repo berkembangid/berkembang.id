@@ -145,12 +145,23 @@ export async function accessVerifiedProfile(dossierId: string, scope: ConsentSco
   return result;
 }
 
-export async function listConsentWorkspace() {
+/**
+ * Permintaan, izin, dan dosir yang terlihat oleh pemanggil.
+ *
+ * `institutionId` diisi untuk portal lembaga/investor: daftar dibatasi ke
+ * organisasi yang sedang dipilih. Tanpa itu, RLS mengembalikan permintaan
+ * SEMUA organisasi tempat orang ini bernaung dalam satu daftar. Admin platform
+ * dan pemilik usaha memanggil tanpa organisasi dan tetap melihat semuanya
+ * sesuai RLS masing-masing.
+ */
+export async function listConsentWorkspace(institutionId: string | null = null) {
   const client = await createServerSupabaseClient();
+  const scoped = <Q extends { eq: (column: string, value: string) => Q }>(query: Q) =>
+    institutionId ? query.eq("institution_id", institutionId) : query;
   const [requestsResult, grantsResult, dossiersResult] = await Promise.all([
-    client.from("dossier_requests").select("*").order("created_at", { ascending: false }),
-    client.from("consent_grants").select("*").order("created_at", { ascending: false }),
-    client.from("dossiers").select("*").order("created_at", { ascending: false }),
+    scoped(client.from("dossier_requests").select("*")).order("created_at", { ascending: false }).limit(300),
+    scoped(client.from("consent_grants").select("*")).order("created_at", { ascending: false }).limit(300),
+    scoped(client.from("dossiers").select("*")).order("created_at", { ascending: false }).limit(300),
   ]);
   if (requestsResult.error || grantsResult.error || dossiersResult.error) throw new ConsentOperationError("SERVICE_UNAVAILABLE", requestsResult.error ?? grantsResult.error ?? dossiersResult.error);
   const institutionIds = [...new Set((requestsResult.data ?? []).map((row) => row.institution_id))];

@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { withPortalRpc } from "@/lib/supabase/portal";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
+import { institutionHeader } from "@/lib/api/institution";
 import { ConsentOperationError, consentErrorResponse } from "@/modules/consent/consent-errors";
 import { buildDocumentUid } from "@/modules/accounting/report-issue";
 import {
@@ -14,11 +15,6 @@ import { renderFinancialStatementsPdf } from "@/modules/accounting/statement-pdf
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function selectedInstitution(request: Request): string | null {
-  const value = request.headers.get("x-institution-id")?.trim();
-  return value ? value : null;
-}
-
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes as unknown as ArrayBuffer);
   return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("");
@@ -27,30 +23,51 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
-    const selected = selectedInstitution(request);
+    const selected = institutionHeader(request);
     const dossier = await resolveInstitutionContext(id, selected);
     if (!dossier.downloadAllowed) throw new ConsentOperationError("DOWNLOAD_NOT_APPROVED");
 
     const client = withPortalRpc(await createServerSupabaseClient());
+
+    /**
+     * Gerbang unduhan, dijalankan SEBAGAI PENGGUNA sebelum satu bita pun
+     * disajikan.
+     *
+     * Dulu panggilan ini berjalan lewat klien service role SESUDAH berkas
+     * dikirim. Dengan service role `auth.uid()` kosong: pemeriksaan anggota di
+     * dalam RPC gagal, peristiwanya tercatat sebagai "ditolak" tanpa pelaku,
+     * dan log audit lembaga berisi unduhan tanpa nama. Jalur unduh-ulang
+     * bahkan mengabaikan hasilnya sama sekali.
+     *
+     * Admin platform bukan anggota lembaga, jadi RPC ini selalu menolaknya;
+     * aksesnya sudah diperiksa `resolveInstitutionContext`.
+     */
+    if (!dossier.isPlatformAdmin) {
+      const { data: gate, error: gateError } = await client.rpc("access_verified_business_profile", {
+        p_dossier_id: dossier.dossierId, p_resource_scope: "financial_summary", p_action: "download",
+      });
+      if (gateError) throw new ConsentOperationError("SERVICE_UNAVAILABLE", gateError);
+      const verdict = (gate ?? {}) as { allowed?: boolean; code?: string };
+      if (!verdict.allowed) {
+        throw new ConsentOperationError(verdict.code === "DOWNLOAD_NOT_APPROVED" ? "DOWNLOAD_NOT_APPROVED" : "ACCESS_DENIED");
+      }
+    }
+
     const printedAt = new Date().toISOString();
-    // Baris arsip dihubungkan ke dossier lewat RPC record (kolom dossier_id
-    // ada setelah migrasi 0058). Filter dossier dilakukan di memori supaya
-    // select tetap valid pada DB yang belum dimigrasi.
-    const { data: dossierIssues } = await client
+    // Arsip dicari per dosir. Dulu yang dibaca 20 terbitan terakhir SE-LEMBAGA
+    // lalu disaring di memori, jadi lembaga yang sibuk kehilangan arsipnya dan
+    // setiap unduhan menerbitkan nomor dokumen baru.
+    const { data: archivedRows } = await client
       .from("report_issues")
-      .select("document_uid,document_id,dossier_id,created_at" as never)
+      .select("document_uid,document_id,created_at")
       .eq("audience", "institution")
       .eq("institution_id", dossier.institutionId)
+      .eq("dossier_id", dossier.dossierId)
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(1);
     const url = new URL(request.url);
     const forceFresh = url.searchParams.get("fresh") === "true" || url.searchParams.get("fresh") === "1";
-    const archived = ((dossierIssues ?? []) as unknown as Array<{
-      document_uid: string;
-      document_id: string | null;
-      dossier_id?: string | null;
-      created_at: string;
-    }>).find((row) => row.dossier_id === dossier.dossierId);
+    const archived = (archivedRows ?? [])[0] as { document_uid: string; document_id: string | null; created_at: string } | undefined;
 
     // Arsip disajikan apa adanya supaya satu nomor dokumen selalu berarti satu
     // berkas yang sama -- tetapi hanya selama ia masih menggambarkan keadaan.
@@ -73,9 +90,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       const downloaded = await admin.storage.from("documents").download(storagePath);
       if (!downloaded.error && downloaded.data) {
         const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
-        await client.rpc("access_verified_business_profile", {
-          p_dossier_id: dossier.dossierId, p_resource_scope: "financial_summary", p_action: "download",
-        });
         return new Response(bytes as BodyInit, {
           status: 200,
           headers: {
@@ -103,8 +117,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       contentType: "application/pdf",
       upsert: true,
     });
-    if (!upload.error) {
-      await admin.rpc("record_institution_report_issue" as never, {
+    // Nomor dokumen dicatat sebagai pengguna: RPC ini menolak `auth.uid()`
+    // kosong, dan dulu penolakan itu ditelan -- arsip tidak pernah tertulis.
+    // Admin platform tidak mengarsipkan; ia bukan penerima dosir.
+    if (!upload.error && !dossier.isPlatformAdmin) {
+      const recorded = await client.rpc("record_institution_report_issue", {
         p_business_id: dossier.businessId,
         p_institution_id: dossier.institutionId,
         p_dossier_id: dossier.dossierId,
@@ -118,12 +135,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         p_period_from: document.period.from,
         p_period_to: document.period.to,
         p_formula_version: dossierFormulaVersion(),
-      } as never);
+      });
+      if (recorded.error) console.error("[dossier pdf] arsip tidak tercatat:", recorded.error.message);
     }
-
-    await admin.rpc("access_verified_business_profile" as never, {
-      p_dossier_id: dossier.dossierId, p_resource_scope: "financial_summary", p_action: "download",
-    } as never);
 
     return new Response(pdf as BodyInit, {
       status: 200,
