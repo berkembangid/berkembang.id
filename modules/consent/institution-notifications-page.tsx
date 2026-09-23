@@ -92,8 +92,8 @@ export default function InstitutionNotificationsPage() {
   const visible = items.filter((item) => filter === "Semua" || (item.notification_type && typeLabels[item.notification_type] === filter));
 
   function target(item: Notification): string | null {
-    if (item.data?.dossierId) return "/institusi/dossiers";
-    if (item.data?.requestId) return "/institusi/requests";
+    if (item.data?.dossierId) return "/lembaga/dosir";
+    if (item.data?.requestId) return "/lembaga/permintaan";
     return null;
   }
 

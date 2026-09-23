@@ -40,7 +40,7 @@ describe("server-controlled effective portal role", () => {
 
   it.each([
     ["admin", "/admin"],
-    ["institution", "/institusi"],
+    ["institution", "/lembaga"],
     ["umkm", "/umkm"],
   ] as const)("maps role %s to %s", (role, expected) => {
     expect(portalPathForRole(role)).toBe(expected);

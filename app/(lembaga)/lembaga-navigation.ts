@@ -13,56 +13,56 @@ import type { PortalRoute } from "@/components/shell/portal-navigation";
  * menyebutnya. Batas itu perlu terbaca dari headernya, bukan disimpulkan dari
  * isi layarnya.
  */
-export const INSTITUSI_ROUTES: readonly PortalRoute[] = [
+export const LEMBAGA_ROUTES: readonly PortalRoute[] = [
   {
-    match: "/institusi",
+    match: "/lembaga",
     exact: true,
     title: "Temukan kandidat",
     hint: "Tanpa nama, sampai pemiliknya memberi izin",
     Icon: TrendingUp,
   },
   {
-    match: "/institusi/wilayah",
+    match: "/lembaga/wilayah",
     title: "Ringkasan wilayah",
     hint: "Jumlah usaha per keadaan, tanpa nama dan tanpa rupiah",
     Icon: Map,
   },
   {
-    match: "/institusi/broadcast",
-    title: "Broadcast pendampingan",
+    match: "/lembaga/siaran",
+    title: "Siaran pendampingan",
     hint: "Nama peserta muncul setelah mereka menekan ikut",
     Icon: Megaphone,
   },
   {
-    match: "/institusi/shortlist",
-    title: "Shortlist saya",
+    match: "/lembaga/tersimpan",
+    title: "Kandidat tersimpan",
     hint: "Kandidat yang Anda simpan untuk ditinjau kembali",
     Icon: Bookmark,
   },
   {
-    match: "/institusi/requests",
+    match: "/lembaga/permintaan",
     title: "Permintaan akses",
     hint: "Menunggu keputusan admin platform",
     Icon: Clock3,
   },
   {
-    match: "/institusi/dossiers",
+    match: "/lembaga/dosir",
     title: "Profil berizin",
     hint: "Hanya yang izinnya masih berlaku",
     Icon: FolderOpen,
   },
-  { match: "/institusi/program", title: "Program pembinaan", Icon: LayoutGrid },
+  { match: "/lembaga/program", title: "Program pembinaan", Icon: LayoutGrid },
   {
-    match: "/institusi/analytics",
+    match: "/lembaga/analitik",
     title: "Analitik program",
     hint: "Agregat peserta, tanpa angka rupiah per usaha",
-    parent: { href: "/institusi/program", label: "Program pembinaan" },
+    parent: { href: "/lembaga/program", label: "Program pembinaan" },
     Icon: BarChart2,
   },
-  { match: "/institusi/notifikasi", title: "Pemberitahuan", Icon: Bell },
-  { match: "/institusi/organisasi", title: "Organisasi & anggota", Icon: Settings2 },
+  { match: "/lembaga/notifikasi", title: "Pemberitahuan", Icon: Bell },
+  { match: "/lembaga/organisasi", title: "Organisasi & anggota", Icon: Settings2 },
   {
-    match: "/institusi/audit",
+    match: "/lembaga/audit",
     title: "Log audit",
     hint: "Setiap pembukaan dan unduhan tercatat",
     Icon: ScrollText,

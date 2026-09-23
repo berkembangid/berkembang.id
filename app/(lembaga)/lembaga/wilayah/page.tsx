@@ -122,7 +122,7 @@ function drilldownHref(band: string | null, legality: string | null): string {
   const params = new URLSearchParams();
   if (band) params.set("mencatat", band);
   if (legality) params.set("legalitas", legality);
-  return `/institusi/wilayah?${params.toString()}`;
+  return `/lembaga/wilayah?${params.toString()}`;
 }
 
 function shellHeader(region: string | null) {
@@ -174,13 +174,13 @@ function DrilldownView({ data, band, legality }: {
       <FeedbackBanner tone="error" title="Daftarnya belum bisa dibuka sekarang">
         Kembali ke angkanya dan coba sekali lagi. Kalau tetap begini, beri tahu pengelola Berkembang.id.
       </FeedbackBanner>
-      <Link href="/institusi/wilayah" className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0b5f86]"><ArrowLeft size={14} /> Kembali ke angka wilayah</Link>
+      <Link href="/lembaga/wilayah" className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0b5f86]"><ArrowLeft size={14} /> Kembali ke angka wilayah</Link>
     </DashboardPage>;
   }
 
   return <DashboardPage>
     {shellHeader(data.region)}
-    <Link href="/institusi/wilayah" className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0b5f86]"><ArrowLeft size={14} /> Kembali ke angka wilayah</Link>
+    <Link href="/lembaga/wilayah" className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0b5f86]"><ArrowLeft size={14} /> Kembali ke angka wilayah</Link>
     <p className="text-xs text-[#6e859e]">Menampilkan: <strong className="font-bold text-[#1b2a3a]">{scope}</strong></p>
 
     <DashboardPanel>
@@ -279,7 +279,7 @@ export default async function RegionSummaryPage({
         icon={ShieldCheck}
         title="Layar ini untuk dinas dengan wilayah kerja"
         description="Lembaga Anda bekerja dengan usaha yang memberi izin satu per satu, bukan dengan angka seluruh kota. Kandidat yang tersedia ada di layar Temukan."
-        action={{ label: "Buka Temukan kandidat", href: "/institusi" }}
+        action={{ label: "Buka Temukan kandidat", href: "/lembaga" }}
       />
     </DashboardPage>;
   }

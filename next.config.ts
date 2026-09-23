@@ -30,6 +30,29 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "2mb",
     },
   },
+  /**
+   * Alamat lama yang berbahasa Inggris atau memakai "institusi".
+   *
+   * Semua portal kini beralamat bahasa Indonesia, dan portal lembaga berada di
+   * `/lembaga`. Alamat lama sudah tersebar sebagai penanda peramban, tautan di
+   * surel, dan catatan serah terima, jadi ia dialihkan -- bukan dibiarkan 404.
+   * Pengalihan ini berjalan sebelum `proxy.ts`, jadi pemeriksaan peran hanya
+   * pernah melihat alamat yang baru.
+   */
+  redirects: async () => [
+    { source: "/institusi/broadcast/:path*", destination: "/lembaga/siaran/:path*", permanent: true },
+    { source: "/institusi/shortlist/:path*", destination: "/lembaga/tersimpan/:path*", permanent: true },
+    { source: "/institusi/requests/:path*", destination: "/lembaga/permintaan/:path*", permanent: true },
+    { source: "/institusi/dossiers/:path*", destination: "/lembaga/dosir/:path*", permanent: true },
+    { source: "/institusi/analytics/:path*", destination: "/lembaga/analitik/:path*", permanent: true },
+    { source: "/institusi/:path*", destination: "/lembaga/:path*", permanent: true },
+    { source: "/investor/shortlist/:path*", destination: "/investor/tersimpan/:path*", permanent: true },
+    { source: "/investor/requests/:path*", destination: "/investor/permintaan/:path*", permanent: true },
+    { source: "/investor/dossiers/:path*", destination: "/investor/dosir/:path*", permanent: true },
+    { source: "/umkm/:old(roadmap|score|gaps)", destination: "/umkm/perjalanan", permanent: true },
+    { source: "/umkm/ai-copilot", destination: "/umkm/panduan", permanent: true },
+    { source: "/umkm/upload", destination: "/umkm/profil/dokumen", permanent: true },
+  ],
   // Allow larger headers for Supabase auth tokens
   headers: async () => [
     {

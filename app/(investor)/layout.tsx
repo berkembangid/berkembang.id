@@ -26,9 +26,9 @@ import styles from "../dashboard-shell.module.css";
 
 const NAV_ITEMS = [
   { href: "/investor", label: "Katalog UMKM", Icon: TrendingUp },
-  { href: "/investor/shortlist", label: "Shortlist", Icon: Bookmark },
-  { href: "/investor/requests", label: "Pengajuan Minat", Icon: Clock3 },
-  { href: "/investor/dossiers", label: "Profil Berizin", Icon: FolderOpen },
+  { href: "/investor/tersimpan", label: "Tersimpan", Icon: Bookmark },
+  { href: "/investor/permintaan", label: "Pengajuan Minat", Icon: Clock3 },
+  { href: "/investor/dosir", label: "Profil Berizin", Icon: FolderOpen },
   { href: "/investor/notifikasi", label: "Notifikasi", Icon: Bell, badge: true },
   { href: "/investor/organisasi", label: "Profil & Tim", Icon: Settings2 },
   { href: "/investor/audit", label: "Log Audit", Icon: ScrollText },

@@ -40,7 +40,7 @@ export type PortalHeading = {
  * Judul untuk sebuah alamat.
  *
  * Yang paling dalam menang, dan itu satu-satunya aturan yang perlu diingat:
- * `/institusi/dossiers` dan `/institusi` sama-sama cocok sebagai awalan, dan
+ * `/lembaga/dosir` dan `/lembaga` sama-sama cocok sebagai awalan, dan
  * yang benar adalah yang lebih panjang. Diurutkan di sini, bukan dititipkan ke
  * urutan penulisan tabel -- tabel yang benar hanya bila barisnya kebetulan
  * berurutan adalah tabel yang akan salah pada penambahan berikutnya.

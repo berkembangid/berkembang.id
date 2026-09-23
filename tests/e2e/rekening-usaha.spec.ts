@@ -114,7 +114,7 @@ test("yang sudah berbukti tidak lagi diminta apa-apa", async ({ page }) => {
 test("Perjalanan menautkan langkah rekening ke layar yang mengerjakannya", async ({ page }) => {
   // Kartu B5 harus membawa pemilik ke tempat pekerjaannya. Tautan yang salah
   // di sini membuat langkah itu mustahil diselesaikan dari Perjalanan.
-  await page.goto("/umkm/roadmap");
+  await page.goto("/umkm/perjalanan");
   const kartu = page.getByText(/Rekening usaha (belum dicatat|sudah dicatat|terpisah)/).first();
   await expect(kartu).toBeVisible({ timeout: 30_000 });
 });

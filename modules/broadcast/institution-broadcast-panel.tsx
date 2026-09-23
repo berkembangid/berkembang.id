@@ -159,7 +159,7 @@ export default function InstitutionBroadcastPanel() {
 
   if (loadError) {
     return <DashboardPage>
-      <PageHeader title="Broadcast pendampingan" description="Tawaran yang dikirim ke usaha berdasarkan keadaannya, bukan namanya." icon={Megaphone} />
+      <PageHeader title="Siaran pendampingan" description="Tawaran yang dikirim ke usaha berdasarkan keadaannya, bukan namanya." icon={Megaphone} />
       <FeedbackBanner tone="error" title="Ruang broadcast belum bisa dibuka">{loadError}</FeedbackBanner>
     </DashboardPage>;
   }
@@ -168,7 +168,7 @@ export default function InstitutionBroadcastPanel() {
 
   return <DashboardPage>
     <PageHeader
-      title="Broadcast pendampingan"
+      title="Siaran pendampingan"
       description="Tawaran yang dikirim berdasarkan keadaan usaha, bukan namanya. Nama peserta muncul setelah mereka menekan ikut."
       icon={Megaphone}
     />

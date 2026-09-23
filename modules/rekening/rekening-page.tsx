@@ -548,7 +548,7 @@ export default function RekeningUsahaPage() {
               Nomor lengkap rekeningmu tidak disimpan. Berkas buktinya privat, dan baru terlihat
               lembaga setelah kamu memberi izin.
             </p>
-            <Link href="/umkm/roadmap" className="text-[11px] font-bold text-[#0b5f86]">
+            <Link href="/umkm/perjalanan" className="text-[11px] font-bold text-[#0b5f86]">
               Lihat Perjalanan
             </Link>
           </div>

@@ -17,6 +17,53 @@ function rpcFailure(error: { message: string } | null) {
   if (error) throw consentOperationError(new Error(error.message));
 }
 
+/**
+ * Kode anonim yang diturunkan dari id usaha, rumusnya sama dengan cadangan
+ * di SQL (`'UMKM-' || upper(substr(replace(id, '-', ''), 1, 8))`). Dipakai
+ * bila ringkasan dari `0103` tidak terbaca, supaya kartu tetap menyebut usaha
+ * yang mana -- bukan kata "Kandidat" yang sama untuk semuanya.
+ */
+export function fallbackCandidateCode(businessId: string) {
+  return `UMKM-${businessId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+}
+
+/** Keping anonim yang sama dengan kartu di daftar Temukan. */
+export type RequestedBusinessSummary = {
+  candidateCode: string;
+  sector: string;
+  generalLocation: string;
+  readinessLevel: string;
+  recordingAgeBand: string;
+  recordingActivity: string;
+};
+
+/**
+ * Kode dan ringkasan anonim usaha yang pernah diminta lembaga pemanggil
+ * (`0103`). `discovery_optins` tidak terbaca oleh lembaga, jadi tanpa ini
+ * setiap kartu Permintaan dan Dosir hanya bertuliskan "Kandidat".
+ *
+ * Kegagalan tidak menjatuhkan layarnya: kartu tetap tampil, hanya tanpa
+ * ringkasan -- misalnya selama migrasinya belum terpasang.
+ */
+export async function summarizeRequestedBusinesses(businessIds: string[]): Promise<Map<string, RequestedBusinessSummary>> {
+  const ids = [...new Set(businessIds)].slice(0, 200);
+  if (ids.length === 0) return new Map();
+  const client = withPortalRpc(await createServerSupabaseClient());
+  const { data, error } = await client.rpc("ringkasan_usaha_yang_diminta", { p_business_ids: ids });
+  if (error || !Array.isArray(data)) {
+    if (error) console.error("[ringkasan_usaha_yang_diminta]", error.message);
+    return new Map();
+  }
+  return new Map((data as Array<Record<string, string>>).map((row) => [row.business_id, {
+    candidateCode: row.candidate_code,
+    sector: row.sector,
+    generalLocation: row.general_location,
+    readinessLevel: row.readiness_level,
+    recordingAgeBand: row.recording_age_band,
+    recordingActivity: row.recording_activity,
+  }]));
+}
+
 export async function listAnonymousCandidates(filter: Partial<CandidateFilter> = {}) {
   const client = withPortalRpc(await createServerSupabaseClient());
   const { data, error } = await client.rpc("list_anonymous_business_candidates", {
@@ -109,16 +156,17 @@ export async function listConsentWorkspace() {
   const institutionIds = [...new Set((requestsResult.data ?? []).map((row) => row.institution_id))];
   const programIds = [...new Set((requestsResult.data ?? []).flatMap((row) => row.program_id ? [row.program_id] : []))];
   const businessIds = [...new Set((requestsResult.data ?? []).map((row) => row.business_id))];
-  const [institutionsResult, programsResult, optinsResult] = await Promise.all([
+  const [institutionsResult, programsResult, optinsResult, summaries] = await Promise.all([
     institutionIds.length ? client.from("institutions").select("id,name").in("id", institutionIds) : Promise.resolve({ data: [], error: null }),
     programIds.length ? client.from("programs").select("id,name").in("id", programIds) : Promise.resolve({ data: [], error: null }),
     businessIds.length ? client.from("discovery_optins").select("business_id,candidate_code").in("business_id", businessIds) : Promise.resolve({ data: [], error: null }),
+    summarizeRequestedBusinesses(businessIds),
   ]);
   const institutions = new Map((institutionsResult.data ?? []).map((row) => [row.id, row.name]));
   const programs = new Map((programsResult.data ?? []).map((row) => [row.id, row.name]));
   const candidateCodes = new Map((optinsResult.data ?? []).map((row) => [row.business_id, row.candidate_code]));
   return {
-    requests: (requestsResult.data ?? []).map((row) => ({ ...row, candidateCode: candidateCodes.get(row.business_id) ?? "Kandidat", institutionName: institutions.get(row.institution_id) ?? "Lembaga", programName: row.program_id ? programs.get(row.program_id) ?? null : null })),
+    requests: (requestsResult.data ?? []).map((row) => ({ ...row, business: summaries.get(row.business_id) ?? null, candidateCode: summaries.get(row.business_id)?.candidateCode ?? candidateCodes.get(row.business_id) ?? fallbackCandidateCode(row.business_id), institutionName: institutions.get(row.institution_id) ?? "Lembaga", programName: row.program_id ? programs.get(row.program_id) ?? null : null })),
     grants: grantsResult.data ?? [], dossiers: dossiersResult.data ?? [],
   };
 }

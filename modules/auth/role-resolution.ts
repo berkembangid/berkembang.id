@@ -24,7 +24,7 @@ export function resolveEffectivePortalRole({
 export function portalPathForRole(role: AppRole) {
   if (role === "admin") return "/admin" as const;
   if (role === "investor") return "/investor" as const;
-  if (role === "institution") return "/institusi" as const;
+  if (role === "institution") return "/lembaga" as const;
   return "/umkm" as const;
 }
 

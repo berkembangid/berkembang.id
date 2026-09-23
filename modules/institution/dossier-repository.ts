@@ -134,7 +134,7 @@ export async function resolveInstitutionContext(
     institutionName: institutionResult.data?.name ?? "Lembaga",
     memberLabel: member ? `anggota (${member.role})` : isPlatformAdmin ? "admin platform" : "anggota lembaga",
     scopes,
-    // Jika sudah masuk /institusi/dossiers (dossier status 'ready' dan grant disetujui), unduhan diizinkan
+    // Jika sudah masuk /lembaga/dosir (dossier status 'ready' dan grant disetujui), unduhan diizinkan
     downloadAllowed: true,
     expiresAt: dossier.expires_at,
     snapshotAt: dossier.generated_at,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolvePortalHeading } from "@/components/shell/portal-navigation";
 import { ADMIN_ROUTES } from "@/app/(admin)/admin-navigation";
-import { INSTITUSI_ROUTES } from "@/app/(dashboard)/institusi-navigation";
+import { LEMBAGA_ROUTES } from "@/app/(lembaga)/lembaga-navigation";
 
 /**
  * Satu aturan yang diuji di sini, dan seluruh tabel judul bergantung padanya:
@@ -36,20 +36,20 @@ describe("judul layar portal", () => {
   });
 
   it("memperlakukan akar portal sebagai cocok persis", () => {
-    // Tanpa `exact`, `/institusi` akan cocok dengan SETIAP alamat portal ini.
-    expect(resolvePortalHeading("/institusi", INSTITUSI_ROUTES, "x").title).toBe("Temukan kandidat");
-    expect(resolvePortalHeading("/institusi/shortlist", INSTITUSI_ROUTES, "x").title).toBe("Shortlist saya");
+    // Tanpa `exact`, `/lembaga` akan cocok dengan SETIAP alamat portal ini.
+    expect(resolvePortalHeading("/lembaga", LEMBAGA_ROUTES, "x").title).toBe("Temukan kandidat");
+    expect(resolvePortalHeading("/lembaga/tersimpan", LEMBAGA_ROUTES, "x").title).toBe("Kandidat tersimpan");
     expect(resolvePortalHeading("/admin", ADMIN_ROUTES, "x").title).toBe("Ringkasan");
     expect(resolvePortalHeading("/admin/audit", ADMIN_ROUTES, "x").title).toBe("Riwayat audit");
   });
 
   it("jatuh ke judul cadangan untuk alamat yang tidak dikenal", () => {
     expect(resolvePortalHeading("/admin/entah", ADMIN_ROUTES, "Administrasi").title).toBe("Administrasi");
-    expect(resolvePortalHeading("/institusi/entah", INSTITUSI_ROUTES, "Portal lembaga").title).toBe("Portal lembaga");
+    expect(resolvePortalHeading("/lembaga/entah", LEMBAGA_ROUTES, "Portal lembaga").title).toBe("Portal lembaga");
   });
 
   it("mengarahkan setiap induk ke alamat yang punya judulnya sendiri", () => {
-    for (const routes of [ADMIN_ROUTES, INSTITUSI_ROUTES] as const) {
+    for (const routes of [ADMIN_ROUTES, LEMBAGA_ROUTES] as const) {
       for (const route of routes) {
         if (!route.parent) continue;
         const parent = resolvePortalHeading(route.parent.href, routes, "TIDAK DIKENAL");
@@ -71,12 +71,12 @@ describe("judul layar portal", () => {
     }
 
     const institusi = [
-      "/institusi", "/institusi/shortlist", "/institusi/requests", "/institusi/dossiers",
-      "/institusi/program", "/institusi/analytics", "/institusi/notifikasi",
-      "/institusi/organisasi", "/institusi/audit",
+      "/lembaga", "/lembaga/tersimpan", "/lembaga/permintaan", "/lembaga/dosir",
+      "/lembaga/program", "/lembaga/analitik", "/lembaga/notifikasi",
+      "/lembaga/organisasi", "/lembaga/audit",
     ];
     for (const path of institusi) {
-      expect(resolvePortalHeading(path, INSTITUSI_ROUTES, "CADANGAN").title, path).not.toBe("CADANGAN");
+      expect(resolvePortalHeading(path, LEMBAGA_ROUTES, "CADANGAN").title, path).not.toBe("CADANGAN");
     }
   });
 });

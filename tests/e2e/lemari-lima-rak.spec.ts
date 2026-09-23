@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
   await page.getByLabel(/sandi|password/i).fill(password!);
   await page.getByRole("button", { name: /masuk/i }).click();
   await page.waitForURL(/\/umkm/);
-  await page.goto("/umkm/upload");
+  await page.goto("/umkm/profil/dokumen");
 });
 
 test("@smoke lima rak tampil berurutan sesuai perjalanan pemilik", async ({ page }) => {

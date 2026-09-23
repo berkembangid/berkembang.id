@@ -112,9 +112,10 @@ test("halaman metodologi menjelaskan aturannya apa adanya", async ({ page }) => 
   await page.screenshot({ path: "test-results/kesiapan-6-metodologi.png", fullPage: true });
 });
 
-test("rute lama tetap hidup dan menampilkan halaman yang sama", async ({ page }) => {
+test("rute lama dialihkan ke Perjalanan", async ({ page }) => {
   for (const path of ["/umkm/roadmap", "/umkm/score", "/umkm/gaps"]) {
     await page.goto(path);
+    await expect(page).toHaveURL(/\/umkm\/perjalanan$/);
     await expect(page.getByText("Tingkat kesiapan usahamu")).toBeVisible({ timeout: 30_000 });
   }
 });

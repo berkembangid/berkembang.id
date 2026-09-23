@@ -78,7 +78,7 @@ Lembaga dan Admin berbagi satu `components/shell/PortalHeader.tsx` karena
 keduanya memakai cangkang `.topbar` yang sama.
 
 Tabel judulnya di `app/(admin)/admin-navigation.ts` dan
-`app/(dashboard)/institusi-navigation.ts`. Aturannya satu: **yang paling dalam
+`app/(lembaga)/lembaga-navigation.ts`. Aturannya satu: **yang paling dalam
 menang**, dan halaman detail memakai awalan bergaris miring penutup
 (`/admin/umkm/`) supaya tidak bertabrakan dengan daftarnya. Dikunci di
 `tests/unit/portal-navigation.test.ts`, termasuk uji yang menangkap layar baru

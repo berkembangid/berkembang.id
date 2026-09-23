@@ -23,7 +23,7 @@ export function InstitutionSection() {
               <li className="flex items-center gap-3"><Check aria-hidden="true" size={16} className="text-[#7fffe4]" />Berbagi data melalui persetujuan pengguna</li>
             </ul>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <Link href="/institusi" className="button-hero-primary focus-ring">Lihat portal institusi <ArrowRight size={16} /></Link>
+              <Link href="/lembaga" className="button-hero-primary focus-ring">Lihat portal institusi <ArrowRight size={16} /></Link>
               <a href="mailto:halo@berkembang.id" className="button-hero-secondary focus-ring">Diskusikan kebutuhan lembaga</a>
             </div>
           </div>

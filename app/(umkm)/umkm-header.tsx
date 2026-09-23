@@ -107,7 +107,7 @@ export default function UmkmHeader({
               <Mic size={15} /> Catat transaksi
             </Link>
           )}
-          <Link href="/umkm/ai-copilot" aria-label="Buka panduan usaha" className={`${styles.iconButton} border border-[#e3e9f0] text-[#4a6280]`}>
+          <Link href="/umkm/panduan" aria-label="Buka panduan usaha" className={`${styles.iconButton} border border-[#e3e9f0] text-[#4a6280]`}>
             <Sparkles size={16} />
           </Link>
           <NotificationBell notices={notices} unread={unread} onOpened={onNoticesSeen} />
@@ -152,7 +152,7 @@ export default function UmkmHeader({
         )}
 
         <div className={styles.mobileActions}>
-          <Link href="/umkm/ai-copilot" aria-label="Buka panduan usaha" className={styles.iconButton}><Sparkles size={17} /></Link>
+          <Link href="/umkm/panduan" aria-label="Buka panduan usaha" className={styles.iconButton}><Sparkles size={17} /></Link>
           <NotificationBell notices={notices} unread={unread} onOpened={onNoticesSeen} compact />
           <AccountMenu userName={userName} businessName={businessName} onSignOut={onSignOut}>
             <button

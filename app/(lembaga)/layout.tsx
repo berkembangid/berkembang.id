@@ -10,7 +10,7 @@ import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure } from "@/lib/notify";
 import { InstitutionProvider, useInstitution } from "@/modules/institution/institution-context";
 import PortalHeader from "@/components/shell/PortalHeader";
-import { INSTITUSI_ROUTES } from "./institusi-navigation";
+import { LEMBAGA_ROUTES } from "./lembaga-navigation";
 import styles from "../dashboard-shell.module.css";
 
 /**
@@ -19,17 +19,17 @@ import styles from "../dashboard-shell.module.css";
  * tidak ada, jadi item itu disaring -- bukan dinonaktifkan.
  */
 const NAV_ITEMS: readonly { href: string; label: string; Icon: typeof TrendingUp; badge?: boolean; regionWide?: boolean }[] = [
-  { href: "/institusi", label: "Temukan", Icon: TrendingUp },
-  { href: "/institusi/wilayah", label: "Ringkasan wilayah", Icon: Map, regionWide: true },
-  { href: "/institusi/broadcast", label: "Broadcast", Icon: Megaphone, regionWide: true },
-  { href: "/institusi/shortlist", label: "Shortlist", Icon: Bookmark },
-  { href: "/institusi/requests", label: "Permintaan", Icon: Clock3 },
-  { href: "/institusi/dossiers", label: "Profil berizin", Icon: FolderOpen },
-  { href: "/institusi/program", label: "Program", Icon: LayoutGrid },
-  { href: "/institusi/analytics", label: "Analitik program", Icon: BarChart2 },
-  { href: "/institusi/notifikasi", label: "Notifikasi", Icon: Bell, badge: true },
-  { href: "/institusi/organisasi", label: "Organisasi", Icon: Settings2 },
-  { href: "/institusi/audit", label: "Log audit", Icon: ScrollText },
+  { href: "/lembaga", label: "Temukan", Icon: TrendingUp },
+  { href: "/lembaga/wilayah", label: "Ringkasan wilayah", Icon: Map, regionWide: true },
+  { href: "/lembaga/siaran", label: "Siaran", Icon: Megaphone, regionWide: true },
+  { href: "/lembaga/tersimpan", label: "Tersimpan", Icon: Bookmark },
+  { href: "/lembaga/permintaan", label: "Permintaan", Icon: Clock3 },
+  { href: "/lembaga/dosir", label: "Profil berizin", Icon: FolderOpen },
+  { href: "/lembaga/program", label: "Program", Icon: LayoutGrid },
+  { href: "/lembaga/analitik", label: "Analitik program", Icon: BarChart2 },
+  { href: "/lembaga/notifikasi", label: "Notifikasi", Icon: Bell, badge: true },
+  { href: "/lembaga/organisasi", label: "Organisasi", Icon: Settings2 },
+  { href: "/lembaga/audit", label: "Log audit", Icon: ScrollText },
 ];
 
 function InstitutionSwitcher() {
@@ -50,12 +50,12 @@ function SidebarShell({ pathname, mobileOpen, setMobileOpen, unread, contextName
   return <>
     {mobileOpen && <button type="button" aria-label="Tutup menu" className={styles.backdrop} onClick={() => setMobileOpen(false)} />}
     <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ""}`}>
-      <div className={styles.brand}><Link href="/institusi" className="flex items-center gap-3 py-1.5" aria-label="Berkembang.id"><Image src="/logo/logo berkembang.webp" alt="Berkembang.id" width={150} height={38} priority className="h-8 w-auto object-contain" /></Link><button type="button" aria-label="Tutup menu" onClick={() => setMobileOpen(false)} className="ml-auto grid size-11 place-items-center rounded-lg text-[#6e859e] md:hidden"><X size={17} /></button></div>
+      <div className={styles.brand}><Link href="/lembaga" className="flex items-center gap-3 py-1.5" aria-label="Berkembang.id"><Image src="/logo/logo berkembang.webp" alt="Berkembang.id" width={150} height={38} priority className="h-8 w-auto object-contain" /></Link><button type="button" aria-label="Tutup menu" onClick={() => setMobileOpen(false)} className="ml-auto grid size-11 place-items-center rounded-lg text-[#6e859e] md:hidden"><X size={17} /></button></div>
       <div className={styles.context}><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#eef8fd] text-[#0f73a3]"><Building2 size={17} /></span><div className="min-w-0"><p className={styles.contextTitle}>{contextName}</p><InstitutionSwitcher /></div></div></div>
       <nav aria-label="Menu portal lembaga" className={styles.group}>
         <p className={styles.groupLabel}>Ruang kerja</p>
         {NAV_ITEMS.filter((item) => !item.regionWide || regionWide).map((item) => {
-          const active = item.href === "/institusi" ? pathname === item.href : pathname.startsWith(item.href);
+          const active = item.href === "/lembaga" ? pathname === item.href : pathname.startsWith(item.href);
           return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} aria-current={active ? "page" : undefined} className={`${styles.navLink} ${active ? styles.navActive : ""}`}><item.Icon size={16} /><span>{item.label}</span>{item.badge && unread > 0 && <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-black text-white">{unread > 99 ? "99+" : unread}</span>}</Link>;
         })}
       </nav>
@@ -103,7 +103,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       <SidebarShell pathname={pathname} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} unread={unread} contextName={selected?.name ?? "Akun lembaga"} regionWide={selected?.regionWide === true} handleSignOut={handleSignOut} />
       <div className={styles.main}>
         <PortalHeader
-          routes={INSTITUSI_ROUTES}
+          routes={LEMBAGA_ROUTES}
           fallbackTitle="Portal lembaga"
           eyebrow="Portal lembaga"
           badge="Akses berizin"
@@ -111,10 +111,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           contextName={selected?.name ?? "Akun lembaga"}
           contextHint="Akses hanya sesuai izin pemilik usaha"
           menuLinks={[
-            { href: "/institusi/organisasi", label: "Organisasi & anggota", Icon: Settings2 },
-            { href: "/institusi/audit", label: "Log audit", Icon: ScrollText },
+            { href: "/lembaga/organisasi", label: "Organisasi & anggota", Icon: Settings2 },
+            { href: "/lembaga/audit", label: "Log audit", Icon: ScrollText },
           ]}
-          notifications={{ href: "/institusi/notifikasi", unread }}
+          notifications={{ href: "/lembaga/notifikasi", unread }}
           onSignOut={() => void handleSignOut()}
         />
         {children}

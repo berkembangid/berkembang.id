@@ -38,7 +38,7 @@ describe("resolveEffectivePortalRole: cabang investor", () => {
 
   it("anggota lembaga tanpa portal investor membuka portal lembaga", () => {
     expect(resolveEffectivePortalRole({ ...dasar, isInvestor: false })).toBe("institution");
-    expect(portalPathForRole("institution")).toBe("/institusi");
+    expect(portalPathForRole("institution")).toBe("/lembaga");
   });
 
   it("tanpa menyebut isInvestor, jawabannya lembaga — bukan investor", () => {

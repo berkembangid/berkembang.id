@@ -55,6 +55,23 @@ export type InstitutionPortalSupplement = {
     };
     Functions: {
       /**
+       * 0103 -- keping anonim usaha yang sudah diminta lembaga pemanggil.
+       * Layar Permintaan dan Dosir memakainya untuk kode, bidang, wilayah,
+       * tingkat, dan umur catatan.
+       */
+      ringkasan_usaha_yang_diminta: {
+        Args: { p_business_ids: string[] };
+        Returns: Array<{
+          business_id: string;
+          candidate_code: string;
+          sector: string;
+          general_location: string;
+          readiness_level: string;
+          recording_age_band: string;
+          recording_activity: string;
+        }>;
+      };
+      /**
        * 0097 -- direktori anggota lembaga beserta nama dan surelnya.
        *
        * `profiles_select` hanya mengizinkan orang membaca profilnya sendiri,

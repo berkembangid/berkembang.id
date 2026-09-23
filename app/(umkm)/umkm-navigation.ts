@@ -17,11 +17,11 @@ export type NavItem = { label: string; href: string; Icon: LucideIcon; matches?:
  */
 export const NAVIGATION: NavItem[] = [
   { label: "Beranda", href: "/umkm", Icon: Home },
-  { label: "Profil", href: "/umkm/profil", Icon: User, matches: ["/umkm/profil", "/umkm/upload"] },
+  { label: "Profil", href: "/umkm/profil", Icon: User, matches: ["/umkm/profil", "/umkm/profil/dokumen"] },
   { label: "Catat", href: "/umkm/catat", Icon: Mic },
   { label: "Laporan", href: "/umkm/laporan", Icon: FileText },
-  { label: "Perjalanan", href: "/umkm/roadmap", Icon: Map, matches: ["/umkm/roadmap", "/umkm/score", "/umkm/gaps", "/umkm/kesiapan"] },
-  { label: "Panduan", href: "/umkm/ai-copilot", Icon: Sparkles },
+  { label: "Perjalanan", href: "/umkm/perjalanan", Icon: Map, matches: ["/umkm/perjalanan", "/umkm/kesiapan"] },
+  { label: "Panduan", href: "/umkm/panduan", Icon: Sparkles },
 ];
 
 export function isActivePath(pathname: string, item: NavItem) {
@@ -62,11 +62,9 @@ const SCREENS: Array<{ path: string; exact?: boolean } & ScreenHeading> = [
   { path: "/umkm/catat", title: "Catat transaksi", hint: "Uang masuk dan uang keluar", Icon: Mic },
   { path: "/umkm/laporan", title: "Buku kas & laporan", hint: "Ringkasan uang usaha", Icon: BarChart3 },
   { path: "/umkm/kesiapan/metodologi", title: "Cara kami menghitung", parentHref: "/umkm/kesiapan", parentLabel: "Kesiapan", Icon: Target },
-  { path: "/umkm/kesiapan", title: "Kesiapan usaha", parentHref: "/umkm/roadmap", parentLabel: "Perjalanan", Icon: Target },
-  { path: "/umkm/score", title: "Nilai kesiapan", parentHref: "/umkm/roadmap", parentLabel: "Perjalanan", Icon: Target },
-  { path: "/umkm/gaps", title: "Yang masih kurang", parentHref: "/umkm/roadmap", parentLabel: "Perjalanan", Icon: Target },
-  { path: "/umkm/roadmap", title: "Perjalanan usaha", hint: "Langkah demi langkah", Icon: Map },
-  { path: "/umkm/ai-copilot", title: "Panduan usaha", hint: "Tanya apa saja soal usaha", Icon: Sparkles },
+  { path: "/umkm/kesiapan", title: "Kesiapan usaha", parentHref: "/umkm/perjalanan", parentLabel: "Perjalanan", Icon: Target },
+  { path: "/umkm/perjalanan", title: "Perjalanan usaha", hint: "Langkah demi langkah", Icon: Map },
+  { path: "/umkm/panduan", title: "Panduan usaha", hint: "Tanya apa saja soal usaha", Icon: Sparkles },
   { path: "/umkm/notifikasi", title: "Pemberitahuan", parentHref: "/umkm", parentLabel: "Beranda", Icon: Bell },
   { path: "/umkm/aktivitas", title: "Aktivitas", parentHref: "/umkm", parentLabel: "Beranda", Icon: Receipt },
   { path: "/umkm/akuntan", title: "Mode akuntan", parentHref: "/umkm/laporan", parentLabel: "Laporan", Icon: BarChart3 },

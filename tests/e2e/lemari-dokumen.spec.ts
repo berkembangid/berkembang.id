@@ -122,7 +122,7 @@ test("rak E: laporan yang diunduh tersimpan dengan nomornya", async ({ page }) =
   await page.getByRole("button", { name: /berkas laporan|unduh/i }).first().click();
   await download;
 
-  await page.goto("/umkm/upload");
+  await page.goto("/umkm/profil/dokumen");
   await expect(page.getByRole("heading", { name: /laporan yang pernah dibuat/i })).toBeVisible();
   // Nomor penerbitan tercetak di kaki halaman berkasnya DAN tampil di sini;
   // itulah yang mencocokkan berkas yang dipegang pembaca dengan barisnya.

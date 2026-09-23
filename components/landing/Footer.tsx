@@ -14,7 +14,7 @@ const columns = [
     title: "Akses",
     links: [
       ["Mulai sebagai UMKM", "/umkm"],
-      ["Portal institusi", "/institusi"],
+      ["Portal institusi", "/lembaga"],
       ["Masuk", "/auth/login"],
     ],
   },

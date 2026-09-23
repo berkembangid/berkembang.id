@@ -19,19 +19,19 @@ export const INVESTOR_ROUTES: readonly PortalRoute[] = [
     Icon: TrendingUp,
   },
   {
-    match: "/investor/shortlist",
-    title: "Shortlist Kemitraan",
+    match: "/investor/tersimpan",
+    title: "Kandidat Tersimpan",
     hint: "Kandidat usaha potensial yang Anda simpan",
     Icon: Bookmark,
   },
   {
-    match: "/investor/requests",
+    match: "/investor/permintaan",
     title: "Pengajuan Minat & Akses",
     hint: "Permintaan mediasi dan izin profil ke admin platform",
     Icon: Clock3,
   },
   {
-    match: "/investor/dossiers",
+    match: "/investor/dosir",
     title: "Profil UMKM Berizin",
     hint: "Dossier lengkap usaha yang telah disetujui",
     Icon: FolderOpen,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { gagal } from "@/lib/api/galat";
 import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
+import { fallbackCandidateCode, summarizeRequestedBusinesses } from "@/modules/consent/consent-repository";
 
 function selectedInstitution(request: Request): string | null {
   const value = request.headers.get("x-institution-id")?.trim();
@@ -23,19 +24,21 @@ export async function GET(request: Request) {
   if (error) return gagal("DOSSIERS_UNAVAILABLE", 503);
   const businessIds = [...new Set((data ?? []).map((row) => row.business_id))];
   const grantIds = [...new Set((data ?? []).map((row) => row.grant_id).filter(Boolean))];
-  const [optins, grants] = await Promise.all([
+  const [optins, grants, summaries] = await Promise.all([
     businessIds.length
       ? client.from("discovery_optins").select("business_id,candidate_code").in("business_id", businessIds)
       : Promise.resolve({ data: [] as Array<{ business_id: string; candidate_code: string }>, error: null }),
     grantIds.length
       ? client.from("consent_grants").select("id,download_allowed").in("id", grantIds)
       : Promise.resolve({ data: [] as Array<{ id: string; download_allowed: boolean }>, error: null }),
+    summarizeRequestedBusinesses(businessIds),
   ]);
   const codes = new Map((optins.data ?? []).map((row) => [row.business_id, row.candidate_code]));
   return NextResponse.json({
     data: (data ?? []).map((row) => ({
       ...row,
-      candidateCode: codes.get(row.business_id) ?? "Kandidat",
+      candidateCode: summaries.get(row.business_id)?.candidateCode ?? codes.get(row.business_id) ?? fallbackCandidateCode(row.business_id),
+      business: summaries.get(row.business_id) ?? null,
       // Setiap dossier yang sudah berstatus ready dan disetujui admin diizinkan untuk diunduh
       downloadAllowed: true,
     })),

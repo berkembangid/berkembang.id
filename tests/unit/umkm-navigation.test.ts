@@ -51,14 +51,14 @@ describe("jalan kembali", () => {
   });
 
   it("tidak memberi induk pada tujuan utama", () => {
-    for (const path of ["/umkm", "/umkm/catat", "/umkm/laporan", "/umkm/profil", "/umkm/roadmap"]) {
+    for (const path of ["/umkm", "/umkm/catat", "/umkm/laporan", "/umkm/profil", "/umkm/perjalanan"]) {
       expect(resolveHeading(path).parentHref, path).toBeUndefined();
     }
   });
 
   it("mengarahkan induknya ke alamat yang memang ada di menu", () => {
     const known = new Set(NAVIGATION.map((item) => item.href));
-    for (const path of ["/umkm/profil/dokumen", "/umkm/notifikasi", "/umkm/score"]) {
+    for (const path of ["/umkm/profil/dokumen", "/umkm/notifikasi", "/umkm/kesiapan/metodologi"]) {
       const parent = resolveHeading(path).parentHref!;
       // Induk boleh berupa layar antara (mis. Kesiapan), asalkan ia sendiri
       // punya judul -- yang tidak boleh adalah induk yang menuju ke mana pun.
@@ -82,8 +82,8 @@ describe("penanda menu aktif", () => {
   });
 
   it("menyalakan Perjalanan untuk seluruh halaman kesiapan", () => {
-    const journey = NAVIGATION.find((item) => item.href === "/umkm/roadmap")!;
-    for (const path of ["/umkm/roadmap", "/umkm/score", "/umkm/gaps", "/umkm/kesiapan", "/umkm/kesiapan/metodologi"]) {
+    const journey = NAVIGATION.find((item) => item.href === "/umkm/perjalanan")!;
+    for (const path of ["/umkm/perjalanan", "/umkm/kesiapan", "/umkm/kesiapan/metodologi"]) {
       expect(isActivePath(path, journey), path).toBe(true);
     }
   });
