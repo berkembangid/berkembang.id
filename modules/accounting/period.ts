@@ -3,6 +3,8 @@ import "server-only";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { withPortalRpc } from "@/lib/supabase/portal";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { dueRecurring } from "@/modules/ledger/recurring-repository";
 import { activeBusinessId } from "@/modules/ledger/ledger-repository";
 import { AccountingOperationError, accountingOperationError } from "@/modules/accounting/accounting-errors";
 import {
@@ -697,7 +699,7 @@ export async function getTaxEstimate(userId: string, asOf: string): Promise<TaxE
  * pengingat hilang sendiri pada detik pemilik mengerjakannya, tidak bisa
  * muncul dua kali, dan tidak pernah basi setelah datanya dikoreksi.
  */
-export type ReminderKind = "HITUNG_STOK" | "TUTUP_KAS" | "DOKUMEN_KEDALUWARSA";
+export type ReminderKind = "HITUNG_STOK" | "TUTUP_KAS" | "DOKUMEN_KEDALUWARSA" | "CATATAN_RUTIN";
 
 export type ReminderView = {
   kind: ReminderKind;
@@ -736,5 +738,16 @@ export async function getPendingReminders(userId: string, asOf: string): Promise
     urgent: Number(row.days_left) <= 7,
     subject: row.name,
   }));
-  return [...ledgerReminders, ...documentReminders];
+  // Catatan rutin yang sudah waktunya (0110). Sama: kegagalan membaca tidak
+  // menjatuhkan pengingat lain.
+  const recurring = await dueRecurring(client as unknown as SupabaseClient, businessId, asOf);
+  const recurringReminders: ReminderView[] = recurring.map((row) => ({
+    kind: "CATATAN_RUTIN" as const,
+    periodMonth: row.next_due.slice(0, 7),
+    dueDate: row.next_due,
+    daysOverdue: Math.max(0, Math.round((Date.parse(`${asOf}T00:00:00Z`) - Date.parse(`${row.next_due}T00:00:00Z`)) / 86_400_000)),
+    urgent: row.next_due < asOf,
+    subject: row.description,
+  }));
+  return [...ledgerReminders, ...documentReminders, ...recurringReminders];
 }

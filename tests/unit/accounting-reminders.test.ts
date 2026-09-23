@@ -121,3 +121,11 @@ describe("pengingat masa berlaku dokumen", () => {
     expect(reminderGroupText(group).title).toBe("2 dokumen izin segera habis masa berlakunya");
   });
 });
+
+describe("pengingat catatan rutin", () => {
+  it("menyebut nama catatannya dan membawa ke layar Catatan rutin", () => {
+    const [group] = groupReminders([{ kind: "CATATAN_RUTIN", periodMonth: "2026-09", dueDate: "2026-09-23", daysOverdue: 0, urgent: false, subject: "Sewa kios" }]);
+    expect(reminderGroupText(group).title).toBe("Waktunya mencatat Sewa kios");
+    expect(reminderHref(group.kind)).toBe("/umkm/catat/rutin");
+  });
+});

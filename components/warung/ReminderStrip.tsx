@@ -25,7 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarCheck, ChevronRight, FileWarning, Package } from "lucide-react";
+import { CalendarCheck, ChevronRight, FileWarning, Package, Repeat } from "lucide-react";
 import Link from "next/link";
 import { AccountingClientError, getRemindersClient } from "@/modules/accounting/accounting-client";
 import type { ReminderKind, ReminderView } from "@/modules/accounting/period";
@@ -69,6 +69,14 @@ export function reminderGroupText(group: ReminderGroup): { title: string; becaus
         : "Bulan ini hampir habis. Setelah dihitung, untung bulan ini baru menunjukkan angka yang benar.",
     };
   }
+  if (group.kind === "CATATAN_RUTIN") {
+    return {
+      title: count === 1
+        ? `Waktunya mencatat ${group.items[0].subject ?? "catatan rutin"}`
+        : `${count} catatan rutin menunggu dicatat`,
+      because: "Biaya rutin yang lupa dicatat membuat untung bulan ini terlihat lebih besar dari kenyataan. Satu ketukan, nominalnya boleh diubah.",
+    };
+  }
   if (group.kind === "DOKUMEN_KEDALUWARSA") {
     const first = group.items[0];
     const expired = first.daysOverdue > 0 || first.dueDate < jakartaDate();
@@ -101,13 +109,14 @@ export function reminderHref(kind: ReminderKind, dueDate?: string): string {
   // Tanggalnya ikut, bukan sekadar penanda: sebelum pukul 04.00 yang perlu
   // ditutup adalah dagangan kemarin, dan dialog harus membuka hari itu.
   if (kind === "DOKUMEN_KEDALUWARSA") return "/umkm/profil/dokumen";
+  if (kind === "CATATAN_RUTIN") return "/umkm/catat/rutin";
   return kind === "TUTUP_KAS" && dueDate
     ? `/umkm/laporan?tutup-kas=${dueDate}`
     : "/umkm/laporan";
 }
 
 export function groupReminders(reminders: ReminderView[]): ReminderGroup[] {
-  const order: ReminderKind[] = ["TUTUP_KAS", "HITUNG_STOK", "DOKUMEN_KEDALUWARSA"];
+  const order: ReminderKind[] = ["CATATAN_RUTIN", "TUTUP_KAS", "HITUNG_STOK", "DOKUMEN_KEDALUWARSA"];
   return order
     .map((kind) => {
       const items = reminders.filter((item) => item.kind === kind);
@@ -143,7 +152,7 @@ export function ReminderStrip({ asOf = jakartaDate() }: { asOf?: string }) {
     <section aria-label="Yang perlu dikerjakan" className="space-y-2">
       {groups.map((group) => {
         const { title, because } = reminderGroupText(group);
-        const Icon = group.kind === "HITUNG_STOK" ? Package : group.kind === "DOKUMEN_KEDALUWARSA" ? FileWarning : CalendarCheck;
+        const Icon = group.kind === "HITUNG_STOK" ? Package : group.kind === "DOKUMEN_KEDALUWARSA" ? FileWarning : group.kind === "CATATAN_RUTIN" ? Repeat : CalendarCheck;
         const shown = group.items.slice(0, maxDatesShown);
         const hidden = group.items.length - shown.length;
         return (
@@ -170,7 +179,7 @@ export function ReminderStrip({ asOf = jakartaDate() }: { asOf?: string }) {
                       key={`${item.kind}-${item.dueDate}`}
                       className="rounded-full border border-umkm-line bg-white px-2 py-0.5 text-xs font-bold text-umkm-muted"
                     >
-                      {group.kind === "HITUNG_STOK" ? monthText(item.periodMonth) : group.kind === "DOKUMEN_KEDALUWARSA" ? `${item.subject ?? "Dokumen"} · ${dayLabel(item.dueDate)}` : dayLabel(item.dueDate)}
+                      {group.kind === "HITUNG_STOK" ? monthText(item.periodMonth) : group.kind === "DOKUMEN_KEDALUWARSA" || group.kind === "CATATAN_RUTIN" ? `${item.subject ?? "Dokumen"} · ${dayLabel(item.dueDate)}` : dayLabel(item.dueDate)}
                     </li>
                   ))}
                   {hidden > 0 && (

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Mic, Plus, RefreshCw, X,
-  Sparkles, Type, Volume2, PenLine, RotateCcw, AlertCircle, CheckCircle2, Camera,
+  ChevronRight, Repeat, Sparkles, Type, Volume2, PenLine, RotateCcw, AlertCircle, CheckCircle2, Camera,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatTanggal } from "@/lib/format";
@@ -929,6 +930,18 @@ export default function CatatPage() {
                 </div>
               </form>
             )}
+
+            {/* Biaya yang datang tiap bulan: diingatkan, bukan dicatat otomatis. */}
+            <Link href="/umkm/catat/rutin" className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-umkm-line bg-white px-4 py-3 hover:bg-umkm-surface">
+              <span className="flex items-center gap-3">
+                <span className="grid size-9 place-items-center rounded-xl bg-umkm-brand-soft text-umkm-brand" aria-hidden><Repeat size={16} /></span>
+                <span>
+                  <span className="block text-sm font-bold text-umkm-ink">Catatan rutin</span>
+                  <span className="block text-xs text-umkm-subtle">Sewa, gaji, listrik — diingatkan pada harinya</span>
+                </span>
+              </span>
+              <ChevronRight size={16} className="text-umkm-subtle" aria-hidden />
+            </Link>
 
             {/* Suggestions */}
             <div className="bg-white rounded-2xl p-5 border border-umkm-line shadow-card space-y-3">

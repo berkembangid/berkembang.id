@@ -17,3 +17,7 @@ export const closeLedgerDayClient = (data: CloseLedgerDayInput) => requestData<{
 export const getTransactionChangesClient = (id: string) => requestData<TransactionChangeView[]>(`/api/v1/ledger/transactions/${id}`, { cache: "no-store" });
 export const getContactBalancesClient = () => requestData<import("@/modules/ledger/contact-balances").ContactBalance[]>("/api/v1/contacts", { cache: "no-store" });
 export const setContactPhoneClient = (name: string, phone: string | null, kind: "PIUTANG" | "UTANG") => requestData<{ name: string; phone: string | null }>("/api/v1/contacts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, phone, kind }) });
+export const listRecurringClient = () => requestData<import("@/modules/ledger/recurring").RecurringView[]>("/api/v1/recurring", { cache: "no-store" });
+export const saveRecurringClient = (input: import("@/modules/ledger/recurring").RecurringInput) => requestData<{ id: string }>("/api/v1/recurring", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+export const deleteRecurringClient = (id: string) => requestData<{ id: string }>(`/api/v1/recurring/${id}`, { method: "DELETE" });
+export const advanceRecurringClient = (id: string, expectedDue: string) => requestData<{ id: string; nextDue: string }>(`/api/v1/recurring/${id}/advance`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedDue }) });

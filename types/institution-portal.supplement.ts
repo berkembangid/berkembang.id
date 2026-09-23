@@ -54,6 +54,23 @@ export type InstitutionPortalSupplement = {
       };
     };
     Functions: {
+      /** 0110 -- catatan rutin. */
+      upsert_recurring_transaction: {
+        Args: {
+          p_id: string | null; p_description: string; p_amount_idr: number; p_emkm_category_code: number;
+          p_emkm_category_subtype: string | null; p_payment_method: string; p_counterparty: string | null;
+          p_cadence: string; p_next_due: string;
+        };
+        Returns: import("@/types/database.generated").Json;
+      };
+      delete_recurring_transaction: {
+        Args: { p_id: string };
+        Returns: import("@/types/database.generated").Json;
+      };
+      advance_recurring_transaction: {
+        Args: { p_id: string; p_expected_due: string };
+        Returns: import("@/types/database.generated").Json;
+      };
       /** 0109 -- piutang dan utang per orang, dan nomor WhatsApp kontak. */
       fn_contact_balances: {
         Args: { p_business_id: string };
