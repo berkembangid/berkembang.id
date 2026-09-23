@@ -150,7 +150,7 @@ export default function BerandaPage() {
             <div className={styles.quickActions}>
               <Link href="/umkm/catat" className={styles.quickAction}><Plus size={16} /> Catat uang</Link>
               <Link
-                href={`/umkm/laporan?tutup-kas=${closingTargetDate(new Date())}`}
+                href={`/umkm/laporan?tab=kas&tutup-kas=${closingTargetDate(new Date())}`}
                 className={styles.quickAction}
                 title={closingPromptText(new Date())}
               >

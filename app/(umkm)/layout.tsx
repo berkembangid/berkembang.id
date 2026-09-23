@@ -13,6 +13,9 @@ import UmkmHeader, { type TransactionNotice } from "./umkm-header";
 import { UmkmNotificationsContext } from "./umkm-notifications";
 import { CATAT_RESTART_EVENT, NAVIGATION, isActivePath } from "./umkm-navigation";
 import styles from "./umkm-shell.module.css";
+import { LaporanMenu } from "./laporan-menu";
+
+const LAPORAN_HREF = "/umkm/laporan";
 
 /**
  * Mencatat dengan suara adalah alasan aplikasi ini dibuka.
@@ -205,6 +208,14 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         <nav aria-label="Menu utama UMKM">
           {NAVIGATION.map((item) => {
             const active = isActivePath(pathname, item);
+            if (item.href === LAPORAN_HREF) {
+              return (
+                <LaporanMenu key={item.href} side="right" active={active} triggerClassName={`${styles.navLink} ${active ? styles.navLinkActive : ""} w-[calc(100%-20px)] cursor-pointer`}>
+                  <item.Icon size={17} />
+                  <span>{item.label}</span>
+                </LaporanMenu>
+              );
+            }
             return (
               <Link key={item.href} href={item.href} onClick={() => restartCaptureIfHere(item.href)} aria-current={active ? "page" : undefined} className={`${styles.navLink} ${active ? styles.navLinkActive : ""}`}>
                 <item.Icon size={17} />
@@ -241,6 +252,13 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       <nav aria-label="Menu utama UMKM" className={styles.bottomNav}>
         {MOBILE_LEFT.map((item) => {
           const active = isActivePath(pathname, item);
+          if (item.href === LAPORAN_HREF) {
+            return (
+              <LaporanMenu key={item.href} side="top" active={active} triggerClassName={`${styles.bottomLink} ${active ? styles.bottomLinkActive : ""}`}>
+                <item.Icon size={19} strokeWidth={active ? 2.5 : 2} /><span>{item.label}</span>
+              </LaporanMenu>
+            );
+          }
           return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`${styles.bottomLink} ${active ? styles.bottomLinkActive : ""}`}><item.Icon size={19} strokeWidth={active ? 2.5 : 2} /><span>{item.label}</span></Link>;
         })}
 

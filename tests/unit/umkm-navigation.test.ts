@@ -27,7 +27,7 @@ describe("judul layar", () => {
 
   it("tidak menyamakan beranda dengan seluruh cabangnya", () => {
     expect(resolveHeading("/umkm").title).toBe("Beranda");
-    expect(resolveHeading("/umkm/laporan").title).toBe("Buku kas & laporan");
+    expect(resolveHeading("/umkm/laporan").title).toBe("Laporan");
   });
 
   it("selalu punya judul, bahkan untuk alamat yang tidak dikenal", () => {

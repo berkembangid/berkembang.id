@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BarChart3, CalendarCheck, Plus } from "lucide-react";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { useConfirm } from "@/components/ui/confirm";
@@ -21,18 +21,36 @@ import { ClosingDialog } from "./_components/closing-dialog";
 import {
   emptyTransactionForm, TransactionDialog, transactionFormFrom, transactionInputFrom, type TransactionFormState,
 } from "@/components/warung/TransactionDialog";
+import { laporanSectionFor } from "../../umkm-navigation";
 
-// Kondisi awal usaha pindah ke menu Profil. Laporan menjawab « bagaimana
-// usaha saya berjalan » dan dibaca berulang kali; kondisi awal menjawab
-// « dari mana saya mulai » dan diisi sekali seumur usaha.
-type Tab = "month" | "contacts" | "bank" | "cash";
-
+/**
+ * Halaman Laporan menampilkan SATU bagian, yang dipilih lewat menu Laporan
+ * (`?tab=`, lihat `LAPORAN_SECTIONS`). Deretan tab di atas halaman sudah
+ * tidak ada: menu itulah pemilihnya.
+ *
+ * `useSearchParams` dibungkus `<Suspense>` di bawah, sesuai panduan Next:
+ * tanpa itu seluruh halaman kehilangan pra-render.
+ */
 export default function LaporanPage() {
+  return (
+    <Suspense fallback={null}>
+      <LaporanView />
+    </Suspense>
+  );
+}
+
+function LaporanView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const section = laporanSectionFor(searchParams.get("tab"));
+  const tab = section.tab;
   const { confirm, confirmWithReason } = useConfirm();
-  const [tab, setTab] = useState<Tab>("month");
-  const [range, setRange] = useState<LedgerRangeState>(() => dateRange("month"));
-  const [preset, setPreset] = useState<Preset>("month");
+  // Buku kas dibuka pada hari ini: itu yang dicari setelah berjualan. Kecuali
+  // datang dari baris aktivitas Beranda (`?cari=`) -- catatan itu bisa saja
+  // dari hari lain, jadi pencariannya memakai sebulan.
+  const initialPreset: Exclude<Preset, "custom"> = searchParams.get("cari") ? "month" : "today";
+  const [range, setRange] = useState<LedgerRangeState>(() => dateRange(initialPreset));
+  const [preset, setPreset] = useState<Preset>(initialPreset);
   const [report, setReport] = useState<LedgerReportView | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -57,9 +75,6 @@ export default function LaporanPage() {
     const requested = params.get("tutup-kas");
     // Ditunda satu tick: memanggil setState langsung di effect memicu render berantai.
     const timer = window.setTimeout(() => {
-      // « Lihat buku kas » dari Catat: catatan barunya ada di tab Buku Kas.
-      if (params.get("tab") === "kas") setTab("cash");
-      if (params.get("tab") === "utang-piutang") setTab("contacts");
       if (requested) {
         // Sebelum pukul 04.00 yang ditawarkan hari kemarin, dan dialog harus
         // menutup hari itu -- bukan hari yang baru dua jam berjalan.
@@ -103,7 +118,23 @@ export default function LaporanPage() {
   }, [loadReport]);
 
   const closedDates = useMemo(() => new Set(report?.closings.map((item) => item.closingDate) ?? []), [report]);
-  const closingDone = report?.closings.some((item) => item.closingDate === closingDate) ?? false;
+
+  // Status tutup kas dibaca sendiri, bukan dari rentang Buku Kas: rentangnya
+  // kini « hari ini », sedangkan sebelum pukul 04.00 yang ditutup hari kemarin.
+  const [closingDone, setClosingDone] = useState(false);
+  const loadClosingStatus = useCallback(async () => {
+    try {
+      const day = await getLedgerReportClient({ startDate: closingDate, endDate: closingDate });
+      setClosingDone(day.closings.some((item) => item.closingDate === closingDate));
+    } catch {
+      // Tombolnya tetap aktif; basis data yang menolak tutup kas ganda.
+    }
+  }, [closingDate]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadClosingStatus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadClosingStatus]);
 
   const choosePreset = (value: Exclude<Preset, "custom">) => { setPreset(value); setRange(dateRange(value)); };
   const chooseRange = (value: LedgerRangeState) => { setPreset("custom"); setRange(value); };
@@ -184,6 +215,7 @@ export default function LaporanPage() {
       await closeLedgerDayClient({ closingDate, openingCashIdr: openingCash ? Number(openingCash) : null, physicalCashIdr: physicalCash ? Number(physicalCash) : null, note: closingNote || null });
       setShowClosing(false);
       notifySuccess(`Kas ${dayLabel} sudah ditutup`, { description: "Transaksi tanggal itu sekarang terkunci dari pengubahan." });
+      setClosingDone(true);
       await loadReport();
     } catch (error) {
       notifyFromError(error, "Tutup kas belum berhasil.");
@@ -195,10 +227,10 @@ export default function LaporanPage() {
   return (
     <DashboardPage>
       <PageHeader
-        title="Buku kas & laporan"
-        description="Pahami uang masuk, biaya, dan selisih usaha dari catatan yang sudah Anda konfirmasi."
+        title={section.label}
+        description={section.description}
         icon={BarChart3}
-        actions={
+        actions={tab === "kas" && (
           <>
             <button type="button" onClick={() => setShowClosing(true)} disabled={closingDone} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-umkm-brand-line bg-umkm-brand-soft px-3 text-xs font-bold text-umkm-brand disabled:cursor-not-allowed disabled:opacity-50">
               <CalendarCheck size={14} aria-hidden /> {closingDone ? `Kas ${closingDayLabel(closingDate, new Date())} sudah ditutup` : "Tutup kas"}
@@ -207,23 +239,15 @@ export default function LaporanPage() {
               <Plus size={14} aria-hidden /> Catat transaksi
             </button>
           </>
-        }
+        )}
       />
 
       {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
 
-      <nav aria-label="Tampilan laporan" className="flex gap-1 overflow-x-auto rounded-xl border border-umkm-line bg-white p-1 shadow-[0_5px_18px_rgba(27,42,58,.04)]">
-        {([{ id: "month", label: "Bulan ini" }, { id: "contacts", label: "Utang piutang" }, { id: "cash", label: "Buku kas" }, { id: "bank", label: "Untuk bank" }] as const).map((item) => (
-          <button key={item.id} type="button" onClick={() => setTab(item.id)} aria-current={tab === item.id ? "page" : undefined} className={`min-h-11 flex-1 whitespace-nowrap rounded-lg px-2 text-xs font-bold transition-colors ${tab === item.id ? "bg-umkm-brand-soft text-umkm-brand shadow-sm" : "text-umkm-subtle hover:bg-umkm-surface-muted"}`}>
-            {item.label}
-          </button>
-        ))}
-      </nav>
-
-      {tab === "month" && <MonthlyTab month={jakartaDate().slice(0, 7)} onManageContacts={() => setTab("contacts")} />}
-      {tab === "contacts" && <ContactBalances sector={sector} businessName={businessName} onChanged={() => void loadReport()} />}
+      {tab === "bulan-ini" && <MonthlyTab month={jakartaDate().slice(0, 7)} onManageContacts={() => router.push("/umkm/laporan?tab=utang-piutang")} />}
+      {tab === "utang-piutang" && <ContactBalances sector={sector} businessName={businessName} onChanged={() => void loadReport()} />}
       {tab === "bank" && <BankReportCard onOpenCondition={() => router.push("/umkm/profil/kondisi-awal")} />}
-      {tab === "cash" && (
+      {tab === "kas" && (
         <CashBook
           report={report}
           loading={loading}

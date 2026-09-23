@@ -1,6 +1,6 @@
 import {
-  BarChart3, Bell, Building2, FileText, Home, Landmark, Map, Mic, Repeat,
-  ShieldCheck, Sparkles, Target, User, Wallet,
+  BarChart3, Bell, BookOpen, Building2, Calculator, CalendarDays, FileText, Home, Landmark, Map, Mic, Repeat,
+  ShieldCheck, Sparkles, Target, User, Users, Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -19,7 +19,7 @@ export const NAVIGATION: NavItem[] = [
   { label: "Beranda", href: "/umkm", Icon: Home },
   { label: "Profil", href: "/umkm/profil", Icon: User, matches: ["/umkm/profil"] },
   { label: "Catat", href: "/umkm/catat", Icon: Mic },
-  { label: "Laporan", href: "/umkm/laporan", Icon: FileText },
+  { label: "Laporan", href: "/umkm/laporan", Icon: FileText, matches: ["/umkm/laporan", "/umkm/akuntan"] },
   { label: "Perjalanan", href: "/umkm/perjalanan", Icon: Map, matches: ["/umkm/perjalanan", "/umkm/kesiapan"] },
   { label: "Panduan", href: "/umkm/panduan", Icon: Sparkles },
 ];
@@ -34,6 +34,39 @@ export const NAVIGATION: NavItem[] = [
  * pernah dibuang diam-diam).
  */
 export const CATAT_RESTART_EVENT = "berkembang:catat-baru";
+
+/**
+ * Isi menu Laporan.
+ *
+ * Laporan dulu satu halaman dengan empat tab di atasnya -- deretan kepala
+ * yang harus dilewati setiap kali, padahal pemilik biasanya datang untuk satu
+ * hal saja. Sekarang menu « Laporan » membuka pilihan ini lebih dulu, dan
+ * halamannya hanya menampilkan yang dipilih (`?tab=`).
+ *
+ * `tab` null berarti tujuan di luar halaman Laporan (`href` dipakai apa adanya).
+ */
+export type LaporanTab = "bulan-ini" | "utang-piutang" | "kas" | "bank";
+
+export type LaporanSection = {
+  tab: LaporanTab | null;
+  href: string;
+  label: string;
+  description: string;
+  Icon: LucideIcon;
+  tone: "brand" | "success" | "warning" | "neutral";
+};
+
+export const LAPORAN_SECTIONS: LaporanSection[] = [
+  { tab: "bulan-ini", href: "/umkm/laporan?tab=bulan-ini", label: "Bulan ini", description: "Untung rugi, pengingat, dan ringkasan bulan berjalan", Icon: CalendarDays, tone: "success" },
+  { tab: "kas", href: "/umkm/laporan?tab=kas", label: "Buku kas", description: "Setiap uang masuk dan keluar, tutup kas harian", Icon: BookOpen, tone: "brand" },
+  { tab: "utang-piutang", href: "/umkm/laporan?tab=utang-piutang", label: "Utang piutang", description: "Siapa yang belum bayar, dan ke siapa Anda berutang", Icon: Users, tone: "warning" },
+  { tab: "bank", href: "/umkm/laporan?tab=bank", label: "Untuk bank", description: "Laporan untuk pengajuan pinjaman", Icon: Landmark, tone: "brand" },
+  { tab: null, href: "/umkm/akuntan", label: "Mode akuntan", description: "Laporan lengkap untuk dibaca akuntan Anda", Icon: Calculator, tone: "neutral" },
+];
+
+export function laporanSectionFor(tab: string | null): LaporanSection {
+  return LAPORAN_SECTIONS.find((section) => section.tab !== null && section.tab === tab) ?? LAPORAN_SECTIONS[0];
+}
 
 export function isActivePath(pathname: string, item: NavItem) {
   if (item.href === "/umkm") return pathname === "/umkm";
@@ -73,7 +106,7 @@ const SCREENS: Array<{ path: string; exact?: boolean } & ScreenHeading> = [
   { path: "/umkm/profil", title: "Profil usaha", hint: "Kenali usaha Anda", Icon: Building2 },
   { path: "/umkm/catat/rutin", title: "Catatan rutin", hint: "Sewa, gaji, listrik, cicilan", parentHref: "/umkm/catat", parentLabel: "Catat", Icon: Repeat },
   { path: "/umkm/catat", title: "Catat transaksi", hint: "Uang masuk dan uang keluar", Icon: Mic },
-  { path: "/umkm/laporan", title: "Buku kas & laporan", hint: "Ringkasan uang usaha", Icon: BarChart3 },
+  { path: "/umkm/laporan", title: "Laporan", hint: "Ringkasan uang usaha", Icon: BarChart3 },
   { path: "/umkm/kesiapan/metodologi", title: "Cara kami menghitung", parentHref: "/umkm/perjalanan", parentLabel: "Perjalanan", Icon: Target },
   { path: "/umkm/perjalanan", title: "Perjalanan usaha", hint: "Langkah demi langkah", Icon: Map },
   { path: "/umkm/panduan", title: "Panduan usaha", hint: "Cara memakai dan jawaban singkat", Icon: Sparkles },

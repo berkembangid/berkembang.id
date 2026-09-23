@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Popover } from "@base-ui/react/popover";
 import {
   ArrowDownLeft, ArrowLeft, ArrowUpRight, Bell, Building2, CheckCircle2,
@@ -17,7 +17,7 @@ import {
 import { WelcomeTour } from "@/components/warung/WelcomeTour";
 import { notificationTypeLabels, type NotificationState } from "@/modules/consent/notification-center";
 import { umkmNotificationTarget } from "./umkm-notifications";
-import { resolveHeading } from "./umkm-navigation";
+import { laporanSectionFor, resolveHeading, type ScreenHeading } from "./umkm-navigation";
 import styles from "./umkm-shell.module.css";
 
 export type TransactionNotice = {
@@ -69,6 +69,29 @@ function initials(name: string) {
  *    padanannya sama sekali: mencatat harus dicari di menu samping, sederajat
  *    dengan "Panduan". Sekarang ia tombol tetap di header.
  */
+/**
+ * Nama layar, dengan satu pengecualian: Laporan menampilkan bagian yang
+ * dibuka (« Buku kas », « Utang piutang »). Bagiannya dipilih lewat `?tab=`,
+ * dan di ponsel judul halaman disembunyikan -- tanpa ini header hanya
+ * berkata « Laporan » untuk kelima bagian.
+ *
+ * `useSearchParams` dibungkus `<Suspense>` sendiri supaya layar lain tetap
+ * dipra-render; cadangannya judul biasa.
+ */
+function ScreenTitle({ heading, pathname }: { heading: ScreenHeading; pathname: string }) {
+  return (
+    <Suspense fallback={heading.title}>
+      <ScreenTitleFromQuery heading={heading} pathname={pathname} />
+    </Suspense>
+  );
+}
+
+function ScreenTitleFromQuery({ heading, pathname }: { heading: ScreenHeading; pathname: string }) {
+  const params = useSearchParams();
+  if (pathname !== "/umkm/laporan") return heading.title;
+  return laporanSectionFor(params.get("tab")).label;
+}
+
 export default function UmkmHeader({
   userName, businessName, notices, accountNotices, unread, onNoticesSeen, onSignOut,
 }: HeaderProps) {
@@ -96,7 +119,7 @@ export default function UmkmHeader({
             </p>
             <p className="mt-0.5 flex items-center gap-2 truncate text-sm font-bold text-umkm-ink">
               <heading.Icon size={15} className="shrink-0 text-umkm-brand" />
-              {heading.title}
+              <ScreenTitle heading={heading} pathname={pathname} />
             </p>
           </div>
         </div>
@@ -148,7 +171,7 @@ export default function UmkmHeader({
               <ArrowLeft size={19} />
             </Link>
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-umkm-ink">{heading.title}</p>
+              <p className="truncate text-sm font-bold text-umkm-ink"><ScreenTitle heading={heading} pathname={pathname} /></p>
               {heading.hint && <p className="truncate text-xs text-umkm-subtle">{heading.hint}</p>}
             </div>
           </div>

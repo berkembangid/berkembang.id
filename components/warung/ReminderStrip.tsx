@@ -111,7 +111,7 @@ export function reminderHref(kind: ReminderKind, dueDate?: string): string {
   if (kind === "DOKUMEN_KEDALUWARSA") return "/umkm/profil/dokumen";
   if (kind === "CATATAN_RUTIN") return "/umkm/catat/rutin";
   return kind === "TUTUP_KAS" && dueDate
-    ? `/umkm/laporan?tutup-kas=${dueDate}`
+    ? `/umkm/laporan?tab=kas&tutup-kas=${dueDate}`
     : "/umkm/laporan";
 }
 
