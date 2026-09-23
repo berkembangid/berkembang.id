@@ -17,8 +17,8 @@ export function PageHeader({
       <div className="flex min-w-0 items-start gap-3">
         {icon && <IconBadge icon={icon} className="mt-0.5" />}
         <div>
-          <h1 data-page-title className="text-xl font-semibold tracking-[-0.025em] text-[#1b2a3a] md:text-2xl">{title}</h1>
-          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-[#6e859e] md:text-sm">{description}</p>
+          <h1 data-page-title className="text-xl font-semibold tracking-[-0.025em] text-umkm-ink md:text-2xl">{title}</h1>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-umkm-subtle md:text-sm">{description}</p>
         </div>
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

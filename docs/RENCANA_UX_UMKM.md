@@ -5,6 +5,35 @@ komponen dan modul yang dipakainya. Urutan fase mengikuti dampak: angka salah
 dan risiko data tertimpa lebih dulu, lalu fondasi tampilan, lalu perbaikan per
 layar, lalu fitur baru.
 
+## Status akhir (23 September 2026, cabang `ux-umkm`)
+
+Semua fase dikerjakan. Ringkasan per commit ada di riwayat git; yang perlu
+diketahui sebelum digabung:
+
+**Wajib sebelum rilis**
+
+- Migrasi baru **0107–0110** belum diterapkan ke demo maupun produksi.
+  Semuanya lulus `npm run db:test` dan uji asap per fungsi di PostgreSQL
+  lokal. Tanpa migrasinya: layar Izin (program & riwayat akses), masa
+  berlaku dokumen, Utang piutang, dan Catatan rutin menampilkan galat; laporan
+  bulanan dan pengingat tetap berjalan (bagian barunya kosong).
+- Tampilan belum diperiksa dengan sesi UMKM sungguhan. Layar baru diperiksa
+  lewat Playwright dengan API tiruan; kenaikan ukuran huruf di Fase 1 belum
+  dilihat per layar dengan data asli.
+
+**Sengaja belum / di luar kode**
+
+- Foto nota aktif bawaan (#9) adalah sakelar `capture_camera` di Ruang Mesin,
+  keputusan operasional setelah akurasi OCR dinilai -- bukan perubahan kode.
+- Service worker untuk membuka aplikasi tanpa sinyal belum dibuat; yang
+  dibuat adalah antrean kirim ulang rekaman/foto (#7).
+- Asisten AI di Panduan tidak dibuat; yang dibuat FAQ yang bisa dicari.
+- Layar Catat masih ±1.200 baris: rekam, periksa, dan fungsi murni sudah
+  dipisah, tetapi mesin keadaannya masih satu komponen.
+- Daftar dokumen yang diarsipkan belum punya layar.
+- Utang piutang dihitung dari nama pihak lawan; nama yang ditulis berbeda
+  (« Bu Sari » vs « Sari ») terhitung dua orang.
+
 ## Fase 0 — Bug yang terlihat pengguna
 
 | # | Masalah | Lokasi |

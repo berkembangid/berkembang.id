@@ -196,6 +196,12 @@
   --umkm-scrim: rgb(2 6 23 / 0.5);
 }
 
+/* Kotak konfirmasi dirender di luar cangkang UMKM; ia membaca warna ini. */
+body[data-portal="umkm"] {
+  --confirm-accent: var(--umkm-brand);
+  --confirm-danger: var(--umkm-danger);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

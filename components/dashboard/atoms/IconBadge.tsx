@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 type Tone = "brand" | "success" | "attention" | "neutral";
 
 const tones: Record<Tone, string> = {
-  brand: "bg-[#eef8fd] text-[#0f73a3]",
-  success: "bg-[#edfbf5] text-[#0b7a55]",
-  attention: "bg-[#fff4dc] text-[#8a5300]",
-  neutral: "bg-[#f3f6f9] text-[#4a6280]",
+  brand: "bg-umkm-brand-soft text-umkm-brand-hover",
+  success: "bg-umkm-success-soft text-umkm-success",
+  attention: "bg-umkm-warning-soft text-[#8a5300]",
+  neutral: "bg-umkm-surface-muted text-umkm-muted",
 };
 
 export function IconBadge({ icon: Icon, tone = "brand", className }: { icon: LucideIcon; tone?: Tone; className?: string }) {

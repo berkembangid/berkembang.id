@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 type Tone = "success" | "info" | "attention" | "error";
 
 const presentation = {
-  success: { Icon: CheckCircle2, className: "border-[#a9ebd0] bg-[#edfbf5] text-[#0a5c42]" },
-  info: { Icon: Info, className: "border-[#addcf4] bg-[#eef8fd] text-[#0a4763]" },
-  attention: { Icon: TriangleAlert, className: "border-[#f5c453] bg-[#fff4dc] text-[#5c3700]" },
-  error: { Icon: AlertCircle, className: "border-[#f4b0a8] bg-[#feecea] text-[#8a1c12]" },
+  success: { Icon: CheckCircle2, className: "border-umkm-success-line bg-umkm-success-soft text-umkm-success" },
+  info: { Icon: Info, className: "border-umkm-brand-line bg-umkm-brand-soft text-umkm-brand-deep" },
+  attention: { Icon: TriangleAlert, className: "border-[#f5c453] bg-umkm-warning-soft text-umkm-warning-strong" },
+  error: { Icon: AlertCircle, className: "border-umkm-danger-line bg-umkm-danger-soft text-umkm-danger-strong" },
 } satisfies Record<Tone, { Icon: typeof Info; className: string }>;
 
 export function FeedbackBanner({ children, tone = "info", title, className, live = false }: { children: React.ReactNode; tone?: Tone; title?: string; className?: string; live?: boolean }) {

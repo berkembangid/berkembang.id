@@ -66,6 +66,13 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
   // Dimuat ulang setiap pindah layar, supaya yang baru ikut terbaca.
   const accountNotices = useNotifications(pathname);
 
+  // Dialog dan toast dipasang di body, di luar cangkang ini. Penanda di body
+  // membuat kotak konfirmasi memakai warna UMKM, bukan nila portal lain.
+  useEffect(() => {
+    document.body.dataset.portal = "umkm";
+    return () => { delete document.body.dataset.portal; };
+  }, []);
+
   useEffect(() => {
     // Ditunda satu tick, pola yang sama dengan pemuatan lain di aplikasi ini:
     // penyimpanan peramban tidak ada di server, jadi pembacaannya harus

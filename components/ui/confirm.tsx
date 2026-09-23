@@ -168,13 +168,21 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               >
                 {pending.options.cancelLabel ?? "Batal"}
               </Button>
+              {/*
+                Warna tombol dibaca dari --confirm-accent / --confirm-danger.
+                Kotak ini dipasang di luar cangkang portal (portal ke body), jadi
+                tidak mewarisi palet UMKM; portal UMKM mengisi kedua variabel
+                itu lewat body[data-portal="umkm"] di globals.css. Portal lain
+                tetap memakai warna lamanya.
+              */}
               <Button
-                variant={tone === "danger" ? "default" : "default"}
+                variant="default"
                 disabled={reasonTooShort}
                 className={cn(
                   "min-h-11 flex-1 rounded-xl text-sm font-bold sm:flex-none sm:px-5 transition-all duration-150 cursor-pointer",
-                  tone === "danger" &&
-                    "!bg-red-600 !text-white hover:!bg-red-700 active:!bg-red-800 active:scale-[0.98] focus-visible:ring-red-400 shadow-sm shadow-red-200"
+                  tone === "danger"
+                    ? "!bg-[var(--confirm-danger,#dc2626)] !text-white hover:!brightness-95 active:scale-[0.98] shadow-sm"
+                    : "!bg-[var(--confirm-accent,var(--primary))] hover:!brightness-110"
                 )}
                 onClick={() => {
                   setTouched(true)
