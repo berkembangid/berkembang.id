@@ -7,14 +7,11 @@ import { LegalitySummary } from "@/components/warung/LegalitySummary";
 import { BusinessAccountSummary } from "@/components/warung/BusinessAccountSummary";
 import Image from "next/image";
 import { useState, useEffect, useId } from "react";
-import { User, Mail, Building2, Phone, Save, FileText, Camera, LogOut, ChevronRight } from "lucide-react";
+import { User, Mail, Building2, Phone, Save, FileText, Camera, ChevronRight, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
-import OwnerConsentPanel from "@/modules/consent/owner-consent-panel";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
-import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure, notifySuccess, notifyWarning } from "@/lib/notify";
-import { DinasAffiliationCard } from "@/components/warung/DinasAffiliationCard";
 import { WelcomeTour } from "@/components/warung/WelcomeTour";
 
 /**
@@ -127,7 +124,6 @@ function ChipGroup<T extends string>({
 
 export default function ProfilPage() {
   const [saving, setSaving] = useState(false);
-  const { confirm } = useConfirm();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewAvatar, setPreviewAvatar] = useState<string | null>(null);
   const [deletionScheduledFor, setDeletionScheduledFor] = useState<string | null>(null);
@@ -321,23 +317,6 @@ export default function ProfilPage() {
     }
   };
 
-  const handleSignOut = async () => {
-    const yes = await confirm({
-      title: "Keluar dari akun?",
-      description: "Catatan yang sudah dikonfirmasi tetap tersimpan. Draf yang belum dikonfirmasi akan hilang, dan Anda perlu masuk lagi untuk membukanya.",
-      confirmLabel: "Keluar",
-      cancelLabel: "Tetap di sini",
-      tone: "danger",
-    });
-    if (!yes) return;
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.warn("Sign out warning:", e);
-    }
-    window.location.href = "/auth/login";
-  };
-
   const initials = (form.namaUsaha || form.namaPemilik || "U").charAt(0).toUpperCase();
 
   return (
@@ -356,23 +335,7 @@ export default function ProfilPage() {
           title="Profil usaha"
           description="Informasi usaha Anda — lengkapi agar dokumen dan laporan mudah dikenali. Foto izin boleh diunggah nanti."
           icon={Building2}
-          actions={
-            <button
-              onClick={handleSignOut}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-line-strong bg-white px-4 text-xs font-bold text-umkm-muted hover:bg-umkm-surface-muted transition-colors"
-            >
-              <LogOut size={14} /> Keluar
-            </button>
-          }
         />
-
-        {/*
-          Di atas formulir, bukan di dalamnya. Ini bukan bidang yang ikut
-          tersimpan bersama profil — ia izin tersendiri yang berlaku begitu
-          ditekan, dan menaruhnya di dalam formulir akan membuat orang
-          mengira ia baru berlaku setelah "Simpan profil".
-        */}
-        <DinasAffiliationCard />
 
         {loadState === "failed" && (
           <FeedbackBanner tone="error" title="Profil belum dapat dimuat">
@@ -599,7 +562,22 @@ export default function ProfilPage() {
               Catatan usaha ini milik Anda. Anda boleh membawanya pergi kapan saja.
             </p>
           </div>
-          <OwnerConsentPanel />
+          {/* Izin lembaga, program, dan dinas pembina pindah ke tab sendiri:
+              dulu tersebar di puncak dan dasar halaman ini, di bawah tombol
+              Simpan, dan tidak pernah terbaca sebagai satu hal. */}
+          <Link
+            href="/umkm/profil/izin"
+            className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-umkm-line bg-white p-4 hover:bg-umkm-surface"
+          >
+            <span className="flex items-center gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-umkm-brand-soft text-umkm-brand"><ShieldCheck size={17} aria-hidden /></span>
+              <span>
+                <span className="block text-sm font-bold text-umkm-ink">Izin & program</span>
+                <span className="block text-xs text-umkm-subtle">Siapa yang bisa melihat data usaha Anda, dan cara mencabutnya.</span>
+              </span>
+            </span>
+            <ChevronRight size={16} aria-hidden className="shrink-0 text-umkm-subtle" />
+          </Link>
           <AccountDataPanel scheduledFor={deletionScheduledFor} />
         </section>
       </DashboardPage>

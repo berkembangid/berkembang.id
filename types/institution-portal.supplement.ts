@@ -54,6 +54,20 @@ export type InstitutionPortalSupplement = {
       };
     };
     Functions: {
+      /** 0107 -- program yang diikuti pemilik, dan jalan keluarnya. */
+      list_my_programs: {
+        Args: Record<string, never>;
+        Returns: import("@/types/database.generated").Json;
+      };
+      leave_program: {
+        Args: { p_program_id: string };
+        Returns: import("@/types/database.generated").Json;
+      };
+      /** 0107 -- riwayat akses lembaga beserta nama lembaganya. */
+      list_my_access_log: {
+        Args: { p_limit?: number };
+        Returns: import("@/types/database.generated").Json;
+      };
       /** 0106 -- catatan pribadi pada kandidat tersimpan. */
       list_my_shortlist_notes: {
         Args: { p_institution_id?: string };

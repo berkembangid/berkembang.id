@@ -22,6 +22,7 @@ export const notificationTypeLabels: Record<string, string> = {
   dossier_pdf_download: "Unduhan PDF",
   consent_review: "Perlu tinjauan",
   consent_notice: "Ketertarikan",
+  dinas_broadcast: "Pendampingan",
 };
 
 /**
@@ -134,8 +135,18 @@ function timeAgo(value: string) {
  * paling sering terjadi: tautan diikuti, tandanya tidak pernah ditekan, dan
  * angka di lonceng tidak pernah turun.
  */
-export function NotificationList({ state, portalBase, onNavigate }: {
+export type NotificationTarget = { href: string; label: string };
+
+function defaultTarget(item: PortalNotification, portalBase: string): NotificationTarget | null {
+  const href = notificationTarget(item, portalBase);
+  return href ? { href, label: href.includes("/dosir") ? "Buka dosir" : "Buka permintaan" } : null;
+}
+
+export function NotificationList({ state, portalBase, onNavigate, resolveTarget, emptyHint }: {
   state: NotificationState; portalBase: string; onNavigate?: () => void;
+  /** Tujuan per portal. Pemilik usaha tidak punya halaman dosir atau permintaan. */
+  resolveTarget?: (item: PortalNotification) => NotificationTarget | null;
+  emptyHint?: string;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"all" | "unread">("all");
@@ -144,10 +155,10 @@ export function NotificationList({ state, portalBase, onNavigate }: {
 
   function activate(item: PortalNotification) {
     if (item.status === "unread") void markRead(item.id);
-    const target = notificationTarget(item, portalBase);
+    const target = (resolveTarget ?? ((entry: PortalNotification) => defaultTarget(entry, portalBase)))(item);
     if (target) {
       onNavigate?.();
-      router.push(target);
+      router.push(target.href);
     }
   }
 
@@ -167,11 +178,11 @@ export function NotificationList({ state, portalBase, onNavigate }: {
         : visible.length === 0 ? <div className="flex flex-col items-center px-6 py-14 text-center">
           <span className="grid size-12 place-items-center rounded-2xl bg-[#eef8fd] text-[#0f73a3]"><Bell size={20} /></span>
           <p className="mt-3 text-sm font-bold text-[#1b2a3a]">{tab === "unread" ? "Semua sudah dibaca" : "Belum ada pemberitahuan"}</p>
-          <p className="mt-1 max-w-xs text-xs leading-relaxed text-[#6e859e]">Keputusan akses, masa izin yang berakhir, dan unduhan PDF muncul di sini.</p>
+          <p className="mt-1 max-w-xs text-xs leading-relaxed text-[#6e859e]">{emptyHint ?? "Keputusan akses, masa izin yang berakhir, dan unduhan PDF muncul di sini."}</p>
         </div>
         : <ul className="divide-y divide-[#eef2f6]">{visible.map((item) => {
           const isUnread = item.status === "unread";
-          const target = notificationTarget(item, portalBase);
+          const target = (resolveTarget ?? ((entry: PortalNotification) => defaultTarget(entry, portalBase)))(item);
           const label = (item.notification_type && notificationTypeLabels[item.notification_type]) ?? "Pemberitahuan";
           return <li key={item.id} className={`group relative flex gap-3 px-5 py-4 transition-colors hover:bg-[#f8fafc] ${isUnread ? "bg-[#f2f9fd]" : ""}`}>
             <span className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl ${isUnread ? "bg-[#0b5f86] text-white" : "bg-[#f3f6f9] text-[#8aa0b6]"}`}><Bell size={15} /></span>
@@ -182,7 +193,7 @@ export function NotificationList({ state, portalBase, onNavigate }: {
               </span>
               <span className={`mt-0.5 block text-sm ${isUnread ? "font-bold text-[#1b2a3a]" : "font-semibold text-[#34496a]"}`}>{item.title}</span>
               <span className="mt-0.5 block text-xs leading-relaxed text-[#6e859e]">{item.body}</span>
-              {target && <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-bold text-[#0b5f86]">Buka {target.includes("/dosir") ? "dosir" : "permintaan"}<ArrowRight size={12} /></span>}
+              {target && <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-bold text-[#0b5f86]">{target.label}<ArrowRight size={12} /></span>}
             </button>
             {isUnread && <button type="button" aria-label="Tandai sudah dibaca" title="Tandai sudah dibaca" onClick={() => void markRead(item.id)} className="relative z-10 grid size-9 shrink-0 place-items-center self-start rounded-lg text-[#0b5f86] opacity-70 hover:bg-white hover:opacity-100"><CheckCheck size={15} /></button>}
           </li>;

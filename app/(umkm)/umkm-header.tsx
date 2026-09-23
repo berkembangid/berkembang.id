@@ -3,11 +3,11 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Popover } from "@base-ui/react/popover";
 import {
   ArrowDownLeft, ArrowLeft, ArrowUpRight, Bell, Building2, CheckCircle2,
-  FileText, LifeBuoy, LogOut, Mic, Sparkles, Wallet, X,
+  FileText, Landmark, LifeBuoy, LogOut, Mic, ShieldCheck, Sparkles, Wallet, X,
 } from "lucide-react";
 
 import {
@@ -15,6 +15,8 @@ import {
   DropdownMenuLinkItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { WelcomeTour } from "@/components/warung/WelcomeTour";
+import { notificationTypeLabels, type NotificationState } from "@/modules/consent/notification-center";
+import { umkmNotificationTarget } from "./umkm-notifications";
 import { resolveHeading } from "./umkm-navigation";
 import styles from "./umkm-shell.module.css";
 
@@ -35,6 +37,7 @@ type HeaderProps = {
   userName: string;
   businessName: string;
   notices: TransactionNotice[];
+  accountNotices: NotificationState;
   unread: number;
   onNoticesSeen: () => void;
   onSignOut: () => void;
@@ -67,7 +70,7 @@ function initials(name: string) {
  *    dengan "Panduan". Sekarang ia tombol tetap di header.
  */
 export default function UmkmHeader({
-  userName, businessName, notices, unread, onNoticesSeen, onSignOut,
+  userName, businessName, notices, accountNotices, unread, onNoticesSeen, onSignOut,
 }: HeaderProps) {
   const pathname = usePathname();
   const heading = resolveHeading(pathname);
@@ -110,7 +113,7 @@ export default function UmkmHeader({
           <Link href="/umkm/panduan" aria-label="Buka panduan usaha" className={`${styles.iconButton} border border-umkm-line text-umkm-muted`}>
             <Sparkles size={16} />
           </Link>
-          <NotificationBell notices={notices} unread={unread} onOpened={onNoticesSeen} />
+          <NotificationBell notices={notices} account={accountNotices} unread={unread} onOpened={onNoticesSeen} />
           <AccountMenu userName={userName} businessName={businessName} onSignOut={onSignOut}>
             <button
               type="button"
@@ -153,7 +156,7 @@ export default function UmkmHeader({
 
         <div className={styles.mobileActions}>
           <Link href="/umkm/panduan" aria-label="Buka panduan usaha" className={styles.iconButton}><Sparkles size={17} /></Link>
-          <NotificationBell notices={notices} unread={unread} onOpened={onNoticesSeen} compact />
+          <NotificationBell notices={notices} account={accountNotices} unread={unread} onOpened={onNoticesSeen} compact />
           <AccountMenu userName={userName} businessName={businessName} onSignOut={onSignOut}>
             <button
               type="button"
@@ -183,18 +186,27 @@ export default function UmkmHeader({
  * penanganan papan tik yang dulu ditulis khusus untuk satu panel ini saja.
  */
 function NotificationBell({
-  notices, unread, onOpened, compact = false,
-}: { notices: TransactionNotice[]; unread: number; onOpened: () => void; compact?: boolean }) {
+  notices, account, unread, onOpened, compact = false,
+}: { notices: TransactionNotice[]; account: NotificationState; unread: number; onOpened: () => void; compact?: boolean }) {
+  const router = useRouter();
+  // Lencana menjumlahkan dua sumber: transaksi baru (ditandai di peramban)
+  // dan pemberitahuan akun yang belum dibaca (ditandai di server).
+  const total = unread + account.unread;
+  // Yang belum dibaca lebih dulu; empat saja -- sisanya di halaman penuh.
+  const accountItems = [...account.items]
+    .sort((a, b) => Number(b.status === "unread") - Number(a.status === "unread"))
+    .slice(0, 4);
+
   return (
     <Popover.Root onOpenChange={(open) => { if (open) onOpened(); }}>
       <Popover.Trigger
-        aria-label={unread ? `Buka pemberitahuan, ${unread} baru` : "Buka pemberitahuan"}
+        aria-label={total ? `Buka pemberitahuan, ${total} baru` : "Buka pemberitahuan"}
         className={`${styles.iconButton} ${compact ? "" : "border border-umkm-line text-umkm-muted"}`}
       >
         <Bell size={17} />
-        {unread > 0 && (
+        {total > 0 && (
           <span aria-hidden className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-[#f5c453] px-1 text-xs font-black text-umkm-warning-strong">
-            {unread > 9 ? "9+" : unread}
+            {total > 9 ? "9+" : total}
           </span>
         )}
       </Popover.Trigger>
@@ -211,38 +223,71 @@ function NotificationBell({
           >
             <div className="flex items-center justify-between border-b border-umkm-line-soft pb-3">
               <div>
-                <Popover.Title className="text-sm font-bold text-umkm-ink">Pemberitahuan terbaru</Popover.Title>
-                <Popover.Description className="mt-0.5 text-xs text-umkm-subtle">Berdasarkan catatan usaha Anda</Popover.Description>
+                <Popover.Title className="text-sm font-bold text-umkm-ink">Pemberitahuan</Popover.Title>
+                <Popover.Description className="mt-0.5 text-xs text-umkm-subtle">Izin data, tawaran dinas, dan catatan terbaru</Popover.Description>
               </div>
-              <Popover.Close aria-label="Tutup pemberitahuan" className="grid h-10 w-10 place-items-center rounded-xl text-umkm-subtle hover:bg-umkm-surface-muted">
+              <Popover.Close aria-label="Tutup pemberitahuan" className="grid size-11 place-items-center rounded-xl text-umkm-subtle hover:bg-umkm-surface-muted">
                 <X size={17} />
               </Popover.Close>
             </div>
 
-            <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">
-              {notices.length === 0 ? (
-                <div className="py-8 text-center">
-                  <CheckCircle2 className="mx-auto text-[#0fa974]" />
-                  <p className="mt-2 text-xs font-bold text-umkm-ink-soft">Belum ada pemberitahuan</p>
-                  <p className="mt-1 text-xs text-umkm-subtle">Catatan transaksi Anda akan muncul di sini.</p>
-                </div>
-              ) : (
-                notices.map((notice) => {
-                  const income = noticeDirection(notice) === "income";
-                  const value = Number(notice.amount_idr ?? notice.nominal ?? 0);
-                  return (
-                    <div key={notice.id} className="flex items-center gap-3 rounded-xl border border-umkm-line-soft bg-umkm-surface p-3">
-                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${income ? "bg-umkm-success-soft text-umkm-success" : "bg-umkm-surface-muted text-umkm-muted"}`}>
-                        {income ? <ArrowDownLeft size={15} /> : <ArrowUpRight size={15} />}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-bold tabular-nums text-umkm-ink">{income ? "+" : "−"}Rp{value.toLocaleString("id-ID")}</p>
-                        <p className="truncate text-xs text-umkm-subtle">{notice.item}</p>
-                      </div>
-                    </div>
-                  );
-                })
+            <div className="mt-3 max-h-96 space-y-4 overflow-y-auto">
+              {accountItems.length > 0 && (
+                <section aria-label="Untuk Anda">
+                  <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-umkm-subtle">Untuk Anda</h3>
+                  <ul className="space-y-2">
+                    {accountItems.map((item) => {
+                      const target = umkmNotificationTarget(item);
+                      const isUnread = item.status === "unread";
+                      const label = (item.notification_type && notificationTypeLabels[item.notification_type]) ?? "Pemberitahuan";
+                      return (
+                        <li key={item.id}>
+                          <Popover.Close
+                            onClick={() => {
+                              if (isUnread) void account.markRead(item.id);
+                              if (target) router.push(target.href);
+                            }}
+                            className={`block w-full rounded-xl border p-3 text-left ${isUnread ? "border-umkm-brand-line bg-umkm-brand-soft" : "border-umkm-line-soft bg-umkm-surface"}`}
+                          >
+                            <span className="text-[11px] font-bold uppercase tracking-wide text-umkm-brand">{label}{isUnread ? " · baru" : ""}</span>
+                            <span className={`mt-0.5 block text-xs ${isUnread ? "font-bold text-umkm-ink" : "font-semibold text-umkm-ink-soft"}`}>{item.title}</span>
+                            <span className="mt-0.5 line-clamp-2 block text-xs text-umkm-subtle">{item.body}</span>
+                          </Popover.Close>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
               )}
+
+              <section aria-label="Catatan terbaru">
+                <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-umkm-subtle">Catatan terbaru</h3>
+                {notices.length === 0 ? (
+                  <div className="py-6 text-center">
+                    <CheckCircle2 className="mx-auto text-umkm-success" aria-hidden />
+                    <p className="mt-2 text-xs font-bold text-umkm-ink-soft">Belum ada catatan</p>
+                    <p className="mt-1 text-xs text-umkm-subtle">Catatan transaksi Anda akan muncul di sini.</p>
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {notices.slice(0, 4).map((notice) => {
+                      const income = noticeDirection(notice) === "income";
+                      const value = Number(notice.amount_idr ?? notice.nominal ?? 0);
+                      return (
+                        <li key={notice.id} className="flex items-center gap-3 rounded-xl border border-umkm-line-soft bg-umkm-surface p-3">
+                          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${income ? "bg-umkm-success-soft text-umkm-success" : "bg-umkm-surface-muted text-umkm-muted"}`}>
+                            {income ? <ArrowDownLeft size={15} aria-hidden /> : <ArrowUpRight size={15} aria-hidden />}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold tabular-nums text-umkm-ink">{income ? "+" : "−"}Rp{value.toLocaleString("id-ID")}</p>
+                            <p className="truncate text-xs text-umkm-subtle">{notice.item}</p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -253,10 +298,10 @@ function NotificationBell({
                 Lihat semua
               </Popover.Close>
               <Popover.Close
-                render={<Link href="/umkm/laporan" />}
+                render={<Link href="/umkm/laporan?tab=kas" />}
                 className="flex min-h-11 items-center justify-center rounded-xl bg-umkm-brand text-xs font-bold text-white"
               >
-                Buka laporan
+                Buka buku kas
               </Popover.Close>
             </div>
           </Popover.Popup>
@@ -313,6 +358,8 @@ function AccountMenu({
           <DropdownMenuLinkItem render={<Link href="/umkm/profil" />}><Building2 />Informasi usaha</DropdownMenuLinkItem>
           <DropdownMenuLinkItem render={<Link href="/umkm/profil/dokumen" />}><FileText />Dokumen usaha</DropdownMenuLinkItem>
           <DropdownMenuLinkItem render={<Link href="/umkm/profil/kondisi-awal" />}><Wallet />Kondisi awal</DropdownMenuLinkItem>
+          <DropdownMenuLinkItem render={<Link href="/umkm/profil/rekening" />}><Landmark />Rekening usaha</DropdownMenuLinkItem>
+          <DropdownMenuLinkItem render={<Link href="/umkm/profil/izin" />}><ShieldCheck />Izin & program</DropdownMenuLinkItem>
           <DropdownMenuSeparator />
           {/*
             Ditaruh di menu akun, bukan di satu halaman. Komponen ini dipakai

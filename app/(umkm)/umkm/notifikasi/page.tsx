@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import { NotificationList } from "@/modules/consent/notification-center";
+import { UMKM_NOTIFICATION_EMPTY_HINT, umkmNotificationTarget, useUmkmNotifications } from "../../umkm-notifications";
 import { ArrowDownLeft, ArrowUpRight, Bell, Receipt } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { DashboardPage, EmptyState, FeedbackBanner, PageHeader } from "@/components/dashboard";
@@ -39,6 +40,10 @@ function formatWhen(row: TransactionRow) {
 }
 
 export default function NotifikasiPage() {
+  const account = useUmkmNotifications();
+  // Pemberitahuan akun lebih dulu: di sanalah keputusan yang perlu ditindak
+  // (izin, undangan). Transaksi hanya gema dari yang pemilik catat sendiri.
+  const [tab, setTab] = useState<"akun" | "transaksi">("akun");
   const [rows, setRows] = useState<TransactionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -81,12 +86,41 @@ export default function NotifikasiPage() {
   return (
     <DashboardPage width="compact">
       <PageHeader
-        title="Pemberitahuan transaksi"
-        description={`${LIMIT} catatan terakhir yang sudah dikonfirmasi. Riwayat lengkap ada di Buku Kas.`}
+        title="Pemberitahuan"
+        description="Kabar soal izin data dan tawaran dinas, serta catatan transaksi terbaru."
         icon={Bell}
-        actions={<Link href="/umkm/laporan" className="inline-flex min-h-11 items-center rounded-lg border border-umkm-line px-3 text-xs font-bold text-umkm-ink-soft hover:bg-umkm-surface">Buka buku kas</Link>}
+        actions={account.unread > 0 && tab === "akun" ? (
+          <button type="button" onClick={() => void account.markAll()} className="inline-flex min-h-11 items-center rounded-lg border border-umkm-line px-3 text-xs font-bold text-umkm-ink-soft hover:bg-umkm-surface">
+            Tandai semua dibaca
+          </button>
+        ) : undefined}
       />
-      {errorMessage ? (
+
+      <div role="tablist" aria-label="Jenis pemberitahuan" className="flex gap-1 rounded-full border border-umkm-line bg-umkm-surface p-1">
+        {([["akun", `Untuk Anda${account.unread ? ` (${account.unread})` : ""}`], ["transaksi", "Catatan transaksi"]] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`min-h-11 flex-1 rounded-full px-3 text-xs font-bold ${tab === key ? "bg-white text-umkm-brand shadow-sm" : "text-umkm-subtle hover:text-umkm-ink"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "akun" ? (
+        <div className="overflow-hidden rounded-2xl border border-umkm-line bg-white pt-3">
+          <NotificationList
+            state={account}
+            portalBase="/umkm"
+            resolveTarget={umkmNotificationTarget}
+            emptyHint={UMKM_NOTIFICATION_EMPTY_HINT}
+          />
+        </div>
+      ) : errorMessage ? (
         <FeedbackBanner tone="error">{errorMessage}</FeedbackBanner>
       ) : loading ? (
         <p role="status" aria-live="polite" className="py-8 text-center text-xs text-umkm-subtle">Menyiapkan pemberitahuan...</p>

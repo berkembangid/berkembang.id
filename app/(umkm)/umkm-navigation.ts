@@ -1,6 +1,6 @@
 import {
   BarChart3, Bell, Building2, FileText, Home, Landmark, Map, Mic, Receipt,
-  Sparkles, Target, User, Wallet,
+  ShieldCheck, Sparkles, Target, User, Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -17,7 +17,7 @@ export type NavItem = { label: string; href: string; Icon: LucideIcon; matches?:
  */
 export const NAVIGATION: NavItem[] = [
   { label: "Beranda", href: "/umkm", Icon: Home },
-  { label: "Profil", href: "/umkm/profil", Icon: User, matches: ["/umkm/profil", "/umkm/profil/dokumen"] },
+  { label: "Profil", href: "/umkm/profil", Icon: User, matches: ["/umkm/profil"] },
   { label: "Catat", href: "/umkm/catat", Icon: Mic },
   { label: "Laporan", href: "/umkm/laporan", Icon: FileText },
   { label: "Perjalanan", href: "/umkm/perjalanan", Icon: Map, matches: ["/umkm/perjalanan", "/umkm/kesiapan"] },
@@ -69,6 +69,7 @@ const SCREENS: Array<{ path: string; exact?: boolean } & ScreenHeading> = [
   { path: "/umkm/profil/dokumen", title: "Dokumen usaha", hint: "Simpan berkas legalitas usaha", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: FileText },
   { path: "/umkm/profil/kondisi-awal", title: "Kondisi awal keuangan", hint: "Titik mulai pembukuan usaha", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: Wallet },
   { path: "/umkm/profil/rekening", title: "Rekening usaha", hint: "Pisahkan uang usaha dari uang rumah", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: Landmark },
+  { path: "/umkm/profil/izin", title: "Izin & program", hint: "Siapa yang bisa melihat data usaha", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: ShieldCheck },
   { path: "/umkm/profil", title: "Profil usaha", hint: "Kenali usaha Anda", Icon: Building2 },
   { path: "/umkm/catat", title: "Catat transaksi", hint: "Uang masuk dan uang keluar", Icon: Mic },
   { path: "/umkm/laporan", title: "Buku kas & laporan", hint: "Ringkasan uang usaha", Icon: BarChart3 },

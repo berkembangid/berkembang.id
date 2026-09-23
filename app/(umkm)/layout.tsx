@@ -8,7 +8,9 @@ import { LogOut } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure, notifyInfo } from "@/lib/notify";
+import { useNotifications } from "@/modules/consent/notification-center";
 import UmkmHeader, { type TransactionNotice } from "./umkm-header";
+import { UmkmNotificationsContext } from "./umkm-notifications";
 import { CATAT_RESTART_EVENT, NAVIGATION, isActivePath } from "./umkm-navigation";
 import styles from "./umkm-shell.module.css";
 
@@ -60,6 +62,9 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
   const [userName, setUserName] = useState("Pengguna");
   const [businessName, setBusinessName] = useState("");
   const currentUserId = useRef<string | null>(null);
+  // Pemberitahuan akun dari basis data: izin, unduhan dosir, undangan dinas.
+  // Dimuat ulang setiap pindah layar, supaya yang baru ikut terbaca.
+  const accountNotices = useNotifications(pathname);
 
   useEffect(() => {
     // Ditunda satu tick, pola yang sama dengan pemuatan lain di aplikasi ini:
@@ -211,11 +216,12 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
           userName={userName}
           businessName={businessName}
           notices={notices}
+          accountNotices={accountNotices}
           unread={unread}
           onNoticesSeen={markNoticesSeen}
           onSignOut={() => void signOut()}
         />
-        {children}
+        <UmkmNotificationsContext.Provider value={accountNotices}>{children}</UmkmNotificationsContext.Provider>
       </div>
 
       <nav aria-label="Menu utama UMKM" className={styles.bottomNav}>

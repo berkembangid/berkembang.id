@@ -493,7 +493,9 @@ describe("WP-06 private-document contract", () => {
     expect(routes.match(/getAuthenticatedUser/g)?.length).toBeGreaterThanOrEqual(4);
     expect(routes).toContain("ledgerErrorResponse");
     expect(routes).toContain("ledgerReportCsv");
-    expect(page).toContain("Tutup kas hari ini");
+    // Tombolnya menyebut hari yang ditutup (hari ini / kemarin / tanggal).
+    expect(page).toContain("Tutup kas ${dayLabel}");
+    expect(page).toContain("closingDayLabel(");
     expect(page).toContain("Transaksi dibatalkan");
     expect(page).not.toMatch(/\.from\(["']transactions["']\)\.(insert|update|delete)/);
   });
