@@ -23,16 +23,19 @@ Semua alamat lama dialihkan permanen di `next.config.ts`.
 
 | Migrasi | Isi | Demo | Produksi |
 |---|---|---|---|
-| `0101` | Nama jenis dokumen legalitas (`ktp`, `izin_edar`) | **belum** | **belum** |
+| `0101` | Nama jenis dokumen legalitas (`ktp`, `izin_edar`) | ✅ | ✅ |
 | `0103` | `ringkasan_usaha_yang_diminta` — kode & ringkasan UMKM untuk Permintaan/Dosir | ✅ | ✅ |
 | `0104` | `resolve_my_institution_id` membaca header `x-institution-id` | ✅ | ✅ |
 | `0105` | Hari WIB untuk batas 20 permintaan, `institution_quota`, audit create/update/delete | ✅ | ✅ |
 | `0106` | Catatan pribadi kandidat tersimpan | ✅ | ✅ |
 
-`0101` menulis ulang beberapa fungsi yang sedang berjalan (daftar kandidat,
-dasbor dinas, persetujuan dosir). Periksa definisi berjalan di tiap basis data
-sebelum menerapkannya — `create_dossier_request` di produksi ternyata pernah
-diterapkan tanpa komentar dan berbeda hash dari repo, meski isinya sama.
+`0101` diterapkan setelah diperiksa: kelima fungsinya di kedua basis data
+sama persis dengan versi dasarnya (hash badan fungsi tanpa komentar), kecuali
+`respond_to_dossier_request` di produksi yang masih versi `0063` -- `0099`
+(potret dosir hanya transaksi dikonfirmasi) belum pernah diterapkan di sana.
+Karena `0101` dibangun di atas `0099`, penyaring `ledger_status = 'confirmed'`
+ikut berlaku di produksi. Tidak ada baris dokumen ber-jenis usang, jadi
+pembaruan datanya tidak menyentuh apa pun.
 
 ## Perubahan perilaku yang perlu diketahui
 
