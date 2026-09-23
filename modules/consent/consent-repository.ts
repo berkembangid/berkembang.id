@@ -2,6 +2,7 @@ import "server-only";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { withPortalRpc } from "@/lib/supabase/portal";
+import { logInstitutionAction } from "@/lib/api/institution";
 import { ConsentOperationError, consentOperationError } from "@/modules/consent/consent-errors";
 import type { CandidateFilter, ConsentScope } from "@/modules/consent/consent-schema";
 import type { Database, Json } from "@/types/database.generated";
@@ -90,7 +91,8 @@ export async function createConsentRequest(input: {
   candidateCode: string; programId?: string | null; institutionId?: string | null; purposeCode: string; purposeDescription: string;
   requestedScopes: ConsentScope[]; requiredScopes: ConsentScope[]; requestedDurationDays: number; downloadRequested: boolean;
 }, idempotencyKey: string) {
-  const client = withPortalRpc(await createServerSupabaseClient());
+  const base = await createServerSupabaseClient();
+  const client = withPortalRpc(base);
   const candidate = await client.rpc("resolve_anonymous_candidate_code", { p_candidate_code: input.candidateCode });
   rpcFailure(candidate.error);
   if (!candidate.data) throw new ConsentOperationError("NOT_FOUND");
@@ -107,7 +109,16 @@ export async function createConsentRequest(input: {
     p_institution_id: input.institutionId ?? undefined,
   });
   rpcFailure(error);
-  return objectValue(data);
+  const result = objectValue(data);
+  // Permintaan izin adalah tindakan paling berdampak di portal ini; dulu ia
+  // tidak meninggalkan jejak di log audit organisasi sama sekali.
+  if (result.idempotent !== true) {
+    await logInstitutionAction(base, input.institutionId ?? null, "REQUEST", "create", {
+      businessId: String(candidate.data),
+      artifactId: typeof result.requestId === "string" ? result.requestId : null,
+    });
+  }
+  return result;
 }
 
 export async function decideConsentRequest(requestId: string, input: { decision: "approve" | "reject"; approvedScopes: ConsentScope[]; downloadAllowed: boolean }) {

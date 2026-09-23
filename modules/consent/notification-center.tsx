@@ -81,20 +81,16 @@ export function useNotifications(reloadKey?: string) {
     }
   }, [reload]);
 
+  // Satu permintaan untuk semuanya, bukan satu per pemberitahuan. Jumlah yang
+  // dikabarkan adalah jumlah yang benar-benar berubah di server.
   const markAll = useCallback(async () => {
-    const pending = items.filter((item) => item.status === "unread");
-    if (pending.length === 0) return;
+    if (!items.some((item) => item.status === "unread")) return;
     try {
-      const results = await Promise.all(
-        pending.map((item) => fetch(`/api/v1/notifications/${item.id}`, { method: "PATCH" })),
-      );
-      const failed = results.filter((response) => !response.ok).length;
-      if (failed > 0) {
-        // Sebutkan berapa yang berhasil. "Sebagian gagal" tanpa angka membuat
-        // orang menekan tombol yang sama berulang kali tanpa tahu kemajuannya.
-        throw new Error(`${pending.length - failed} dari ${pending.length} pemberitahuan tertandai. Sisanya belum tersimpan.`);
-      }
-      notifySuccess(`${pending.length} pemberitahuan ditandai terbaca`);
+      const response = await fetch("/api/v1/notifications", { method: "PATCH" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error?.message ?? "Tanda baca belum tersimpan.");
+      const updated = Number(body?.data?.updated ?? 0);
+      notifySuccess(`${updated} pemberitahuan ditandai terbaca`);
     } catch (error) {
       notifyFromError(error, "Tanda baca belum tersimpan.");
     } finally {
@@ -108,10 +104,14 @@ export function useNotifications(reloadKey?: string) {
 
 export type NotificationState = ReturnType<typeof useNotifications>;
 
-/** Tujuan sebuah pemberitahuan di portal yang sedang dibuka -- lembaga atau investor. */
+/**
+ * Tujuan sebuah pemberitahuan di portal yang sedang dibuka -- lembaga atau
+ * investor. Langsung ke dosir atau permintaan yang dimaksud (`?id=`), bukan
+ * ke daftarnya: dulu orang harus mencari sendiri kartu mana yang dibicarakan.
+ */
 export function notificationTarget(item: PortalNotification, portalBase: string): string | null {
-  if (item.data?.dossierId) return `${portalBase}/dosir`;
-  if (item.data?.requestId) return `${portalBase}/permintaan`;
+  if (item.data?.dossierId) return `${portalBase}/dosir?id=${encodeURIComponent(item.data.dossierId)}`;
+  if (item.data?.requestId) return `${portalBase}/permintaan?id=${encodeURIComponent(item.data.requestId)}`;
   return null;
 }
 
@@ -182,7 +182,7 @@ export function NotificationList({ state, portalBase, onNavigate }: {
               </span>
               <span className={`mt-0.5 block text-sm ${isUnread ? "font-bold text-[#1b2a3a]" : "font-semibold text-[#34496a]"}`}>{item.title}</span>
               <span className="mt-0.5 block text-xs leading-relaxed text-[#6e859e]">{item.body}</span>
-              {target && <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-bold text-[#0b5f86]">Buka {target.endsWith("/dosir") ? "dosir" : "permintaan"}<ArrowRight size={12} /></span>}
+              {target && <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-bold text-[#0b5f86]">Buka {target.includes("/dosir") ? "dosir" : "permintaan"}<ArrowRight size={12} /></span>}
             </button>
             {isUnread && <button type="button" aria-label="Tandai sudah dibaca" title="Tandai sudah dibaca" onClick={() => void markRead(item.id)} className="relative z-10 grid size-9 shrink-0 place-items-center self-start rounded-lg text-[#0b5f86] opacity-70 hover:bg-white hover:opacity-100"><CheckCheck size={15} /></button>}
           </li>;

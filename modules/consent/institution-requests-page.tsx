@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight, Ban, CalendarDays, CheckCircle2, Clock3, FolderOpen, Hourglass, RefreshCw, TimerOff, XCircle,
@@ -12,6 +12,9 @@ import { notifyFromError, notifySuccess } from "@/lib/notify";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
 import { usePortal } from "@/modules/consent/portal-copy";
 import { BusinessFacts, BusinessHeading, CardSkeleton, Empty, SearchBox, formatDate, relativeDays, type BusinessSummary } from "@/modules/consent/candidate-ui";
+
+type DossierRef = { id: string; request_id: string; status: string; expires_at: string | null };
+type GrantRef = { request_id: string; scopes: string[]; status: string; expires_at: string | null; download_allowed: boolean };
 
 type Request = {
   id: string; institution_id: string; candidateCode: string; purpose_description: string; requested_scopes: string[];
@@ -47,6 +50,9 @@ export default function InstitutionRequestsPage() {
   const portalBase = portal.base;
   const { selectedId } = useInstitution();
   const [requests, setRequests] = useState<Request[]>([]);
+  const [dossiers, setDossiers] = useState<DossierRef[]>([]);
+  const [grants, setGrants] = useState<GrantRef[]>([]);
+  const [highlight, setHighlight] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -60,6 +66,8 @@ export default function InstitutionRequestsPage() {
         if (!response.ok) throw new Error(body.error?.message ?? "Permintaan belum dapat dimuat.");
         setLoadError("");
         setRequests(body.data?.requests ?? []);
+        setDossiers(body.data?.dossiers ?? []);
+        setGrants(body.data?.grants ?? []);
       })
       .catch((error) => { if (!(error instanceof Error && error.name === "AbortError")) setLoadError(error instanceof Error ? error.message : "Permintaan belum dapat dimuat."); })
       .finally(() => { if (!signal?.aborted) setLoading(false); });
@@ -70,6 +78,23 @@ export default function InstitutionRequestsPage() {
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  // `?id=` dari pemberitahuan: kartu permintaannya disorot dan digulir ke
+  // tengah layar, bukan dibiarkan dicari di antara puluhan kartu lain.
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (loading || deepLinkHandled.current) return;
+    deepLinkHandled.current = true;
+    const wanted = new URLSearchParams(window.location.search).get("id");
+    if (!wanted || !requests.some((item) => item.id === wanted)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sekali, setelah daftar termuat
+    setHighlight(wanted);
+    window.setTimeout(() => document.getElementById(`permintaan-${wanted}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  }, [loading, requests]);
+
+  /** Dosir aktif milik sebuah permintaan, untuk tombol "Buka dosir" yang langsung ke dialognya. */
+  const dossierFor = useCallback((requestId: string) => dossiers.find((item) =>
+    item.request_id === requestId && item.status === "ready" && (!item.expires_at || new Date(item.expires_at) > new Date()))?.id ?? null, [dossiers]);
 
   async function refresh(request: Request) {
     setBusy(request.id);
@@ -164,25 +189,42 @@ export default function InstitutionRequestsPage() {
       : <div className="space-y-3">{visible.map((request) => <RequestCard
         key={request.id}
         request={request}
-        dossierHref={`${portalBase}/dosir`}
+        dossierHref={dossierFor(request.id) ? `${portalBase}/dosir?id=${dossierFor(request.id)}` : `${portalBase}/dosir`}
+        highlighted={highlight === request.id}
+        grant={grants.find((grant) => grant.request_id === request.id) ?? null}
         busy={busy === request.id}
         onRefresh={() => void refresh(request)}
       />)}</div>}
   </DashboardPage>;
 }
 
-function RequestCard({ request, dossierHref, busy, onRefresh }: { request: Request; dossierHref: string; busy: boolean; onRefresh: () => void }) {
+function RequestCard({ request, dossierHref, highlighted, grant, busy, onRefresh }: { request: Request; dossierHref: string; highlighted: boolean; grant: GrantRef | null; busy: boolean; onRefresh: () => void }) {
   const status = statusOf(request.status);
   const canRefresh = request.status === "approved" || request.status === "expired";
   const title = request.business?.candidateCode ?? request.candidateCode;
 
-  return <article className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_1px_2px_rgba(16,40,64,.04)]">
+  return <article id={`permintaan-${request.id}`} className={`scroll-mt-24 rounded-2xl border bg-white p-5 shadow-[0_1px_2px_rgba(16,40,64,.04)] transition-colors ${highlighted ? "border-[#0b5f86] ring-2 ring-[#0b5f86]/15" : "border-[#e3e9f0]"}`}>
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <BusinessHeading title={title} summary={request.business ?? null} />
       <span className={`inline-flex min-h-7 shrink-0 items-center gap-1.5 self-start rounded-full border px-3 text-[11px] font-bold ${status.badge}`}><status.Icon size={13} />{status.label}</span>
     </div>
 
     {request.business && <div className="mt-4"><BusinessFacts summary={request.business} /></div>}
+
+    {/*
+      Yang DISETUJUI, bukan yang diminta. Pemilik bisa menyetujui sebagian
+      lingkup saja, dan petugas yang mengira identitas dan kontak ikut terbuka
+      akan mencarinya di dosir tanpa pernah menemukannya.
+    */}
+    {grant && request.status === "approved" && <div className="mt-4 rounded-xl border border-[#a9ebd0] bg-[#f3fcf8] p-3.5 text-xs text-[#0a5c42]">
+      <p className="font-bold">Disetujui {grant.scopes.length} dari {request.requested_scopes.length} bagian{grant.download_allowed ? " · boleh diunduh" : " · hanya lihat"}</p>
+      <p className="mt-1 leading-relaxed">
+        {grant.scopes.includes("business_identity")
+          ? "Identitas dan kontak usaha terbuka di dosir. Hubungi pemiliknya lewat kontak di sana."
+          : "Identitas usaha tetap tersamar — pemilik tidak menyetujui bagian identitas dan kontak."}
+      </p>
+      {grant.scopes.length < request.requested_scopes.length && <p className="mt-1 text-[#4a6280]">Tidak disetujui: {request.requested_scopes.filter((scope) => !grant.scopes.includes(scope)).map((scope) => consentScopeLabels[scope as ConsentScope]?.label ?? scope).join(", ")}.</p>}
+    </div>}
 
     <div className="mt-4 rounded-xl border border-[#eef2f6] p-3.5">
       <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#8aa0b6]">Tujuan permintaan</p>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { gagal } from "@/lib/api/galat";
 import { withPortalRpc } from "@/lib/supabase/portal";
 import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
-import { resolveSelectedInstitution } from "@/lib/api/institution";
+import { logInstitutionAction, resolveSelectedInstitution } from "@/lib/api/institution";
 
 export async function GET(request: Request) {
   if (!await getAuthenticatedUser()) return gagal("UNAUTHENTICATED", 401);
@@ -40,5 +40,7 @@ export async function POST(request: Request) {
     p_institution_id: selected,
   });
   if (error) return gagal("SHORTLIST_UPDATE_FAILED", 400);
+  const saved = Boolean((data as { shortlisted?: boolean } | null)?.shortlisted);
+  await logInstitutionAction(base, selected, "SHORTLIST", saved ? "create" : "delete");
   return NextResponse.json({ data });
 }

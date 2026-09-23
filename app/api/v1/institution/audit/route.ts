@@ -5,7 +5,7 @@ import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase
 import { institutionHeader, resolveSelectedInstitution } from "@/lib/api/institution";
 import { fallbackCandidateCode, summarizeRequestedBusinesses } from "@/modules/consent/consent-repository";
 
-const ARTIFACTS = ["CANDIDATE_LIST", "SHORTLIST", "ORGANIZATION", "PROGRAM_DASH", "PDF", "DOSSIER"] as const;
+const ARTIFACTS = ["CANDIDATE_LIST", "SHORTLIST", "ORGANIZATION", "PROGRAM_DASH", "PDF", "DOSSIER", "REQUEST", "PROGRAM", "MEMBER", "API_KEY"] as const;
 const PAGE_SIZE = 50;
 
 /**

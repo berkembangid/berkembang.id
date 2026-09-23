@@ -46,6 +46,39 @@ export async function selectedInstitutionFromCookies(): Promise<string | null> {
   return clean(store.get(INSTITUTION_COOKIE)?.value);
 }
 
+export type AuditArtifact =
+  | "CANDIDATE_LIST" | "SHORTLIST" | "ORGANIZATION" | "PROGRAM_DASH" | "PDF" | "DOSSIER"
+  | "REQUEST" | "PROGRAM" | "MEMBER" | "API_KEY";
+export type AuditAction = "view" | "download" | "create" | "update" | "delete";
+
+/**
+ * Mencatat satu tindakan ke log audit organisasi (`0105`).
+ *
+ * Kegagalan mencatat tidak membatalkan tindakannya -- tindakannya sudah
+ * terjadi -- tetapi ia TIDAK LAGI ditelan diam-diam: dulu rute anggota
+ * mencatat dengan tindakan `manage`, yang ditolak basis data sejak hari
+ * pertama, dan tak seorang pun tahu log itu kosong.
+ */
+export async function logInstitutionAction(
+  client: SupabaseClient<Database>,
+  institutionId: string | null,
+  artifact: AuditArtifact,
+  action: AuditAction,
+  detail: { businessId?: string | null; artifactId?: string | null } = {},
+): Promise<void> {
+  if (!institutionId) return;
+  const { error } = await (client as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+  }).rpc("log_institution_view", {
+    p_institution_id: institutionId,
+    p_artifact: artifact,
+    p_action: action,
+    ...(detail.businessId ? { p_business_id: detail.businessId } : {}),
+    ...(detail.artifactId ? { p_artifact_id: detail.artifactId } : {}),
+  });
+  if (error) console.error(`[audit] ${artifact}/${action} tidak tercatat:`, error.message);
+}
+
 /**
  * Organisasi yang BERLAKU untuk permintaan ini, diperiksa basis data.
  *

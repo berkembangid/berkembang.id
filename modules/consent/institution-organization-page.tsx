@@ -7,6 +7,7 @@ import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure, notifySuccess } from "@/lib/notify";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
 import { formatDate } from "@/modules/consent/candidate-ui";
+import { fetchInstitutionQuota, type InstitutionQuota } from "@/modules/consent/candidate-card";
 import { usePortal } from "@/modules/consent/portal-copy";
 
 /**
@@ -83,6 +84,7 @@ export default function InstitutionOrganizationPage() {
   const [loadError, setLoadError] = useState("");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
+  const [quota, setQuota] = useState<InstitutionQuota | null>(null);
 
   const isOrgAdmin = selected?.role?.toLowerCase() === "admin";
 
@@ -105,6 +107,7 @@ export default function InstitutionOrganizationPage() {
       setMembers(body.data.members ?? []);
       setEntitlement(body.data.entitlement);
       setLoadError("");
+      setQuota(await fetchInstitutionQuota(selectedId));
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Data organisasi belum dapat dimuat.");
     }
@@ -278,8 +281,9 @@ export default function InstitutionOrganizationPage() {
               batasnya tak terlihat sampai ia menolak penambahan -- dan pada
               saat itu orangnya sudah mengetik surel.
             */}
-            <div className="mt-4 grid grid-cols-2 gap-2.5 min-[400px]:grid-cols-3">
+            <div className="mt-4 grid grid-cols-2 gap-2.5 min-[400px]:grid-cols-4">
               <Metric label="Kursi terpakai" value={kursi === null ? String(aktif) : `${aktif} dari ${kursi}`} />
+              <Metric label="Permintaan hari ini" value={quota ? `${quota.requestsToday} dari ${quota.requestLimit}` : "—"} />
               <Metric label="Kuota dosir" value={entitlement?.dossier_credits ? String(entitlement.dossier_credits) : "Tanpa batas"} />
               <Metric label="Dosir terpakai" value={String(entitlement?.credits_used ?? 0)} />
             </div>

@@ -122,6 +122,8 @@
     "0101_nama_jenis_dokumen_legalitas.sql",
     "0102_siapa_yang_mencoba_demo.sql",
     "0103_ringkasan_usaha_yang_diminta_lembaga.sql",
-    "0104_organisasi_terpilih_dari_header.sql"
+    "0104_organisasi_terpilih_dari_header.sql",
+    "0105_kuota_terlihat_dan_audit_lengkap.sql",
+    "0106_catatan_kandidat_tersimpan.sql"
   ]
 }

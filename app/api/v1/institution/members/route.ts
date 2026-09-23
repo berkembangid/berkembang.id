@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withPortalRpc } from "@/lib/supabase/portal";
 import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
-import { institutionHeader } from "@/lib/api/institution";
+import { institutionHeader, logInstitutionAction } from "@/lib/api/institution";
 
 /**
  * Anggota organisasi lembaga.
@@ -151,19 +151,12 @@ export async function POST(request: Request) {
     return gagal(kode, status);
   }
 
-  // Dicatat sebagai `manage`, bukan `view`.
-  //
-  // Rute ini dulu mencatat penambahan anggota dengan `p_action: "view"`, jadi
-  // jejak auditnya mengatakan orang itu MELIHAT halaman pada saat ia justru
-  // memberi orang lain akses ke profil UMKM berizin. Jejak audit yang salah
-  // lebih buruk daripada tidak ada jejak: ia dipercaya.
-  await withPortalRpc(await createServerSupabaseClient())
-    .rpc("log_institution_view", {
-      p_institution_id: selected,
-      p_artifact: "ORGANIZATION",
-      p_action: "manage",
-    })
-    .then(() => undefined, () => undefined);
+  // Dicatat sebagai MEMBER/create. Dulu dicatat `ORGANIZATION/manage` --
+  // tindakan yang ditolak `log_institution_view` sejak hari pertama, jadi
+  // tidak satu pun penambahan anggota pernah tercatat. Sebelumnya lagi
+  // `view`, yang mengatakan orang itu MELIHAT halaman padahal ia memberi
+  // orang lain akses ke profil UMKM berizin.
+  await logInstitutionAction(client, selected, "MEMBER", "create");
 
   return NextResponse.json({ data }, { status: 201 });
 }
@@ -206,6 +199,7 @@ export async function PATCH(request: Request) {
   if (!data || data.length === 0) return gagal("MEMBER_NOT_CHANGED", 403);
   if (data[0].status !== body.status) return gagal("MEMBER_NOT_CHANGED", 403);
 
+  await logInstitutionAction(client, selected, "MEMBER", "update", { artifactId: body.memberId });
   return NextResponse.json({ data: data[0] });
 }
 
@@ -240,13 +234,6 @@ export async function DELETE(request: Request) {
   if (error) return gagal(kodeDariPostgres(error.message), 400);
   if (!data || data.length === 0) return gagal("MEMBER_NOT_CHANGED", 403);
 
-  await withPortalRpc(await createServerSupabaseClient())
-    .rpc("log_institution_view", {
-      p_institution_id: selected,
-      p_artifact: "ORGANIZATION",
-      p_action: "manage",
-    })
-    .then(() => undefined, () => undefined);
-
+  await logInstitutionAction(client, selected, "MEMBER", "delete", { artifactId: memberId });
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { withPortalRpc } from "@/lib/supabase/portal";
 import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
 import { ConsentOperationError, consentErrorResponse } from "@/modules/consent/consent-errors";
 import { consentScopeSchema } from "@/modules/consent/consent-schema";
+import { logInstitutionAction } from "@/lib/api/institution";
 
 async function sha256Hex(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
@@ -52,6 +53,20 @@ export async function POST(request: Request) {
     const { data: platform } = await client.from("platform_admins").select("user_id").eq("user_id", user.id).eq("status", "active").maybeSingle();
     if (member?.role !== "admin" && !platform) throw new ConsentOperationError("ACCESS_DENIED");
 
+    // Kunci tidak boleh membuka lebih dari izinnya, atau lebih lama darinya.
+    // Dulu lingkup kunci diambil apa adanya dari permintaan dan masa berlakunya
+    // bebas -- kunci bisa meminta lingkup yang tidak pernah disetujui pemilik
+    // dan tetap hidup setelah izinnya berakhir.
+    const { data: grant } = await client.from("consent_grants").select("scopes,expires_at,status").eq("id", dossier.grant_id).maybeSingle();
+    if (!grant || grant.status !== "active") throw new ConsentOperationError("ACCESS_DENIED");
+    const grantedScopes = new Set((grant.scopes ?? []) as string[]);
+    const allowedScopes = scopes.filter((scope) => grantedScopes.has(scope));
+    if (allowedScopes.length === 0) throw new ConsentOperationError("DATA_NOT_APPROVED");
+    const grantExpiry = grant.expires_at ? new Date(grant.expires_at) : null;
+    const requestedExpiry = typeof body.expiresAt === "string" && !Number.isNaN(Date.parse(body.expiresAt)) ? new Date(body.expiresAt) : null;
+    if (requestedExpiry && requestedExpiry <= new Date()) throw new ConsentOperationError("VALIDATION_FAILED");
+    const expiresAt = requestedExpiry && (!grantExpiry || requestedExpiry < grantExpiry) ? requestedExpiry : grantExpiry;
+
     const raw = `dsk_${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
     const admin = (await import("@/lib/supabase/admin")).createServiceRoleClient();
     const { data, error } = await admin.from("dossier_api_keys" as never).insert({
@@ -59,12 +74,13 @@ export async function POST(request: Request) {
       institution_id: dossier.institution_id,
       key_hash: await sha256Hex(raw),
       key_prefix: raw.slice(0, 12),
-      scopes,
-      expires_at: typeof body.expiresAt === "string" ? body.expiresAt : null,
+      scopes: allowedScopes,
+      expires_at: expiresAt ? expiresAt.toISOString() : null,
       created_by: user.id,
     } as never).select("id,key_prefix,scopes,expires_at").single();
     if (error) throw new ConsentOperationError("SERVICE_UNAVAILABLE", error);
     const row = data as unknown as { id: string; key_prefix: string; scopes: string[]; expires_at: string | null };
+    if (member) await logInstitutionAction(client, dossier.institution_id, "API_KEY", "create", { artifactId: row.id });
     return Response.json({ data: { ...row, key: raw, warning: "Simpan kunci ini sekarang — hash-nya yang tersimpan, kunci penuh tidak bisa dibaca ulang." } }, { status: 201 });
   } catch (error) {
     return consentErrorResponse(error);

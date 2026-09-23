@@ -45,6 +45,26 @@ export type Candidate = {
 
 const defaultScopes: ConsentScope[] = ["business_identity", "readiness", "financial_summary"];
 
+export type InstitutionQuota = {
+  requestsToday: number;
+  requestLimit: number;
+  requestsResetAt: string;
+  dossierCredits: number;
+  dossierCreditsUsed: number;
+};
+
+/** Sisa kuota organisasi terpilih (`/api/v1/institution/quota`). `null` selama belum terbaca. */
+export async function fetchInstitutionQuota(institutionId: string | null, signal?: AbortSignal): Promise<InstitutionQuota | null> {
+  try {
+    const response = await fetch("/api/v1/institution/quota", { cache: "no-store", signal, headers: institutionHeaders(institutionId) });
+    if (!response.ok) return null;
+    const body = await response.json();
+    return (body.data ?? null) as InstitutionQuota | null;
+  } catch {
+    return null;
+  }
+}
+
 /** Kode kandidat yang disimpan organisasi terpilih, dan sakelar simpan/lepas. */
 export function useShortlist() {
   const { selectedId } = useInstitution();
@@ -112,14 +132,17 @@ export function useInterestRequest({ onSettled }: { onSettled?: () => void } = {
   const [duration, setDuration] = useState(30);
   const [downloadRequested, setDownloadRequested] = useState(false);
   const [sending, setSending] = useState(false);
+  const [quota, setQuota] = useState<InstitutionQuota | null>(null);
 
   const open = useCallback((candidate: Candidate) => {
     setSelected(candidate);
+    setQuota(null);
+    void fetchInstitutionQuota(selectedId).then(setQuota);
     setScopes(defaultScopes);
     setPurpose(portal.purposeDefault);
     setDuration(30);
     setDownloadRequested(false);
-  }, [portal.purposeDefault]);
+  }, [portal.purposeDefault, selectedId]);
 
   function toggleScope(scope: ConsentScope) {
     setScopes((current) => current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope]);
@@ -182,6 +205,7 @@ export function useInterestRequest({ onSettled }: { onSettled?: () => void } = {
     downloadRequested={downloadRequested}
     setDownloadRequested={setDownloadRequested}
     sending={sending}
+    quota={quota}
     onClose={() => setSelected(null)}
     onSubmit={() => void submit()}
   /> : null;
@@ -189,8 +213,10 @@ export function useInterestRequest({ onSettled }: { onSettled?: () => void } = {
   return { open, dialog };
 }
 
-export function CandidateCard({ candidate, saved, dossierHref, onToggleSaved, onRequest }: {
+export function CandidateCard({ candidate, saved, dossierHref, onToggleSaved, onRequest, children }: {
   candidate: Candidate; saved: boolean; dossierHref: string; onToggleSaved: () => void; onRequest: () => void;
+  /** Bagian tambahan di bawah fakta -- Tersimpan memakainya untuk catatan dan pembanding. */
+  children?: React.ReactNode;
 }) {
   const opened = candidate.dossierStatus === "ready";
   const pending = !opened && candidate.requestStatus === "pending";
@@ -235,6 +261,8 @@ export function CandidateCard({ candidate, saved, dossierHref, onToggleSaved, on
       <Fact Icon={Files} label="Bukti usaha" value={evidence ? `${evidence} jenis` : "Belum ada"} tone={evidence ? "good" : "warn"} />
     </dl>
 
+    {children}
+
     <div className="mt-auto pt-5">
       {opened ? <Link href={dossierHref} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#a9ebd0] bg-[#edfbf5] px-4 text-sm font-bold text-[#0a5c42] hover:bg-[#e0f7ec]">
         <FolderOpen size={16} />Profil terbuka — lihat dosir<ArrowRight size={15} />
@@ -258,13 +286,16 @@ export function CandidateSkeleton() {
 }
 
 function RequestDialog({
-  candidate, purpose, setPurpose, scopes, toggleScope, duration, setDuration, downloadRequested, setDownloadRequested, sending, onClose, onSubmit,
+  candidate, purpose, setPurpose, scopes, toggleScope, duration, setDuration, downloadRequested, setDownloadRequested, sending, quota, onClose, onSubmit,
 }: {
   candidate: Candidate; purpose: string; setPurpose: (value: string) => void; scopes: ConsentScope[]; toggleScope: (scope: ConsentScope) => void;
   duration: number; setDuration: (value: number) => void; downloadRequested: boolean; setDownloadRequested: (value: boolean) => void;
-  sending: boolean; onClose: () => void; onSubmit: () => void;
+  sending: boolean; quota: InstitutionQuota | null; onClose: () => void; onSubmit: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const requestsLeft = quota ? Math.max(0, quota.requestLimit - quota.requestsToday) : null;
+  const creditsLeft = quota && quota.dossierCredits > 0 ? Math.max(0, quota.dossierCredits - quota.dossierCreditsUsed) : null;
+  const blocked = requestsLeft === 0;
   // Dibaca lewat ref supaya efeknya hanya berjalan sekali saat dialog dibuka;
   // bila tidak, setiap ketikan di kolom tujuan memindahkan fokus ke tombol tutup.
   const latest = useRef({ onClose, sending });
@@ -320,12 +351,25 @@ function RequestDialog({
           </label>
         </div>
 
-        <p className="rounded-xl bg-[#fff8e6] p-3 text-xs leading-5 text-[#6b4700]">Maksimal 20 permintaan per organisasi per hari. Ruang lingkup tidak bisa diubah setelah terkirim.</p>
+        {/*
+          Sisa kuota dibaca dari server, bukan kalimat tetap "maksimal 20".
+          Orang yang tahu sisanya satu tidak menghabiskannya untuk kandidat
+          yang belum ia yakini.
+        */}
+        <div className={`rounded-xl p-3 text-xs leading-5 ${blocked ? "bg-[#feecea] text-[#8a1c12]" : "bg-[#fff8e6] text-[#6b4700]"}`}>
+          <p className="font-bold">
+            {requestsLeft === null ? "Membaca sisa kuota…"
+              : blocked ? "Kuota permintaan hari ini sudah habis."
+              : `Sisa ${requestsLeft} dari ${quota?.requestLimit} permintaan hari ini.`}
+            {creditsLeft !== null && ` Kuota dosir tersisa ${creditsLeft}.`}
+          </p>
+          <p className="mt-0.5">{blocked ? "Kuota kembali pukul 00.00 WIB." : "Ruang lingkup tidak bisa diubah setelah terkirim."}</p>
+        </div>
       </div>
 
       <footer className="flex gap-3 border-t border-[#eef2f6] px-6 py-4">
         <button type="button" onClick={onClose} disabled={sending} className="min-h-11 flex-1 rounded-xl border border-[#d5dee8] text-sm font-bold text-[#34496a] hover:bg-[#f6f8fb]">Batal</button>
-        <button type="button" disabled={sending || scopes.length === 0 || purposeTooShort} onClick={onSubmit} className="min-h-11 flex-1 rounded-xl bg-[#0b5f86] text-sm font-bold text-white hover:bg-[#094f70] disabled:opacity-50">{sending ? "Mengirim…" : "Kirim permintaan"}</button>
+        <button type="button" disabled={sending || blocked || scopes.length === 0 || purposeTooShort} onClick={onSubmit} className="min-h-11 flex-1 rounded-xl bg-[#0b5f86] text-sm font-bold text-white hover:bg-[#094f70] disabled:opacity-50">{sending ? "Mengirim…" : "Kirim permintaan"}</button>
       </footer>
     </section>
   </div>;

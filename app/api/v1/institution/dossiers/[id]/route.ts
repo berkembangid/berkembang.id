@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/supabase/server";
+import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
+import { withPortalRpc } from "@/lib/supabase/portal";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { ConsentOperationError, consentErrorResponse } from "@/modules/consent/consent-errors";
 import { resolveInstitutionContext } from "@/modules/institution/dossier-repository";
@@ -14,6 +15,19 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     if (!await getAuthenticatedUser()) throw new ConsentOperationError("UNAUTHENTICATED");
     const { id } = await context.params;
     const dossier = await resolveInstitutionContext(id, institutionHeader(request));
+
+    // Membuka detail dosir dicatat SEBAGAI PENGGUNA. Dulu rute ini membaca
+    // semuanya lewat service role tanpa satu panggilan akses pun, jadi tatapan
+    // paling rinci di portal ini -- keuangan, legalitas, identitas -- tidak
+    // pernah muncul di log audit organisasi maupun di jejak yang dilihat
+    // pemilik usaha. Trigger `0055` meneruskan peristiwa ini ke log audit.
+    if (!dossier.isPlatformAdmin && dossier.scopes.length > 0) {
+      const client = withPortalRpc(await createServerSupabaseClient());
+      const { data: gate } = await client.rpc("access_verified_business_profile", {
+        p_dossier_id: dossier.dossierId, p_resource_scope: dossier.scopes[0], p_action: "view",
+      });
+      if ((gate as { allowed?: boolean } | null)?.allowed === false) throw new ConsentOperationError("ACCESS_DENIED");
+    }
 
     const readiness = (dossier.items.readiness ?? {}) as Record<string, unknown>;
     const financial = (dossier.items.financial_summary ?? {}) as Record<string, unknown>;

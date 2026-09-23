@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Eye, ScrollText } from "lucide-react";
+import { Download, Eye, PencilLine, Plus, ScrollText, Trash2 } from "lucide-react";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
 import { Empty } from "@/modules/consent/candidate-ui";
@@ -25,16 +25,42 @@ const artifactLabels: Record<string, string> = {
   PROGRAM_DASH: "ringkasan program",
   DOSSIER: "dosir",
   PDF: "PDF dosir",
+  REQUEST: "permintaan izin",
+  PROGRAM: "program",
+  MEMBER: "anggota",
+  API_KEY: "kunci API dosir",
+};
+
+/** Kata kerja per tindakan. SHORTLIST punya kata sendiri: menyimpan, bukan membuat. */
+function verb(artifact: string, action: string) {
+  if (artifact === "SHORTLIST" && action === "create") return "menyimpan kandidat ke";
+  if (artifact === "SHORTLIST" && action === "delete") return "melepas kandidat dari";
+  if (artifact === "REQUEST" && action === "create") return "mengirim";
+  if (artifact === "MEMBER" && action === "create") return "menambah";
+  if (artifact === "MEMBER" && action === "update") return "mengubah status";
+  if (artifact === "MEMBER" && action === "delete") return "mengeluarkan";
+  if (artifact === "API_KEY" && action === "create") return "menerbitkan";
+  return { download: "mengunduh", create: "membuat", update: "menyunting", delete: "menghapus" }[action] ?? "membuka";
+}
+
+const actionStyle: Record<string, { Icon: typeof Eye; tone: string }> = {
+  view: { Icon: Eye, tone: "bg-[#eef8fd] text-[#0f73a3]" },
+  download: { Icon: Download, tone: "bg-[#fff8e6] text-[#b7791f]" },
+  create: { Icon: Plus, tone: "bg-[#edfbf5] text-[#12906a]" },
+  update: { Icon: PencilLine, tone: "bg-[#f3f6f9] text-[#4a6280]" },
+  delete: { Icon: Trash2, tone: "bg-[#feecea] text-[#b4304a]" },
 };
 
 const FILTERS: Array<{ key: string; label: string }> = [
   { key: "", label: "Semua" },
   { key: "DOSSIER", label: "Dosir" },
   { key: "PDF", label: "Unduhan PDF" },
+  { key: "REQUEST", label: "Permintaan" },
   { key: "CANDIDATE_LIST", label: "Daftar kandidat" },
   { key: "SHORTLIST", label: "Tersimpan" },
   { key: "PROGRAM_DASH", label: "Program" },
   { key: "ORGANIZATION", label: "Organisasi" },
+  { key: "MEMBER", label: "Anggota" },
 ];
 
 const dayFormat = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -121,13 +147,13 @@ export default function InstitutionAuditPage() {
           <h2 className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-[#6e859e]">{group.label}</h2>
           <ul className="divide-y divide-[#eef2f6] overflow-hidden rounded-2xl border border-[#e3e9f0] bg-white">
             {group.rows.map((log) => {
-              const download = log.action === "download";
+              const style = actionStyle[log.action] ?? actionStyle.view;
               return <li key={log.id} className="flex items-start gap-3 px-4 py-3">
-                <span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg ${download ? "bg-[#fff8e6] text-[#b7791f]" : "bg-[#eef8fd] text-[#0f73a3]"}`}>{download ? <Download size={14} /> : <Eye size={14} />}</span>
+                <span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg ${style.tone}`}><style.Icon size={14} /></span>
                 <div className="min-w-0 flex-1 text-xs">
                   <p className="text-[#34496a]">
                     <span className="font-bold text-[#1b2a3a]">{log.memberName ?? "Sistem"}</span>
-                    {" "}{download ? "mengunduh" : "membuka"} {artifactLabels[log.artifact] ?? "halaman"}
+                    {" "}{verb(log.artifact, log.action)} {artifactLabels[log.artifact] ?? "halaman"}
                     {log.businessCode && <> <span className="font-mono font-bold text-[#1b2a3a]">{log.businessCode}</span></>}
                   </p>
                 </div>

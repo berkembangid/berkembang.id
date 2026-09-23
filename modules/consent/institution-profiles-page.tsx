@@ -91,6 +91,22 @@ export default function InstitutionProfilesPage() {
     return () => controller.abort();
   }, [selectedId]);
 
+  // `?id=` dari pemberitahuan atau kartu Permintaan: dosir yang dimaksud
+  // langsung dibuka. Dibaca dari `window.location` sekali setelah daftar
+  // termuat; `useSearchParams` akan memaksa batas Suspense di atas halaman ini.
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (loading || deepLinkHandled.current) return;
+    deepLinkHandled.current = true;
+    const wanted = new URLSearchParams(window.location.search).get("id");
+    if (!wanted) return;
+    const match = dossiers.find((item) => item.id === wanted);
+    if (match) void open(match);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sekali, setelah daftar termuat
+    else setLoadError("Dosir yang dituju tidak lagi aktif. Izinnya mungkin sudah berakhir atau dicabut.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sekali, setelah daftar termuat
+  }, [loading, dossiers]);
+
   async function open(dossier: DossierRow) {
     setOpened(dossier);
     setDetail(null);

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { gagal } from "@/lib/api/galat";
 import { z } from "zod";
 import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
-import { institutionHeader, resolveSelectedInstitution } from "@/lib/api/institution";
+import { institutionHeader, logInstitutionAction, resolveSelectedInstitution } from "@/lib/api/institution";
 
 const programSchema = z.object({
   name: z.string().trim().min(3).max(200),
@@ -60,6 +60,7 @@ export async function POST(request: Request) {
     created_by: user.id,
   }).select("id,join_code").single();
   if (error) return gagal("PROGRAM_CREATE_FAILED", 400);
+  await logInstitutionAction(client, selected, "PROGRAM", "create", { artifactId: data?.id });
   return NextResponse.json({ data }, { status: 201 });
 }
 
@@ -123,6 +124,7 @@ export async function PATCH(request: Request) {
   // sebagai 200, jadi ia harus dihitung, bukan diasumsikan berhasil.
   if (!data || data.length === 0) return gagal("TIDAK_ADA_YANG_BERUBAH");
 
+  await logInstitutionAction(client, selected, "PROGRAM", "update", { artifactId: id });
   return NextResponse.json({ data: data[0] });
 }
 
@@ -157,5 +159,6 @@ export async function DELETE(request: Request) {
   if (error) return gagal("PROGRAM_UPDATE_FAILED");
   if (!data || data.length === 0) return gagal("TIDAK_ADA_YANG_BERUBAH");
 
+  await logInstitutionAction(client, selected, "PROGRAM", "delete", { artifactId: id });
   return NextResponse.json({ ok: true });
 }

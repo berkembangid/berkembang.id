@@ -54,6 +54,26 @@ export type InstitutionPortalSupplement = {
       };
     };
     Functions: {
+      /** 0106 -- catatan pribadi pada kandidat tersimpan. */
+      list_my_shortlist_notes: {
+        Args: { p_institution_id?: string };
+        Returns: Record<string, string>;
+      };
+      set_my_shortlist_note: {
+        Args: { p_candidate_code: string; p_note: string; p_institution_id?: string };
+        Returns: { candidateCode: string; note: string | null };
+      };
+      /** 0105 -- sisa kuota organisasi terpilih. */
+      institution_quota: {
+        Args: { p_institution_id?: string };
+        Returns: {
+          requestsToday: number;
+          requestLimit: number;
+          requestsResetAt: string;
+          dossierCredits: number;
+          dossierCreditsUsed: number;
+        };
+      };
       /**
        * 0103 -- keping anonim usaha yang sudah diminta lembaga pemanggil.
        * Layar Permintaan dan Dosir memakainya untuk kode, bidang, wilayah,
