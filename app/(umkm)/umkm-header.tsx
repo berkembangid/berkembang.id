@@ -291,13 +291,17 @@ function NotificationBell({
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
+              {/* Tautan, bukan tombol: `nativeButton={false}` supaya Base UI
+                  tidak menambahkan semantik tombol di atas <a>. */}
               <Popover.Close
+                nativeButton={false}
                 render={<Link href="/umkm/notifikasi" />}
                 className="flex min-h-11 items-center justify-center rounded-xl border border-umkm-line text-xs font-bold text-umkm-ink-soft"
               >
                 Lihat semua
               </Popover.Close>
               <Popover.Close
+                nativeButton={false}
                 render={<Link href="/umkm/laporan?tab=kas" />}
                 className="flex min-h-11 items-center justify-center rounded-xl bg-umkm-brand text-xs font-bold text-white"
               >
