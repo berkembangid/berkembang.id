@@ -2176,6 +2176,31 @@ async function verifyAccountingPeriodReports() {
     "proceeds must equal book value plus the gain or loss",
   );
   assert.ok(Number(disposal.rows[0].value.bookValueIdr) <= bookBefore);
+  // 0112: sisa nilai WAJIB ikut mengurangkan penyusutan sebelum pembukuan
+  // mulai. Kulkas ini membawa 31.250 dari jurnal pembuka; tanpanya untung
+  // atau ruginya meleset sebesar itu dan akun 1690 menyisakan saldo untuk
+  // alat yang sudah tidak ada.
+  const kulkasAfter = await client.query(`
+    select asset.cost_idr::bigint as cost, asset.opening_accumulated_depreciation_idr::bigint as opening,
+      coalesce((select sum(amount_idr) from public.depreciation_postings where asset_id = asset.id), 0)::bigint as posted
+    from public.fixed_assets asset where asset.id = '${kulkasId}'
+  `);
+  const { cost: kulkasCost, opening: kulkasOpening, posted: kulkasPosted } = kulkasAfter.rows[0];
+  assert.ok(Number(kulkasOpening) > 0, "the fixture asset must carry opening accumulated depreciation");
+  assert.equal(
+    Number(disposal.rows[0].value.bookValueIdr),
+    Number(kulkasCost) - Number(kulkasOpening) - Number(kulkasPosted),
+    "book value at disposal must subtract opening accumulated depreciation too",
+  );
+  assert.equal(
+    Number(await scalar(`
+      select coalesce(sum(line.debit), 0)::bigint as value from public.journal_lines line
+      join public.journal_entries entry on entry.id = line.entry_id
+      where entry.source = 'ASSET_DISPOSAL' and entry.source_id = '${kulkasId}' and line.account_code = '1690'
+    `)),
+    Number(kulkasOpening) + Number(kulkasPosted),
+    "disposal must clear the whole accumulated depreciation of the asset",
+  );
   await assertBalanced("2026-10-31", "after disposing of an asset");
 
   // Bulan-bulan sesudah alat dilepas tidak boleh disusutkan lagi.
