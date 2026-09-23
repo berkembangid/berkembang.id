@@ -12,6 +12,7 @@ import { ReclassCard } from "@/components/warung/ReclassCard";
 import { BroadcastInvitations } from "@/components/warung/BroadcastInvitations";
 import { DinasOfferCard } from "@/components/warung/DinasOfferCard";
 import { SetupChecklist } from "@/components/warung/SetupChecklist";
+import { PendingUploadsNotice } from "@/components/warung/PendingUploadsNotice";
 import type { ReadinessLevelPayload } from "@/modules/readiness/level-repository";
 import styles from "../umkm-dashboard.module.css";
 
@@ -166,6 +167,8 @@ export default function BerandaPage() {
             hitung stok adalah pekerjaan HARI INI, dan Beranda satu-satunya
             halaman yang pemilik buka setiap hari.
           */}
+          <PendingUploadsNotice />
+
           <ReminderStrip />
 
           <SetupChecklist readiness={readiness} hasTransactions={hasTransactions} loading={loading} />
@@ -214,6 +217,7 @@ export default function BerandaPage() {
           {error && <div role="alert" className="mt-5 flex gap-2 rounded-xl border border-umkm-danger-line bg-umkm-danger-soft p-4 text-xs text-umkm-danger-strong"><AlertCircle size={17} />{error}</div>}
 
           <div className="mt-5 space-y-4">
+            <PendingUploadsNotice />
             <ReminderStrip />
             <SetupChecklist readiness={readiness} hasTransactions={hasTransactions} loading={loading} />
           </div>

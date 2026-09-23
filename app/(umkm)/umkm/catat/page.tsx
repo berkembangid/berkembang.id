@@ -32,6 +32,7 @@ import { compressImageFile } from "@/modules/documents/image-compression";
 import { attachDocumentTo, uploadEvidencePhoto } from "@/modules/documents/evidence-client";
 import { CATAT_RESTART_EVENT } from "../../umkm-navigation";
 import { RecordingCard } from "./_components/recording-card";
+import { listPendingUploads, removePendingUpload, savePendingUpload, shouldQueueForRetry } from "@/modules/ledger/pending-uploads";
 import { ReviewItem } from "./_components/review-item";
 import { CaptionWithEvidence } from "./_components/caption-with-evidence";
 import {
@@ -137,6 +138,15 @@ export default function CatatPage() {
   // pemilik hanya bisa menatap roda yang tidak pernah selesai.
   const [stalled, setStalled] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  // Rekaman atau foto yang menunggu dikirim karena sinyal putus.
+  const [pendingCount, setPendingCount] = useState(0);
+  const refreshPending = useCallback(async () => {
+    setPendingCount((await listPendingUploads()).length);
+  }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refreshPending(), 0);
+    return () => window.clearTimeout(timer);
+  }, [refreshPending]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   // Rekaman yang dibatalkan dibuang saat berhenti, bukan dikirim.
@@ -256,12 +266,14 @@ export default function CatatPage() {
    * enam puluh baris yang hanya berbeda di tiga kata; perbaikan di satu
    * salinan tidak pernah sampai ke yang lain.
    */
-  const uploadAndProcess = useCallback(async ({ inputMethod, file, mimeType, noun }: {
+  const uploadAndProcess = useCallback(async ({ inputMethod, file, mimeType, noun, queuedId }: {
     inputMethod: "voice" | "camera";
     file: Blob;
     mimeType: "audio/webm" | "audio/mp4" | "audio/ogg" | "audio/mpeg" | "image/jpeg" | "image/png";
     /** « Rekaman » atau « Foto », untuk pesan galat. */
     noun: string;
+    /** Diisi saat mengirim ulang dari antrean; dihapus dari antrean setelah terkirim. */
+    queuedId?: string;
   }) => {
     let createdCaptureId: string | null = null;
     let processingScheduled = false;
@@ -290,6 +302,8 @@ export default function CatatPage() {
       setStep("processing");
       await processCapture(created.capture.id);
       processingScheduled = true;
+      if (queuedId) await removePendingUpload(queuedId);
+      await refreshPending();
       await pollCapture(created.capture.id);
     } catch (error) {
       if (createdCaptureId && !processingScheduled) {
@@ -297,10 +311,53 @@ export default function CatatPage() {
         localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
         setCaptureId(null);
       }
+      // Sinyal putus sebelum berkasnya sampai: simpan di ponsel, jangan hilang.
+      if (!processingScheduled && shouldQueueForRetry(error, navigator.onLine)) {
+        const kept = queuedId ? true : await savePendingUpload({ inputMethod, mimeType, blob: file });
+        if (kept) {
+          await refreshPending();
+          notifyInfo(`${noun} disimpan di ponsel ini`, {
+            description: "Sinyal sedang putus. Kami kirim otomatis begitu sinyal kembali, atau tekan « Kirim sekarang ».",
+            duration: 8000,
+          });
+          setErrorMessage("");
+          setStep("ready");
+          return;
+        }
+      }
       setErrorMessage(captureErrorMessage(error, `${noun} belum dapat diproses. Silakan coba lagi, atau tulis transaksinya.`));
       setStep("failed");
     }
-  }, [pollCapture]);
+  }, [pollCapture, refreshPending]);
+
+  /** Kirim yang terlama di antrean. Satu per satu: layar periksa hanya memuat satu catatan. */
+  const sendPending = useCallback(async () => {
+    const [first] = await listPendingUploads();
+    if (!first) return;
+    setStep("uploading");
+    setErrorMessage("");
+    if (first.inputMethod === "camera") receiptPhotoRef.current = new File([first.blob], "nota", { type: first.mimeType });
+    await uploadAndProcess({
+      inputMethod: first.inputMethod,
+      file: first.blob,
+      mimeType: first.mimeType,
+      noun: first.inputMethod === "camera" ? "Foto" : "Rekaman",
+      queuedId: first.id,
+    });
+  }, [uploadAndProcess]);
+
+  // Sinyal kembali saat layar ini terbuka dan pemilik tidak sedang merekam
+  // atau memeriksa: kirim yang tertunda tanpa perlu diminta.
+  useEffect(() => {
+    const onOnline = () => {
+      if (step === "ready" && pendingCount > 0) {
+        notifyInfo("Sinyal kembali — mengirim catatan yang tertunda");
+        void sendPending();
+      }
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [step, pendingCount, sendPending]);
 
   const processAudioWithAI = useCallback(async (blob: Blob, actualMime?: string) => {
     setStep("uploading");
@@ -929,6 +986,16 @@ export default function CatatPage() {
                   </button>
                 </div>
               </form>
+            )}
+
+            {pendingCount > 0 && (
+              <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-umkm-warning-line bg-umkm-warning-soft px-4 py-3">
+                <p className="text-xs leading-relaxed text-umkm-warning">
+                  <strong className="block text-sm">{pendingCount} catatan menunggu dikirim</strong>
+                  Tersimpan di ponsel ini sejak sinyal putus.
+                </p>
+                <button type="button" onClick={() => void sendPending()} className="min-h-11 rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white">Kirim sekarang</button>
+              </div>
             )}
 
             {/* Biaya yang datang tiap bulan: diingatkan, bukan dicatat otomatis. */}
