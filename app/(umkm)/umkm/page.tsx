@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ReadinessMiniCard } from "@/components/warung/ReadinessMiniCard";
 import Link from "next/link";
-import { AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CalendarCheck, CheckCircle2, ChevronRight, CircleEllipsis, FileText, Mic, Plus, Sparkles, WalletCards } from "lucide-react";
+import { AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CalendarCheck, CheckCircle2, ChevronRight, FileText, Mic, Plus, Sparkles, Type, WalletCards } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ReminderStrip } from "@/components/warung/ReminderStrip";
 import { closingPromptText, closingTargetDate } from "@/modules/ledger/closing-day";
@@ -11,6 +11,7 @@ import { jakartaDate } from "@/modules/ledger/ledger-schema";
 import { ReclassCard } from "@/components/warung/ReclassCard";
 import { BroadcastInvitations } from "@/components/warung/BroadcastInvitations";
 import { DinasOfferCard } from "@/components/warung/DinasOfferCard";
+import { SetupChecklist } from "@/components/warung/SetupChecklist";
 import type { ReadinessLevelPayload } from "@/modules/readiness/level-repository";
 import styles from "../umkm-dashboard.module.css";
 
@@ -19,7 +20,7 @@ type CaptureRow = { id: string; status: string; failure_message: string | null; 
 type DocumentRow = { id: string; name: string; doc_type: string; status: string; updated_at: string };
 type RequestRow = { id: string; purpose: string; status: string; created_at: string };
 type ActionItem = { id: string; title: string; description: string; href: string };
-type ActivityItem = { id: string; title: string; detail: string; at: string; href: string };
+type ActivityItem = { id: string; kind: "income" | "expense" | "document" | "readiness"; title: string; detail: string; at: string; href: string };
 
 function transactionDirection(row: TransactionRow) { return row.direction ?? (row.type === "masuk" ? "income" : "expense"); }
 function transactionAmount(row: TransactionRow) { return Number(row.amount_idr ?? row.nominal ?? 0); }
@@ -43,6 +44,7 @@ export default function BerandaPage() {
   const [unchecked, setUnchecked] = useState(0);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasTransactions, setHasTransactions] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -76,29 +78,34 @@ export default function BerandaPage() {
         const requests = (requestResult.data ?? []) as RequestRow[];
         const required: ActionItem[] = [];
         for (const capture of captures) {
-          if (capture.status === "needs_review") required.push({ id: `capture-${capture.id}`, title: "Periksa catatan sebelum disimpan", description: "Hasil suara menunggu pemeriksaan Anda.", href: "/umkm/catat" });
-          else if (capture.status === "failed") required.push({ id: `capture-${capture.id}`, title: "Catatan belum berhasil dibaca", description: capture.failure_message ?? "Coba kembali atau tulis secara manual.", href: "/umkm/catat" });
-          else required.push({ id: `capture-${capture.id}`, title: "Catatan masih diproses", description: "Buka kembali untuk melihat perkembangan terbaru.", href: "/umkm/catat" });
+          if (capture.status === "needs_review") required.push({ id: `capture-${capture.id}`, title: "Periksa catatan sebelum disimpan", description: "Hasil suara menunggu pemeriksaan Anda.", href: `/umkm/catat?capture=${capture.id}` });
+          else if (capture.status === "failed") required.push({ id: `capture-${capture.id}`, title: "Catatan belum berhasil dibaca", description: capture.failure_message ?? "Coba kembali atau tulis secara manual.", href: `/umkm/catat?capture=${capture.id}` });
+          else required.push({ id: `capture-${capture.id}`, title: "Catatan masih diproses", description: "Buka kembali untuk melihat perkembangan terbaru.", href: `/umkm/catat?capture=${capture.id}` });
         }
         for (const document of documents.filter((item) => item.status === "processing" || item.status === "rejected")) {
           required.push({ id: `document-${document.id}`, title: document.status === "rejected" ? "Dokumen perlu diganti" : "Dokumen sedang dibaca", description: document.name, href: "/umkm/profil/dokumen" });
         }
-        for (const request of requests) required.push({ id: `request-${request.id}`, title: "Ada permintaan akses data", description: request.purpose, href: "/umkm/profil" });
+        for (const request of requests) required.push({ id: `request-${request.id}`, title: "Ada permintaan akses data", description: request.purpose, href: "/umkm/profil/izin#izin-lembaga" });
         setActions(required.slice(0, 5));
         // Kartu uang hari ini hanya menghitung catatan yang SUDAH dikonfirmasi.
         // Tanpa menyebutkan berapa yang belum diperiksa, angkanya terbaca
         // sebagai seluruh hari padahal belum tentu.
         setUnchecked(captures.filter((capture) => capture.status === "needs_review").length);
 
-        const realActivities: ActivityItem[] = ((recentResult.data ?? []) as TransactionRow[]).map((row) => ({
+        const recent = (recentResult.data ?? []) as TransactionRow[];
+        setHasTransactions(recent.length > 0);
+        // Baris aktivitas membuka Buku Kas dengan catatan itu sudah dicari --
+        // dulu semuanya jatuh ke tab ringkasan bulan, bukan ke catatannya.
+        const realActivities: ActivityItem[] = recent.map((row) => ({
           id: `transaction-${row.id}`,
+          kind: transactionDirection(row) === "income" ? "income" : "expense",
           title: transactionDirection(row) === "income" ? "Pemasukan tercatat" : "Pengeluaran tercatat",
           detail: `${row.item} · ${formatIdr(transactionAmount(row))}`,
           at: row.created_at,
-          href: "/umkm/laporan",
+          href: `/umkm/laporan?tab=kas&cari=${encodeURIComponent(row.item)}`,
         }));
-        for (const document of documents) realActivities.push({ id: `document-${document.id}`, title: "Dokumen diperbarui", detail: document.name, at: document.updated_at, href: "/umkm/profil/dokumen" });
-        if (readinessData?.levelSince) realActivities.push({ id: `readiness-${readinessData.level}-${readinessData.levelSince}`, title: `Tingkat kesiapan: ${readinessData.levelName}`, detail: readinessData.levelMeaning, at: `${readinessData.levelSince}T00:00:00+07:00`, href: "/umkm/kesiapan" });
+        for (const document of documents) realActivities.push({ id: `document-${document.id}`, kind: "document", title: "Dokumen diperbarui", detail: document.name, at: document.updated_at, href: "/umkm/profil/dokumen" });
+        if (readinessData?.levelSince) realActivities.push({ id: `readiness-${readinessData.level}-${readinessData.levelSince}`, kind: "readiness", title: `Tingkat kesiapan: ${readinessData.levelName}`, detail: readinessData.levelMeaning, at: `${readinessData.levelSince}T00:00:00+07:00`, href: "/umkm/perjalanan" });
         setActivities(realActivities.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 6));
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : "Beranda belum dapat dimuat.");
@@ -132,6 +139,7 @@ export default function BerandaPage() {
             <div className={styles.balanceMeta}>
               <span className={styles.balancePill}>{todayTransactions.length} catatan</span>
               <span>Masuk {formatIdr(income)}</span>
+              <span>Keluar {formatIdr(expense)}</span>
               {unchecked > 0 && (
                 <Link href="/umkm/catat" className={styles.balancePill}>
                   {unchecked} belum dicek
@@ -147,7 +155,9 @@ export default function BerandaPage() {
               >
                 <CalendarCheck size={15} /> Tutup kas
               </Link>
-              <Link href="/umkm/catat" aria-label="Pilihan catat lainnya" className={`${styles.quickAction} ${styles.quickActionRound}`}><CircleEllipsis size={18} /></Link>
+              {/* Dulu tombol « … » yang membawa ke tempat yang sama dengan
+                  « Catat uang ». Sekarang jalan pintas ke mode tulis. */}
+              <Link href="/umkm/catat?mode=tulis" aria-label="Catat dengan mengetik" className={`${styles.quickAction} ${styles.quickActionRound}`}><Type size={17} aria-hidden /></Link>
             </div>
           </section>
 
@@ -158,12 +168,14 @@ export default function BerandaPage() {
           */}
           <ReminderStrip />
 
+          <SetupChecklist readiness={readiness} hasTransactions={hasTransactions} loading={loading} />
+
           <ReclassCard />
 
           <section aria-labelledby="activity-mobile-title" className={styles.whiteCard}>
             <div className={styles.sectionHeader}>
               <h2 id="activity-mobile-title" className={styles.sectionTitle}>Aktivitas</h2>
-              <Link href="/umkm/laporan" className={styles.sectionLink}>Lihat semua</Link>
+              <Link href="/umkm/laporan?tab=kas" className={styles.sectionLink}>Lihat semua</Link>
             </div>
             {loading ? <p role="status" className="py-8 text-center text-xs text-umkm-subtle">Menyiapkan aktivitas...</p> : activities.length === 0 ? <EmptyActivity /> : activities.slice(0, 4).map((item) => <ActivityRow key={item.id} item={item} />)}
           </section>
@@ -171,21 +183,24 @@ export default function BerandaPage() {
           <section aria-labelledby="journey-mobile-title" className={`${styles.whiteCard} ${styles.journeyCard}`}>
             <div className={styles.sectionHeader}>
               <div><p className={styles.eyebrow} style={{ color: "var(--umkm-brand-hover)" }}>Perjalanan usaha</p><h2 id="journey-mobile-title" className={styles.sectionTitle}>Kesiapan data</h2></div>
-              <Link href="/umkm/kesiapan" className={styles.sectionLink}>Detail</Link>
+              <Link href="/umkm/perjalanan" className={styles.sectionLink}>Detail</Link>
             </div>
             <div className={styles.missionRow}>
               <div className={styles.mission}>
                 <strong>{readiness?.step?.title ?? "Semua langkah utama sudah didukung data"}</strong>
                 <p>{readiness?.step?.headline ?? "Lanjutkan kebiasaan mencatat agar ringkasan usaha tetap lengkap."}</p>
-                <Link href={readiness?.step?.action?.href ?? "/umkm/kesiapan"} className="-mx-2 mt-2 inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs font-extrabold text-umkm-brand hover:bg-umkm-brand-soft">Lanjutkan <ChevronRight size={12} /></Link>
+                <Link href={readiness?.step?.action?.href ?? "/umkm/perjalanan"} className="-mx-2 mt-2 inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs font-extrabold text-umkm-brand hover:bg-umkm-brand-soft">Lanjutkan <ChevronRight size={12} /></Link>
               </div>
             </div>
           </section>
 
           <section aria-labelledby="actions-mobile-title" className={styles.whiteCard}>
             <div className={styles.sectionHeader}><h2 id="actions-mobile-title" className={styles.sectionTitle}>Perlu perhatian</h2><span className="text-xs text-umkm-subtle">{actions.length} item</span></div>
-            {loading ? <p className="py-5 text-center text-xs text-umkm-subtle">Memeriksa data...</p> : actions.length === 0 ? <div className="flex items-center gap-2 py-4 text-xs text-umkm-success"><CheckCircle2 size={17} /> Semua beres untuk saat ini.</div> : actions.slice(0, 3).map((item) => <ActionRow key={item.id} item={item} />)}
+            {loading ? <p role="status" className="py-5 text-center text-xs text-umkm-subtle">Memeriksa data...</p> : actions.length === 0 ? <div className="flex items-center gap-2 py-4 text-xs text-umkm-success"><CheckCircle2 size={17} /> Semua beres untuk saat ini.</div> : actions.slice(0, 3).map((item) => <ActionRow key={item.id} item={item} />)}
           </section>
+
+          <DinasOfferCard />
+          <BroadcastInvitations />
         </div>
       </div>
 
@@ -198,8 +213,9 @@ export default function BerandaPage() {
 
           {error && <div role="alert" className="mt-5 flex gap-2 rounded-xl border border-umkm-danger-line bg-umkm-danger-soft p-4 text-xs text-umkm-danger-strong"><AlertCircle size={17} />{error}</div>}
 
-          <div className="mt-5">
+          <div className="mt-5 space-y-4">
             <ReminderStrip />
+            <SetupChecklist readiness={readiness} hasTransactions={hasTransactions} loading={loading} />
           </div>
 
           <section aria-label="Ringkasan hari ini" className={styles.kpiGrid}>
@@ -209,12 +225,12 @@ export default function BerandaPage() {
             {/* Tangga, bukan rapor. "17/100" memberi tahu pemilik bahwa ia
                 gagal tanpa memberi tahu apa yang kurang, dan angka yang
                 mustahil naik cepat hanya membuat orang berhenti membukanya. */}
-            <ReadinessMiniCard />
+            <ReadinessMiniCard data={readiness} />
           </section>
 
           <div className={styles.desktopGrid}>
             <section aria-labelledby="activity-desktop-title" className={styles.panel}>
-              <div className={styles.panelHeader}><div><h2 id="activity-desktop-title" className={styles.panelTitle}>Aktivitas terbaru</h2><p className="mt-1 text-xs text-umkm-subtle">Catatan dan perubahan terbaru di usaha Anda</p></div><Link href="/umkm/laporan" className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-umkm-line px-3 text-xs font-bold text-umkm-ink-soft hover:bg-umkm-surface">Buka laporan</Link></div>
+              <div className={styles.panelHeader}><div><h2 id="activity-desktop-title" className={styles.panelTitle}>Aktivitas terbaru</h2><p className="mt-1 text-xs text-umkm-subtle">Catatan dan perubahan terbaru di usaha Anda</p></div><Link href="/umkm/laporan?tab=kas" className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-umkm-line px-3 text-xs font-bold text-umkm-ink-soft hover:bg-umkm-surface">Buka laporan</Link></div>
               <div className={styles.panelBody}>{loading ? <p className="py-10 text-center text-xs text-umkm-subtle">Menyiapkan aktivitas...</p> : activities.length === 0 ? <EmptyActivity /> : activities.map((item) => <ActivityRow key={item.id} item={item} />)}</div>
             </section>
 
@@ -229,7 +245,7 @@ export default function BerandaPage() {
                   <h2 id="mission-desktop-title" className={styles.panelTitle}>Langkah usaha berikutnya</h2>
                   <p className="mt-1 text-xs text-umkm-subtle">Rekomendasi berdasarkan data yang sudah tersedia</p>
                 </div>
-                <Link href="/umkm/kesiapan" className="-mx-2 inline-flex min-h-11 items-center rounded-lg px-2 text-xs font-bold text-umkm-brand hover:bg-umkm-brand-soft">Lihat perjalanan</Link>
+                <Link href="/umkm/perjalanan" className="-mx-2 inline-flex min-h-11 items-center rounded-lg px-2 text-xs font-bold text-umkm-brand hover:bg-umkm-brand-soft">Lihat perjalanan</Link>
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5">
                 <div className="flex items-start gap-3.5 min-w-0 flex-1">
@@ -242,7 +258,7 @@ export default function BerandaPage() {
                   </div>
                 </div>
                 <Link
-                  href={readiness?.step?.action?.href ?? "/umkm/kesiapan"}
+                  href={readiness?.step?.action?.href ?? "/umkm/perjalanan"}
                   className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-umkm-brand px-5 text-xs font-bold text-white hover:bg-umkm-brand-hover transition-colors shadow-sm self-stretch sm:self-auto"
                 >
                   {readiness?.step?.action?.label ?? "Lanjutkan"} <ArrowRight size={14} />
@@ -265,12 +281,13 @@ function KpiCard({ label, value, meta, Icon, tone }: { label: string; value: str
 }
 
 function ActivityRow({ item }: { item: ActivityItem }) {
-  const isIncome = item.title.toLowerCase().includes("pemasukan");
-  return <Link href={item.href} className={styles.activityRow}><span className={styles.activityIcon}>{isIncome ? <ArrowDownLeft size={17} /> : item.title.toLowerCase().includes("pengeluaran") ? <ArrowUpRight size={17} /> : <FileText size={16} />}</span><span className={styles.activityCopy}><strong>{item.title}</strong><small>{item.detail}</small></span><time className={styles.activityTime}>{formatTime(item.at)}</time></Link>;
+  // Ikon dari jenisnya, bukan dari mencocokkan kata di judul.
+  const icon = item.kind === "income" ? <ArrowDownLeft size={17} /> : item.kind === "expense" ? <ArrowUpRight size={17} /> : <FileText size={16} />;
+  return <Link href={item.href} className={styles.activityRow}><span className={styles.activityIcon} aria-hidden>{icon}</span><span className={styles.activityCopy}><strong>{item.title}</strong><small>{item.detail}</small></span><time className={styles.activityTime}>{formatTime(item.at)}</time></Link>;
 }
 
 function ActionRow({ item }: { item: ActionItem }) {
-  return <Link href={item.href} className={styles.actionRow}><span className={styles.actionDot} /><span className="min-w-0 flex-1"><strong>{item.title}</strong><small className="truncate">{item.description}</small></span><ChevronRight size={14} className="text-umkm-faint" /></Link>;
+  return <Link href={item.href} className={styles.actionRow}><span className={styles.actionDot} /><span className="min-w-0 flex-1"><strong>{item.title}</strong><small className="line-clamp-2">{item.description}</small></span><ChevronRight size={14} className="text-umkm-faint" /></Link>;
 }
 
 function EmptyActivity() {

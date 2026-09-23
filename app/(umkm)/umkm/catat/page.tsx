@@ -198,8 +198,21 @@ export default function CatatPage() {
   }, [applyCapture, router]);
 
   useEffect(() => {
-    const persistedCaptureId = localStorage.getItem(ACTIVE_CAPTURE_STORAGE_KEY);
+    // « Perlu perhatian » di Beranda menunjuk catatan tertentu lewat
+    // ?capture=. Dulu hanya catatan yang tersimpan di peramban ini yang bisa
+    // dibuka lagi; catatan kedua dan seterusnya tidak punya jalan masuk.
+    const params = new URLSearchParams(window.location.search);
+    const requestedCapture = params.get("capture");
+    const persistedCaptureId =
+      requestedCapture && /^[0-9a-f-]{36}$/i.test(requestedCapture)
+        ? requestedCapture
+        : localStorage.getItem(ACTIVE_CAPTURE_STORAGE_KEY);
+    const requestedMode = params.get("mode");
     let cancelled = false;
+    // Jalan pintas « Tulis » dari Beranda.
+    const modeTimerId = !persistedCaptureId && requestedMode === "tulis"
+      ? window.setTimeout(() => { setInputMode("text"); typedTextRef.current?.focus(); }, 0)
+      : null;
     const restoreTimerId = persistedCaptureId
       ? window.setTimeout(() => {
         if (cancelled) return;
@@ -227,6 +240,7 @@ export default function CatatPage() {
     return () => {
       cancelled = true;
       if (restoreTimerId !== null) window.clearTimeout(restoreTimerId);
+      if (modeTimerId !== null) window.clearTimeout(modeTimerId);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       const mr = mediaRecorderRef.current;
       if (mr && mr.state !== "inactive") {

@@ -213,7 +213,13 @@ export function CashBook({ report, loading, range, preset, busy, closedDates, on
   onEdit: (transaction: LedgerTransactionView) => void;
   onCancel: (transaction: LedgerTransactionView) => void;
 }) {
-  const [filter, setFilter] = useState<CashBookFilter>(defaultCashBookFilter);
+  // ?cari= dari baris aktivitas di Beranda: catatan yang diketuk langsung
+  // dicari, alih-alih dibuang ke daftar sebulan penuh.
+  const [filter, setFilter] = useState<CashBookFilter>(() => {
+    if (typeof window === "undefined") return defaultCashBookFilter;
+    const query = new URLSearchParams(window.location.search).get("cari");
+    return query ? { ...defaultCashBookFilter, query: query.slice(0, 80) } : defaultCashBookFilter;
+  });
   const [showFilters, setShowFilters] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
 

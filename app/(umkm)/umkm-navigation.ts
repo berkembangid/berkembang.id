@@ -1,5 +1,5 @@
 import {
-  BarChart3, Bell, Building2, FileText, Home, Landmark, Map, Mic, Receipt,
+  BarChart3, Bell, Building2, FileText, Home, Landmark, Map, Mic,
   ShieldCheck, Sparkles, Target, User, Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -73,12 +73,10 @@ const SCREENS: Array<{ path: string; exact?: boolean } & ScreenHeading> = [
   { path: "/umkm/profil", title: "Profil usaha", hint: "Kenali usaha Anda", Icon: Building2 },
   { path: "/umkm/catat", title: "Catat transaksi", hint: "Uang masuk dan uang keluar", Icon: Mic },
   { path: "/umkm/laporan", title: "Buku kas & laporan", hint: "Ringkasan uang usaha", Icon: BarChart3 },
-  { path: "/umkm/kesiapan/metodologi", title: "Cara kami menghitung", parentHref: "/umkm/kesiapan", parentLabel: "Kesiapan", Icon: Target },
-  { path: "/umkm/kesiapan", title: "Kesiapan usaha", parentHref: "/umkm/perjalanan", parentLabel: "Perjalanan", Icon: Target },
+  { path: "/umkm/kesiapan/metodologi", title: "Cara kami menghitung", parentHref: "/umkm/perjalanan", parentLabel: "Perjalanan", Icon: Target },
   { path: "/umkm/perjalanan", title: "Perjalanan usaha", hint: "Langkah demi langkah", Icon: Map },
   { path: "/umkm/panduan", title: "Panduan usaha", hint: "Tanya apa saja soal usaha", Icon: Sparkles },
   { path: "/umkm/notifikasi", title: "Pemberitahuan", parentHref: "/umkm", parentLabel: "Beranda", Icon: Bell },
-  { path: "/umkm/aktivitas", title: "Aktivitas", parentHref: "/umkm", parentLabel: "Beranda", Icon: Receipt },
   { path: "/umkm/akuntan", title: "Mode akuntan", parentHref: "/umkm/laporan", parentLabel: "Laporan", Icon: BarChart3 },
 ];
 

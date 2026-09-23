@@ -41,7 +41,7 @@ test("@smoke satu endpoint memberi tingkat yang sama di dua layar", async ({ pag
     await route.fulfill({ json: payload });
   });
 
-  await page.goto("/umkm/kesiapan");
+  await page.goto("/umkm/perjalanan");
   await expect(page.getByText("Emas").first()).toBeVisible({ timeout: 30_000 });
   await page.screenshot({ path: "test-results/kesiapan-1-halaman.png", fullPage: true });
 
@@ -54,7 +54,7 @@ test("@smoke satu endpoint memberi tingkat yang sama di dua layar", async ({ pag
 test("akun dengan riwayat tidak dimulai dari Mulai", async ({ page }) => {
   // Evaluasi retroaktif: akun lama mendapat tingkat sesuai datanya pada
   // pembacaan pertama, bukan default terendah.
-  await page.goto("/umkm/kesiapan");
+  await page.goto("/umkm/perjalanan");
   const level = page.locator("section", { hasText: "Tingkat kesiapan usaha Anda" }).first();
   await expect(level).toBeVisible({ timeout: 30_000 });
   const text = await level.innerText();
@@ -96,7 +96,7 @@ test("belanja besar yang belum ada tampil netral, bukan merah", async ({ page })
     await route.fulfill({ json: payload });
   });
 
-  await page.goto("/umkm/kesiapan");
+  await page.goto("/umkm/perjalanan");
   await expect(page.getByText("Belum ada belanja besar")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/Belum ada bukan berarti kurang/)).toBeVisible();
   await page.screenshot({ path: "test-results/kesiapan-5-b3-netral.png", fullPage: true });

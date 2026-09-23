@@ -17,8 +17,14 @@ import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import type { ReadinessLevelPayload } from "@/modules/readiness/level-repository";
 
-export function ReadinessMiniCard() {
-  const [data, setData] = useState<ReadinessLevelPayload | null>(null);
+/**
+ * `data` diisi bila pemanggil sudah memuat kesiapan sendiri. Beranda dulu
+ * meminta `/api/v1/readiness` dua kali pada setiap kunjungan: sekali untuk
+ * langkah berikutnya, sekali lagi di dalam kartu ini.
+ */
+export function ReadinessMiniCard({ data: provided }: { data?: ReadinessLevelPayload | null } = {}) {
+  const [fetched, setData] = useState<ReadinessLevelPayload | null>(null);
+  const data = provided === undefined ? fetched : provided;
 
   const load = useCallback(async () => {
     try {
@@ -33,9 +39,10 @@ export function ReadinessMiniCard() {
   }, []);
 
   useEffect(() => {
+    if (provided !== undefined) return;
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
-  }, [load]);
+  }, [load, provided]);
 
   if (!data) return null;
 
@@ -43,7 +50,7 @@ export function ReadinessMiniCard() {
 
   return (
     <Link
-      href="/umkm/kesiapan"
+      href="/umkm/perjalanan"
       className="block rounded-2xl border border-umkm-line-strong bg-white px-4 py-3.5 transition-colors hover:bg-umkm-surface"
     >
       <span className="flex items-center justify-between text-[13px] text-umkm-muted">

@@ -50,6 +50,11 @@ const nextConfig: NextConfig = {
     { source: "/investor/requests/:path*", destination: "/investor/permintaan/:path*", permanent: true },
     { source: "/investor/dossiers/:path*", destination: "/investor/dosir/:path*", permanent: true },
     { source: "/umkm/:old(roadmap|score|gaps)", destination: "/umkm/perjalanan", permanent: true },
+    // Dua alamat untuk satu halaman membuat header menampilkan tombol
+    // « kembali » ke halaman yang isinya sama persis. Metodologi tetap di
+    // /umkm/kesiapan/metodologi; hanya alamat induknya yang dialihkan.
+    { source: "/umkm/kesiapan", destination: "/umkm/perjalanan", permanent: true },
+    { source: "/umkm/aktivitas", destination: "/umkm", permanent: true },
     { source: "/umkm/ai-copilot", destination: "/umkm/panduan", permanent: true },
     { source: "/umkm/upload", destination: "/umkm/profil/dokumen", permanent: true },
   ],

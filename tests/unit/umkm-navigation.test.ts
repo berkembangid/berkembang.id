@@ -22,7 +22,7 @@ describe("judul layar", () => {
     // `/umkm/profil` juga awalan dari `/umkm/profil/dokumen`; yang lebih dalam
     // harus menang, dan itu bergantung pada urutan tabelnya.
     expect(resolveHeading("/umkm/kesiapan/metodologi").title).toBe("Cara kami menghitung");
-    expect(resolveHeading("/umkm/kesiapan").title).toBe("Kesiapan usaha");
+    expect(resolveHeading("/umkm/profil/izin").title).toBe("Izin & program");
   });
 
   it("tidak menyamakan beranda dengan seluruh cabangnya", () => {
@@ -44,7 +44,8 @@ describe("jalan kembali", () => {
       "/umkm/profil/kondisi-awal",
       "/umkm/kesiapan/metodologi",
       "/umkm/notifikasi",
-      "/umkm/aktivitas",
+      "/umkm/profil/rekening",
+      "/umkm/profil/izin",
     ]) {
       expect(resolveHeading(path).parentHref, path).toBeTruthy();
     }

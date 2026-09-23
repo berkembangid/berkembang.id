@@ -46,7 +46,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("@smoke tidak ada layar UMKM yang meluber ke samping", async ({ page }) => {
-  for (const path of ["/umkm", "/umkm/laporan", "/umkm/kesiapan", "/umkm/profil/dokumen", "/umkm/profil"]) {
+  for (const path of ["/umkm", "/umkm/laporan", "/umkm/perjalanan", "/umkm/profil/dokumen", "/umkm/profil"]) {
     await page.goto(path);
     await page.waitForTimeout(1_500);
     const result = await overflowing(page);

@@ -138,7 +138,7 @@ export default function ReadinessLevelPage() {
   if (problem) {
     return (
       <DashboardPage width="compact">
-        <PageHeader title="Langkah usaha saya" description="Semua dinilai otomatis dari catatan dan dokumen Anda." icon={ShieldCheck} />
+        <PageHeader title="Perjalanan usaha" description="Semua dinilai otomatis dari catatan dan dokumen Anda." icon={ShieldCheck} />
         <p className="rounded-2xl border border-umkm-warning-line bg-umkm-warning-soft px-4 py-3 text-xs text-umkm-warning">
           {problem}{" "}
           <button type="button" onClick={() => void load()} className="-mx-1.5 inline-flex min-h-11 items-center rounded-lg px-1.5 font-bold underline">
@@ -152,7 +152,7 @@ export default function ReadinessLevelPage() {
   if (!data) {
     return (
       <DashboardPage width="compact">
-        <PageHeader title="Langkah usaha saya" description="Semua dinilai otomatis dari catatan dan dokumen Anda." icon={ShieldCheck} />
+        <PageHeader title="Perjalanan usaha" description="Semua dinilai otomatis dari catatan dan dokumen Anda." icon={ShieldCheck} />
         <p className="flex items-center gap-2 px-1 py-6 text-xs text-umkm-subtle">
           <LoaderCircle size={14} className="animate-spin" /> Memuat tingkat kesiapan…
         </p>
@@ -167,7 +167,7 @@ export default function ReadinessLevelPage() {
   return (
     <DashboardPage width="compact">
       <PageHeader
-        title="Langkah usaha saya"
+        title="Perjalanan usaha"
         description="Semua dinilai otomatis dari catatan dan dokumen Anda — tidak ada yang perlu diklaim."
         icon={ShieldCheck}
         actions={

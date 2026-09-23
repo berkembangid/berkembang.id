@@ -97,7 +97,7 @@ export default function MetodologiPage() {
         icon={ScrollText}
         actions={
           <Link
-            href="/umkm/kesiapan"
+            href="/umkm/perjalanan"
             className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-umkm-line bg-white px-3 text-xs font-bold text-umkm-muted hover:bg-umkm-surface-muted"
           >
             <ArrowLeft size={14} /> Kembali
