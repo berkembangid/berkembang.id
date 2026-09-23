@@ -54,6 +54,15 @@ export type InstitutionPortalSupplement = {
       };
     };
     Functions: {
+      /** 0109 -- piutang dan utang per orang, dan nomor WhatsApp kontak. */
+      fn_contact_balances: {
+        Args: { p_business_id: string };
+        Returns: Array<{ kind: "PIUTANG" | "UTANG"; name: string; balance_idr: number; since: string | null; last_activity: string | null; phone: string | null }>;
+      };
+      set_contact_phone: {
+        Args: { p_name: string; p_phone: string | null; p_kind?: string };
+        Returns: import("@/types/database.generated").Json;
+      };
       /** 0108 -- masa berlaku dokumen izin dan pengingatnya. */
       set_document_validity: {
         Args: { p_document_id: string; p_valid_until: string | null };

@@ -23,7 +23,7 @@ const boxTone = {
   householdIdr: { border: "border-umkm-warning-line", bg: "bg-umkm-warning-soft", text: "text-umkm-warning" },
 } as const;
 
-export function MonthlyTab({ month }: { month: string }) {
+export function MonthlyTab({ month, onManageContacts }: { month: string; onManageContacts?: () => void }) {
   const [report, setReport] = useState<WarungReportView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -160,6 +160,11 @@ export function MonthlyTab({ month }: { month: string }) {
           <h3 className="text-sm font-bold text-umkm-ink">Pelanggan yang belum bayar</h3>
           <span className="text-xs font-bold text-umkm-warning">{formatIdr(report.receivableTotalIdr)}</span>
         </div>
+        {onManageContacts && report.receivables.length > 0 && (
+          <button type="button" onClick={onManageContacts} className="mt-1 inline-flex min-h-11 items-center text-xs font-bold text-umkm-brand">
+            Tagih atau tandai lunas →
+          </button>
+        )}
         {report.receivables.length === 0 ? (
           <p className="mt-3 text-xs text-umkm-subtle">Semua pelanggan sudah membayar.</p>
         ) : (
@@ -170,7 +175,7 @@ export function MonthlyTab({ month }: { month: string }) {
                   <strong className="block truncate text-xs text-umkm-ink">
                     {row.counterpartyName ?? row.description}
                   </strong>
-                  <small className="text-xs text-umkm-subtle">{formatTanggal(row.transactionDate)}</small>
+                  {row.transactionDate && <small className="text-xs text-umkm-subtle">sejak {formatTanggal(row.transactionDate)}</small>}
                 </span>
                 <span className="shrink-0 text-xs font-black text-umkm-warning">{formatIdr(row.amountIdr)}</span>
               </li>

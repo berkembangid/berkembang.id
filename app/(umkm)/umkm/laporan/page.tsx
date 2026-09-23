@@ -6,6 +6,7 @@ import { BarChart3, CalendarCheck, Plus } from "lucide-react";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { useConfirm } from "@/components/ui/confirm";
 import { BankReportCard } from "@/components/warung/BankReportCard";
+import { ContactBalances } from "@/components/warung/ContactBalances";
 import { MonthlyTab } from "@/components/warung/MonthlyTab";
 import { supabase } from "@/lib/supabase";
 import { notifyFromError, notifySuccess, notifyWarning } from "@/lib/notify";
@@ -24,7 +25,7 @@ import {
 // Kondisi awal usaha pindah ke menu Profil. Laporan menjawab « bagaimana
 // usaha saya berjalan » dan dibaca berulang kali; kondisi awal menjawab
 // « dari mana saya mulai » dan diisi sekali seumur usaha.
-type Tab = "month" | "bank" | "cash";
+type Tab = "month" | "contacts" | "bank" | "cash";
 
 export default function LaporanPage() {
   const router = useRouter();
@@ -37,6 +38,7 @@ export default function LaporanPage() {
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState(false);
   const [sector, setSector] = useState<AccountingSector>(pilotSector);
+  const [businessName, setBusinessName] = useState("");
 
   const [form, setForm] = useState<TransactionFormState>(emptyTransactionForm);
   const [editing, setEditing] = useState<LedgerTransactionView | null>(null);
@@ -57,6 +59,7 @@ export default function LaporanPage() {
     const timer = window.setTimeout(() => {
       // « Lihat buku kas » dari Catat: catatan barunya ada di tab Buku Kas.
       if (params.get("tab") === "kas") setTab("cash");
+      if (params.get("tab") === "utang-piutang") setTab("contacts");
       if (requested) {
         // Sebelum pukul 04.00 yang ditawarkan hari kemarin, dan dialog harus
         // menutup hari itu -- bukan hari yang baru dua jam berjalan.
@@ -73,8 +76,11 @@ export default function LaporanPage() {
     void (async () => {
       const { data: session } = await supabase.auth.getUser();
       if (!session.user) return;
-      const { data } = await supabase.from("profiles").select("sektor_usaha").eq("auth_user_id", session.user.id).maybeSingle();
-      if (!cancelled) setSector(sectorFromAnswer(data?.sektor_usaha));
+      const { data } = await supabase.from("profiles").select("sektor_usaha,nama_usaha").eq("auth_user_id", session.user.id).maybeSingle();
+      if (!cancelled) {
+        setSector(sectorFromAnswer(data?.sektor_usaha));
+        setBusinessName(data?.nama_usaha ?? "");
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -206,15 +212,16 @@ export default function LaporanPage() {
 
       {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
 
-      <nav aria-label="Tampilan laporan" className="flex gap-1 rounded-xl border border-umkm-line bg-white p-1 shadow-[0_5px_18px_rgba(27,42,58,.04)]">
-        {([{ id: "month", label: "Bulan ini" }, { id: "bank", label: "Untuk bank" }, { id: "cash", label: "Buku kas" }] as const).map((item) => (
-          <button key={item.id} type="button" onClick={() => setTab(item.id)} aria-current={tab === item.id ? "page" : undefined} className={`min-h-11 flex-1 rounded-lg px-3 text-xs font-bold transition-colors ${tab === item.id ? "bg-umkm-brand-soft text-umkm-brand shadow-sm" : "text-umkm-subtle hover:bg-umkm-surface-muted"}`}>
+      <nav aria-label="Tampilan laporan" className="flex gap-1 overflow-x-auto rounded-xl border border-umkm-line bg-white p-1 shadow-[0_5px_18px_rgba(27,42,58,.04)]">
+        {([{ id: "month", label: "Bulan ini" }, { id: "contacts", label: "Utang piutang" }, { id: "cash", label: "Buku kas" }, { id: "bank", label: "Untuk bank" }] as const).map((item) => (
+          <button key={item.id} type="button" onClick={() => setTab(item.id)} aria-current={tab === item.id ? "page" : undefined} className={`min-h-11 flex-1 whitespace-nowrap rounded-lg px-2 text-xs font-bold transition-colors ${tab === item.id ? "bg-umkm-brand-soft text-umkm-brand shadow-sm" : "text-umkm-subtle hover:bg-umkm-surface-muted"}`}>
             {item.label}
           </button>
         ))}
       </nav>
 
-      {tab === "month" && <MonthlyTab month={jakartaDate().slice(0, 7)} />}
+      {tab === "month" && <MonthlyTab month={jakartaDate().slice(0, 7)} onManageContacts={() => setTab("contacts")} />}
+      {tab === "contacts" && <ContactBalances sector={sector} businessName={businessName} onChanged={() => void loadReport()} />}
       {tab === "bank" && <BankReportCard onOpenCondition={() => router.push("/umkm/profil/kondisi-awal")} />}
       {tab === "cash" && (
         <CashBook

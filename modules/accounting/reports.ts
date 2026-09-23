@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { withPortalRpc } from "@/lib/supabase/portal";
 import { activeBusinessId, csvCell } from "@/modules/ledger/ledger-repository";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
 import { AccountingOperationError, accountingOperationError } from "@/modules/accounting/accounting-errors";
@@ -356,15 +357,11 @@ export async function getWarungReport(userId: string, month: string): Promise<Wa
   const previousKey = previousMonth(month);
   const previous = rows.find((row) => row.periodMonth === previousKey) ?? null;
 
+  // Saldo per pelanggan (0109), bukan daftar penjualan tempo mentah: dulu
+  // pelunasan (kategori 3) tidak pernah mengurangi apa pun, jadi pelanggan
+  // yang sudah bayar tetap tampil berutang selamanya.
   const [receivableResult, reclassResult] = await Promise.all([
-    client
-      .from("transactions")
-      .select("id,item,counterparty,amount_idr,transaction_date")
-      .eq("business_id", businessId)
-      .eq("ledger_status", "confirmed")
-      .eq("emkm_category_code", 10)
-      .order("transaction_date", { ascending: false })
-      .limit(20),
+    withPortalRpc(client).rpc("fn_contact_balances", { p_business_id: businessId }),
     client
       .from("transactions")
       .select("id", { count: "exact", head: true })
@@ -372,16 +369,23 @@ export async function getWarungReport(userId: string, month: string): Promise<Wa
       .eq("ledger_status", "confirmed")
       .eq("needs_reclass", true),
   ]);
-  fail(receivableResult.error);
   fail(reclassResult.error);
 
-  const receivables: ReceivableView[] = (receivableResult.data ?? []).map((row) => ({
-    transactionId: row.id,
-    description: row.item,
-    counterpartyName: row.counterparty,
-    amountIdr: Number(row.amount_idr ?? 0),
-    transactionDate: row.transaction_date ?? "",
-  }));
+  // Fungsi saldo belum terpasang di suatu lingkungan bukan alasan menjatuhkan
+  // seluruh laporan bulanan; daftarnya saja yang kosong.
+  const balanceRows = receivableResult.error || !Array.isArray(receivableResult.data)
+    ? []
+    : (receivableResult.data as Array<{ kind: string; name: string; balance_idr: number; since: string | null }>);
+  const receivables: ReceivableView[] = balanceRows
+    .filter((row) => row.kind === "PIUTANG")
+    .slice(0, 20)
+    .map((row) => ({
+      transactionId: row.name.toLowerCase(),
+      description: row.name,
+      counterpartyName: row.name,
+      amountIdr: Number(row.balance_idr),
+      transactionDate: row.since ?? "",
+    }));
 
   return {
     month,

@@ -126,6 +126,7 @@
     "0105_kuota_terlihat_dan_audit_lengkap.sql",
     "0106_catatan_kandidat_tersimpan.sql",
     "0107_izin_dan_program_pemilik.sql",
-    "0108_masa_berlaku_dokumen.sql"
+    "0108_masa_berlaku_dokumen.sql",
+    "0109_saldo_per_kontak.sql"
   ]
 }
