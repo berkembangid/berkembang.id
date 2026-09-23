@@ -4545,8 +4545,15 @@ async function verifyDinasAuthority() {
 
     insert into public.documents (business_id, user_id, name, doc_type)
     select business.id, business.legacy_profile_id, 'berkas.pdf', jenis
+    -- 'ktp', bukan 'ktp_owner'. Perapiannya ditulis di \`0101\`: nama kedua itu
+    -- tidak pernah ada di \`private.known_document_types()\`, jadi tidak ada
+    -- pemilik yang bisa mengunggahnya. Fixture ini dulu memakainya karena
+    -- fungsi pembacanya juga memakainya -- dua-duanya salah dengan cara yang
+    -- sama, dan itulah sebab skenario ini tidak pernah memperlihatkan cacat
+    -- yang sudah berjalan di produksi. Dengan nama yang berlaku, ketiganya
+    -- benar-benar terhitung dan \`grupLegal\` memang legalitasnya lengkap.
     from public.businesses as business
-    cross join unnest(array['nib', 'npwp', 'ktp_owner']) as jenis
+    cross join unnest(array['nib', 'npwp', 'ktp']) as jenis
     where business.legacy_profile_id in (${daftarId(grupLegal)});
   `);
 

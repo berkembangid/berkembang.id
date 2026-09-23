@@ -1143,6 +1143,212 @@ describe("document type list contract (0043)", () => {
   });
 });
 
+describe("legality document type contract (0101)", () => {
+  /**
+   * Isi fungsi yang BERLAKU, yaitu `create or replace` terakhir di seluruh
+   * migrasi -- alasan yang sama seperti `sqlKnownTypes` di atas.
+   *
+   * Batas isinya diambil dari tag dolarnya sendiri (`$fn$`, `$function$`),
+   * bukan dari "sampai definisi berikutnya". Migrasi `0101` menyelipkan
+   * pembaruan data dan dua blok `do $$` di antara fungsi-fungsinya, dan
+   * potongan kasar akan menyeret komentarnya ke dalam badan fungsi lalu
+   * melaporkan cacat yang tidak ada.
+   */
+  function latestFunctionBodies(): Map<string, string> {
+    const bodies = new Map<string, string>();
+    const files = readdirSync(migrationDirectory).filter((name) => name.endsWith(".sql")).sort();
+    for (const file of files) {
+      const sql = readFileSync(join(migrationDirectory, file), "utf8");
+      const starts = [...sql.matchAll(/create\s+or\s+replace\s+function\s+(public|private)\.(\w+)/gi)];
+      for (const start of starts) {
+        const from = start.index ?? 0;
+        const opening = /\bas\s+\$(\w*)\$/i.exec(sql.slice(from));
+        if (!opening) continue;
+        const bodyFrom = from + (opening.index ?? 0) + opening[0].length;
+        const closing = sql.indexOf(`$${opening[1]}$`, bodyFrom);
+        if (closing < 0) continue;
+        bodies.set(`${start[1].toLowerCase()}.${start[2]}`, sql.slice(bodyFrom, closing));
+      }
+    }
+    expect(bodies.size, "no function definitions found").toBeGreaterThan(0);
+    return bodies;
+  }
+
+  function typesInside(body: string): string[] {
+    return [...body.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]);
+  }
+
+  function knownTypes(): string[] {
+    const body = latestFunctionBodies().get("private.known_document_types");
+    expect(body, "known_document_types must exist in some migration").toBeTruthy();
+    return typesInside(body as string);
+  }
+
+  const listHelpers = [
+    "private.legality_document_types",
+    "private.owner_identity_document_types",
+    "private.sector_certificate_document_types",
+  ];
+
+  it("names only document types the upload flow accepts", () => {
+    // Cacat yang dijaga di sini: sepuluh fungsi pembaca menyaring
+    // `doc_type in ('nib','npwp','ktp_owner','pirt','halal','distribution_permit')`
+    // sementara `ktp_owner` dan `distribution_permit` ditolak
+    // `create_document_upload_session` dengan VALIDATION_FAILED sejak hari
+    // pertama. Potret dosir selalu kosong dan penanda "legalitas lengkap"
+    // selalu kurang hitung, tanpa satu galat pun.
+    const known = knownTypes();
+    const bodies = latestFunctionBodies();
+    for (const helper of listHelpers) {
+      const body = bodies.get(helper);
+      expect(body, `${helper} must exist`).toBeTruthy();
+      const types = typesInside(body as string);
+      expect(types.length, `${helper} must not be empty`).toBeGreaterThan(0);
+      for (const docType of types) {
+        expect(known, `${helper} -> ${docType}`).toContain(docType);
+      }
+    }
+  });
+
+  it("uses the same names as the TypeScript upload schema", () => {
+    // Dua daftar yang tidak pernah dibandingkan siapa pun sudah berselisih
+    // sekali (`0043`). Ini yang kedua, dan dijaga dengan cara yang sama.
+    const bodies = latestFunctionBodies();
+    for (const helper of listHelpers) {
+      for (const docType of typesInside(bodies.get(helper) as string)) {
+        expect(documentTypes as readonly string[], `${helper} -> ${docType}`).toContain(docType);
+      }
+    }
+  });
+
+  it("counts the owner identity card and the distribution permit", () => {
+    const legality = typesInside(latestFunctionBodies().get("private.legality_document_types") as string);
+    expect(legality.sort()).toEqual(["halal", "izin_edar", "ktp", "nib", "npwp", "pirt"]);
+  });
+
+  it("leaves no function filtering on a type nobody can upload", () => {
+    // Bukan hanya lima fungsi yang ditulis ulang `0101`: seluruh isi migrasi
+    // disapu, supaya salinan keenam yang lahir di cabang lain ketahuan di
+    // sini dan bukan di dasbor dinas enam bulan kemudian.
+    const stale: string[] = [];
+    for (const [name, body] of latestFunctionBodies()) {
+      if (/\bktp_owner\b|\bdistribution_permit\b/.test(body)) stale.push(name);
+    }
+    expect(stale).toEqual([]);
+  });
+
+  it("keeps the legality list in one place", () => {
+    // Daftarnya sempat tersalin ke sepuluh tempat, dan itulah sebab satu salah
+    // ketik bertahan sepuluh migrasi. Setiap pembaca memanggil helper-nya.
+    const bodies = latestFunctionBodies();
+    for (const name of [
+      "public.list_anonymous_business_candidates",
+      "public.dinas_region_drilldown",
+      "private.dinas_region_cells",
+      "private.dinas_cohort",
+    ]) {
+      const body = bodies.get(name);
+      expect(body, `${name} must exist`).toBeTruthy();
+      expect(body, name).toContain("private.legality_document_types()");
+    }
+    const dossier = bodies.get("public.respond_to_dossier_request");
+    expect(dossier).toContain("private.owner_identity_document_types()");
+    expect(dossier).toContain("private.sector_certificate_document_types()");
+  });
+
+  it("rewrites the live definition of every function it touches", () => {
+    // `create or replace` terakhir untuk kelima fungsi harus ada DI `0101`.
+    // Kalau migrasi berikutnya menulis ulang salah satunya dari salinan lama,
+    // daftarnya kembali inline dan uji di atas yang menangkapnya -- tetapi uji
+    // ini menyebut sebabnya dengan lebih jelas.
+    const migration = readFileSync(
+      join(migrationDirectory, "0101_nama_jenis_dokumen_legalitas.sql"),
+      "utf8",
+    );
+    for (const name of [
+      "public.respond_to_dossier_request",
+      "public.list_anonymous_business_candidates",
+      "public.dinas_region_drilldown",
+      "private.dinas_region_cells",
+      "private.dinas_cohort",
+    ]) {
+      expect(migration.toLowerCase(), name).toContain(`create or replace function ${name}`);
+    }
+  });
+
+  it("normalizes any row that slipped through with a stale type", () => {
+    // `documents.doc_type` adalah `text` tanpa check constraint. Nol baris di
+    // data yang diperiksa, tetapi jaringnya tetap harus ada di migrasinya.
+    const migration = readFileSync(
+      join(migrationDirectory, "0101_nama_jenis_dokumen_legalitas.sql"),
+      "utf8",
+    );
+    for (const table of ["public.documents", "public.document_upload_sessions"]) {
+      expect(migration, table).toMatch(
+        new RegExp(`update ${table.replace(".", "\\.")}[\\s\\S]{0,400}?where doc_type in \\('ktp_owner', 'distribution_permit'\\);`),
+      );
+    }
+    expect(migration).toContain("when 'ktp_owner' then 'ktp'");
+    expect(migration).toContain("when 'distribution_permit' then 'izin_edar'");
+  });
+
+  /**
+   * Penyaring lingkup dosir yang HIDUP DI TYPESCRIPT.
+   *
+   * `modules/institution/dossier-evidence.ts` memilih dokumen untuk halaman 1
+   * dossier PDF dengan daftarnya sendiri (`scopeDocumentTypes`), bukan lewat
+   * SQL -- jadi helper `private.*_document_types()` tidak bisa menjangkaunya,
+   * dan dua daftar kembali berdiri tanpa ada yang membandingkan. Itu bentuk
+   * cacat yang sama persis dengan yang diperbaiki `0101`, hanya berpindah
+   * bahasa.
+   *
+   * Berkasnya belum ada di cabang ini; ia datang bersama pekerjaan dossier
+   * PDF. Uji ini sengaja ditulis lebih dulu dan diam selama berkasnya belum
+   * ada, supaya penjagaannya menyala sendiri saat berkasnya mendarat --
+   * bukan menunggu ada yang ingat menuliskannya.
+   */
+  it("keeps the TypeScript dossier scope filter on the same names as SQL", () => {
+    const evidenceFile = join(process.cwd(), "modules", "institution", "dossier-evidence.ts");
+    if (!existsSync(evidenceFile)) return;
+
+    const source = readFileSync(evidenceFile, "utf8");
+    expect(source, "dossier-evidence.ts masih menyebut jenis yang tidak bisa diunggah")
+      .not.toMatch(/\bktp_owner\b|\bdistribution_permit\b/);
+
+    const start = source.indexOf("scopeDocumentTypes");
+    expect(start, "scopeDocumentTypes tidak ditemukan; namanya berubah?").toBeGreaterThanOrEqual(0);
+    const open = source.indexOf("{", start);
+    let depth = 0;
+    let end = -1;
+    for (let index = open; index < source.length && open >= 0; index += 1) {
+      if (source[index] === "{") depth += 1;
+      if (source[index] === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          end = index;
+          break;
+        }
+      }
+    }
+    expect(end, "blok scopeDocumentTypes tidak tertutup").toBeGreaterThan(open);
+
+    const bodies = latestFunctionBodies();
+    const allowed = new Set([
+      ...typesInside(bodies.get("private.legality_document_types") as string),
+      ...typesInside(bodies.get("private.owner_identity_document_types") as string),
+      ...typesInside(bodies.get("private.sector_certificate_document_types") as string),
+    ]);
+    const declared = [...source.slice(open, end).matchAll(/["']([a-z][a-z_]*)["']/g)]
+      .map((match) => match[1])
+      .filter((name) => (documentTypes as readonly string[]).includes(name));
+    expect(declared.length, "tidak satu pun jenis dokumen terbaca di scopeDocumentTypes")
+      .toBeGreaterThan(0);
+    for (const docType of declared) {
+      expect([...allowed], `dossier-evidence.ts -> ${docType}`).toContain(docType);
+    }
+  });
+});
+
 describe("report archive contract (0044)", () => {
   const migration = readFileSync(join(migrationDirectory, "0044_report_archive.sql"), "utf8");
 
