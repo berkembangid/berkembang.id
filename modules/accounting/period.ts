@@ -32,6 +32,7 @@ import type {
   LoanUpdateInput,
   OpeningBalancesInput,
 } from "@/modules/accounting/period-schema";
+import { defaultUsefulLifeMonths } from "@/modules/accounting/period-schema";
 
 /**
  * Penolakan dari basis data harus sampai ke pemilik apa adanya. Sebelumnya
@@ -308,6 +309,8 @@ export type FixedAssetView = {
   disposedOn: string | null;
   /** Alat kondisi awal hanya bisa diubah lewat koreksi kondisi awal. */
   fromOpeningBalance: boolean;
+  /** Alat milik sendiri yang disetor sesudah kondisi awal (0111). */
+  ownerContributed: boolean;
   originalCostIdr: number;
   monthlyDepreciationIdr: number;
 };
@@ -315,16 +318,25 @@ export type FixedAssetView = {
 export async function listFixedAssets(userId: string): Promise<FixedAssetView[]> {
   const client = await createServerSupabaseClient();
   const businessId = await activeBusinessId(userId);
-  const [assets, postings] = await Promise.all([
+  const [assets, postings, contributed] = await Promise.all([
     client
       .from("fixed_assets")
       .select("id,name,category,acquired_on,cost_idr,useful_life_months,disposed_on,opening_balance_id,original_cost_idr,opening_accumulated_depreciation_idr")
       .eq("business_id", businessId)
       .order("acquired_on", { ascending: false }),
     client.from("depreciation_postings").select("asset_id,amount_idr").eq("business_id", businessId),
+    // `owner_contributed` (0111) belum ada di tipe hasil generate; dibaca
+    // terpisah supaya kueri utamanya tetap bertipe.
+    (client as unknown as SupabaseClient)
+      .from("fixed_assets")
+      .select("id")
+      .eq("business_id", businessId)
+      .eq("owner_contributed", true),
   ]);
   fail(assets.error);
   fail(postings.error);
+  fail(contributed.error);
+  const contributedIds = new Set(((contributed.data ?? []) as Array<{ id: string }>).map((row) => row.id));
 
   const accumulated = new Map<string, number>();
   for (const row of postings.data ?? []) {
@@ -351,6 +363,7 @@ export async function listFixedAssets(userId: string): Promise<FixedAssetView[]>
       bookValueIdr: Number(row.cost_idr) - accumulatedIdr,
       disposedOn: row.disposed_on,
       fromOpeningBalance: row.opening_balance_id !== null,
+      ownerContributed: contributedIds.has(row.id),
       originalCostIdr: Number(row.original_cost_idr ?? row.cost_idr),
       monthlyDepreciationIdr: Math.max(
         // SAK EMKM 11.14: seluruh harga perolehan yang disusutkan.
@@ -361,19 +374,27 @@ export async function listFixedAssets(userId: string): Promise<FixedAssetView[]>
   });
 }
 
-export async function registerFixedAsset(input: FixedAssetInput) {
-  const client = await createServerSupabaseClient();
-  const { data, error } = await client.rpc("register_fixed_asset", {
+/**
+ * Alat yang sudah dimiliki, disetor ke usaha kapan saja (0111).
+ *
+ * `costIdr` di sini adalah nilai PAKAI sekarang dan `usefulLifeMonths` sisa
+ * umurnya -- bukan harga beli dulu. Basis data membukukannya sebagai aset
+ * tetap terhadap modal pemilik, tanpa kas. `register_fixed_asset` yang lama
+ * tetap tertutup karena tidak membuat jurnal.
+ */
+export async function contributeFixedAsset(input: FixedAssetInput) {
+  const client = withPortalRpc(await createServerSupabaseClient());
+  const category = input.category ?? "peralatan";
+  const { data, error } = await client.rpc("contribute_fixed_asset", {
     p_name: input.name,
-    p_cost_idr: input.costIdr,
-    p_acquired_on: input.acquiredOn,
-    p_category: input.category ?? undefined,
-    p_useful_life_months: input.usefulLifeMonths ?? undefined,
-    p_salvage_value_idr: 0,
+    p_value_idr: input.costIdr,
+    p_useful_life_months: input.usefulLifeMonths ?? defaultUsefulLifeMonths[category],
+    p_category: category,
+    p_contributed_on: input.acquiredOn,
   });
   const operationError = rpcError(error);
   if (operationError) throw operationError;
-  return data;
+  return data as { fixedAssetId: string; journalEntryId: string; contributedOn: string };
 }
 
 export type LoanView = {

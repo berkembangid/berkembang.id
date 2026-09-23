@@ -1,6 +1,6 @@
 import {
   BarChart3, Bell, BookOpen, Building2, Calculator, CalendarDays, FileText, Home, Landmark, Map, Mic, Repeat,
-  ShieldCheck, Sparkles, Target, User, Users, Wallet,
+  Scale, ShieldCheck, Sparkles, Target, User, Users, Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -45,7 +45,7 @@ export const CATAT_RESTART_EVENT = "berkembang:catat-baru";
  *
  * `tab` null berarti tujuan di luar halaman Laporan (`href` dipakai apa adanya).
  */
-export type LaporanTab = "bulan-ini" | "utang-piutang" | "kas" | "bank";
+export type LaporanTab = "bulan-ini" | "utang-piutang" | "kas" | "kondisi" | "bank";
 
 export type LaporanSection = {
   tab: LaporanTab | null;
@@ -59,6 +59,7 @@ export type LaporanSection = {
 export const LAPORAN_SECTIONS: LaporanSection[] = [
   { tab: "bulan-ini", href: "/umkm/laporan?tab=bulan-ini", label: "Bulan ini", description: "Untung rugi, pengingat, dan ringkasan bulan berjalan", Icon: CalendarDays, tone: "success" },
   { tab: "kas", href: "/umkm/laporan?tab=kas", label: "Buku kas", description: "Setiap uang masuk dan keluar, tutup kas harian", Icon: BookOpen, tone: "brand" },
+  { tab: "kondisi", href: "/umkm/laporan?tab=kondisi", label: "Kondisi usaha", description: "Yang Anda punya, yang harus dibayar, dan milik bersih", Icon: Scale, tone: "success" },
   { tab: "utang-piutang", href: "/umkm/laporan?tab=utang-piutang", label: "Utang piutang", description: "Siapa yang belum bayar, dan ke siapa Anda berutang", Icon: Users, tone: "warning" },
   { tab: "bank", href: "/umkm/laporan?tab=bank", label: "Untuk bank", description: "Laporan untuk pengajuan pinjaman", Icon: Landmark, tone: "brand" },
   { tab: null, href: "/umkm/akuntan", label: "Mode akuntan", description: "Laporan lengkap untuk dibaca akuntan Anda", Icon: Calculator, tone: "neutral" },

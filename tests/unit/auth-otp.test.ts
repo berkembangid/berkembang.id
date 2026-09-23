@@ -127,7 +127,7 @@ describe("rangkaian layar autentikasi", () => {
     // Pengalihannya bergantung pada penanda yang tersimpan, bukan pada keadaan
     // lain yang kebetulan kosong.
     expect(kontinu).toContain("onboarding_seen_at");
-    expect(kontinu).toContain('redirect(new URL("/umkm/profil"');
+    expect(kontinu).toContain('redirect(new URL("/umkm/profil/kondisi-awal?mulai=1"');
     // Bendera yang tidak dibaca siapa pun tidak kembali.
     expect(kontinu).not.toContain("onboarding=1");
     expect(codeOnly(read("app", "auth", "register", "page.tsx"))).not.toContain("/umkm/profil");

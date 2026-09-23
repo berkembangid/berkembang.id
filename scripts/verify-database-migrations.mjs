@@ -2209,6 +2209,35 @@ async function verifyAccountingPeriodReports() {
     "42501",
   );
 
+  // 0111: alat yang sudah dimiliki disetor kapan saja -- WITH jurnal.
+  // Aset tetap bertambah, modal pemilik bertambah sama besar, tanpa kas.
+  const setoran = await asAuthenticatedCommitted(
+    userB,
+    "select public.contribute_fixed_asset('Etalase kaca', 2400000, 36, 'peralatan', current_date) as value",
+  );
+  const setoranAssetId = setoran.rows[0].value.fixedAssetId;
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.fixed_assets where id = '${setoranAssetId}' and owner_contributed and cost_idr = 2400000`),
+    1,
+    "a contributed asset must be stored at the value the owner typed",
+  );
+  assert.equal(
+    await scalar(`
+      select count(*)::int as value from public.journal_lines line
+      join public.journal_entries entry on entry.id = line.entry_id
+      where entry.source = 'ASSET_CONTRIBUTION' and entry.source_id = '${setoranAssetId}'
+        and ((line.account_code = '1600' and line.debit = 2400000) or (line.account_code = '3100' and line.credit = 2400000))
+    `),
+    2,
+    "a contributed asset must be journaled as fixed asset against owner equity",
+  );
+  await assertBalanced("2026-10-31", "after contributing an owned asset");
+  await expectAuthenticatedRejected(
+    userB,
+    "select public.contribute_fixed_asset('Motor', 1000000, 36, 'kendaraan', current_date + 2)",
+    "22023",
+  );
+
   // Alat usaha lain tetap tidak bisa disentuh. Diuji lewat penandaan « sudah
   // dijual », karena itulah satu-satunya jalan tulis yang masih terbuka.
   await assert.rejects(

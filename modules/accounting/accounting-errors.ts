@@ -16,6 +16,7 @@ export type AccountingErrorCode =
   | "CHANGE_REASON_REQUIRED"
   | "FIXED_ASSET_NOT_FOUND"
   | "FIXED_ASSET_ALREADY_DISPOSED"
+  | "ASSET_DATE_IN_FUTURE"
   | "LOAN_NOT_FOUND"
   | "ACCOUNT_NOT_FOUND"
   | "JOURNAL_ENTRY_UNBALANCED"
@@ -39,6 +40,7 @@ const definitions: Record<AccountingErrorCode, { status: number; message: string
   CHANGE_REASON_REQUIRED: { status: 400, message: "Tuliskan dulu kenapa angkanya diperbarui, minimal tiga huruf.", retryable: false },
   FIXED_ASSET_NOT_FOUND: { status: 404, message: "Alat usaha ini tidak ditemukan.", retryable: false },
   FIXED_ASSET_ALREADY_DISPOSED: { status: 409, message: "Alat ini sudah ditandai tidak dipakai sebelumnya.", retryable: false },
+  ASSET_DATE_IN_FUTURE: { status: 400, message: "Tanggalnya belum lewat. Pilih hari ini atau tanggal sebelumnya.", retryable: false },
   LOAN_NOT_FOUND: { status: 404, message: "Pinjaman ini tidak ditemukan.", retryable: false },
   ACCOUNT_NOT_FOUND: { status: 404, message: "Kelompok catatan ini tidak dikenal.", retryable: false },
   JOURNAL_ENTRY_UNBALANCED: { status: 500, message: "Catatan belum tersimpan karena pembukuannya tidak seimbang.", retryable: false },

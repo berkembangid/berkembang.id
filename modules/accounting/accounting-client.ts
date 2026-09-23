@@ -140,7 +140,8 @@ export const getNotesClient = (from: string, to: string) =>
 export const getFixedAssetsClient = () =>
   requestData<{ fixedAssets: FixedAssetView[] }>("/api/v1/fixed-assets", { cache: "no-store" });
 
-export const registerFixedAssetClient = (input: FixedAssetInput) =>
+/** Alat milik sendiri yang disetor ke usaha (0111). `costIdr` = nilai pakai sekarang. */
+export const contributeFixedAssetClient = (input: FixedAssetInput) =>
   requestData<{ fixedAssetId: string }>("/api/v1/fixed-assets", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

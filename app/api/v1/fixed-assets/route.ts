@@ -5,7 +5,7 @@ import {
   accountingValidationErrorResponse,
 } from "@/modules/accounting/accounting-errors";
 import { fixedAssetInputSchema } from "@/modules/accounting/period-schema";
-import { listFixedAssets, registerFixedAsset } from "@/modules/accounting/period";
+import { contributeFixedAsset, listFixedAssets } from "@/modules/accounting/period";
 
 export async function GET() {
   try {
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     if (!user) throw new AccountingOperationError("UNAUTHENTICATED");
     const input = fixedAssetInputSchema.safeParse(await request.json().catch(() => null));
     if (!input.success) return accountingValidationErrorResponse(input.error);
-    return Response.json({ data: await registerFixedAsset(input.data) }, { status: 201 });
+    return Response.json({ data: await contributeFixedAsset(input.data) }, { status: 201 });
   } catch (error) {
     return accountingErrorResponse(error);
   }

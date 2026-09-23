@@ -16,7 +16,9 @@ export async function GET(request: Request) {
   try {
     const role = await getEffectivePortalRole(supabase, user.id);
     if (role) {
-      // Pemilik yang BARU MENDAFTAR diantar ke Profil, sekali.
+      // Pemilik yang BARU MENDAFTAR diantar ke Kondisi awal, sekali -- langkah
+      // pertama yang membuat laporannya bisa jujur. Di sana ada « Lewati, isi
+      // nanti »; daftar persiapan di Beranda mengingatkannya lagi.
       //
       // Bedanya dengan perilaku yang dicabut hari ini terletak pada apa yang
       // ditanyakan. Dulu: "apakah ia belum punya transaksi" -- keadaan yang
@@ -35,7 +37,7 @@ export async function GET(request: Request) {
           .eq("auth_user_id", user.id)
           .maybeSingle();
         if (!profile.error && profile.data && profile.data.onboarding_seen_at === null) {
-          return NextResponse.redirect(new URL("/umkm/profil", request.url));
+          return NextResponse.redirect(new URL("/umkm/profil/kondisi-awal?mulai=1", request.url));
         }
       }
 

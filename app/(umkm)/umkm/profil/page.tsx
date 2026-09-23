@@ -12,7 +12,6 @@ import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { notifyFailure, notifySuccess, notifyWarning } from "@/lib/notify";
-import { WelcomeTour } from "@/components/warung/WelcomeTour";
 
 /**
  * Pilihan sektor datang dari tabel pemetaan, bukan daftar tersendiri.
@@ -52,8 +51,6 @@ interface ProfileRecord {
   tahun_mulai_usaha?: number | null;
   jumlah_karyawan?: string | null;
   kanal_penjualan?: string[] | null;
-  /** Null berarti pemilik ini baru mendaftar dan belum pernah melihat perkenalan. */
-  onboarding_seen_at?: string | null;
 }
 
 /**
@@ -171,7 +168,6 @@ export default function ProfilPage() {
   // Null berarti belum dibaca; `true`/`false` baru berarti jawabannya. Tanpa
   // keadaan ketiga ini, perkenalan berkelip muncul sesaat pada setiap pemilik
   // sebelum profilnya selesai dibaca.
-  const [showTour, setShowTour] = useState<boolean | null>(null);
 
   /**
    * Formulir baru boleh disimpan setelah profilnya selesai dibaca.
@@ -211,10 +207,6 @@ export default function ProfilPage() {
         const nib = dbProfile?.nib || user.user_metadata?.nib || "";
         const alamat = dbProfile?.alamat || user.user_metadata?.alamat || "";
         const avatar = dbProfile?.avatar_url || user.user_metadata?.avatar_url || "";
-        // Profil yang gagal dibaca tidak dianggap baru: perkenalan yang
-        // muncul karena bacaan gagal akan muncul pada orang yang sudah
-        // melewatinya.
-        setShowTour(dbProfile ? dbProfile.onboarding_seen_at === null : false);
 
         const loaded = {
           email: user.email || "",
@@ -367,15 +359,6 @@ export default function ProfilPage() {
 
   return (
     <>
-      {/*
-        Perkenalan dipasang di Profil, bukan di Beranda, karena di sinilah
-        pemilik baru diantar -- dan kartu terakhirnya menjelaskan halaman yang
-        sedang ia lihat. Perkenalan yang menjelaskan layar lain akan dibaca
-        sambil menatap layar yang tidak cocok dengan isinya.
-      */}
-      {showTour === true && (
-        <WelcomeTour ownerName={form.namaPemilik} onClose={() => setShowTour(false)} />
-      )}
       <DashboardPage width="compact">
         <PageHeader
           title="Profil usaha"

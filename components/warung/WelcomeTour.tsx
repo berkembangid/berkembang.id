@@ -74,10 +74,10 @@ const STEPS: readonly Step[] = [
   },
   {
     icon: FileText,
-    title: "Isi profil dulu, dokumen bisa nanti",
+    title: "Mulai dari kondisi usaha Anda hari ini",
     body:
-      "Nama usaha, bidang, dan kota membuat laporan Anda bisa dikenali. " +
-      "Foto izin seperti NIB dan PIRT boleh diunggah kapan-kapan — tidak ada yang terhenti karena itu.",
+      "Uang, stok, alat, dan utang yang sudah ada menjadi titik mulai laporan. " +
+      "Belum sempat menghitung? Lewati dulu — bisa diisi kapan saja, dan foto izin pun boleh menyusul.",
   },
   {
     icon: Sparkles,

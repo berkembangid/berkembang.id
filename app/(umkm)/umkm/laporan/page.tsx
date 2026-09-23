@@ -6,6 +6,7 @@ import { BarChart3, CalendarCheck, Plus } from "lucide-react";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { useConfirm } from "@/components/ui/confirm";
 import { BankReportCard } from "@/components/warung/BankReportCard";
+import { ConditionTab } from "@/components/warung/ConditionTab";
 import { ContactBalances } from "@/components/warung/ContactBalances";
 import { MonthlyTab } from "@/components/warung/MonthlyTab";
 import { supabase } from "@/lib/supabase";
@@ -246,6 +247,7 @@ function LaporanView() {
 
       {tab === "bulan-ini" && <MonthlyTab month={jakartaDate().slice(0, 7)} onManageContacts={() => router.push("/umkm/laporan?tab=utang-piutang")} />}
       {tab === "utang-piutang" && <ContactBalances sector={sector} businessName={businessName} onChanged={() => void loadReport()} />}
+      {tab === "kondisi" && <ConditionTab />}
       {tab === "bank" && <BankReportCard onOpenCondition={() => router.push("/umkm/profil/kondisi-awal")} />}
       {tab === "kas" && (
         <CashBook

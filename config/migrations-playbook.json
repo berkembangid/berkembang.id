@@ -128,6 +128,7 @@
     "0107_izin_dan_program_pemilik.sql",
     "0108_masa_berlaku_dokumen.sql",
     "0109_saldo_per_kontak.sql",
-    "0110_transaksi_rutin.sql"
+    "0110_transaksi_rutin.sql",
+    "0111_alat_milik_sendiri.sql"
   ]
 }

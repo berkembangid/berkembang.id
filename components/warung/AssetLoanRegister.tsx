@@ -10,20 +10,30 @@
  * Yang bisa diubah di sini hanya keterangan. Harga alat ikut sumbernya, dan
  * sisa pinjaman ikut cicilan yang dicatat -- keduanya tidak pernah diketik di
  * layar ini, supaya angka di laporan tidak bisa berbeda dari catatannya.
+ *
+ * SATU PENGECUALIAN: alat yang SUDAH dimiliki tetapi tidak masuk kondisi awal
+ * (etalase dari rumah, motor yang mulai dipakai mengantar) bisa ditambah kapan
+ * saja. Basis data mencatatnya sebagai setoran pemilik berupa barang (0111),
+ * lengkap dengan jurnalnya -- bukan baris yang berdiri tanpa pembukuan.
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Landmark, LoaderCircle, PackageOpen, Wrench } from "lucide-react";
+import { ArrowLeft, Landmark, LoaderCircle, PackageOpen, Plus, Wrench } from "lucide-react";
 import { EmptyState, FeedbackBanner, MetricCard, StatusBadge } from "@/components/dashboard";
 import {
   AccountingClientError,
+  contributeFixedAssetClient,
   disposeFixedAssetClient,
   getFixedAssetsClient,
   getLoansClient,
 } from "@/modules/accounting/accounting-client";
 import type { FixedAssetView, LoanView } from "@/modules/accounting/period";
 import {
+  assetCategories,
+  assetCategoryLabels,
+  defaultUsefulLifeMonths,
   lenderTypeLabels,
+  type AssetCategory,
   type LenderType,
 } from "@/modules/accounting/period-schema";
 import { InlineMoneyInput } from "@/components/warung/MoneyInput";
@@ -48,10 +58,14 @@ export function depreciationEndsOn(asset: FixedAssetView): string {
 export function AssetLoanRegister({
   onBack,
   onChanged,
+  startAdding = false,
 }: {
   onBack: () => void;
   onChanged: () => void;
+  /** Dibuka dari tombol « Tambah alat usaha »: formulirnya langsung terbuka. */
+  startAdding?: boolean;
 }) {
+  const [adding, setAdding] = useState(startAdding);
   const [assets, setAssets] = useState<FixedAssetView[]>([]);
   const [loans, setLoans] = useState<LoanView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,16 +147,40 @@ export function AssetLoanRegister({
       ) : (
         <>
           <section className="rounded-2xl border border-umkm-line bg-white p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
-            <h3 className="text-sm font-bold text-umkm-ink">Alat usaha</h3>
-            {assets.length === 0 ? (
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-umkm-ink">Alat usaha</h3>
+              {!adding && (
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-brand-line bg-umkm-brand-soft px-3 text-xs font-bold text-umkm-brand"
+                >
+                  <Plus size={14} aria-hidden /> Tambah alat usaha
+                </button>
+              )}
+            </div>
+            {adding && (
+              <AddAssetForm
+                onCancel={() => setAdding(false)}
+                onSaved={(name, valueIdr) => {
+                  setAdding(false);
+                  notifySuccess(`${name} masuk daftar alat usaha`, {
+                    description: `Dicatat sebagai modal yang Anda setor berupa barang, senilai ${formatIdr(valueIdr)}. Nilainya turun sedikit tiap bulan mulai bulan depan.`,
+                    duration: 7000,
+                  });
+                  void refresh();
+                }}
+              />
+            )}
+            {assets.length === 0 && !adding ? (
               <div className="mt-4">
                 <EmptyState
                   icon={PackageOpen}
                   title="Belum ada alat usaha tercatat"
-                  description="Alat yang sudah Anda punya sejak awal diisi di kondisi awal usaha. Alat yang dibeli setelahnya cukup dicatat sebagai belanja, nanti otomatis masuk daftar ini."
+                  description="Alat yang baru dibeli cukup dicatat sebagai belanja, nanti otomatis masuk daftar ini. Alat yang sudah Anda punya tapi belum tercatat bisa ditambah lewat « Tambah alat usaha »."
                 />
               </div>
-            ) : (
+            ) : assets.length === 0 ? null : (
               <ul className="mt-3 divide-y divide-umkm-line-soft">
                 {assets.map((asset) => (
                   <AssetRow
@@ -230,12 +268,16 @@ function AssetRow({
               <StatusBadge tone="neutral">Sudah tidak dipakai</StatusBadge>
             ) : asset.fromOpeningBalance ? (
               <StatusBadge tone="info">Dari kondisi awal</StatusBadge>
+            ) : asset.ownerContributed ? (
+              <StatusBadge tone="info">Milik sendiri</StatusBadge>
             ) : (
               <StatusBadge tone="neutral">Dari catatan belanja</StatusBadge>
             )}
           </p>
           <p className="mt-1 text-xs text-umkm-subtle">
-            Dibeli {asset.acquiredOn} · harga dulu {formatIdr(asset.originalCostIdr)}
+            {asset.ownerContributed
+              ? `Mulai dipakai usaha ${asset.acquiredOn} · dinilai ${formatIdr(asset.originalCostIdr)}`
+              : `Dibeli ${asset.acquiredOn} · harga dulu ${formatIdr(asset.originalCostIdr)}`}
           </p>
           {!asset.disposedOn && (
             <p className="mt-0.5 text-xs text-umkm-subtle">
@@ -302,6 +344,135 @@ function AssetRow({
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * Alat yang sudah dimiliki, ditambahkan kapan saja.
+ *
+ * Yang ditanyakan adalah nilai PAKAI sekarang dan sisa umurnya, bukan harga
+ * beli dulu: alat yang sudah dipakai bertahun-tahun tidak boleh masuk buku
+ * seharga barunya. Tanggalnya bawaan hari ini; boleh dimundurkan sampai hari
+ * pertama mencatat (basis data yang menolak bila lebih awal).
+ */
+function AddAssetForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: (name: string, valueIdr: number) => void }) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<AssetCategory>("peralatan");
+  const [years, setYears] = useState(String(defaultUsefulLifeMonths.peralatan / 12));
+  const [value, setValue] = useState<number | null>(null);
+  const [since, setSince] = useState(jakartaDate());
+  const [busy, setBusy] = useState(false);
+  const yearsNumber = Number(years);
+  const ready = name.trim().length > 0 && (value ?? 0) > 0 && yearsNumber >= 1 && yearsNumber <= 50;
+
+  const save = async () => {
+    if (!ready || value === null) return;
+    setBusy(true);
+    try {
+      await contributeFixedAssetClient({
+        name: name.trim(),
+        costIdr: value,
+        acquiredOn: since,
+        category,
+        usefulLifeMonths: yearsNumber * 12,
+      });
+      onSaved(name.trim(), value);
+    } catch (cause) {
+      notifyFailure(cause instanceof AccountingClientError ? cause.message : "Alat usaha belum tersimpan.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form
+      className="mt-3 space-y-3 rounded-xl border border-umkm-brand-line bg-umkm-brand-soft p-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <p className="text-xs leading-relaxed text-umkm-subtle">
+        Untuk alat yang sudah Anda punya tapi belum tercatat. Alat yang baru dibeli cukup dicatat sebagai belanja.
+      </p>
+      <label className={labelClass}>
+        Nama alat
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          maxLength={120}
+          placeholder="Contoh: etalase kaca, motor antar"
+          className={`${fieldClass} mt-1.5`}
+        />
+      </label>
+      <label className={labelClass}>
+        Jenis
+        <select
+          value={category}
+          onChange={(event) => {
+            const next = event.target.value as AssetCategory;
+            // Umur bawaan ikut jenisnya selama pemilik belum menggantinya.
+            if (years === String(defaultUsefulLifeMonths[category] / 12)) setYears(String(defaultUsefulLifeMonths[next] / 12));
+            setCategory(next);
+          }}
+          className={`${fieldClass} mt-1.5`}
+        >
+          {assetCategories.map((item) => (
+            <option key={item} value={item}>{assetCategoryLabels[item]}</option>
+          ))}
+        </select>
+      </label>
+      <div className={labelClass}>
+        Kira-kira nilainya sekarang
+        <div className="mt-1.5">
+          <InlineMoneyInput ariaLabel="Nilai alat sekarang" value={value} onChange={setValue} />
+        </div>
+        <span className="mt-1 block text-xs font-normal text-umkm-subtle">
+          Kalau dijual hari ini laku berapa — bukan harga belinya dulu.
+        </span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className={labelClass}>
+          Masih bisa dipakai berapa lama
+          <div className="mt-1.5 flex items-center gap-2">
+            <input
+              inputMode="numeric"
+              value={years}
+              onChange={(event) => setYears(event.target.value.replace(/\D/g, "").slice(0, 2))}
+              aria-label="Sisa umur pakai dalam tahun"
+              className={`${fieldClass} w-20`}
+            />
+            <span className="text-xs font-bold text-umkm-subtle">tahun</span>
+          </div>
+        </label>
+        <label className={labelClass}>
+          Mulai dipakai untuk usaha
+          <input
+            type="date"
+            max={jakartaDate()}
+            value={since}
+            onChange={(event) => setSince(event.target.value)}
+            className={`${fieldClass} mt-1.5`}
+          />
+        </label>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="min-h-11 rounded-xl border border-umkm-line-strong bg-white px-4 text-xs font-bold text-umkm-ink"
+        >
+          Batal
+        </button>
+        <button
+          type="submit"
+          disabled={!ready || busy}
+          className="min-h-11 flex-1 rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white disabled:opacity-50"
+        >
+          {busy ? "Menyimpan..." : "Simpan alat usaha"}
+        </button>
+      </div>
+    </form>
   );
 }
 

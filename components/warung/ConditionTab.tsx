@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, LoaderCircle, Receipt, RefreshCcw, Wallet } from "lucide-react";
+import { AlertCircle, LoaderCircle, Plus, Receipt, RefreshCcw, Wallet } from "lucide-react";
 import {
   AccountingClientError,
   getBalanceSheetClient,
@@ -37,9 +37,19 @@ import { jakartaDate } from "@/modules/ledger/capture-schema";
  * Yang tersisa hanyalah daftar alat usaha dan pinjaman, dan itu pun hanya
  * untuk dibaca serta menandai alat yang sudah dijual.
  */
-type View = "summary" | "register";
+type View = "summary" | "register" | "add-asset";
 
-export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
+export function ConditionTab({
+  asOf = jakartaDate(),
+  onSkip,
+  onOpeningSaved,
+}: {
+  asOf?: string;
+  /** Langkah pertama pemilik baru: « Lewati, isi nanti » di samping formulirnya. */
+  onSkip?: () => void;
+  /** Dipanggil setelah kondisi awal tersimpan; tanpa ini layarnya memuat ringkasan. */
+  onOpeningSaved?: () => void;
+}) {
   const [condition, setCondition] = useState<BusinessConditionView | null>(null);
   const [needsOpening, setNeedsOpening] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -100,7 +110,22 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
             sebelum Anda mencatat di sini. Enam pertanyaan, sekali saja.
           </p>
         </div>
-        <OpeningBalanceWizard onDone={() => void load()} />
+        {onSkip && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-umkm-line bg-white p-4">
+            <p className="text-xs leading-relaxed text-umkm-subtle">
+              Belum sempat menghitung? Anda tetap bisa mencatat transaksi. Kondisi awal bisa diisi kapan saja dari
+              Profil, dan Beranda akan mengingatkannya.
+            </p>
+            <button
+              type="button"
+              onClick={onSkip}
+              className="inline-flex min-h-11 shrink-0 items-center rounded-xl border border-umkm-line px-4 text-xs font-bold text-umkm-ink-soft hover:bg-umkm-surface"
+            >
+              Lewati, isi nanti
+            </button>
+          </div>
+        )}
+        <OpeningBalanceWizard onDone={() => (onOpeningSaved ? onOpeningSaved() : void load())} />
       </div>
     );
   }
@@ -116,9 +141,10 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
     );
   }
 
-  if (view === "register") {
+  if (view === "register" || view === "add-asset") {
     return (
       <AssetLoanRegister
+        startAdding={view === "add-asset"}
         onBack={() => setView("summary")}
         onChanged={() => void load()}
       />
@@ -155,15 +181,26 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
       </div>
 
       <div className="space-y-3">
-        <button
-          type="button"
-          onClick={() => setView("register")}
-          className="min-h-11 text-xs font-bold text-umkm-brand"
-        >
-          Alat usaha &amp; pinjaman
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setView("add-asset")}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-umkm-brand px-3 text-xs font-bold text-white"
+          >
+            <Plus size={14} aria-hidden /> Tambah alat usaha
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("register")}
+            className="inline-flex min-h-11 items-center rounded-xl border border-umkm-line px-3 text-xs font-bold text-umkm-brand"
+          >
+            Alat usaha &amp; pinjaman
+          </button>
+        </div>
         <p className="rounded-xl border border-umkm-line bg-umkm-surface p-3 text-xs leading-relaxed text-umkm-subtle">
-          Kondisi awal hanya diisi sekali, karena ia titik mulai usaha Anda. Bila
+          Alat yang sudah Anda punya tapi terlewat bisa ditambah kapan saja lewat{" "}
+          <strong className="font-bold text-umkm-muted">Tambah alat usaha</strong>. Angka lain di kondisi awal
+          hanya diisi sekali, karena ia titik mulai usaha Anda. Bila
           ada selisih &mdash; misalnya uang tunai di laci ternyata berbeda dari
           yang diketik &mdash; perbaiki lewat <strong className="font-bold text-umkm-muted">catat transaksi</strong>{" "}
           pemasukan atau pengeluaran. Cara itu menyimpan jejak kapan selisihnya

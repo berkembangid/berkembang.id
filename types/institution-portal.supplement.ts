@@ -54,6 +54,11 @@ export type InstitutionPortalSupplement = {
       };
     };
     Functions: {
+      /** 0111 -- alat milik sendiri disetor ke usaha, dengan jurnal. */
+      contribute_fixed_asset: {
+        Args: { p_name: string; p_value_idr: number; p_useful_life_months: number; p_category?: string; p_contributed_on?: string };
+        Returns: import("@/types/database.generated").Json;
+      };
       /** 0110 -- catatan rutin. */
       upsert_recurring_transaction: {
         Args: {
