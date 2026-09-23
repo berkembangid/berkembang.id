@@ -75,7 +75,7 @@ export function nudgeCopy(level: NudgeLevel, forAsset = false): NudgeCopy | null
   }
   return {
     title: "Foto notanya?",
-    hint: "Boleh dilewati. Foto notanya biar catatanmu makin kuat.",
+    hint: "Boleh dilewati. Foto notanya biar catatan Anda makin kuat.",
     buttonLabel: "Foto nota",
   };
 }

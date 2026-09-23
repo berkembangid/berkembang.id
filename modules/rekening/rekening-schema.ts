@@ -100,19 +100,19 @@ export const rekeningStageCopy: Record<RekeningStage, {
   0: {
     badge: "Belum dicatat",
     title: "Rekening usaha belum dicatat",
-    body: "Uang usaha yang mengalir lewat rekening sendiri jauh lebih mudah dibaca — olehmu, dan oleh lembaga yang membaca laporanmu.",
-    next: "Catat rekening usahamu, atau lihat panduan membukanya.",
+    body: "Uang usaha yang mengalir lewat rekening sendiri jauh lebih mudah dibaca — oleh Anda, dan oleh lembaga yang membaca laporan Anda.",
+    next: "Catat rekening usaha Anda, atau lihat panduan membukanya.",
   },
   1: {
     badge: "Tercatat",
     title: "Rekening usaha sudah dicatat",
-    body: "Catatanmu sudah masuk. Langkah ini dihitung sebagian di Perjalanan.",
+    body: "Catatan Anda sudah masuk. Langkah ini dihitung sebagian di Perjalanan.",
     next: "Lampirkan rekening koran atau foto halaman depan buku tabungan supaya menjadi bukti.",
   },
   2: {
     badge: "Berbukti",
     title: "Rekening usaha terpisah, dengan buktinya",
-    body: "Ada berkasnya, dan kamu sudah menyatakan berkas itu memang rekening usahamu. Langkah ini terpenuhi penuh.",
+    body: "Ada berkasnya, dan Anda sudah menyatakan berkas itu memang rekening usaha Anda. Langkah ini terpenuhi penuh.",
     next: null,
   },
 };
@@ -127,11 +127,11 @@ export const rekeningStageCopy: Record<RekeningStage, {
 export const PANDUAN_BUKA_REKENING = [
   {
     judul: "Bawa KTP",
-    isi: "Cukup KTP untuk membuka tabungan atas namamu sendiri yang khusus dipakai untuk usaha.",
+    isi: "Cukup KTP untuk membuka tabungan atas nama Anda sendiri yang khusus dipakai untuk usaha.",
   },
   {
     judul: "Bawa NPWP dan NIB bila ada",
-    isi: "Tidak wajib untuk tabungan perorangan, tetapi diminta bila kamu ingin rekening atas nama usaha.",
+    isi: "Tidak wajib untuk tabungan perorangan, tetapi diminta bila Anda ingin rekening atas nama usaha.",
   },
   {
     judul: "Sebutkan keperluannya",

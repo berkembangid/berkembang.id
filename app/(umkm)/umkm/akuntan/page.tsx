@@ -47,6 +47,7 @@ import { createDocumentSignedUrl } from "@/modules/documents/document-client";
 import { listTransactionAttachments } from "@/modules/documents/evidence-client";
 import { DashboardPage, DashboardPanel, EmptyState, PageHeader, PanelHeader } from "@/components/dashboard";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
+import { formatTanggal } from "@/lib/format";
 
 type View = "journal" | "ledger" | "trial";
 
@@ -95,13 +96,13 @@ export default function AkuntanPage() {
           <>
             <Link
               href="/umkm/laporan"
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280]"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-umkm-line bg-white px-3 text-xs font-bold text-umkm-muted"
             >
               <ArrowLeft size={14} /> Kembali ke Laporan
             </Link>
             <a
               href={journalExportUrl(from, to)}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#a9ebd0] bg-[#edfbf5] px-3 text-xs font-bold text-[#0b7a55]"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-umkm-success-line bg-umkm-success-soft px-3 text-xs font-bold text-umkm-success"
             >
               <Download size={14} /> Unduh jurnal (CSV)
             </a>
@@ -109,18 +110,18 @@ export default function AkuntanPage() {
         }
       />
 
-      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[#e3e9f0] bg-white p-4">
-        <label className="text-[11px] font-bold text-[#4a6280]">
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-umkm-line bg-white p-4">
+        <label className="text-xs font-bold text-umkm-muted">
           Dari tanggal
           <input
             type="date"
             value={from}
             max={to}
             onChange={(event) => setFrom(event.target.value)}
-            className="mt-1.5 block min-h-11 rounded-xl border border-[#d8dcff] px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
+            className="mt-1.5 block min-h-11 rounded-xl border border-umkm-line-strong px-3 text-sm font-medium outline-none focus:border-umkm-brand"
           />
         </label>
-        <label className="text-[11px] font-bold text-[#4a6280]">
+        <label className="text-xs font-bold text-umkm-muted">
           Sampai tanggal
           <input
             type="date"
@@ -128,7 +129,7 @@ export default function AkuntanPage() {
             min={from}
             max={today}
             onChange={(event) => setTo(event.target.value)}
-            className="mt-1.5 block min-h-11 rounded-xl border border-[#d8dcff] px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
+            className="mt-1.5 block min-h-11 rounded-xl border border-umkm-line-strong px-3 text-sm font-medium outline-none focus:border-umkm-brand"
           />
         </label>
         {/*
@@ -136,13 +137,13 @@ export default function AkuntanPage() {
           `ml-auto` ke kanan dan berdesakan dengan kedua kolom tanggal begitu
           layarnya menyempit.
         */}
-        <p className="basis-full text-[11px] leading-relaxed text-[#6e859e] xl:ml-auto xl:max-w-md xl:basis-auto">
+        <p className="basis-full text-xs leading-relaxed text-umkm-subtle xl:ml-auto xl:max-w-md xl:basis-auto">
           Berkas CSV memakai kolom <code className="break-words">kode_akun, nama_akun, debit, kredit, tanggal, sumber, memo</code>{" "}
           — mengikuti rentang tanggal di atas.
         </p>
       </div>
 
-      <nav aria-label="Tampilan pembukuan" className="flex gap-1 rounded-xl border border-[#e3e9f0] bg-white p-1">
+      <nav aria-label="Tampilan pembukuan" className="flex gap-1 rounded-xl border border-umkm-line bg-white p-1">
         {viewLabels.map((item) => (
           <button
             key={item.id}
@@ -150,7 +151,7 @@ export default function AkuntanPage() {
             onClick={() => setView(item.id)}
             aria-current={view === item.id ? "page" : undefined}
             className={`min-h-11 flex-1 rounded-lg px-3 text-xs font-bold transition-colors ${
-              view === item.id ? "bg-[#eef8fd] text-[#0b5f86] shadow-sm" : "text-[#6e859e] hover:bg-[#f3f6f9]"
+              view === item.id ? "bg-umkm-brand-soft text-umkm-brand shadow-sm" : "text-umkm-subtle hover:bg-umkm-surface-muted"
             }`}
           >
             {item.label}
@@ -167,7 +168,7 @@ export default function AkuntanPage() {
 
 function Loading({ label }: { label: string }) {
   return (
-    <div role="status" className="flex items-center justify-center gap-2 rounded-2xl bg-white p-12 text-sm text-[#6e859e]">
+    <div role="status" className="flex items-center justify-center gap-2 rounded-2xl bg-white p-12 text-sm text-umkm-subtle">
       <LoaderCircle className="animate-spin" size={18} /> {label}
     </div>
   );
@@ -177,7 +178,7 @@ function Failure({ message, onRetry }: { message: string; onRetry: () => void })
   return (
     <div
       role="alert"
-      className="flex items-center gap-2 rounded-2xl border border-[#f3c6cf] bg-[#fdf1f3] p-4 text-xs font-semibold text-[#b4304a]"
+      className="flex items-center gap-2 rounded-2xl border border-umkm-danger-line bg-umkm-danger-soft p-4 text-xs font-semibold text-umkm-danger"
     >
       <AlertCircle size={16} /> {message}
       <button onClick={onRetry} className="ml-auto inline-flex min-h-11 items-center gap-1 rounded-lg px-2 font-bold">
@@ -240,12 +241,12 @@ function JournalPanel({ from, to }: { from: string; to: string }) {
           Tiga entri berarti tiga kali "Akun / Debit / Kredit", dan itulah yang
           membuat halaman ini terasa berantakan padahal isinya sedikit.
         */}
-        <div className="flex items-baseline gap-3 border-b border-[#e3e9f0] py-2 text-[10px] font-bold uppercase tracking-wide text-[#6e859e]">
+        <div className="flex items-baseline gap-3 border-b border-umkm-line py-2 text-[11px] font-bold uppercase tracking-wide text-umkm-subtle">
           <span className="min-w-0 flex-1">Akun</span>
           <span className="w-24 shrink-0 text-right md:w-32">Debit</span>
           <span className="w-24 shrink-0 text-right md:w-32">Kredit</span>
         </div>
-        <ul className="divide-y divide-[#eef2f6]">
+        <ul className="divide-y divide-umkm-line-soft">
           {data.entries.map((entry) => (
             <JournalEntryRow key={entry.id} entry={entry} />
           ))}
@@ -289,8 +290,8 @@ function EvidenceClip({ transactionId, count }: { transactionId: string; count: 
       }}
       aria-label={`Lihat bukti (${count})`}
       title={failed ? "Bukti belum bisa dibuka. Coba lagi." : `Lihat bukti (${count})`}
-      className={`inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
-        failed ? "text-[#8a6412] hover:bg-[#fdf8ee]" : "text-[#0b5f86] hover:bg-[#eef8fd]"
+      className={`inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-xs font-bold transition-colors ${
+        failed ? "text-umkm-warning hover:bg-umkm-warning-soft" : "text-umkm-brand hover:bg-umkm-brand-soft"
       } disabled:opacity-40`}
     >
       <Paperclip size={11} />
@@ -303,25 +304,25 @@ function JournalEntryRow({ entry }: { entry: JournalEntryView }) {
   return (
     <li className="py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <p className="flex items-center gap-1.5 text-xs font-bold text-[#1b2a3a]">
-          {entry.entryDate} · {sourceLabels[entry.source] ?? entry.source}
+        <p className="flex items-center gap-1.5 text-xs font-bold text-umkm-ink">
+          {formatTanggal(entry.entryDate)} · {sourceLabels[entry.source] ?? entry.source}
           {entry.attachmentCount > 0 && entry.sourceId && (
             <EvidenceClip transactionId={entry.sourceId} count={entry.attachmentCount} />
           )}
         </p>
-        <p className="text-xs font-bold tabular-nums text-[#1b2a3a]">{idr(entry.totalIdr)}</p>
+        <p className="text-xs font-bold tabular-nums text-umkm-ink">{idr(entry.totalIdr)}</p>
       </div>
       {(entry.memo || entry.reason) && (
-        <p className="mt-0.5 text-[11px] leading-relaxed text-[#6e859e]">{entry.reason ?? entry.memo}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-umkm-subtle">{entry.reason ?? entry.memo}</p>
       )}
       <div className="mt-1.5 space-y-0.5">
         {entry.lines.map((line, index) => (
           <div
             key={`${entry.id}-${line.accountCode}-${index}`}
-            className="flex items-baseline gap-3 text-[11px] text-[#1b2a3a]"
+            className="flex items-baseline gap-3 text-xs text-umkm-ink"
           >
             <span className="min-w-0 flex-1 truncate">
-              <span className="font-mono text-[10px] text-[#6e859e]">{line.accountCode}</span> {line.accountName}
+              <span className="font-mono text-xs text-umkm-subtle">{line.accountCode}</span> {line.accountName}
             </span>
             <span className="w-24 shrink-0 text-right tabular-nums md:w-32">{idr(line.debitIdr)}</span>
             <span className="w-24 shrink-0 text-right tabular-nums md:w-32">{idr(line.creditIdr)}</span>
@@ -341,12 +342,12 @@ function LedgerPanel({ from, to }: { from: string; to: string }) {
     <DashboardPanel>
       <PanelHeader title="Buku Besar" description="Mutasi satu akun beserta saldo berjalannya." />
       <div className="px-4 py-4 md:px-5">
-        <label className="block max-w-md text-[11px] font-bold text-[#4a6280]">
+        <label className="block max-w-md text-xs font-bold text-umkm-muted">
           Akun
           <select
             value={accountCode}
             onChange={(event) => setAccountCode(event.target.value)}
-            className="mt-1.5 block min-h-11 w-full rounded-xl border border-[#d8dcff] px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
+            className="mt-1.5 block min-h-11 w-full rounded-xl border border-umkm-line-strong px-3 text-sm font-medium outline-none focus:border-umkm-brand"
           >
             {chartOfAccounts.map((account) => (
               <option key={account.code} value={account.code}>
@@ -368,12 +369,12 @@ function LedgerPanel({ from, to }: { from: string; to: string }) {
 function LedgerTable({ ledger }: { ledger: GeneralLedgerView }) {
   return (
     <div className="mt-3 overflow-x-auto">
-      <table className="w-full min-w-[560px] text-[11px]">
+      <table className="w-full min-w-[560px] text-xs">
         <caption className="sr-only">
           Buku besar akun {ledger.accountCode} {ledger.accountName}
         </caption>
         <thead>
-          <tr className="border-b border-[#e3e9f0] text-left text-[#6e859e]">
+          <tr className="border-b border-umkm-line text-left text-umkm-subtle">
             <th className="py-1.5 font-semibold">Tanggal</th>
             <th className="py-1.5 font-semibold">Sumber</th>
             <th className="py-1.5 font-semibold">Memo</th>
@@ -382,16 +383,16 @@ function LedgerTable({ ledger }: { ledger: GeneralLedgerView }) {
             <th className="py-1.5 text-right font-semibold">Saldo</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-[#eef2f6]">
-          <tr className="text-[#6e859e]">
+        <tbody className="divide-y divide-umkm-line-soft">
+          <tr className="text-umkm-subtle">
             <td className="py-1.5" colSpan={5}>
               Saldo awal periode
             </td>
             <td className="py-1.5 text-right font-bold tabular-nums">{signedIdr(ledger.openingBalanceIdr)}</td>
           </tr>
           {ledger.rows.map((row, index) => (
-            <tr key={`${row.entryId}-${index}`} className="text-[#1b2a3a]">
-              <td className="py-1.5 whitespace-nowrap">{row.entryDate}</td>
+            <tr key={`${row.entryId}-${index}`} className="text-umkm-ink">
+              <td className="py-1.5 whitespace-nowrap">{formatTanggal(row.entryDate)}</td>
               <td className="py-1.5 whitespace-nowrap">{sourceLabels[row.source] ?? row.source}</td>
               <td className="py-1.5">{row.memo ?? "—"}</td>
               <td className="py-1.5 text-right tabular-nums">{idr(row.debitIdr)}</td>
@@ -401,7 +402,7 @@ function LedgerTable({ ledger }: { ledger: GeneralLedgerView }) {
           ))}
         </tbody>
         <tfoot>
-          <tr className="border-t border-[#e3e9f0] font-bold text-[#1b2a3a]">
+          <tr className="border-t border-umkm-line font-bold text-umkm-ink">
             <td className="py-1.5" colSpan={3}>
               Jumlah periode
             </td>
@@ -412,7 +413,7 @@ function LedgerTable({ ledger }: { ledger: GeneralLedgerView }) {
         </tfoot>
       </table>
       {ledger.truncated && (
-        <p className="mt-2 text-[11px] font-semibold text-[#b4304a]">
+        <p className="mt-2 text-xs font-semibold text-umkm-danger">
           Barisnya terlalu banyak untuk satu halaman. Persempit rentang tanggalnya.
         </p>
       )}
@@ -441,8 +442,8 @@ function TrialBalancePanel({ asOf }: { asOf: string }) {
         <div
           className={`mb-3 flex items-center gap-2 rounded-xl border p-3 text-xs font-bold ${
             data.balanced
-              ? "border-[#a9ebd0] bg-[#edfbf5] text-[#0b7a55]"
-              : "border-[#f3c6cf] bg-[#fdf1f3] text-[#b4304a]"
+              ? "border-umkm-success-line bg-umkm-success-soft text-umkm-success"
+              : "border-umkm-danger-line bg-umkm-danger-soft text-umkm-danger"
           }`}
         >
           <Scale size={15} />
@@ -451,19 +452,19 @@ function TrialBalancePanel({ asOf }: { asOf: string }) {
             : "Tidak seimbang. Hubungi pendamping sebelum berkas ini dipakai."}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] text-[11px]">
+          <table className="w-full min-w-[520px] text-xs">
             <thead>
-              <tr className="border-b border-[#e3e9f0] text-left text-[#6e859e]">
+              <tr className="border-b border-umkm-line text-left text-umkm-subtle">
                 <th className="py-1.5 font-semibold">Akun</th>
                 <th className="py-1.5 text-right font-semibold">Debit</th>
                 <th className="py-1.5 text-right font-semibold">Kredit</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#eef2f6]">
+            <tbody className="divide-y divide-umkm-line-soft">
               {rows.map((row) => (
-                <tr key={row.accountCode} className="text-[#1b2a3a]">
+                <tr key={row.accountCode} className="text-umkm-ink">
                   <td className="py-1.5">
-                    <span className="font-mono text-[10px] text-[#6e859e]">{row.accountCode}</span> {row.accountName}
+                    <span className="font-mono text-xs text-umkm-subtle">{row.accountCode}</span> {row.accountName}
                   </td>
                   {/*
                     Sisi yang kosong ditulis "—", bukan "Rp0".
@@ -471,16 +472,16 @@ function TrialBalancePanel({ asOf }: { asOf: string }) {
                     yang benar adalah akun ini tidak punya saldo di sisi itu.
                   */}
                   <td className="py-1.5 text-right tabular-nums">
-                    {row.debitIdr === 0 ? <span className="text-[#c8d3de]">—</span> : idr(row.debitIdr)}
+                    {row.debitIdr === 0 ? <span className="text-umkm-line-strong">—</span> : idr(row.debitIdr)}
                   </td>
                   <td className="py-1.5 text-right tabular-nums">
-                    {row.creditIdr === 0 ? <span className="text-[#c8d3de]">—</span> : idr(row.creditIdr)}
+                    {row.creditIdr === 0 ? <span className="text-umkm-line-strong">—</span> : idr(row.creditIdr)}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t border-[#e3e9f0] font-bold text-[#1b2a3a]">
+              <tr className="border-t border-umkm-line font-bold text-umkm-ink">
                 <td className="py-1.5">Jumlah</td>
                 <td className="py-1.5 text-right tabular-nums">{idr(data.totalDebitIdr)}</td>
                 <td className="py-1.5 text-right tabular-nums">{idr(data.totalCreditIdr)}</td>

@@ -106,12 +106,12 @@ export function VoiceDraftCard({
   };
 
   return (
-    <article className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
+    <article className="rounded-2xl border border-umkm-line bg-white p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
       {transcript !== "" && (
-        <p className="text-[11px] leading-relaxed text-[#6e859e]">
+        <p className="text-xs leading-relaxed text-umkm-subtle">
           {highlightSegments(transcript, spans).map((piece, index) =>
             piece.highlighted ? (
-              <mark key={index} className="rounded bg-[#eef8fd] px-0.5 font-bold text-[#0b5f86]">
+              <mark key={index} className="rounded bg-umkm-brand-soft px-0.5 font-bold text-umkm-brand">
                 {piece.text}
               </mark>
             ) : (
@@ -123,7 +123,7 @@ export function VoiceDraftCard({
 
       {needsAnswer ? (
         <div className="mt-3">
-          <p className="text-sm font-bold text-[#1b2a3a]">
+          <p className="text-sm font-bold text-umkm-ink">
             {choices.length >= 2 ? "Yang mana maksudnya?" : "Berapa nominalnya?"}
           </p>
           {choices.length >= 2 ? (
@@ -136,8 +136,8 @@ export function VoiceDraftCard({
                   aria-pressed={chosenAmount === candidate.value}
                   className={`min-h-12 rounded-xl border px-4 text-base font-bold transition-colors ${
                     chosenAmount === candidate.value
-                      ? "border-[#0b5f86] bg-[#0b5f86] text-white"
-                      : "border-[#d8dcff] bg-white text-[#1b2a3a]"
+                      ? "border-umkm-brand bg-umkm-brand text-white"
+                      : "border-umkm-line-strong bg-white text-umkm-ink"
                   }`}
                 >
                   {formatIdr(candidate.value)}
@@ -155,26 +155,26 @@ export function VoiceDraftCard({
           )}
         </div>
       ) : (
-        <p className="mt-2 text-3xl font-bold tracking-[-0.035em] text-[#1b2a3a] tabular-nums">
+        <p className="mt-2 text-3xl font-bold tracking-[-0.035em] text-umkm-ink tabular-nums">
           {formatIdr(chosenAmount ?? draft.amountCandidates[0]?.value ?? 0)}
         </p>
       )}
 
-      <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-[#6e859e]">
+      <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-umkm-subtle">
         <div className="flex gap-1">
           <dt>Tanggal</dt>
-          <dd className="font-bold text-[#1b2a3a]">{draft.occurredOn}</dd>
+          <dd className="font-bold text-umkm-ink">{draft.occurredOn}</dd>
         </div>
         {draft.paymentMethod && (
           <div className="flex gap-1">
             <dt>Bayar</dt>
-            <dd className="font-bold text-[#1b2a3a]">{draft.paymentMethod}</dd>
+            <dd className="font-bold text-umkm-ink">{draft.paymentMethod}</dd>
           </div>
         )}
         {draft.counterpartySuggestion && (
           <div className="flex gap-1">
             <dt>Pelanggan</dt>
-            <dd className="font-bold text-[#1b2a3a]">{draft.counterpartySuggestion}</dd>
+            <dd className="font-bold text-umkm-ink">{draft.counterpartySuggestion}</dd>
           </div>
         )}
       </dl>
@@ -205,7 +205,7 @@ export function VoiceDraftCard({
           onSave();
         }}
         disabled={busy || (needsAnswer && chosenAmount === null)}
-        className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0b5f86] text-xs font-bold text-white disabled:opacity-50"
+        className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-umkm-brand text-xs font-bold text-white disabled:opacity-50"
       >
         {busy ? <LoaderCircle className="animate-spin" size={15} /> : <CheckCircle2 size={15} />}
         {busy ? "Menyimpan..." : "Simpan catatan"}

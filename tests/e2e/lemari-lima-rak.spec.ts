@@ -93,7 +93,7 @@ test("rak nota menjelaskan dirinya saat masih kosong", async ({ page }) => {
   const shelf = page.locator("section").filter({ hasText: "Nota & bukti" }).first();
   const text = await shelf.innerText();
   expect(
-    text.includes("Nota akan muncul di sini saat kamu memfotonya dari catatan")
+    text.includes("Nota akan muncul di sini saat Anda memfotonya dari catatan")
       || text.includes("menempel pada satu catatan"),
     "rak nota harus menjelaskan dirinya, entah kosong atau terisi",
   ).toBe(true);

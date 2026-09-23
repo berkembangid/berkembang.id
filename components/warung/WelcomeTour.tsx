@@ -161,14 +161,14 @@ export function WelcomeTour({
    */
   return createPortal(
     <div
-      className="fixed inset-0 z-[var(--z-dialog)] flex items-end justify-center bg-slate-950/50 md:items-center md:p-6"
+      className="fixed inset-0 z-[var(--z-dialog)] flex items-end justify-center bg-umkm-scrim md:items-center md:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="sambutan-judul"
     >
       <section className="max-h-[88dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-5 pb-[calc(env(safe-area-inset-bottom)+20px)] shadow-2xl md:max-h-[88vh] md:max-w-md md:rounded-3xl md:p-6">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-[#0b5f86]">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-umkm-brand">
             {/*
               "Selamat datang" hanya benar sekali. Pemilik yang membukanya lagi
               dari menu akun sudah memakai aplikasi ini berbulan-bulan; disambut
@@ -184,16 +184,16 @@ export function WelcomeTour({
             onClick={() => void finish()}
             disabled={busy}
             aria-label="Lewati perkenalan"
-            className="-mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-xl text-[#6e859e] hover:bg-slate-100 disabled:opacity-50"
+            className="-mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-xl text-umkm-subtle hover:bg-umkm-surface-muted disabled:opacity-50"
           >
             <X size={18} />
           </button>
         </div>
 
-        <span className="mt-4 grid size-12 place-items-center rounded-2xl bg-[#eef8fd] text-[#0f73a3]">
+        <span className="mt-4 grid size-12 place-items-center rounded-2xl bg-umkm-brand-soft text-umkm-brand-hover">
           <Icon size={22} />
         </span>
-        <h2 id="sambutan-judul" className="mt-4 text-lg font-bold leading-snug text-[#1b2a3a] md:text-base">
+        <h2 id="sambutan-judul" className="mt-4 text-lg font-bold leading-snug text-umkm-ink md:text-base">
           {current.title}
         </h2>
         {/*
@@ -201,13 +201,13 @@ export function WelcomeTour({
           di bawah cahaya matahari dan tidak selalu bermata muda; dua piksel
           itu bedanya antara dibaca dan dilewati.
         */}
-        <p className="mt-2 text-sm leading-relaxed text-[#5a7186]">{current.body}</p>
+        <p className="mt-2 text-sm leading-relaxed text-umkm-subtle">{current.body}</p>
 
         <div className="mt-4 flex gap-1.5" aria-label={`Langkah ${step + 1} dari ${STEPS.length}`}>
           {STEPS.map((item, index) => (
             <span
               key={item.title}
-              className={`h-1.5 rounded-full transition-all ${index <= step ? "w-7 bg-[#1590c7]" : "w-3.5 bg-[#e3e9f0]"}`}
+              className={`h-1.5 rounded-full transition-all ${index <= step ? "w-7 bg-umkm-sky" : "w-3.5 bg-umkm-line"}`}
             />
           ))}
         </div>
@@ -217,7 +217,7 @@ export function WelcomeTour({
             type="button"
             onClick={() => void finish()}
             disabled={busy}
-            className="-ml-2 min-h-11 rounded-xl px-2 text-sm font-bold text-[#6e859e] underline underline-offset-2 hover:bg-slate-50 disabled:opacity-50 md:text-xs"
+            className="-ml-2 min-h-11 rounded-xl px-2 text-sm font-bold text-umkm-subtle underline underline-offset-2 hover:bg-umkm-surface disabled:opacity-50 md:text-xs"
           >
             Lewati
           </button>
@@ -225,7 +225,7 @@ export function WelcomeTour({
             type="button"
             onClick={() => (last ? void finish() : setStep(step + 1))}
             disabled={busy}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-[#0b5f86] px-5 text-sm font-bold text-white disabled:opacity-50 md:text-xs"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-umkm-brand px-5 text-sm font-bold text-white disabled:opacity-50 md:text-xs"
           >
             {last ? (
               <>

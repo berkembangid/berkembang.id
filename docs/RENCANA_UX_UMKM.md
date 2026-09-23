@@ -43,6 +43,25 @@ layar, lalu fitur baru.
   dengan papan ketik, `role="progressbar"` pada bilah pilar, `aria-current`
   pada tangga tingkat, `aria-label` pada tombol mikrofon dan kamera.
 
+### Status Fase 0 dan 1 (23 September 2026)
+
+Fase 0 selesai. Fase 1 selesai dengan catatan:
+
+- Palet `--umkm-*` di `app/globals.css`, dipakai lewat `text-umkm-ink` dan
+  seterusnya. Cakupan: `app/(umkm)`, `components/warung`,
+  `components/documents`, rekening, kesiapan, izin pemilik.
+  `components/dashboard` belum ikut karena dipakai juga portal lembaga dan
+  admin.
+- `FormDialog` (`components/ui/dialog.tsx`) menggantikan empat dialog rakitan.
+  Fokus, Esc, dan konfirmasi yang terbuka di atasnya sudah diuji dengan
+  Playwright pada peramban yang menggambar. Panel peramban yang tersembunyi
+  tidak menjalankan `requestAnimationFrame`, jadi uji fokus di sana selalu
+  gagal walau kodenya benar.
+- Ukuran huruf dinaikkan secara mekanis (teks ≥12px, label kapital ≥11px).
+  Belum diperiksa per layar dengan sesi UMKM yang masuk.
+- Belum: tombol di kotak `confirm()` masih memakai `--primary` nila global,
+  sehingga di Ruang Usaha warnanya berbeda dari tombol lain.
+
 ## Fase 2 — Perbaikan UX per layar
 
 **Navigasi.** Gabungkan `/umkm/kesiapan` ke `/umkm/perjalanan` (redirect).

@@ -93,12 +93,12 @@ export default function MetodologiPage() {
     <DashboardPage width="compact">
       <PageHeader
         title="Cara kami menghitung"
-        description="Seluruh aturan yang menentukan tingkat kesiapan usahamu, apa adanya."
+        description="Seluruh aturan yang menentukan tingkat kesiapan usaha Anda, apa adanya."
         icon={ScrollText}
         actions={
           <Link
             href="/umkm/kesiapan"
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-umkm-line bg-white px-3 text-xs font-bold text-umkm-muted hover:bg-umkm-surface-muted"
           >
             <ArrowLeft size={14} /> Kembali
           </Link>
@@ -117,28 +117,28 @@ export default function MetodologiPage() {
           </button>
         </FeedbackBanner>
       ) : !data ? (
-        <p role="status" className="flex items-center gap-2 px-1 py-6 text-xs text-[#6e859e]">
+        <p role="status" className="flex items-center gap-2 px-1 py-6 text-xs text-umkm-subtle">
           <LoaderCircle size={14} className="animate-spin" /> Memuat aturan…
         </p>
       ) : (
         <>
-          <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5">
-            <h2 className="text-sm font-bold text-[#1b2a3a]">Empat tingkat</h2>
+          <section className="rounded-2xl border border-umkm-line bg-white p-5">
+            <h2 className="text-sm font-bold text-umkm-ink">Empat tingkat</h2>
             <ul className="mt-3 space-y-2">
               {data.levels.map((level) => (
-                <li key={level.level} className="rounded-xl bg-[#f3f6f9] px-3.5 py-2.5">
-                  <p className="text-xs font-bold text-[#1b2a3a]">{level.name}</p>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-[#4a6280]">{level.meaning}</p>
+                <li key={level.level} className="rounded-xl bg-umkm-surface-muted px-3.5 py-2.5">
+                  <p className="text-xs font-bold text-umkm-ink">{level.name}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-umkm-muted">{level.meaning}</p>
                 </li>
               ))}
             </ul>
           </section>
 
-          <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5">
-            <h2 className="text-sm font-bold text-[#1b2a3a]">Tiga belas hal yang dilihat</h2>
-            <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
+          <section className="rounded-2xl border border-umkm-line bg-white p-5">
+            <h2 className="text-sm font-bold text-umkm-ink">Tiga belas hal yang dilihat</h2>
+            <p className="mt-1 text-xs leading-relaxed text-umkm-subtle">
               Hampir semuanya dihitung dari catatan dan dokumen yang sudah ada. Satu-satunya yang
-              kamu nyatakan sendiri adalah rekening usaha — dan pernyataan itu baru terhitung penuh
+              Anda nyatakan sendiri adalah rekening usaha — dan pernyataan itu baru terhitung penuh
               setelah ada berkasnya. Hari mencatat dihitung dari {data.windows.habitDays} hari
               terakhir, mutu catatan dari {data.windows.qualityDays} hari terakhir, dan belanja
               besar berarti di atas Rp{data.bigSpendIdr.toLocaleString("id-ID")}.
@@ -146,7 +146,7 @@ export default function MetodologiPage() {
             <div className="mt-3 overflow-x-auto">
               <table className="w-full min-w-[520px] text-left text-[11.5px]">
                 <thead>
-                  <tr className="border-b border-[#e3e9f0] text-[10px] uppercase tracking-wide text-[#6e859e]">
+                  <tr className="border-b border-umkm-line text-[11px] uppercase tracking-wide text-umkm-subtle">
                     <th className="py-2 pr-3 font-bold">Yang dilihat</th>
                     <th className="py-2 pr-3 font-bold">Mulai terhitung</th>
                     <th className="py-2 pr-3 font-bold">Syarat Perak</th>
@@ -155,31 +155,31 @@ export default function MetodologiPage() {
                 </thead>
                 <tbody>
                   {data.components.map((component) => (
-                    <tr key={component.id} className="border-b border-[#f3f6f9] last:border-b-0">
+                    <tr key={component.id} className="border-b border-umkm-surface-muted last:border-b-0">
                       <td className="py-2 pr-3">
-                        <span className="font-bold text-[#1b2a3a]">
+                        <span className="font-bold text-umkm-ink">
                           {componentNames[component.id] ?? component.id}
                         </span>
-                        <span className="mt-0.5 block text-[10px] text-[#6e859e]">
+                        <span className="mt-0.5 block text-xs text-umkm-subtle">
                           {component.pillarTitle}
                         </span>
                       </td>
-                      <td className="py-2 pr-3 tabular-nums text-[#4a6280]">{threshold(component.partial, component.id)}</td>
-                      <td className="py-2 pr-3 tabular-nums text-[#4a6280]">{threshold(component.silver, component.id)}</td>
-                      <td className="py-2 tabular-nums text-[#4a6280]">{threshold(component.gold, component.id)}</td>
+                      <td className="py-2 pr-3 tabular-nums text-umkm-muted">{threshold(component.partial, component.id)}</td>
+                      <td className="py-2 pr-3 tabular-nums text-umkm-muted">{threshold(component.silver, component.id)}</td>
+                      <td className="py-2 tabular-nums text-umkm-muted">{threshold(component.gold, component.id)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <p className="mt-3 text-[11px] leading-relaxed text-[#6e859e]">
+            <p className="mt-3 text-xs leading-relaxed text-umkm-subtle">
               Bagian yang datanya memang belum ada — misalnya nota belanja besar pada usaha yang
               belum pernah belanja besar — tidak dihitung sebagai kekurangan dan tidak menahan
-              tingkatmu.
+              tingkat Anda.
             </p>
           </section>
 
-          <section className="rounded-xl border border-[#e3e9f0] bg-[#f3f6f9] px-4 py-3 text-[12.5px] leading-relaxed text-[#4a6280]">
+          <section className="rounded-xl border border-umkm-line bg-umkm-surface-muted px-4 py-3 text-[12.5px] leading-relaxed text-umkm-muted">
             {data.disclaimer} Versi aturan: {data.formulaVersion}. Aturan yang sudah terbit tidak
             pernah diubah diam-diam; perubahan selalu menjadi versi baru, sehingga penilaian lama
             tetap bisa dijelaskan.

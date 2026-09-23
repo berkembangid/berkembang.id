@@ -5,7 +5,7 @@
   padding: 92px 14px 132px;
   background:
     radial-gradient(circle at 88% 7%, rgba(169, 235, 208, .7), transparent 22rem),
-    linear-gradient(155deg, #0f73a3 0, #29abe2 25rem, #eef8fd 25rem, #f5fbf8 100%);
+    linear-gradient(155deg, var(--umkm-brand-hover) 0, var(--umkm-sky) 25rem, var(--umkm-brand-soft) 25rem, var(--umkm-success-soft) 100%);
 }
 
 .mobileOnly { display: block; }
@@ -42,9 +42,9 @@
   border-radius: 50%;
   content: "";
 }
-.eyebrow { color: rgba(255,255,255,.72); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.eyebrow { color: rgba(255,255,255,.72); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .balance { margin-top: 8px; font-size: clamp(30px, 9vw, 42px); font-weight: 800; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
-.balanceMeta { display: flex; align-items: center; gap: 7px; margin-top: 5px; color: rgba(255,255,255,.78); font-size: 11px; }
+.balanceMeta { display: flex; align-items: center; gap: 7px; margin-top: 5px; color: rgba(255,255,255,.78); font-size: 12px; }
 .balancePill { padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,.16); color: white; font-weight: 700; }
 .quickActions { position: absolute; inset: auto 14px 14px; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; }
 .quickAction {
@@ -59,7 +59,7 @@
   border-radius: 999px;
   background: rgba(8,50,69,.58);
   color: white;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   backdrop-filter: blur(12px);
 }
@@ -73,7 +73,7 @@
   box-shadow: 0 14px 38px rgba(27,42,58,.07);
 }
 .sectionHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
-.sectionTitle { color: #1b2a3a; font-size: 15px; font-weight: 800; letter-spacing: -.015em; }
+.sectionTitle { color: var(--umkm-ink); font-size: 15px; font-weight: 800; letter-spacing: -.015em; }
 /*
   Area sentuh 44px tanpa menggeser tulisannya dari tepi kanan kartu.
   `margin: 0 -8px` membatalkan `padding: 0 8px`, jadi yang bertambah hanya
@@ -86,56 +86,50 @@
   margin: 0 -8px;
   padding: 0 8px;
   border-radius: 8px;
-  color: #0b5f86;
-  font-size: 11px;
+  color: var(--umkm-brand);
+  font-size: 12px;
   font-weight: 700;
 }
-.sectionLink:hover { background: #eef8fd; }
+.sectionLink:hover { background: var(--umkm-brand-soft); }
 
-.activityRow { display: flex; min-height: 66px; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #eef2f6; }
+.activityRow { display: flex; min-height: 66px; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--umkm-line-soft); }
 .activityRow:last-child { border-bottom: 0; }
-.activityIcon { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border-radius: 13px; background: #eef8fd; color: #0f73a3; }
+.activityIcon { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border-radius: 13px; background: var(--umkm-brand-soft); color: var(--umkm-brand-hover); }
 .activityCopy { min-width: 0; flex: 1; }
-.activityCopy strong { display: block; overflow: hidden; color: #1b2a3a; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.activityCopy small { display: block; overflow: hidden; margin-top: 2px; color: #6e859e; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.activityTime { max-width: 66px; color: #9fb0c2; font-size: 9px; text-align: right; }
+.activityCopy strong { display: block; overflow: hidden; color: var(--umkm-ink); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.activityCopy small { display: block; overflow: hidden; margin-top: 2px; color: var(--umkm-subtle); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.activityTime { max-width: 76px; color: var(--umkm-subtle); font-size: 11px; text-align: right; }
 
-.journeyCard { background: linear-gradient(145deg, #eef8fd, rgba(255,255,255,.98)); }
+.journeyCard { background: linear-gradient(145deg, var(--umkm-brand-soft), rgba(255,255,255,.98)); }
 .missionRow { display: flex; align-items: center; gap: 16px; }
 .mission { flex: 1; min-width: 0; }
-.mission strong { display: block; color: #1b2a3a; font-size: 12px; }
-.mission p { margin-top: 4px; color: #4a6280; font-size: 10px; line-height: 1.5; }
+.mission strong { display: block; color: var(--umkm-ink); font-size: 12px; }
+.mission p { margin-top: 4px; color: var(--umkm-muted); font-size: 12px; line-height: 1.5; }
 
 .desktopPage { padding: 28px; }
 .desktopHeading { font-size: 28px; font-weight: 600; letter-spacing: -.035em; }
-.desktopSubheading { margin-top: 4px; color: #6e859e; font-size: 13px; }
+.desktopSubheading { margin-top: 4px; color: var(--umkm-subtle); font-size: 13px; }
 .kpiGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
-.kpi { min-height: 140px; padding: 17px; border: 1px solid #e3e9f0; border-radius: 16px; background: white; }
-.kpiTop { display: flex; align-items: center; justify-content: space-between; color: #6e859e; font-size: 11px; }
+.kpi { min-height: 140px; padding: 17px; border: 1px solid var(--umkm-line); border-radius: 16px; background: white; }
+.kpiTop { display: flex; align-items: center; justify-content: space-between; color: var(--umkm-subtle); font-size: 12px; }
 .kpiValue { margin-top: 22px; color: #111b26; font-size: 27px; font-weight: 600; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
-.kpiMeta { margin-top: 7px; color: #6e859e; font-size: 10px; }
-.positive { color: #0b7a55; }
-.neutral { color: #0b5f86; }
+.kpiMeta { margin-top: 7px; color: var(--umkm-subtle); font-size: 12px; }
+.positive { color: var(--umkm-success); }
+.neutral { color: var(--umkm-brand); }
 .desktopGrid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, .75fr); gap: 16px; margin-top: 16px; }
-.panel { border: 1px solid #e3e9f0; border-radius: 16px; background: white; }
-.panelHeader { display: flex; align-items: center; justify-content: space-between; padding: 17px 18px; border-bottom: 1px solid #eef2f6; }
+.panel { border: 1px solid var(--umkm-line); border-radius: 16px; background: white; }
+.panelHeader { display: flex; align-items: center; justify-content: space-between; padding: 17px 18px; border-bottom: 1px solid var(--umkm-line-soft); }
 .panelTitle { font-size: 13px; font-weight: 700; }
 .panelBody { padding: 8px 18px; }
-.cashChart { display: flex; height: 170px; align-items: end; gap: 13px; padding: 24px 4px 4px; border-bottom: 1px solid #e3e9f0; }
-.chartGroup { display: flex; flex: 1; align-items: end; justify-content: center; gap: 4px; height: 100%; }
-.barIncome, .barExpense { width: min(16px, 34%); border-radius: 4px 4px 1px 1px; }
-.barIncome { background: #1590c7; }
-.barExpense { background: #c8d3de; }
-.chartLabels { display: flex; justify-content: space-around; padding: 9px 0 13px; color: #9fb0c2; font-size: 9px; }
-.actionRow { display: flex; align-items: center; gap: 11px; padding: 13px 0; border-bottom: 1px solid #eef2f6; }
+.actionRow { display: flex; align-items: center; gap: 11px; padding: 13px 0; border-bottom: 1px solid var(--umkm-line-soft); }
 .actionRow:last-child { border-bottom: 0; }
 .actionDot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #f5c453; }
-.actionRow strong { display: block; color: #1b2a3a; font-size: 11px; }
-.actionRow small { display: block; margin-top: 2px; color: #6e859e; font-size: 9px; }
+.actionRow strong { display: block; color: var(--umkm-ink); font-size: 13px; }
+.actionRow small { display: block; margin-top: 2px; color: var(--umkm-subtle); font-size: 12px; }
 .fullWidth { grid-column: 1 / -1; }
 
 @media (min-width: 768px) {
-  .page { min-height: auto; overflow: visible; padding: 0; background: #f8fafc; }
+  .page { min-height: auto; overflow: visible; padding: 0; background: var(--umkm-surface); }
   .mobileOnly { display: none; }
   .desktopOnly { display: block; }
 }

@@ -63,8 +63,8 @@ export function emptySelection(direction: "income" | "expense"): CategorySelecti
 function chipClass(active: boolean) {
   return `min-h-11 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-bold transition-colors ${
     active
-      ? "border-[#0b5f86] bg-[#0b5f86] text-white"
-      : "border-[#d8dcff] bg-white text-[#3a3f63] hover:bg-[#f2f3ff]"
+      ? "border-umkm-brand bg-umkm-brand text-white"
+      : "border-umkm-line-strong bg-white text-umkm-ink-soft hover:bg-umkm-brand-soft"
   }`;
 }
 
@@ -117,7 +117,7 @@ export function CategoryChips({
   return (
     <div className="space-y-3">
       <fieldset>
-        <legend className="text-[11px] font-bold text-[#4a6280]">Uang ini untuk apa?</legend>
+        <legend className="text-xs font-bold text-umkm-muted">Uang ini untuk apa?</legend>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {primaryChoices.map((choice) => (
             <button
@@ -135,7 +135,7 @@ export function CategoryChips({
 
       {selection.emkmCategoryCode === 6 && (
         <fieldset>
-          <legend className="text-[11px] font-bold text-[#4a6280]">Biaya apa?</legend>
+          <legend className="text-xs font-bold text-umkm-muted">Biaya apa?</legend>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {expenseChoices
               .filter((choice) => choice.subtype !== "5280")
@@ -157,14 +157,14 @@ export function CategoryChips({
       {minimumNotice && (
         <p
           role="status"
-          className="rounded-xl border border-[#addcf4] bg-[#eef8fd] px-3 py-2.5 text-[11px] leading-relaxed text-[#1b2a3a]"
+          className="rounded-xl border border-umkm-brand-line bg-umkm-brand-soft px-3 py-2.5 text-xs leading-relaxed text-umkm-ink"
         >
           {minimumNotice}
         </p>
       )}
 
       {requiresCounterparty(selection.emkmCategoryCode) && (
-        <label className="block text-[11px] font-bold text-[#4a6280]">
+        <label className="block text-xs font-bold text-umkm-muted">
           Siapa pelanggannya?
           <input
             value={selection.counterpartyName ?? ""}
@@ -172,7 +172,7 @@ export function CategoryChips({
               onChange({ ...selection, counterpartyName: event.target.value || null })
             }
             placeholder="Contoh: Bu Ani"
-            className="mt-1.5 min-h-11 w-full rounded-xl border border-[#d8dcff] px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
+            className="mt-1.5 min-h-11 w-full rounded-xl border border-umkm-line-strong px-3 text-sm font-medium outline-none focus:border-umkm-brand"
           />
         </label>
       )}
@@ -193,8 +193,8 @@ export function CategoryChips({
         bulan adalah satuan pembukuan, bukan satuan orang.
       */}
       {isAssetPurchase(selection.emkmCategoryCode) && !minimumNotice && (
-        <div className="grid gap-3 rounded-xl border border-[#d8dcff] bg-[#f7f8ff] p-3 sm:grid-cols-2">
-          <label className="block text-[11px] font-bold text-[#4a6280]">
+        <div className="grid gap-3 rounded-xl border border-umkm-line-strong bg-umkm-brand-soft p-3 sm:grid-cols-2">
+          <label className="block text-xs font-bold text-umkm-muted">
             Alat jenis apa?
             <select
               value={selection.assetCategory ?? "peralatan"}
@@ -209,14 +209,14 @@ export function CategoryChips({
                   assetUsefulLifeYears: kind?.years ?? 4,
                 });
               }}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-[#d8dcff] bg-white px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
+              className="mt-1.5 min-h-11 w-full rounded-xl border border-umkm-line-strong bg-white px-3 text-sm font-medium outline-none focus:border-umkm-brand"
             >
               {ASSET_KINDS.map((kind) => (
                 <option key={kind.value} value={kind.value}>{kind.label}</option>
               ))}
             </select>
           </label>
-          <label className="block text-[11px] font-bold text-[#4a6280]">
+          <label className="block text-xs font-bold text-umkm-muted">
             Masih bisa dipakai berapa lama?
             <span className="mt-1.5 flex items-center gap-2">
               <input
@@ -226,12 +226,12 @@ export function CategoryChips({
                   const digits = event.target.value.replace(/\D/g, "").slice(0, 2);
                   onChange({ ...selection, assetUsefulLifeYears: digits ? Number(digits) : null });
                 }}
-                className="min-h-11 w-20 rounded-xl border border-[#d8dcff] bg-white px-3 text-sm font-medium outline-none focus:border-[#0b5f86]"
+                className="min-h-11 w-20 rounded-xl border border-umkm-line-strong bg-white px-3 text-sm font-medium outline-none focus:border-umkm-brand"
                 aria-label="Umur ekonomis alat dalam tahun"
               />
-              <span className="text-xs font-bold text-[#6e859e]">tahun</span>
+              <span className="text-xs font-bold text-umkm-subtle">tahun</span>
             </span>
-            <span className="mt-1 block text-[10px] font-normal leading-relaxed text-[#6e859e]">
+            <span className="mt-1 block text-xs font-normal leading-relaxed text-umkm-subtle">
               Perkiraan saja. Angka inilah yang menentukan berapa nilai alat ini turun tiap bulan.
             </span>
           </label>

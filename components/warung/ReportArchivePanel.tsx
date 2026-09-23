@@ -79,7 +79,7 @@ export function ReportArchivePanel() {
 
   if (loading) {
     return (
-      <p className="flex items-center gap-2 px-1 py-3 text-[11px] text-[#6e859e]">
+      <p className="flex items-center gap-2 px-1 py-3 text-xs text-umkm-subtle">
         <LoaderCircle size={13} className="animate-spin" /> Memuat arsip laporan…
       </p>
     );
@@ -99,7 +99,7 @@ export function ReportArchivePanel() {
   return (
     <div className="space-y-2">
       {problem && (
-        <p className="rounded-xl border border-[#f0d9a8] bg-[#fdf8ee] px-3 py-2 text-[11px] text-[#8a6412]">
+        <p className="rounded-xl border border-umkm-warning-line bg-umkm-warning-soft px-3 py-2 text-xs text-umkm-warning">
           {problem}
         </p>
       )}
@@ -107,17 +107,17 @@ export function ReportArchivePanel() {
         {issues.map((issue) => (
           <li
             key={issue.id}
-            className="flex items-start gap-3 rounded-2xl border border-[#e3e9f0] bg-white px-3.5 py-3"
+            className="flex items-start gap-3 rounded-2xl border border-umkm-line bg-white px-3.5 py-3"
           >
-            <FileText size={16} className="mt-0.5 shrink-0 text-[#0b5f86]" />
+            <FileText size={16} className="mt-0.5 shrink-0 text-umkm-brand" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-bold text-[#1b2a3a]">
+              <p className="truncate text-xs font-bold text-umkm-ink">
                 {reportKindLabels[issue.reportKind]}
               </p>
-              <p className="mt-0.5 text-[11px] text-[#4a6280]">
+              <p className="mt-0.5 text-xs text-umkm-muted">
                 {reportPeriodText(issue.periodFrom, issue.periodTo)}
               </p>
-              <p className="mt-0.5 text-[10px] text-[#6e859e]">
+              <p className="mt-0.5 text-xs text-umkm-subtle">
                 Dibuat {issuedAtText(issue.createdAt)} · No. {issue.documentUid}
               </p>
             </div>
@@ -126,7 +126,7 @@ export function ReportArchivePanel() {
               onClick={() => void download(issue)}
               disabled={downloading === issue.id || !issue.documentId}
               aria-label={`Unduh ulang laporan ${issue.documentUid}`}
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#0b5f86] transition-colors hover:bg-[#eef8fd] disabled:opacity-40"
+              className="grid size-11 shrink-0 place-items-center rounded-lg text-umkm-brand transition-colors hover:bg-umkm-brand-soft disabled:opacity-40"
             >
               {downloading === issue.id ? (
                 <LoaderCircle size={14} className="animate-spin" />

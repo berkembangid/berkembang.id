@@ -141,36 +141,36 @@ export function ReminderStrip({ asOf = jakartaDate() }: { asOf?: string }) {
             href={reminderHref(group.kind, group.items[0]?.dueDate)}
             className={`flex items-start gap-3 rounded-2xl border px-3.5 py-3 transition-colors ${
               group.urgent
-                ? "border-[#f0d9a8] bg-[#fdf8ee] hover:bg-[#fbf2e2]"
-                : "border-[#addcf4] bg-[#eef8fd] hover:bg-[#e3f3fb]"
+                ? "border-umkm-warning-line bg-umkm-warning-soft hover:bg-umkm-warning-soft"
+                : "border-umkm-brand-line bg-umkm-brand-soft hover:bg-umkm-brand-soft"
             }`}
           >
             <Icon
               size={16}
-              className={`mt-0.5 shrink-0 ${group.urgent ? "text-[#8a6412]" : "text-[#0b5f86]"}`}
+              className={`mt-0.5 shrink-0 ${group.urgent ? "text-umkm-warning" : "text-umkm-brand"}`}
             />
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-[#1b2a3a]">{title}</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-[#4a6280]">{because}</p>
+              <p className="text-xs font-bold text-umkm-ink">{title}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-umkm-muted">{because}</p>
               {group.items.length > 1 && (
                 <ul className="mt-2 flex flex-wrap gap-1.5">
                   {shown.map((item) => (
                     <li
                       key={`${item.kind}-${item.dueDate}`}
-                      className="rounded-full border border-[#e3e9f0] bg-white px-2 py-0.5 text-[10px] font-bold text-[#4a6280]"
+                      className="rounded-full border border-umkm-line bg-white px-2 py-0.5 text-xs font-bold text-umkm-muted"
                     >
                       {group.kind === "HITUNG_STOK" ? monthText(item.periodMonth) : dayLabel(item.dueDate)}
                     </li>
                   ))}
                   {hidden > 0 && (
-                    <li className="px-1 py-0.5 text-[10px] font-bold text-[#6e859e]">+{hidden} lagi</li>
+                    <li className="px-1 py-0.5 text-xs font-bold text-umkm-subtle">+{hidden} lagi</li>
                   )}
                 </ul>
               )}
             </div>
             <ChevronRight
               size={16}
-              className={`mt-0.5 shrink-0 ${group.urgent ? "text-[#8a6412]" : "text-[#0b5f86]"}`}
+              className={`mt-0.5 shrink-0 ${group.urgent ? "text-umkm-warning" : "text-umkm-brand"}`}
             />
           </Link>
         );

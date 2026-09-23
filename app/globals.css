@@ -151,6 +151,49 @@
   --tone-warning-surface: #fff6e2;
   --tone-info: #0b5f86;
   --tone-info-surface: #eef8fd;
+
+  /*
+    PALET RUANG USAHA (UMKM).
+
+    Sebelumnya setiap berkas menulis kode hex sendiri -- lebih dari tujuh
+    ratus kali -- dan kodenya bergeser: tiga biru hover yang berbeda, dua
+    hijau "berhasil", dan sisa ungu muda dari palet lama yang tidak pernah
+    dipakai di mana pun lagi. Satu peran, satu warna. Di Tailwind dipakai
+    lewat `text-umkm-ink`, `bg-umkm-brand-soft`, dan seterusnya; di modul CSS
+    lewat `var(--umkm-ink)`.
+  */
+  --umkm-brand: #0b5f86;
+  --umkm-brand-hover: #0f73a3;
+  --umkm-brand-deep: #0a5375;
+  --umkm-sky: #1590c7;
+  --umkm-brand-soft: #eef8fd;
+  --umkm-brand-tint: #d6eefa;
+  --umkm-brand-line: #addcf4;
+  --umkm-ink: #1b2a3a;
+  --umkm-ink-soft: #34496a;
+  --umkm-muted: #4a6280;
+  --umkm-subtle: #6e859e;
+  /* Hanya untuk ikon dan garis hias: kontrasnya terlalu rendah untuk teks. */
+  --umkm-faint: #9fb0c2;
+  --umkm-line: #e3e9f0;
+  --umkm-line-soft: #eef2f6;
+  --umkm-line-strong: #c8d3de;
+  --umkm-surface: #f7f9fb;
+  --umkm-surface-muted: #f3f6f9;
+  --umkm-canvas: #f4f9fc;
+  --umkm-success: #0b7a55;
+  --umkm-success-soft: #edfbf5;
+  --umkm-success-line: #a9ebd0;
+  --umkm-warning: #8a6412;
+  --umkm-warning-strong: #5c3700;
+  --umkm-warning-soft: #fdf8ee;
+  --umkm-warning-line: #f0d9a8;
+  /* Merah hanya untuk kegagalan sistem dan aksi yang merusak. */
+  --umkm-danger: #b4304a;
+  --umkm-danger-strong: #8a1c12;
+  --umkm-danger-soft: #fdf1f3;
+  --umkm-danger-line: #f3c6cf;
+  --umkm-scrim: rgb(2 6 23 / 0.5);
 }
 
 @theme inline {
@@ -173,6 +216,37 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-umkm-brand: var(--umkm-brand);
+  --color-umkm-brand-hover: var(--umkm-brand-hover);
+  --color-umkm-brand-deep: var(--umkm-brand-deep);
+  --color-umkm-sky: var(--umkm-sky);
+  --color-umkm-brand-soft: var(--umkm-brand-soft);
+  --color-umkm-brand-tint: var(--umkm-brand-tint);
+  --color-umkm-brand-line: var(--umkm-brand-line);
+  --color-umkm-ink: var(--umkm-ink);
+  --color-umkm-ink-soft: var(--umkm-ink-soft);
+  --color-umkm-muted: var(--umkm-muted);
+  --color-umkm-subtle: var(--umkm-subtle);
+  --color-umkm-faint: var(--umkm-faint);
+  --color-umkm-line: var(--umkm-line);
+  --color-umkm-line-soft: var(--umkm-line-soft);
+  --color-umkm-line-strong: var(--umkm-line-strong);
+  --color-umkm-surface: var(--umkm-surface);
+  --color-umkm-surface-muted: var(--umkm-surface-muted);
+  --color-umkm-canvas: var(--umkm-canvas);
+  --color-umkm-success: var(--umkm-success);
+  --color-umkm-success-soft: var(--umkm-success-soft);
+  --color-umkm-success-line: var(--umkm-success-line);
+  --color-umkm-warning: var(--umkm-warning);
+  --color-umkm-warning-strong: var(--umkm-warning-strong);
+  --color-umkm-warning-soft: var(--umkm-warning-soft);
+  --color-umkm-warning-line: var(--umkm-warning-line);
+  --color-umkm-danger: var(--umkm-danger);
+  --color-umkm-danger-strong: var(--umkm-danger-strong);
+  --color-umkm-danger-soft: var(--umkm-danger-soft);
+  --color-umkm-danger-line: var(--umkm-danger-line);
+  --color-umkm-scrim: var(--umkm-scrim);
 
   --radius-sm: calc(var(--radius) - 6px);
   --radius-md: calc(var(--radius) - 4px);

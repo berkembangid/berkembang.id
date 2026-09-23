@@ -75,7 +75,7 @@ export function LegalitySummary() {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3">
-        <label className="block text-xs font-bold text-[#4a6280]">Ringkasan legalitas</label>
+        <label className="block text-xs font-bold text-umkm-muted">Ringkasan legalitas</label>
         {/*
           `-mr-2 px-2` + `min-h-11`: area sentuhnya 44px tanpa menggeser
           tulisannya dari tepi kanan. Tautan setinggi 17px di dalam kartu yang
@@ -83,14 +83,14 @@ export function LegalitySummary() {
         */}
         <Link
           href="/umkm/profil/dokumen"
-          className="-mr-2 inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-[11px] font-bold text-[#0b5f86] hover:bg-[#f3f6f9]"
+          className="-mr-2 inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-xs font-bold text-umkm-brand hover:bg-umkm-surface-muted"
         >
           Kelola dokumen
         </Link>
       </div>
 
       {rows === null ? (
-        <p className="flex items-center gap-2 px-1 py-2 text-[11px] text-[#6e859e]">
+        <p className="flex items-center gap-2 px-1 py-2 text-xs text-umkm-subtle">
           <LoaderCircle size={12} className="animate-spin" /> Memuat…
         </p>
       ) : (
@@ -99,31 +99,31 @@ export function LegalitySummary() {
             <li key={row.docType}>
               <Link
                 href="/umkm/profil/dokumen"
-                className="flex items-center gap-3 rounded-xl border border-[#e3e9f0] bg-white px-3 py-2.5 transition-colors hover:bg-[#f7f9fb]"
+                className="flex items-center gap-3 rounded-xl border border-umkm-line bg-white px-3 py-2.5 transition-colors hover:bg-umkm-surface"
               >
                 <FileText
                   size={15}
-                  className={`shrink-0 ${row.present ? "text-[#1d6b39]" : "text-[#9fb0c2]"}`}
+                  className={`shrink-0 ${row.present ? "text-umkm-success" : "text-umkm-faint"}`}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-[#1b2a3a]">
+                  <p className="text-xs font-bold text-umkm-ink">
                     {documentTypeLabels[row.docType]}
-                    {row.present && <span className="ml-1.5 text-[#1d6b39]">✓</span>}
+                    {row.present && <span className="ml-1.5 text-umkm-success">✓</span>}
                   </p>
-                  <p className="mt-0.5 truncate text-[10px] text-[#6e859e]">
+                  <p className="mt-0.5 truncate text-xs text-umkm-subtle">
                     {row.docNumber ? `No. ${row.docNumber} · ` : ""}
                     {validUntilText(row.validUntil) ? `berlaku sampai ${validUntilText(row.validUntil)} · ` : ""}
                     {row.assurance}
                   </p>
                 </div>
-                <ChevronRight size={14} className="shrink-0 text-[#9fb0c2]" />
+                <ChevronRight size={14} className="shrink-0 text-umkm-faint" />
               </Link>
             </li>
           ))}
         </ul>
       )}
 
-      <p className="mt-2 text-[10px] leading-relaxed text-[#6e859e]">
+      <p className="mt-2 text-xs leading-relaxed text-umkm-subtle">
         Nomor dan masa berlaku dibaca dari dokumen yang Anda unggah, supaya tidak ada dua angka
         yang berbeda untuk izin yang sama.
       </p>

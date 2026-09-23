@@ -55,7 +55,7 @@ test.describe("uang yang diambil untuk rumah", () => {
     await page.getByRole("textbox").first().fill("ambil 300 ribu buat SPP anak");
     await page.getByRole("button", { name: /proses|kirim|periksa/i }).first().click();
 
-    await expect(page.getByText(/Item Teridentifikasi/i)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/Catatan yang ditemukan/i)).toBeVisible({ timeout: 60_000 });
     // Prior kata pemicu prive harus sudah memilih kategorinya lebih dulu.
     await expect(page.getByRole("button", { name: "Ambil untuk rumah", pressed: true })).toBeVisible();
     await page.getByRole("button", { name: /Simpan Catatan/i }).click();

@@ -84,7 +84,7 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
 
   if (loading) {
     return (
-      <div role="status" className="flex items-center justify-center gap-2 rounded-2xl bg-white p-12 text-sm text-[#6e859e]">
+      <div role="status" className="flex items-center justify-center gap-2 rounded-2xl bg-white p-12 text-sm text-umkm-subtle">
         <LoaderCircle className="animate-spin" size={18} /> Menghitung kondisi usaha...
       </div>
     );
@@ -93,9 +93,9 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
   if (needsOpening) {
     return (
       <div className="space-y-4">
-        <div className="flex items-start gap-3 rounded-2xl border border-[#addcf4] bg-[#eef8fd] p-4">
-          <Wallet size={18} className="mt-0.5 shrink-0 text-[#0b5f86]" />
-          <p className="text-xs leading-relaxed text-[#1b2a3a]">
+        <div className="flex items-start gap-3 rounded-2xl border border-umkm-brand-line bg-umkm-brand-soft p-4">
+          <Wallet size={18} className="mt-0.5 shrink-0 text-umkm-brand" />
+          <p className="text-xs leading-relaxed text-umkm-ink">
             Untuk tahu kondisi usaha, sistem perlu tahu titik mulainya: uang, stok, alat, dan utang yang sudah ada
             sebelum Anda mencatat di sini. Enam pertanyaan, sekali saja.
           </p>
@@ -107,7 +107,7 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
 
   if (error || !condition) {
     return (
-      <div role="alert" className="flex items-center gap-2 rounded-2xl border border-[#f3c6cf] bg-[#fdf1f3] p-4 text-xs font-semibold text-[#b4304a]">
+      <div role="alert" className="flex items-center gap-2 rounded-2xl border border-umkm-danger-line bg-umkm-danger-soft p-4 text-xs font-semibold text-umkm-danger">
         <AlertCircle size={16} /> {error || "Kondisi usaha belum dapat dimuat."}
         <button onClick={() => void load()} className="ml-auto inline-flex min-h-11 items-center gap-1 rounded-lg px-2 font-bold">
           <RefreshCcw size={13} /> Coba lagi
@@ -128,13 +128,13 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
   return (
     <div className="space-y-4">
 
-      <section className="rounded-2xl border border-[#addcf4] bg-[#eef8fd] p-5">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-[#0b5f86]">Milik saya bersih</p>
-        <p className="mt-2 text-2xl font-bold tracking-[-0.035em] text-[#0b5f86] tabular-nums">
+      <section className="rounded-2xl border border-umkm-brand-line bg-umkm-brand-soft p-5">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-umkm-brand">Milik saya bersih</p>
+        <p className="mt-2 text-2xl font-bold tracking-[-0.035em] text-umkm-brand tabular-nums">
           {condition.netWorthIdr < 0 ? "−" : ""}
           {formatIdr(condition.netWorthIdr)}
         </p>
-        <p className="mt-2 text-xs leading-relaxed text-[#1b2a3a]">{condition.sentence}</p>
+        <p className="mt-2 text-xs leading-relaxed text-umkm-ink">{condition.sentence}</p>
       </section>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -158,14 +158,14 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
         <button
           type="button"
           onClick={() => setView("register")}
-          className="min-h-11 text-xs font-bold text-[#0b5f86]"
+          className="min-h-11 text-xs font-bold text-umkm-brand"
         >
           Alat usaha &amp; pinjaman
         </button>
-        <p className="rounded-xl border border-[#e3e9f0] bg-[#f8fafc] p-3 text-[11px] leading-relaxed text-[#6e859e]">
+        <p className="rounded-xl border border-umkm-line bg-umkm-surface p-3 text-xs leading-relaxed text-umkm-subtle">
           Kondisi awal hanya diisi sekali, karena ia titik mulai usaha Anda. Bila
           ada selisih &mdash; misalnya uang tunai di laci ternyata berbeda dari
-          yang diketik &mdash; perbaikinya lewat <strong className="font-bold text-[#4a6280]">catat transaksi</strong>{" "}
+          yang diketik &mdash; perbaiki lewat <strong className="font-bold text-umkm-muted">catat transaksi</strong>{" "}
           pemasukan atau pengeluaran. Cara itu menyimpan jejak kapan selisihnya
           ketahuan dan berapa besarnya.
         </p>
@@ -174,21 +174,21 @@ export function ConditionTab({ asOf = jakartaDate() }: { asOf?: string }) {
       {tax && (
         <section
           className={`rounded-2xl border p-4 ${
-            tax.isTaxable ? "border-[#f0d9a8] bg-[#fdf8ee]" : "border-[#e3e9f0] bg-white"
+            tax.isTaxable ? "border-umkm-warning-line bg-umkm-warning-soft" : "border-umkm-line bg-white"
           }`}
         >
           <div className="flex items-start gap-3">
-            <Receipt size={16} className={`mt-0.5 shrink-0 ${tax.isTaxable ? "text-[#8a6412]" : "text-[#6e859e]"}`} />
+            <Receipt size={16} className={`mt-0.5 shrink-0 ${tax.isTaxable ? "text-umkm-warning" : "text-umkm-subtle"}`} />
             <div className="min-w-0">
-              <p className="text-xs font-bold text-[#1b2a3a]">Pajak tahun {tax.taxYear}</p>
-              <p className="mt-1 text-xs leading-relaxed text-[#1b2a3a]">{taxEstimateSentence(tax)}</p>
-              <p className="mt-1.5 text-[11px] leading-relaxed text-[#6e859e]">{taxEstimateDisclaimer}</p>
+              <p className="text-xs font-bold text-umkm-ink">Pajak tahun {tax.taxYear}</p>
+              <p className="mt-1 text-xs leading-relaxed text-umkm-ink">{taxEstimateSentence(tax)}</p>
+              <p className="mt-1.5 text-xs leading-relaxed text-umkm-subtle">{taxEstimateDisclaimer}</p>
             </div>
           </div>
         </section>
       )}
 
-      <p className="text-[11px] leading-relaxed text-[#6e859e]">
+      <p className="text-xs leading-relaxed text-umkm-subtle">
         Angka per {condition.asOf}, dihitung barusan. Nilai alat usaha sudah dikurangi penyusutannya, jadi yang
         terlihat adalah nilai pakainya sekarang, bukan harga belinya dulu.
       </p>
@@ -209,21 +209,21 @@ function ConditionList({
   tone: "positive" | "negative";
   emptyText: string;
 }) {
-  const accent = tone === "positive" ? "text-[#0b7a55]" : "text-[#b4304a]";
+  const accent = tone === "positive" ? "text-umkm-success" : "text-umkm-danger";
   return (
-    <section className="rounded-2xl border border-[#e3e9f0] bg-white p-4 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
+    <section className="rounded-2xl border border-umkm-line bg-white p-4 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-bold text-[#1b2a3a]">{title}</h3>
+        <h3 className="text-sm font-bold text-umkm-ink">{title}</h3>
         <span className={`text-sm font-bold tabular-nums ${accent}`}>{formatIdr(total)}</span>
       </div>
       {items.length === 0 ? (
-        <p className="mt-3 text-xs text-[#6e859e]">{emptyText}</p>
+        <p className="mt-3 text-xs text-umkm-subtle">{emptyText}</p>
       ) : (
-        <ul className="mt-3 divide-y divide-[#eef2f6]">
+        <ul className="mt-3 divide-y divide-umkm-line-soft">
           {items.map((item) => (
             <li key={item.label} className="flex items-center justify-between gap-3 py-2.5">
-              <span className="text-xs text-[#1b2a3a]">{item.label}</span>
-              <span className="shrink-0 text-xs font-bold tabular-nums text-[#1b2a3a]">
+              <span className="text-xs text-umkm-ink">{item.label}</span>
+              <span className="shrink-0 text-xs font-bold tabular-nums text-umkm-ink">
                 {item.amountIdr < 0 ? "−" : ""}
                 {formatIdr(item.amountIdr)}
               </span>

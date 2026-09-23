@@ -54,9 +54,9 @@ import {
  */
 
 const toneByStage = {
-  0: "border-[#e3e9f0] bg-white text-[#6e859e]",
-  1: "border-amber-200 bg-amber-50 text-amber-700",
-  2: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  0: "border-umkm-line bg-white text-umkm-subtle",
+  1: "border-umkm-warning-line bg-umkm-warning-soft text-umkm-warning",
+  2: "border-umkm-success-line bg-umkm-success-soft text-umkm-success",
 } as const;
 
 function tanggalPanjang(value: string | null) {
@@ -220,7 +220,7 @@ export default function RekeningUsahaPage() {
       setRekening(null);
       setMode("ringkasan");
       notifySuccess("Catatan rekening dihapus", {
-        description: "Kamu bisa mencatatnya lagi kapan saja.",
+        description: "Anda bisa mencatatnya lagi kapan saja.",
       });
     } catch (error) {
       notifyFromError(error, "Catatan belum berhasil dihapus.");
@@ -233,40 +233,40 @@ export default function RekeningUsahaPage() {
     <DashboardPage width="compact">
       <PageHeader
         title="Rekening usaha"
-        description="Satu rekening yang khusus dipakai untuk uang usaha — boleh atas namamu sendiri. Ini yang membuat laporanmu bisa dibaca tanpa memilah belanja rumah."
+        description="Satu rekening yang khusus dipakai untuk uang usaha — boleh atas nama Anda sendiri. Ini yang membuat laporan Anda bisa dibaca tanpa memilah belanja rumah."
         icon={Landmark}
       />
 
       {memuat ? (
         <DashboardPanel className="p-6">
-          <p className="flex items-center gap-2 text-xs text-[#6e859e]">
+          <p className="flex items-center gap-2 text-xs text-umkm-subtle">
             <LoaderCircle size={14} className="animate-spin" /> Memuat catatan rekening…
           </p>
         </DashboardPanel>
       ) : (
         <>
           {gagalMuat && (
-            <DashboardPanel className="border-amber-200 bg-amber-50 p-4">
-              <p className="text-xs text-amber-800">{gagalMuat}</p>
+            <DashboardPanel className="border-umkm-warning-line bg-umkm-warning-soft p-4">
+              <p className="text-xs text-umkm-warning">{gagalMuat}</p>
             </DashboardPanel>
           )}
 
           {/* Keadaan sekarang, dan satu langkah berikutnya. */}
           <DashboardPanel className={`p-5 ${toneByStage[stage]}`}>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-black/10 bg-white/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide">
+              <span className="rounded-full border border-black/10 bg-white/70 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide">
                 {copy.badge}
               </span>
               {stage === 2 && rekening?.ownerConfirmedAt && (
-                <span className="text-[10px]">
+                <span className="text-xs">
                   dinyatakan {tanggalPanjang(rekening.ownerConfirmedAt)}
                 </span>
               )}
             </div>
-            <h2 className="mt-2 text-base font-bold text-[#1b2a3a]">{copy.title}</h2>
-            <p className="mt-1 text-xs leading-relaxed text-[#4a6280]">{copy.body}</p>
+            <h2 className="mt-2 text-base font-bold text-umkm-ink">{copy.title}</h2>
+            <p className="mt-1 text-xs leading-relaxed text-umkm-muted">{copy.body}</p>
             {copy.next && (
-              <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-[#1b2a3a]">
+              <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-umkm-ink">
                 <ArrowRight size={14} className="mt-0.5 shrink-0" />
                 {copy.next}
               </p>
@@ -279,20 +279,20 @@ export default function RekeningUsahaPage() {
               <button
                 type="button"
                 onClick={bukaFormulir}
-                className="rounded-2xl border border-[#0b5f86] bg-[#0b5f86] px-4 py-5 text-left text-white transition-opacity hover:opacity-90"
+                className="rounded-2xl border border-umkm-brand bg-umkm-brand px-4 py-5 text-left text-white transition-opacity hover:opacity-90"
               >
                 <p className="text-sm font-bold">Sudah punya rekening usaha</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-white/80">
+                <p className="mt-1 text-xs leading-relaxed text-white/80">
                   Catat banknya dan 4 angka terakhir. Kurang dari satu menit.
                 </p>
               </button>
               <button
                 type="button"
                 onClick={() => setMode("panduan")}
-                className="rounded-2xl border border-[#e3e9f0] bg-white px-4 py-5 text-left transition-colors hover:bg-[#f7f9fb]"
+                className="rounded-2xl border border-umkm-line bg-white px-4 py-5 text-left transition-colors hover:bg-umkm-surface"
               >
-                <p className="text-sm font-bold text-[#1b2a3a]">Belum punya</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
+                <p className="text-sm font-bold text-umkm-ink">Belum punya</p>
+                <p className="mt-1 text-xs leading-relaxed text-umkm-subtle">
                   Lihat apa yang perlu dibawa dan apa yang ditanyakan di bank.
                 </p>
               </button>
@@ -304,35 +304,35 @@ export default function RekeningUsahaPage() {
             <DashboardPanel>
               <PanelHeader
                 title="Membuka rekening untuk usaha"
-                description="Rekening atas namamu sendiri sudah cukup, asalkan khusus dipakai untuk uang usaha."
+                description="Rekening atas nama Anda sendiri sudah cukup, asalkan khusus dipakai untuk uang usaha."
                 action={
                   <button
                     type="button"
                     onClick={() => setMode("ringkasan")}
-                    className="text-[11px] font-bold text-[#0b5f86]"
+                    className="inline-flex min-h-11 items-center rounded-lg border border-umkm-line px-3 text-xs font-bold text-umkm-muted hover:bg-umkm-surface"
                   >
-                    Tutup
+                    Tutup panduan
                   </button>
                 }
               />
               <ol className="space-y-3 px-4 py-4 md:px-5">
                 {PANDUAN_BUKA_REKENING.map((langkah, index) => (
                   <li key={langkah.judul} className="flex gap-3">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#eef4f8] text-[11px] font-bold text-[#0b5f86]">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-umkm-surface-muted text-xs font-bold text-umkm-brand">
                       {index + 1}
                     </span>
                     <div>
-                      <p className="text-xs font-bold text-[#1b2a3a]">{langkah.judul}</p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-[#6e859e]">{langkah.isi}</p>
+                      <p className="text-xs font-bold text-umkm-ink">{langkah.judul}</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-umkm-subtle">{langkah.isi}</p>
                     </div>
                   </li>
                 ))}
               </ol>
-              <div className="border-t border-[#eef2f6] px-4 py-3 md:px-5">
+              <div className="border-t border-umkm-line-soft px-4 py-3 md:px-5">
                 <button
                   type="button"
                   onClick={bukaFormulir}
-                  className="text-[11px] font-bold text-[#0b5f86]"
+                  className="inline-flex min-h-11 items-center text-xs font-bold text-umkm-brand"
                 >
                   Sudah punya rekeningnya sekarang — catat di sini
                 </button>
@@ -345,21 +345,30 @@ export default function RekeningUsahaPage() {
             <DashboardPanel>
               <PanelHeader
                 title={rekening ? "Ubah catatan rekening" : "Catat rekening usaha"}
-                description="Nomor lengkapnya tidak kami simpan — cukup 4 angka terakhir supaya kamu mengenali rekeningmu sendiri."
+                description="Nomor lengkapnya tidak kami simpan — cukup 4 angka terakhir supaya Anda mengenali rekening Anda sendiri."
               />
-              <div className="space-y-4 px-4 py-4 md:px-5">
+              {/* Sebuah <form> sungguhan: Enter di kolom terakhir menyimpan,
+                  seperti formulir lain yang dikenal pemilik. */}
+              <form
+                className="space-y-4 px-4 py-4 md:px-5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (siapSimpan && !sibuk) void simpan();
+                }}
+              >
                 <div>
-                  <label className="block text-xs font-bold text-[#1b2a3a]">Bank</label>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <p id="rekening-bank-label" className="block text-xs font-bold text-umkm-ink">Bank</p>
+                  <div role="group" aria-labelledby="rekening-bank-label" className="mt-2 flex flex-wrap gap-1.5">
                     {[...BANK_PILIHAN, BANK_LAINNYA].map((pilihan) => (
                       <button
                         key={pilihan}
                         type="button"
+                        aria-pressed={bank === pilihan}
                         onClick={() => setBank(pilihan)}
-                        className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                        className={`inline-flex min-h-11 items-center rounded-full border px-4 text-xs font-semibold transition-colors ${
                           bank === pilihan
-                            ? "border-[#0b5f86] bg-[#0b5f86] text-white"
-                            : "border-[#e3e9f0] bg-white text-[#4a6280] hover:bg-[#f7f9fb]"
+                            ? "border-umkm-brand bg-umkm-brand text-white"
+                            : "border-umkm-line bg-white text-umkm-muted hover:bg-umkm-surface"
                         }`}
                       >
                         {pilihan}
@@ -370,38 +379,43 @@ export default function RekeningUsahaPage() {
                     <input
                       value={bankLain}
                       onChange={(event) => setBankLain(event.target.value)}
+                      aria-label="Nama bank lainnya"
                       placeholder="Tulis nama banknya, misalnya BPD Bali atau Koperasi Sejahtera"
                       maxLength={80}
-                      className="mt-2 w-full rounded-xl border border-[#e3e9f0] px-3 py-2.5 text-xs text-[#1b2a3a] outline-none focus:border-[#0b5f86]"
+                      className="mt-2 min-h-11 w-full rounded-xl border border-umkm-line px-3 text-sm text-umkm-ink outline-none focus:border-umkm-brand"
                     />
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#1b2a3a]">Nama pemilik rekening</label>
+                  <label htmlFor="rekening-nama" className="block text-xs font-bold text-umkm-ink">Nama pemilik rekening</label>
                   <input
+                    id="rekening-nama"
                     value={namaPemilik}
                     onChange={(event) => setNamaPemilik(event.target.value)}
+                    aria-describedby="rekening-nama-hint"
                     placeholder="Seperti tertulis di buku tabungan"
                     maxLength={120}
-                    className="mt-1.5 w-full rounded-xl border border-[#e3e9f0] px-3 py-2.5 text-xs text-[#1b2a3a] outline-none focus:border-[#0b5f86]"
+                    className="mt-1.5 min-h-11 w-full rounded-xl border border-umkm-line px-3 text-sm text-umkm-ink outline-none focus:border-umkm-brand"
                   />
-                  <p className="mt-1 text-[10px] leading-relaxed text-[#6e859e]">
-                    Boleh namamu sendiri. Yang dinilai pemisahan uangnya, bukan atas nama siapa rekeningnya.
+                  <p id="rekening-nama-hint" className="mt-1 text-xs leading-relaxed text-umkm-subtle">
+                    Boleh nama Anda sendiri. Yang dinilai pemisahan uangnya, bukan atas nama siapa rekeningnya.
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#1b2a3a]">4 angka terakhir</label>
+                  <label htmlFor="rekening-nomor" className="block text-xs font-bold text-umkm-ink">4 angka terakhir</label>
                   <input
+                    id="rekening-nomor"
                     value={nomor}
                     onChange={(event) => setNomor(event.target.value)}
+                    aria-describedby="rekening-nomor-hint"
                     inputMode="numeric"
                     placeholder="Boleh ketik nomor lengkapnya, yang disimpan hanya 4 angka terakhir"
                     maxLength={40}
-                    className="mt-1.5 w-full rounded-xl border border-[#e3e9f0] px-3 py-2.5 text-xs text-[#1b2a3a] outline-none focus:border-[#0b5f86]"
+                    className="mt-1.5 min-h-11 w-full rounded-xl border border-umkm-line px-3 text-sm text-umkm-ink outline-none focus:border-umkm-brand"
                   />
-                  <p className="mt-1 text-[10px] leading-relaxed text-[#6e859e]">
+                  <p id="rekening-nomor-hint" aria-live="polite" className="mt-1 text-xs leading-relaxed text-umkm-subtle">
                     {digit
                       ? `Yang tersimpan: •••• ${digit}`
                       : "Perlu paling sedikit 4 angka."}
@@ -410,10 +424,9 @@ export default function RekeningUsahaPage() {
 
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
-                    type="button"
+                    type="submit"
                     disabled={!siapSimpan || sibuk}
-                    onClick={() => void simpan()}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#0b5f86] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white disabled:opacity-40"
                   >
                     {sibuk ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />}
                     Simpan
@@ -421,12 +434,12 @@ export default function RekeningUsahaPage() {
                   <button
                     type="button"
                     onClick={() => setMode("ringkasan")}
-                    className="rounded-xl border border-[#e3e9f0] px-4 py-2.5 text-xs font-bold text-[#4a6280]"
+                    className="inline-flex min-h-11 items-center rounded-xl border border-umkm-line px-4 text-xs font-bold text-umkm-muted"
                   >
                     Batal
                   </button>
                 </div>
-              </div>
+              </form>
             </DashboardPanel>
           )}
 
@@ -436,10 +449,10 @@ export default function RekeningUsahaPage() {
               <PanelHeader title="Rekening yang tercatat" />
               <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-5">
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-[#1b2a3a]">
+                  <p className="text-sm font-bold text-umkm-ink">
                     {rekening.bankName} •••• {rekening.accountLast4}
                   </p>
-                  <p className="mt-0.5 truncate text-[11px] text-[#6e859e]">
+                  <p className="mt-0.5 truncate text-xs text-umkm-subtle">
                     atas nama {rekening.accountHolderName}
                   </p>
                 </div>
@@ -447,7 +460,7 @@ export default function RekeningUsahaPage() {
                   <button
                     type="button"
                     onClick={bukaFormulir}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-[#e3e9f0] px-3 py-2 text-[11px] font-bold text-[#4a6280]"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-line px-3 text-xs font-bold text-umkm-muted"
                   >
                     <Pencil size={12} /> Ubah
                   </button>
@@ -455,13 +468,13 @@ export default function RekeningUsahaPage() {
                     type="button"
                     disabled={sibuk}
                     onClick={() => void hapus()}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-[#e3e9f0] px-3 py-2 text-[11px] font-bold text-[#b42318] disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-line px-3 text-xs font-bold text-umkm-danger disabled:opacity-40"
                   >
                     <Trash2 size={12} /> Hapus
                   </button>
                 </div>
               </div>
-              <p className="border-t border-[#eef2f6] px-4 py-3 text-[10px] leading-relaxed text-[#6e859e] md:px-5">
+              <p className="border-t border-umkm-line-soft px-4 py-3 text-xs leading-relaxed text-umkm-subtle md:px-5">
                 Mengubah bank atau 4 angka terakhir akan melepas bukti yang terpasang — berkas lama
                 membuktikan rekening yang lain.
               </p>
@@ -477,12 +490,12 @@ export default function RekeningUsahaPage() {
               />
               <div className="space-y-3 px-4 py-4 md:px-5">
                 {stage === 2 ? (
-                  <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
-                    <Check size={14} className="mt-0.5 shrink-0 text-emerald-700" />
+                  <div className="flex items-start gap-2 rounded-xl border border-umkm-success-line bg-umkm-success-soft px-3 py-3">
+                    <Check size={14} className="mt-0.5 shrink-0 text-umkm-success" />
                     <div>
-                      <p className="text-xs font-bold text-emerald-800">Bukti sudah terpasang</p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-emerald-700">
-                        Kamu menyatakan berkas ini memang rekening usahamu pada{" "}
+                      <p className="text-xs font-bold text-umkm-success">Bukti sudah terpasang</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-umkm-success">
+                        Anda menyatakan berkas ini memang rekening usaha Anda pada{" "}
                         {tanggalPanjang(rekening.ownerConfirmedAt)}.{" "}
                         <Link href="/umkm/profil/dokumen" className="-mx-1.5 inline-flex min-h-11 items-center rounded-lg px-1.5 font-bold underline">
                           Lihat di lemari
@@ -491,10 +504,10 @@ export default function RekeningUsahaPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-[11px] leading-relaxed text-[#6e859e]">
-                    Dengan melampirkan berkas, kamu menyatakan bahwa berkas itu memang rekening yang
-                    kamu catat di atas. Kami tidak menghubungi bank dan tidak memeriksa keaslian
-                    berkasnya — yang kami catat adalah pernyataanmu.
+                  <p className="text-xs leading-relaxed text-umkm-subtle">
+                    Dengan melampirkan berkas, Anda menyatakan bahwa berkas itu memang rekening yang
+                    Anda catat di atas. Kami tidak menghubungi bank dan tidak memeriksa keaslian
+                    berkasnya — yang kami catat adalah pernyataan Anda.
                   </p>
                 )}
 
@@ -503,12 +516,12 @@ export default function RekeningUsahaPage() {
                     type="button"
                     disabled={sibuk}
                     onClick={() => void lampirkan(koranTersedia.id)}
-                    className="flex w-full items-center gap-3 rounded-xl border border-[#e3e9f0] bg-white px-3 py-3 text-left transition-colors hover:bg-[#f7f9fb] disabled:opacity-40"
+                    className="flex w-full items-center gap-3 rounded-xl border border-umkm-line bg-white px-3 py-3 text-left transition-colors hover:bg-umkm-surface disabled:opacity-40"
                   >
-                    <FileText size={15} className="shrink-0 text-[#0b5f86]" />
+                    <FileText size={15} className="shrink-0 text-umkm-brand" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-[#1b2a3a]">Pakai rekening koran yang sudah ada</p>
-                      <p className="mt-0.5 truncate text-[10px] text-[#6e859e]">
+                      <p className="text-xs font-bold text-umkm-ink">Pakai rekening koran yang sudah ada</p>
+                      <p className="mt-0.5 truncate text-xs text-umkm-subtle">
                         {koranTersedia.name} · sudah tersimpan di lemari
                       </p>
                     </div>
@@ -530,25 +543,25 @@ export default function RekeningUsahaPage() {
                   type="button"
                   disabled={sibuk}
                   onClick={() => berkasRef.current?.click()}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#0b5f86] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40"
+                  className="inline-flex items-center gap-2 rounded-xl bg-umkm-brand px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40"
                 >
                   {sibuk ? <LoaderCircle size={14} className="animate-spin" /> : <Paperclip size={14} />}
                   {stage === 2 ? "Ganti bukti" : "Unggah bukti"}
                 </button>
-                <p className="text-[10px] leading-relaxed text-[#6e859e]">
+                <p className="text-xs leading-relaxed text-umkm-subtle">
                   PDF, JPG, atau PNG sampai 10 MB.
                 </p>
               </div>
             </DashboardPanel>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#e3e9f0] bg-[#f7f9fb] px-4 py-3">
-            <p className="flex items-start gap-2 text-[10px] leading-relaxed text-[#6e859e]">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-umkm-line bg-umkm-surface px-4 py-3">
+            <p className="flex items-start gap-2 text-xs leading-relaxed text-umkm-subtle">
               <Lock size={12} className="mt-0.5 shrink-0" />
-              Nomor lengkap rekeningmu tidak disimpan. Berkas buktinya privat, dan baru terlihat
-              lembaga setelah kamu memberi izin.
+              Nomor lengkap rekening Anda tidak disimpan. Berkas buktinya privat, dan baru terlihat
+              lembaga setelah Anda memberi izin.
             </p>
-            <Link href="/umkm/perjalanan" className="text-[11px] font-bold text-[#0b5f86]">
+            <Link href="/umkm/perjalanan" className="text-xs font-bold text-umkm-brand">
               Lihat Perjalanan
             </Link>
           </div>

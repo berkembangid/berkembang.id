@@ -118,14 +118,14 @@ export function DinasAffiliationCard() {
   }
 
   return (
-    <section className="rounded-2xl border border-[#e3e9f0] bg-white p-4 shadow-[0_4px_16px_rgba(27,42,58,.04)] sm:p-5">
+    <section className="rounded-2xl border border-umkm-line bg-white p-4 shadow-[0_4px_16px_rgba(27,42,58,.04)] sm:p-5">
       <div className="flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#eef8fd] text-[#0b5f86]">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-umkm-brand-soft text-umkm-brand">
           <Building2 size={18} />
         </span>
         <div className="min-w-0">
-          <h2 className="text-sm font-bold text-[#1b2a3a]">Dinas pembina</h2>
-          <p className="mt-1 text-xs leading-relaxed text-[#6e859e]">
+          <h2 className="text-sm font-bold text-umkm-ink">Dinas pembina</h2>
+          <p className="mt-1 text-xs leading-relaxed text-umkm-subtle">
             Kalau usaha Anda dibina sebuah dinas, pilih di sini. Dinas itu dapat melihat nama usaha Anda supaya bisa
             mengundang Anda ke program pendampingan — bukan catatan keuangannya.
           </p>
@@ -133,22 +133,22 @@ export function DinasAffiliationCard() {
       </div>
 
       {loadError && (
-        <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">
+        <p role="alert" className="mt-3 rounded-xl border border-umkm-danger-line bg-umkm-danger-soft p-3 text-xs font-semibold text-umkm-danger">
           {loadError}
         </p>
       )}
 
       {!state ? (
-        <p role="status" className="mt-4 flex items-center gap-2 text-xs text-[#6e859e]">
+        <p role="status" className="mt-4 flex items-center gap-2 text-xs text-umkm-subtle">
           <LoaderCircle size={14} className="animate-spin" /> Memuat…
         </p>
       ) : state.active ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#a9ebd0] bg-[#edfbf5] p-3.5">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-umkm-success-line bg-umkm-success-soft p-3.5">
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-xs font-bold text-[#0b7a55]">
+            <p className="flex items-center gap-1.5 text-xs font-bold text-umkm-success">
               <ShieldCheck size={14} /> {state.active.institutionName}
             </p>
-            <p className="mt-0.5 text-[11px] text-[#0b7a55]">
+            <p className="mt-0.5 text-xs text-umkm-success">
               Dipilih {new Intl.DateTimeFormat("id-ID", { dateStyle: "long" }).format(new Date(state.active.grantedAt))}
             </p>
           </div>
@@ -156,7 +156,7 @@ export function DinasAffiliationCard() {
             type="button"
             onClick={() => void revoke()}
             disabled={busy}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#c8d3de] bg-white px-4 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9] disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-line-strong bg-white px-4 text-xs font-bold text-umkm-muted hover:bg-umkm-surface-muted disabled:opacity-50"
           >
             <X size={14} /> Cabut
           </button>
@@ -164,12 +164,12 @@ export function DinasAffiliationCard() {
       ) : !state.regionKnown ? (
         // Dua kembalian kosong punya arti berbeda, dan layarnya harus
         // membedakannya: tanpa kota, daftarnya tidak bisa disusun sama sekali.
-        <p className="mt-4 rounded-xl border border-[#f0d9a8] bg-[#fdf8ee] p-3.5 text-xs leading-relaxed text-[#8a6412]">
+        <p className="mt-4 rounded-xl border border-umkm-warning-line bg-umkm-warning-soft p-3.5 text-xs leading-relaxed text-umkm-warning">
           Isi dulu <strong>kota atau kabupaten</strong> usaha Anda di formulir di bawah, lalu simpan. Daftar dinas
           disusun dari kota itu.
         </p>
       ) : state.options.length === 0 ? (
-        <p className="mt-4 rounded-xl bg-[#f8fafc] p-3.5 text-xs leading-relaxed text-[#6e859e]">
+        <p className="mt-4 rounded-xl bg-umkm-surface p-3.5 text-xs leading-relaxed text-umkm-subtle">
           Belum ada dinas yang terdaftar di kota Anda. Bagian ini akan terisi sendiri begitu ada.
         </p>
       ) : (
@@ -179,7 +179,7 @@ export function DinasAffiliationCard() {
             id="dinas-pembina"
             value={chosen}
             onChange={(event) => setChosen(event.target.value)}
-            className="min-h-11 flex-1 rounded-xl border border-[#d5dfe9] px-3 text-sm outline-none focus:border-[#0b5f86]"
+            className="min-h-11 flex-1 rounded-xl border border-umkm-line-strong px-3 text-sm outline-none focus:border-umkm-brand"
           >
             <option value="">Belum dipilih</option>
             {state.options.map((option) => (
@@ -190,7 +190,7 @@ export function DinasAffiliationCard() {
             type="button"
             onClick={() => void grant()}
             disabled={busy || !chosen}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white hover:bg-[#0f73a3] disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white hover:bg-umkm-brand-hover disabled:opacity-50"
           >
             {busy ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />} Simpan
           </button>

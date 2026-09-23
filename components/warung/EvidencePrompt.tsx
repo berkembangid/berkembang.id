@@ -75,20 +75,20 @@ export function EvidencePrompt({
 
   if (state === "done") {
     return (
-      <p className="flex items-center gap-2 rounded-2xl border border-[#bde5c8] bg-[#f0faf3] px-3.5 py-3 text-[11px] font-bold text-[#1d6b39]">
+      <p className="flex items-center gap-2 rounded-2xl border border-umkm-success-line bg-umkm-success-soft px-3.5 py-3 text-xs font-bold text-umkm-success">
         <Check size={14} className="shrink-0" /> Foto nota tersimpan.
-        {sizeText && <span className="font-normal text-[#4a6280]">· {sizeText}</span>}
+        {sizeText && <span className="font-normal text-umkm-muted">· {sizeText}</span>}
       </p>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-[#e3e9f0] bg-white px-3.5 py-3">
-      <p className="text-xs font-bold text-[#1b2a3a]">{title}</p>
-      <p className="mt-0.5 text-[11px] leading-relaxed text-[#4a6280]">{hint}</p>
+    <div className="rounded-2xl border border-umkm-line bg-white px-3.5 py-3">
+      <p className="text-xs font-bold text-umkm-ink">{title}</p>
+      <p className="mt-0.5 text-xs leading-relaxed text-umkm-muted">{hint}</p>
 
       {state === "failed" && (
-        <p className="mt-2 rounded-xl border border-[#f0d9a8] bg-[#fdf8ee] px-3 py-2 text-[11px] leading-relaxed text-[#8a6412]">
+        <p className="mt-2 rounded-xl border border-umkm-warning-line bg-umkm-warning-soft px-3 py-2 text-xs leading-relaxed text-umkm-warning">
           {message} Catatannya sendiri sudah tersimpan.
         </p>
       )}
@@ -116,7 +116,7 @@ export function EvidencePrompt({
           }
           inputRef.current?.click();
         }}
-        className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl border border-[#addcf4] bg-[#eef8fd] px-3 py-2.5 text-xs font-bold text-[#0b5f86] transition-colors hover:bg-[#e3f3fb] disabled:opacity-60"
+        className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl border border-umkm-brand-line bg-umkm-brand-soft px-3 py-2.5 text-xs font-bold text-umkm-brand transition-colors hover:bg-umkm-brand-soft disabled:opacity-60"
       >
         {state === "working" ? (
           <>

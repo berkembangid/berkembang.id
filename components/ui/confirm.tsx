@@ -63,6 +63,13 @@ type Pending =
 type ConfirmContextValue = {
   confirm: (options: ConfirmOptions) => Promise<boolean>
   confirmWithReason: (options: ConfirmWithReasonOptions) => Promise<string | null>
+  /**
+   * Benar selagi kotak konfirmasi terbuka. Dialog formulir di bawahnya membaca
+   * ini untuk melepas perangkap fokusnya; tanpa itu fokus tertahan di dialog
+   * yang sudah tertutup lapisan konfirmasi, dan Enter mengirim formulirnya
+   * lagi alih-alih menjawab pertanyaannya.
+   */
+  isOpen: boolean
 }
 
 const ConfirmContext = React.createContext<ConfirmContextValue | null>(null)
@@ -78,8 +85,10 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [reason, setReason] = React.useState("")
   const [touched, setTouched] = React.useState(false)
 
+  const isOpen = pending !== null
   const value = React.useMemo<ConfirmContextValue>(
     () => ({
+      isOpen,
       confirm: (options) =>
         new Promise<boolean>((resolve) => {
           setReason("")
@@ -93,7 +102,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           setPending({ kind: "reason", options, resolve })
         }),
     }),
-    []
+    [isOpen]
   )
 
   // Menutup lewat Esc atau tombol Batal harus menghasilkan jawaban yang sama

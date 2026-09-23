@@ -163,21 +163,21 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_8px_30px_rgba(27,42,58,.04)]">
-        <h3 className="text-sm font-bold text-[#1b2a3a]">Berkas catatan usaha</h3>
-        <p className="mt-1 text-xs leading-relaxed text-[#6e859e]">
+      <section className="rounded-2xl border border-umkm-line bg-white p-5 shadow-[0_8px_30px_rgba(27,42,58,.04)]">
+        <h3 className="text-sm font-bold text-umkm-ink">Berkas catatan usaha</h3>
+        <p className="mt-1 text-xs leading-relaxed text-umkm-subtle">
           Satu berkas PDF berisi kondisi usaha, untung rugi, aliran uang, dan catatan penjelasnya, disusun
           mengikuti format SAK EMKM. Bisa Anda serahkan ke bank, koperasi, atau program pemerintah yang meminta
           bukti pembukuan.
         </p>
-        <p className="mt-2 rounded-xl bg-[#f6f9fb] p-3 text-[11px] leading-relaxed text-[#4a627a]">
+        <p className="mt-2 rounded-xl bg-umkm-surface p-3 text-xs leading-relaxed text-umkm-muted">
           Berkas ini memuat catatan Anda apa adanya. Kami tidak menilai usaha Anda dan tidak memutuskan apa pun
           soal pinjaman — yang menilai tetap lembaga yang menerima berkas ini.
         </p>
       </section>
 
       {loading ? (
-        <div role="status" className="flex items-center justify-center gap-2 rounded-2xl bg-white p-10 text-sm text-[#6e859e]">
+        <div role="status" className="flex items-center justify-center gap-2 rounded-2xl bg-white p-10 text-sm text-umkm-subtle">
           <LoaderCircle className="animate-spin" size={18} /> Memeriksa kesiapan berkas...
         </div>
       ) : (
@@ -187,9 +187,9 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
       )}
 
       {warung && sheet && !loading && (
-        <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
-          <h3 className="text-sm font-bold text-[#1b2a3a]">Yang akan terbaca di berkas</h3>
-          <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
+        <section className="rounded-2xl border border-umkm-line bg-white p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
+          <h3 className="text-sm font-bold text-umkm-ink">Yang akan terbaca di berkas</h3>
+          <p className="mt-1 text-xs leading-relaxed text-umkm-subtle">
             Angka bulan ini, supaya tidak ada kejutan setelah berkasnya terkirim.
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -201,9 +201,9 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
         </section>
       )}
 
-      <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_8px_30px_rgba(27,42,58,.04)]">
-        <h3 className="text-sm font-bold text-[#1b2a3a]">Pilih rentang waktu</h3>
-        <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
+      <section className="rounded-2xl border border-umkm-line bg-white p-5 shadow-[0_8px_30px_rgba(27,42,58,.04)]">
+        <h3 className="text-sm font-bold text-umkm-ink">Pilih rentang waktu</h3>
+        <p className="mt-1 text-xs leading-relaxed text-umkm-subtle">
           {monthsAvailable > 0
             ? `Catatan Anda saat ini mencakup ${monthsAvailable} bulan.`
             : "Belum ada bulan yang tercatat."}
@@ -218,8 +218,8 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
               onClick={() => setMonths(period.months)}
               className={`min-h-11 rounded-full border px-4 text-xs font-bold transition-colors ${
                 months === period.months
-                  ? "border-[#0b5f86] bg-[#0b5f86] text-white"
-                  : "border-[#d5dfe9] bg-white text-[#1b2a3a]"
+                  ? "border-umkm-brand bg-umkm-brand text-white"
+                  : "border-umkm-line-strong bg-white text-umkm-ink"
               }`}
             >
               {period.label}
@@ -228,7 +228,7 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
         </div>
 
         {periodTooLong && (
-          <p className="mt-3 flex items-start gap-1.5 rounded-xl border border-[#f0d49a] bg-[#fdf7ec] p-3 text-[11px] font-semibold leading-relaxed text-[#8a6320]">
+          <p className="mt-3 flex items-start gap-1.5 rounded-xl border border-umkm-warning-line bg-umkm-warning-soft p-3 text-xs font-semibold leading-relaxed text-umkm-warning">
             <CircleAlert size={14} className="mt-0.5 shrink-0" />
             Catatan Anda baru {monthsAvailable} bulan, jadi {months - monthsAvailable} bulan pertama akan kosong.
             Pilih rentang yang lebih pendek supaya berkasnya terbaca padat.
@@ -236,7 +236,7 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
         )}
 
         {error && (
-          <p role="alert" className="mt-3 flex items-start gap-1.5 rounded-xl border border-[#f3c6cf] bg-[#fdf1f3] p-3 text-xs font-semibold text-[#b4304a]">
+          <p role="alert" className="mt-3 flex items-start gap-1.5 rounded-xl border border-umkm-danger-line bg-umkm-danger-soft p-3 text-xs font-semibold text-umkm-danger">
             <AlertCircle size={14} className="mt-0.5 shrink-0" /> {error}
           </p>
         )}
@@ -245,33 +245,33 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
           type="button"
           disabled={busy}
           onClick={() => void buildReport()}
-          className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-60 md:w-auto"
+          className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white disabled:opacity-60 md:w-auto"
         >
           {busy ? <LoaderCircle className="animate-spin" size={15} /> : <FileText size={15} />}
           {busy ? "Menyusun berkas..." : "Buat berkas PDF"}
         </button>
 
         {done && (
-          <div className="mt-4 rounded-xl border border-[#a9ebd0] bg-[#edfbf5] p-3">
-            <p role="status" className="flex items-start gap-1.5 text-xs font-bold text-[#0b7a55]">
+          <div className="mt-4 rounded-xl border border-umkm-success-line bg-umkm-success-soft p-3">
+            <p role="status" className="flex items-start gap-1.5 text-xs font-bold text-umkm-success">
               <CheckCircle2 size={14} className="mt-0.5 shrink-0" /> Tersimpan di perangkat Anda
             </p>
-            <p className="mt-1 break-all text-[11px] text-[#3f6b58]">{done.fileName}</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-[#3f6b58]">
+            <p className="mt-1 break-all text-xs text-umkm-success">{done.fileName}</p>
+            <p className="mt-1 text-xs leading-relaxed text-umkm-success">
               Cari di folder Unduhan kalau perlu mengirimnya lagi nanti.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => void shareReport()}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-[#0b7a55] px-4 text-xs font-bold text-white"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-umkm-success px-4 text-xs font-bold text-white"
               >
                 <Share2 size={14} /> Kirim berkas
               </button>
               <button
                 type="button"
                 onClick={() => void buildReport()}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#a9ebd0] bg-white px-4 text-xs font-bold text-[#0b7a55]"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-success-line bg-white px-4 text-xs font-bold text-umkm-success"
               >
                 <Download size={14} /> Unduh ulang
               </button>
@@ -293,12 +293,12 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
       */}
       <Link
         href="/umkm/akuntan"
-        className="flex items-start gap-3 rounded-2xl border border-[#e3e9f0] bg-white p-4 text-left shadow-[0_8px_28px_rgba(27,42,58,.04)] transition-colors hover:border-[#addcf4] hover:bg-[#f8fcfe]"
+        className="flex items-start gap-3 rounded-2xl border border-umkm-line bg-white p-4 text-left shadow-[0_8px_28px_rgba(27,42,58,.04)] transition-colors hover:border-umkm-brand-line hover:bg-umkm-brand-soft"
       >
-        <BookOpenCheck size={18} className="mt-0.5 shrink-0 text-[#0b5f86]" />
+        <BookOpenCheck size={18} className="mt-0.5 shrink-0 text-umkm-brand" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-[#1b2a3a]">Perincian pembukuan</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
+          <p className="text-sm font-bold text-umkm-ink">Perincian pembukuan</p>
+          <p className="mt-1 text-xs leading-relaxed text-umkm-subtle">
             Untuk pendamping, koperasi, atau petugas bank yang ingin menelusuri satu angka sampai ke catatan
             {/* Pintu ke Mode Akuntan: harus menyebut isinya dengan tepat supaya
                 pendamping tahu apa yang akan ia temukan di sana. */}
@@ -306,7 +306,7 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
             dari sana.
           </p>
         </div>
-        <ChevronRight size={16} className="mt-0.5 shrink-0 text-[#9fb0c2]" />
+        <ChevronRight size={16} className="mt-0.5 shrink-0 text-umkm-faint" />
       </Link>
     </div>
   );
@@ -314,9 +314,9 @@ export function BankReportCard({ onOpenCondition }: { onOpenCondition?: () => vo
 
 function PreviewFigure({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl bg-[#f6f9fb] p-3">
-      <dt className="text-[10px] font-medium text-[#6e859e]">{label}</dt>
-      <dd className="mt-1 text-sm font-bold tabular-nums text-[#1b2a3a]">
+    <div className="rounded-xl bg-umkm-surface p-3">
+      <dt className="text-xs font-medium text-umkm-subtle">{label}</dt>
+      <dd className="mt-1 text-sm font-bold tabular-nums text-umkm-ink">
         {value < 0 ? "−" : ""}
         {formatIdr(value)}
       </dd>
@@ -373,38 +373,38 @@ function ReadinessChecklist({
   const pending = items.filter((item) => !item.done);
 
   return (
-    <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
+    <section className="rounded-2xl border border-umkm-line bg-white p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-bold text-[#1b2a3a]">Kesiapan berkas</h3>
-          <p className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
+          <h3 className="text-sm font-bold text-umkm-ink">Kesiapan berkas</h3>
+          <p className="mt-1 text-xs leading-relaxed text-umkm-subtle">
             {pending.length === 0
               ? "Semua bagian sudah lengkap. Berkasnya siap dikirim."
               : `${pending.length} hal masih bisa dilengkapi. Berkas tetap bisa dibuat sekarang.`}
           </p>
         </div>
         {readiness.balanced ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#edfbf5] px-2 py-1 text-[10px] font-bold text-[#0b7a55]">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-umkm-success-soft px-2 py-1 text-xs font-bold text-umkm-success">
             <Scale size={12} /> Angka seimbang
           </span>
         ) : (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#fdf1f3] px-2 py-1 text-[10px] font-bold text-[#b4304a]">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-umkm-danger-soft px-2 py-1 text-xs font-bold text-umkm-danger">
             <Scale size={12} /> Perlu diperiksa
           </span>
         )}
       </div>
 
-      <ul className="mt-4 divide-y divide-[#eef2f6]">
+      <ul className="mt-4 divide-y divide-umkm-line-soft">
         {items.map((item) => (
           <li key={item.key} className="flex items-start gap-3 py-3">
             {item.done ? (
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#0b7a55]" />
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-umkm-success" />
             ) : (
-              <CircleAlert size={16} className="mt-0.5 shrink-0 text-[#c98a1e]" />
+              <CircleAlert size={16} className="mt-0.5 shrink-0 text-umkm-warning" />
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-[#1b2a3a]">{item.title}</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-[#6e859e]">
+              <p className="text-xs font-bold text-umkm-ink">{item.title}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-umkm-subtle">
                 {item.done ? item.whenDone : item.whenMissing}
               </p>
             </div>
@@ -412,7 +412,7 @@ function ReadinessChecklist({
               <button
                 type="button"
                 onClick={item.action.run}
-                className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 text-[11px] font-bold text-[#0b5f86]"
+                className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-bold text-umkm-brand"
               >
                 {item.action.label} <ArrowRight size={12} />
               </button>

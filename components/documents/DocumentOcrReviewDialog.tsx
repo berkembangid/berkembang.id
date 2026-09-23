@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, ShieldAlert, X } from "lucide-react";
+import { CheckCircle2, ShieldAlert } from "lucide-react";
+import { FormDialog } from "@/components/ui/dialog";
 import {
   documentTypeLabels,
   parseDocumentOcrResult,
@@ -77,28 +78,25 @@ export function DocumentOcrReviewDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[var(--z-dialog)] flex items-end justify-center bg-slate-950/50 p-0 md:items-center md:p-6" role="dialog" aria-modal="true" aria-label="Periksa data dokumen">
-      <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl md:max-w-xl md:rounded-3xl md:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-blue-600">Data berhasil dibaca</p>
-            <h2 className="mt-1 text-lg font-black text-slate-800">{documentTypeLabels[docType]}</h2>
-            <p className="mt-1 text-xs text-slate-500">Koreksi jika hasil pembacaan tidak sesuai dokumen asli.</p>
-          </div>
-          <button type="button" onClick={onClose} disabled={busy} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50" aria-label="Tutup pemeriksaan data">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="mt-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+    // Selagi menyimpan, Esc dan tombol tutup tidak berbuat apa-apa: menutup di
+    // tengah jalan membuat pemilik tidak tahu apakah konfirmasinya tersimpan.
+    <FormDialog
+      open
+      onClose={() => { if (!busy) onClose(); }}
+      eyebrow="Data berhasil dibaca"
+      title={documentTypeLabels[docType]}
+      description="Koreksi jika hasil pembacaan tidak sesuai dokumen asli."
+      className="md:max-w-xl"
+    >
+        <div className="mt-4 flex gap-3 rounded-xl border border-umkm-warning-line bg-umkm-warning-soft p-3 text-xs text-umkm-warning">
           <ShieldAlert className="mt-0.5 shrink-0" size={17} />
           <p>Pastikan data di bawah sesuai dengan dokumen asli. Konfirmasi ini bukan pemeriksaan keaslian oleh pemerintah atau lembaga pembiayaan.</p>
         </div>
 
         <div className="mt-5 space-y-3">
           {fields[docType].map((field) => (
-            <label key={field.key} className="block text-xs font-bold text-slate-700">
-              {field.label}{field.required && <span className="ml-1 text-red-500">*</span>}
+            <label key={field.key} className="block text-xs font-bold text-umkm-ink-soft">
+              {field.label}{field.required && <span className="ml-1 text-umkm-danger">*</span>}
               <input
                 type={field.type ?? "text"}
                 inputMode={field.inputMode}
@@ -108,26 +106,25 @@ export function DocumentOcrReviewDialog({
                   [field.key]: event.target.value.trimStart() || null,
                 }))}
                 disabled={busy}
-                className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+                className="mt-1.5 min-h-11 w-full rounded-xl border border-umkm-line px-3 text-sm font-medium text-umkm-ink outline-none focus:border-umkm-sky focus:ring-2 focus:ring-umkm-brand-tint disabled:bg-umkm-surface"
               />
             </label>
           ))}
         </div>
 
-        <div className="mt-4 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+        <div className="mt-4 rounded-xl bg-umkm-surface p-3 text-xs text-umkm-muted">
           Tingkat keterbacaan awal: <span className="font-bold">{Math.round(initialData.confidence * 100)}%</span>. Angka ini tidak menentukan keaslian dokumen.
         </div>
-        {error && <p className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</p>}
+        {error && <p className="mt-3 rounded-xl bg-umkm-danger-soft p-3 text-xs font-semibold text-umkm-danger">{error}</p>}
 
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <button type="button" onClick={onClose} disabled={busy} className="rounded-xl border border-slate-200 px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+          <button type="button" onClick={onClose} disabled={busy} className="min-h-11 rounded-xl border border-umkm-line px-4 text-xs font-bold text-umkm-muted hover:bg-umkm-surface disabled:opacity-50">
             Nanti saja
           </button>
-          <button type="button" onClick={() => void submit()} disabled={busy} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50">
+          <button type="button" onClick={() => void submit()} disabled={busy} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white hover:bg-umkm-brand-deep disabled:opacity-50">
             <CheckCircle2 size={16} /> {busy ? "Menyimpan..." : "Konfirmasi data"}
           </button>
         </div>
-      </div>
-    </div>
+    </FormDialog>
   );
 }

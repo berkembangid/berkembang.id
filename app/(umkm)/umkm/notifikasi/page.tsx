@@ -84,12 +84,12 @@ export default function NotifikasiPage() {
         title="Pemberitahuan transaksi"
         description={`${LIMIT} catatan terakhir yang sudah dikonfirmasi. Riwayat lengkap ada di Buku Kas.`}
         icon={Bell}
-        actions={<Link href="/umkm/laporan" className="inline-flex min-h-11 items-center rounded-lg border border-[#e3e9f0] px-3 text-xs font-bold text-[#34496a] hover:bg-[#f7f9fb]">Buka buku kas</Link>}
+        actions={<Link href="/umkm/laporan" className="inline-flex min-h-11 items-center rounded-lg border border-umkm-line px-3 text-xs font-bold text-umkm-ink-soft hover:bg-umkm-surface">Buka buku kas</Link>}
       />
       {errorMessage ? (
         <FeedbackBanner tone="error">{errorMessage}</FeedbackBanner>
       ) : loading ? (
-        <p role="status" aria-live="polite" className="py-8 text-center text-xs text-[#6e859e]">Menyiapkan pemberitahuan...</p>
+        <p role="status" aria-live="polite" className="py-8 text-center text-xs text-umkm-subtle">Menyiapkan pemberitahuan...</p>
       ) : rows.length === 0 ? (
         <EmptyState icon={Receipt} title="Belum ada pemberitahuan" description="Pemberitahuan akan muncul setelah Anda mencatat pemasukan atau pengeluaran." action={{ label: "Catat transaksi", href: "/umkm/catat" }} />
       ) : (
@@ -98,19 +98,19 @@ export default function NotifikasiPage() {
             const income = isIncome(row);
             const amount = Number(row.amount_idr ?? row.nominal ?? 0);
             return (
-              <li key={row.id} className="flex items-center justify-between gap-3 rounded-xl border border-[#e3e9f0] bg-white p-4">
+              <li key={row.id} className="flex items-center justify-between gap-3 rounded-xl border border-umkm-line bg-white p-4">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${income ? "bg-[#e6f6ef] text-[#0b7a55]" : "bg-[#f3f6f9] text-[#34496a]"}`}>
+                  <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${income ? "bg-umkm-success-soft text-umkm-success" : "bg-umkm-surface-muted text-umkm-ink-soft"}`}>
                     {income ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-[#1b2a3a]">
+                    <p className="text-sm font-bold text-umkm-ink">
                       {income ? "Uang masuk" : "Uang keluar"} Rp{amount.toLocaleString("id-ID")}
                     </p>
-                    <p className="truncate text-xs text-[#6e859e]">{row.item || "Transaksi"}</p>
+                    <p className="truncate text-xs text-umkm-subtle">{row.item || "Transaksi"}</p>
                   </div>
                 </div>
-                <time className="shrink-0 text-right text-xs text-[#6e859e]">{formatWhen(row)}</time>
+                <time className="shrink-0 text-right text-xs text-umkm-subtle">{formatWhen(row)}</time>
               </li>
             );
           })}

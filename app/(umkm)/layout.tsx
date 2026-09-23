@@ -196,12 +196,12 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         </nav>
         <div className={styles.profile}>
           <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#d6eefa] text-xs font-extrabold text-[#0b5f86]">{userName.slice(0, 2).toUpperCase()}</div>
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-umkm-brand-tint text-xs font-extrabold text-umkm-brand">{userName.slice(0, 2).toUpperCase()}</div>
             <Link href="/umkm/profil" className="flex min-h-11 min-w-0 flex-1 flex-col justify-center">
-              <p className="truncate text-xs font-bold text-[#1b2a3a]">{userName}</p>
-              <p className="truncate text-[10px] text-[#6e859e]">{businessName || "Kelola profil usaha"}</p>
+              <p className="truncate text-xs font-bold text-umkm-ink">{userName}</p>
+              <p className="truncate text-xs text-umkm-subtle">{businessName || "Kelola profil usaha"}</p>
             </Link>
-            <button onClick={() => void signOut()} aria-label="Keluar dari akun" className="grid size-11 place-items-center rounded-lg text-[#9fb0c2] hover:bg-[#f3f6f9] hover:text-[#34496a]"><LogOut size={15} /></button>
+            <button onClick={() => void signOut()} aria-label="Keluar dari akun" className="grid size-11 place-items-center rounded-lg text-umkm-subtle hover:bg-umkm-surface-muted hover:text-umkm-ink-soft"><LogOut size={15} /></button>
           </div>
         </div>
       </aside>

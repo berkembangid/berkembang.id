@@ -44,7 +44,7 @@ export function BusinessAccountSummary() {
 
   if (memuat) {
     return (
-      <p className="flex items-center gap-2 px-1 py-2 text-[11px] text-[#6e859e]">
+      <p className="flex items-center gap-2 px-1 py-2 text-xs text-umkm-subtle">
         <LoaderCircle size={12} className="animate-spin" /> Memuat…
       </p>
     );
@@ -53,24 +53,24 @@ export function BusinessAccountSummary() {
   return (
     <Link
       href="/umkm/profil/rekening"
-      className="flex items-center gap-3 rounded-xl border border-[#e3e9f0] bg-white px-3 py-2.5 transition-colors hover:bg-[#f7f9fb]"
+      className="flex items-center gap-3 rounded-xl border border-umkm-line bg-white px-3 py-2.5 transition-colors hover:bg-umkm-surface"
     >
       <Landmark
         size={15}
-        className={`shrink-0 ${stage === 2 ? "text-[#1d6b39]" : stage === 1 ? "text-amber-600" : "text-[#9fb0c2]"}`}
+        className={`shrink-0 ${stage === 2 ? "text-umkm-success" : stage === 1 ? "text-umkm-warning" : "text-umkm-faint"}`}
       />
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-bold text-[#1b2a3a]">
+        <p className="text-xs font-bold text-umkm-ink">
           Rekening usaha
-          {stage === 2 && <span className="ml-1.5 text-[#1d6b39]">✓</span>}
+          {stage === 2 && <span className="ml-1.5 text-umkm-success">✓</span>}
         </p>
-        <p className="mt-0.5 truncate text-[10px] text-[#6e859e]">
+        <p className="mt-0.5 truncate text-xs text-umkm-subtle">
           {rekening
             ? `${rekening.bankName} •••• ${rekening.accountLast4} · ${copy.badge}`
             : copy.badge}
         </p>
       </div>
-      <ChevronRight size={14} className="shrink-0 text-[#9fb0c2]" />
+      <ChevronRight size={14} className="shrink-0 text-umkm-faint" />
     </Link>
   );
 }

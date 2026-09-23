@@ -874,14 +874,14 @@ export default function CatatPage() {
               melainkan tidak ada sama sekali. Tombol kelabu mengundang
               pertanyaan "kenapa saya tidak boleh"; ketiadaannya tidak.
             */}
-            <div className="flex bg-[#eef8fd] p-1.5 rounded-2xl max-w-md mx-auto">
+            <div className="flex bg-umkm-brand-soft p-1.5 rounded-2xl max-w-md mx-auto">
               {availableModes.map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setInputMode(mode)}
                   className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                    inputMode === mode ? "bg-[#0b5f86] text-white shadow-sm" : "text-[#4a6280] hover:text-[#0b5f86]"
+                    inputMode === mode ? "bg-umkm-brand text-white shadow-sm" : "text-umkm-muted hover:text-umkm-brand"
                   }`}
                 >
                   {mode === "voice" ? <><Mic size={16} /> Suara</>
@@ -893,36 +893,37 @@ export default function CatatPage() {
 
             {/* Voice Box */}
             {inputMode === "voice" && (
-              <div className="bg-white rounded-3xl p-8 border border-[#e3e9f0] shadow-card text-center space-y-6 animate-fade-in">
-                <div className="w-16 h-16 rounded-2xl bg-[#eef8fd] flex items-center justify-center mx-auto text-[#0b5f86]">
+              <div className="bg-white rounded-3xl p-8 border border-umkm-line shadow-card text-center space-y-6 animate-fade-in">
+                <div className="w-16 h-16 rounded-2xl bg-umkm-brand-soft flex items-center justify-center mx-auto text-umkm-brand">
                   <Mic size={32} />
                 </div>
                 <div>
-                  <h2 className="font-headline text-xl font-bold text-[#1b2a3a]">Ceritakan transaksi usaha Anda</h2>
-                  <p className="text-xs text-[#4a6280] mt-1 max-w-md mx-auto">
-                    Bicaralah seperti bercerita ke teman. Contoh: <span className="font-semibold text-[#0b5f86]">&quot;Laku 15 porsi ayam 300 ribu, beli minyak 50 ribu&quot;</span>
+                  <h2 className="font-headline text-xl font-bold text-umkm-ink">Ceritakan transaksi usaha Anda</h2>
+                  <p className="text-xs text-umkm-muted mt-1 max-w-md mx-auto">
+                    Bicaralah seperti bercerita ke teman. Contoh: <span className="font-semibold text-umkm-brand">&quot;Laku 15 porsi ayam 300 ribu, beli minyak 50 ribu&quot;</span>
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={startMediaRecording}
-                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#0b5f86] to-[#0ea5e9] text-white flex items-center justify-center mx-auto shadow-xl hover:scale-105 transition-transform cursor-pointer group"
+                  aria-label="Mulai merekam suara"
+                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-umkm-brand to-umkm-sky text-white flex items-center justify-center mx-auto shadow-xl hover:scale-105 transition-transform cursor-pointer group"
                 >
-                  <Mic size={40} className="group-hover:scale-110 transition-transform" />
+                  <Mic size={40} aria-hidden className="group-hover:scale-110 transition-transform" />
                 </button>
-                <p className="text-[11px] text-[#6e859e] font-medium">Tekan tombol mikrofon, bicara, lalu tekan lagi untuk selesai</p>
+                <p className="text-xs text-umkm-subtle font-medium">Tekan tombol mikrofon, bicara, lalu tekan lagi untuk selesai</p>
               </div>
             )}
 
             {/* Camera Box */}
             {inputMode === "camera" && (
-              <div className="bg-white rounded-3xl p-8 border border-[#e3e9f0] shadow-card text-center space-y-6 animate-fade-in">
-                <div className="w-16 h-16 rounded-2xl bg-[#eef8fd] flex items-center justify-center mx-auto text-[#0b5f86]">
+              <div className="bg-white rounded-3xl p-8 border border-umkm-line shadow-card text-center space-y-6 animate-fade-in">
+                <div className="w-16 h-16 rounded-2xl bg-umkm-brand-soft flex items-center justify-center mx-auto text-umkm-brand">
                   <Camera size={32} />
                 </div>
                 <div>
-                  <h2 className="font-headline text-xl font-bold text-[#1b2a3a]">Potret nota belanjanya</h2>
-                  <p className="text-xs text-[#4a6280] mt-1 max-w-md mx-auto">
+                  <h2 className="font-headline text-xl font-bold text-umkm-ink">Potret nota belanjanya</h2>
+                  <p className="text-xs text-umkm-muted mt-1 max-w-md mx-auto">
                     Letakkan nota di tempat terang, pastikan angka totalnya terbaca. Anda tetap memeriksa hasilnya sebelum disimpan.
                   </p>
                 </div>
@@ -933,16 +934,18 @@ export default function CatatPage() {
                   capture="environment"
                   onChange={handlePhotoSelected}
                   className="sr-only"
-                  aria-label="Ambil foto nota"
+                  tabIndex={-1}
+                  aria-hidden
                 />
                 <button
                   type="button"
                   onClick={() => photoInputRef.current?.click()}
-                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#0b5f86] to-[#0ea5e9] text-white flex items-center justify-center mx-auto shadow-xl hover:scale-105 transition-transform cursor-pointer group"
+                  aria-label="Ambil foto nota"
+                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-umkm-brand to-umkm-sky text-white flex items-center justify-center mx-auto shadow-xl hover:scale-105 transition-transform cursor-pointer group"
                 >
-                  <Camera size={40} className="group-hover:scale-110 transition-transform" />
+                  <Camera size={40} aria-hidden className="group-hover:scale-110 transition-transform" />
                 </button>
-                <p className="text-[11px] text-[#6e859e] font-medium">
+                <p className="text-xs text-umkm-subtle font-medium">
                   Fotonya ikut tersimpan sebagai bukti transaksi ini
                 </p>
               </div>
@@ -950,24 +953,24 @@ export default function CatatPage() {
 
             {/* Text Box */}
             {inputMode === "text" && (
-              <form onSubmit={handleProcessTypedText} className="bg-white rounded-3xl p-6 border border-[#e3e9f0] shadow-card space-y-4 animate-fade-in">
+              <form onSubmit={handleProcessTypedText} className="bg-white rounded-3xl p-6 border border-umkm-line shadow-card space-y-4 animate-fade-in">
                 <div className="flex items-center gap-2">
-                  <Sparkles size={18} className="text-[#0b5f86]" />
-                  <h2 className="font-headline text-base font-bold text-[#1b2a3a]">Tulis transaksi dengan kalimat bebas</h2>
+                  <Sparkles size={18} className="text-umkm-brand" />
+                  <h2 className="font-headline text-base font-bold text-umkm-ink">Tulis transaksi dengan kalimat bebas</h2>
                 </div>
                 <textarea
                   rows={4}
                   value={typedText}
                   onChange={(e) => setTypedText(e.target.value)}
                   placeholder="Contoh: Ada pesanan nasi goreng 10 porsi 150 ribu lunas, dan tadi bayar listrik kios 50 ribu"
-                  className="w-full p-4 rounded-2xl border border-[#c8d3de] text-sm focus:border-[#0b5f86] focus:outline-none"
+                  className="w-full p-4 rounded-2xl border border-umkm-line-strong text-sm focus:border-umkm-brand focus:outline-none"
                   required
                 />
                 <div className="flex justify-end">
                   <button
                     type="submit"
                     disabled={!typedText.trim()}
-                    className="bg-[#0b5f86] text-white font-bold px-6 py-3 rounded-xl text-xs hover:bg-[#0f73a3] transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="bg-umkm-brand text-white font-bold px-6 py-3 rounded-xl text-xs hover:bg-umkm-brand-hover transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     <Sparkles size={14} /> Baca transaksi
                   </button>
@@ -976,9 +979,9 @@ export default function CatatPage() {
             )}
 
             {/* Suggestions */}
-            <div className="bg-white rounded-2xl p-5 border border-[#e3e9f0] shadow-card space-y-3">
-              <h3 className="text-xs font-bold text-[#1b2a3a] uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles size={14} className="text-[#0b5f86]" /> Contoh Kalimat Langsung Coba
+            <div className="bg-white rounded-2xl p-5 border border-umkm-line shadow-card space-y-3">
+              <h3 className="text-xs font-bold text-umkm-ink uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles size={14} className="text-umkm-brand" /> Contoh kalimat
               </h3>
               <div className="space-y-2">
                 {SUGGESTIONS.map((sug) => (
@@ -986,10 +989,10 @@ export default function CatatPage() {
                     key={sug.label}
                     type="button"
                     onClick={() => handleSuggestionClick(sug.text)}
-                    className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-[#e3e9f0] bg-[#f3f2ff] p-3 text-left text-xs font-semibold text-[#1b2a3a] transition-colors hover:bg-[#eef8fd] cursor-pointer"
+                    className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-umkm-line bg-umkm-brand-soft p-3 text-left text-xs font-semibold text-umkm-ink transition-colors hover:bg-umkm-brand-soft cursor-pointer"
                   >
                     <span>{sug.label}</span>
-                    <span className="text-[11px] font-bold text-[#0b5f86]">Coba AI →</span>
+                    <span className="text-xs font-bold text-umkm-brand">Coba →</span>
                   </button>
                 ))}
               </div>
@@ -999,53 +1002,53 @@ export default function CatatPage() {
 
         {/* ── RECORDING ──────────────────────────────────────────── */}
         {step === "recording" && (
-          <div className="bg-white rounded-3xl p-8 border border-red-200 shadow-card text-center space-y-5 animate-fade-in">
+          <div role="status" aria-live="polite" className="bg-white rounded-3xl p-8 border border-umkm-line shadow-card text-center space-y-5 animate-fade-in">
             <div className="flex flex-col items-center gap-3">
-              <div className="w-20 h-20 rounded-full bg-[#d6eefa] text-[#0f73a3] flex items-center justify-center border-4 border-[#29abe2] animate-pulse">
+              <div className="w-20 h-20 rounded-full bg-umkm-brand-tint text-umkm-brand-hover flex items-center justify-center border-4 border-umkm-sky animate-pulse">
                 <Mic size={36} />
               </div>
               <div>
-                <div className="inline-flex items-center gap-2 bg-[#eef8fd] border border-[#addcf4] px-3 py-1 rounded-full mb-2">
-                  <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
-                  <span className="text-xs font-mono font-bold text-[#0b5f86]">{formatSeconds(recordSeconds)}</span>
+                <div className="inline-flex items-center gap-2 bg-umkm-brand-soft border border-umkm-brand-line px-3 py-1 rounded-full mb-2">
+                  <span className="w-2 h-2 rounded-full bg-umkm-danger animate-ping" />
+                  <span aria-hidden className="text-xs font-mono font-bold text-umkm-brand">{formatSeconds(recordSeconds)}</span>
                 </div>
-                <h2 className="font-headline text-xl font-bold text-[#0b5f86]">Sedang mendengarkan...</h2>
-                <p className="text-xs text-[#4a6280] mt-1">Bicaralah dengan jelas dan natural. Klik tombol di bawah jika sudah selesai.</p>
+                <h2 className="font-headline text-xl font-bold text-umkm-brand">Sedang mendengarkan...</h2>
+                <p className="text-xs text-umkm-muted mt-1">Bicaralah dengan jelas dan natural. Tekan tombol di bawah jika sudah selesai.</p>
               </div>
             </div>
 
             {/* Wave bars */}
-            <div className="flex items-center justify-center gap-1.5 h-10">
+            <div aria-hidden className="flex items-center justify-center gap-1.5 h-10">
               {WAVE_BARS.map((h, idx) => (
                 <div
                   key={idx}
-                  className="w-1.5 bg-[#29abe2] rounded-full animate-bounce"
+                  className="w-1.5 bg-umkm-sky rounded-full animate-bounce"
                   style={{ height: `${h}%`, animationDelay: `${idx * 0.1}s` }}
                 />
               ))}
             </div>
 
             {/* Caption placeholder */}
-            <div className="bg-[#eef8fd] border border-[#d6eefa] rounded-2xl px-4 py-3 text-left">
-              <p className="text-[10px] font-bold text-[#0f73a3] uppercase tracking-wider mb-1.5 flex items-center gap-1">
+            <div className="bg-umkm-brand-soft border border-umkm-brand-tint rounded-2xl px-4 py-3 text-left">
+              <p className="text-[11px] font-bold text-umkm-brand-hover uppercase tracking-wider mb-1.5 flex items-center gap-1">
                 <Volume2 size={11} /> Transkripsi akan muncul setelah selesai
               </p>
               <div className="flex items-center gap-2">
                 {CAPTION_SKELETON.map((i) => (
                   <div
                     key={i}
-                    className="h-1.5 rounded-full bg-red-300 animate-pulse"
+                    className="h-1.5 rounded-full bg-umkm-brand-line animate-pulse"
                     style={{ width: `${20 + i * 12}%`, animationDelay: `${i * 0.15}s` }}
                   />
                 ))}
               </div>
-              <p className="text-[11px] text-red-400 mt-2 italic">AI akan mengubah suaramu menjadi catatan transaksi otomatis...</p>
+              <p className="mt-2 text-xs text-umkm-muted">Setelah selesai, ucapan Anda diubah menjadi catatan untuk Anda periksa.</p>
             </div>
 
             <button
               type="button"
               onClick={stopMediaRecording}
-              className="bg-red-600 text-white text-xs font-bold px-8 py-3.5 rounded-xl hover:bg-red-700 transition-colors cursor-pointer shadow-md flex items-center justify-center gap-2 mx-auto"
+              className="bg-umkm-brand text-white text-xs font-bold px-8 py-3.5 rounded-xl hover:bg-umkm-brand-deep transition-colors cursor-pointer shadow-md flex items-center justify-center gap-2 mx-auto"
             >
               <Square size={14} className="fill-current" /> Selesai berbicara
             </button>
@@ -1055,20 +1058,20 @@ export default function CatatPage() {
         {/* ── PROCESSING ─────────────────────────────────────────── */}
         {(["uploading", "processing", "saving"] as Step[]).includes(step) && (
           step === "processing" && stalled ? (
-            <div role="status" aria-live="polite" className="bg-white rounded-3xl p-10 border border-[#e3e9f0] shadow-card text-center space-y-4 animate-fade-in">
-              <RefreshCw size={36} className="text-[#9fb0c2] mx-auto" />
-              <h2 className="font-headline text-lg font-bold text-[#1b2a3a]">Pembacaannya lebih lama dari biasa</h2>
-              <p className="mx-auto max-w-md text-xs leading-relaxed text-[#4a6280]">Catatan Anda aman dan masih dibaca di latar belakang. Anda bisa menunggu sebentar lagi, atau menuliskannya sendiri sekarang.</p>
+            <div role="status" aria-live="polite" className="bg-white rounded-3xl p-10 border border-umkm-line shadow-card text-center space-y-4 animate-fade-in">
+              <RefreshCw size={36} className="text-umkm-faint mx-auto" />
+              <h2 className="font-headline text-lg font-bold text-umkm-ink">Pembacaannya lebih lama dari biasa</h2>
+              <p className="mx-auto max-w-md text-xs leading-relaxed text-umkm-muted">Catatan Anda aman dan masih dibaca di latar belakang. Anda bisa menunggu sebentar lagi, atau menuliskannya sendiri sekarang.</p>
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-                <button type="button" onClick={checkAgain} className="min-h-11 rounded-xl bg-[#0b5f86] px-5 text-xs font-bold text-white hover:bg-[#0a5375]">Periksa lagi</button>
-                <button type="button" onClick={() => void writeInstead()} className="min-h-11 rounded-xl border border-[#e3e9f0] bg-white px-5 text-xs font-bold text-[#4a6280] hover:bg-[#f7f9fb]">Tulis sendiri</button>
+                <button type="button" onClick={checkAgain} className="min-h-11 rounded-xl bg-umkm-brand px-5 text-xs font-bold text-white hover:bg-umkm-brand-deep">Periksa lagi</button>
+                <button type="button" onClick={() => void writeInstead()} className="min-h-11 rounded-xl border border-umkm-line bg-white px-5 text-xs font-bold text-umkm-muted hover:bg-umkm-surface">Tulis sendiri</button>
               </div>
             </div>
           ) : (
-          <div role="status" aria-live="polite" className="bg-white rounded-3xl p-10 border border-[#e3e9f0] shadow-card text-center space-y-4 animate-fade-in">
-            <RefreshCw size={36} className="animate-spin text-[#0b5f86] mx-auto" />
-            <h2 className="font-headline text-lg font-bold text-[#1b2a3a]">{step === "uploading" ? (inputMode === "camera" ? "Mengirim foto nota dengan aman..." : inputMode === "text" ? "Mengirim tulisan..." : "Mengirim rekaman dengan aman...") : step === "processing" ? "Membaca isi catatan..." : "Menyimpan catatan..."}</h2>
-            <p className="text-xs text-[#4a6280]">{step === "uploading" ? "Jangan tutup halaman sampai selesai dikirim." : step === "processing" ? "Nominal dan jenis transaksi sedang disiapkan untuk Anda periksa." : "Data yang sudah Anda periksa sedang dimasukkan ke buku kas."}</p>
+          <div role="status" aria-live="polite" className="bg-white rounded-3xl p-10 border border-umkm-line shadow-card text-center space-y-4 animate-fade-in">
+            <RefreshCw size={36} className="animate-spin text-umkm-brand mx-auto" />
+            <h2 className="font-headline text-lg font-bold text-umkm-ink">{step === "uploading" ? (inputMode === "camera" ? "Mengirim foto nota dengan aman..." : inputMode === "text" ? "Mengirim tulisan..." : "Mengirim rekaman dengan aman...") : step === "processing" ? "Membaca isi catatan..." : "Menyimpan catatan..."}</h2>
+            <p className="text-xs text-umkm-muted">{step === "uploading" ? "Jangan tutup halaman sampai selesai dikirim." : step === "processing" ? "Nominal dan jenis transaksi sedang disiapkan untuk Anda periksa." : "Data yang sudah Anda periksa sedang dimasukkan ke buku kas."}</p>
           </div>
           )
         )}
@@ -1076,10 +1079,10 @@ export default function CatatPage() {
         {/* ── TERSIMPAN, LALU PINTU A ────────────────────────────── */}
         {step === "success" && (
           <div role="status" aria-live="polite" className="space-y-3 animate-fade-in">
-            <div className="rounded-3xl border border-[#bde5c8] bg-white p-8 text-center shadow-card">
-              <CheckCircle2 size={36} className="mx-auto text-[#1d6b39]" />
-              <h2 className="font-headline mt-3 text-lg font-bold text-[#1b2a3a]">Catatan berhasil disimpan</h2>
-              <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-[#4a6280]">
+            <div className="rounded-3xl border border-umkm-success-line bg-white p-8 text-center shadow-card">
+              <CheckCircle2 size={36} className="mx-auto text-umkm-success" />
+              <h2 className="font-headline mt-3 text-lg font-bold text-umkm-ink">Catatan berhasil disimpan</h2>
+              <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-umkm-muted">
                 {savedTargets.length > 1
                   ? `${savedTargets.length} catatan masuk ke buku kas.`
                   : "Catatannya sudah masuk ke buku kas."}
@@ -1104,14 +1107,14 @@ export default function CatatPage() {
               <button
                 type="button"
                 onClick={startFresh}
-                className="min-h-11 w-full rounded-xl bg-[#0b5f86] text-xs font-bold text-white transition-colors hover:bg-[#0a5375]"
+                className="min-h-11 w-full rounded-xl bg-umkm-brand text-xs font-bold text-white transition-colors hover:bg-umkm-brand-deep"
               >
                 Catat lagi
               </button>
               <button
                 type="button"
                 onClick={() => router.push("/umkm/laporan?tab=kas")}
-                className="min-h-11 w-full rounded-xl border border-[#e3e9f0] bg-white text-xs font-bold text-[#4a6280] transition-colors hover:bg-[#f7f9fb]"
+                className="min-h-11 w-full rounded-xl border border-umkm-line bg-white text-xs font-bold text-umkm-muted transition-colors hover:bg-umkm-surface"
               >
                 Lihat buku kas
               </button>
@@ -1120,11 +1123,11 @@ export default function CatatPage() {
         )}
 
         {step === "failed" && (
-          <div role="alert" className="rounded-3xl border border-red-200 bg-white p-8 text-center shadow-card">
-            <AlertCircle size={36} className="mx-auto text-red-500" />
-            <h2 className="mt-3 text-lg font-bold text-slate-800">Catatan belum berhasil dibaca</h2>
-            <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-500">{errorMessage || "Rekaman atau tulisan tetap tersimpan. Anda dapat mencoba lagi tanpa kehilangan isi yang sudah dibuat."}</p>
-            <button type="button" onClick={() => { setTypedText(editableCaption || transcription || typedText); setInputMode("text"); setErrorMessage(""); setStep("ready"); }} className="mt-5 min-h-11 rounded-xl bg-[#0b5f86] px-5 text-xs font-bold text-white">Periksa sebagai tulisan</button>
+          <div role="alert" className="rounded-3xl border border-umkm-danger-line bg-white p-8 text-center shadow-card">
+            <AlertCircle size={36} className="mx-auto text-umkm-danger" />
+            <h2 className="mt-3 text-lg font-bold text-umkm-ink">Catatan belum berhasil dibaca</h2>
+            <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-umkm-subtle">{errorMessage || "Rekaman atau tulisan tetap tersimpan. Anda dapat mencoba lagi tanpa kehilangan isi yang sudah dibuat."}</p>
+            <button type="button" onClick={() => { setTypedText(editableCaption || transcription || typedText); setInputMode("text"); setErrorMessage(""); setStep("ready"); }} className="mt-5 min-h-11 rounded-xl bg-umkm-brand px-5 text-xs font-bold text-white">Periksa sebagai tulisan</button>
           </div>
         )}
 
@@ -1139,18 +1142,18 @@ export default function CatatPage() {
               dihilangkan fitur ini.
             */}
             {ocrSummary && (
-              <div className="rounded-2xl border border-[#addcf4] bg-[#eef8fd] p-4 space-y-2">
-                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#0b5f86]">
+              <div className="rounded-2xl border border-umkm-brand-line bg-umkm-brand-soft p-4 space-y-2">
+                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-umkm-brand">
                   <Camera size={13} /> Dibaca dari nota
                 </p>
                 {ocrSummary.excerpt && (
-                  <p className="rounded-xl bg-white px-3 py-2 font-mono text-xs text-[#1b2a3a]">
+                  <p className="rounded-xl bg-white px-3 py-2 font-mono text-xs text-umkm-ink">
                     {ocrSummary.excerpt}
                   </p>
                 )}
                 {ocrSummary.ambiguous && ocrSummary.candidates.length > 1 && (
                   <div className="space-y-2">
-                    <p className="text-[11px] leading-relaxed text-[#34496a]">
+                    <p className="text-xs leading-relaxed text-umkm-ink-soft">
                       Ada dua angka yang sama-sama mungkin. Pilih yang benar-benar dibayar:
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -1159,7 +1162,7 @@ export default function CatatPage() {
                           key={amount}
                           type="button"
                           onClick={() => chooseCandidateAmount(amount)}
-                          className="min-h-11 rounded-xl border border-[#0b5f86] bg-white px-4 text-xs font-bold tabular-nums text-[#0b5f86] hover:bg-[#d6eefa]"
+                          className="min-h-11 rounded-xl border border-umkm-brand bg-white px-4 text-xs font-bold tabular-nums text-umkm-brand hover:bg-umkm-brand-tint"
                         >
                           Rp{amount.toLocaleString("id-ID")}
                         </button>
@@ -1168,7 +1171,7 @@ export default function CatatPage() {
                   </div>
                 )}
                 {!ocrSummary.ambiguous && ocrSummary.candidates.length === 0 && (
-                  <p className="text-[11px] leading-relaxed text-[#34496a]">
+                  <p className="text-xs leading-relaxed text-umkm-ink-soft">
                     Angkanya belum terbaca dari foto. Isi nominalnya sendiri di bawah, atau potret ulang notanya.
                   </p>
                 )}
@@ -1176,18 +1179,18 @@ export default function CatatPage() {
             )}
 
             {/* Editable Caption Box */}
-            <div className="bg-[#eef8fd] rounded-2xl p-4 border border-[#bac3ff] space-y-2">
+            <div className="bg-umkm-brand-soft rounded-2xl p-4 border border-umkm-brand-line space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-[#0b5f86] uppercase tracking-wider flex items-center gap-1.5">
-                  <Volume2 size={13} /> Yang kamu ucapkan:
+                <p className="text-[11px] font-bold text-umkm-brand uppercase tracking-wider flex items-center gap-1.5">
+                  <Volume2 size={13} /> Yang terbaca
                 </p>
                 {!isEditingCaption && (
                   <button
                     type="button"
                     onClick={() => { setIsEditingCaption(true); setTimeout(() => captionTextareaRef.current?.focus(), 50); }}
-                    className="flex items-center gap-1 text-[10px] font-bold text-[#0b5f86] bg-white border border-[#bac3ff] px-2 py-1 rounded-lg hover:bg-[#eef8fd] transition-colors cursor-pointer"
+                    className="flex items-center gap-1 text-xs font-bold text-umkm-brand bg-white border border-umkm-brand-line min-h-11 px-3 rounded-lg hover:bg-umkm-brand-soft transition-colors cursor-pointer"
                   >
-                    <PenLine size={11} /> Edit Caption
+                    <PenLine size={13} /> Ubah tulisan
                   </button>
                 )}
               </div>
@@ -1199,7 +1202,7 @@ export default function CatatPage() {
                     value={editableCaption}
                     onChange={(e) => setEditableCaption(e.target.value)}
                     rows={3}
-                    className="w-full text-xs text-[#1b2a3a] font-medium bg-white border border-[#0b5f86] rounded-xl px-3 py-2.5 focus:outline-none resize-none leading-relaxed"
+                    className="w-full text-xs text-umkm-ink font-medium bg-white border border-umkm-brand rounded-xl px-3 py-2.5 focus:outline-none resize-none leading-relaxed"
                     placeholder="Koreksi caption di sini..."
                   />
                   <div className="flex items-center gap-2">
@@ -1207,35 +1210,35 @@ export default function CatatPage() {
                       type="button"
                       onClick={reprocessFromCaption}
                       disabled={reprocessing || !editableCaption.trim()}
-                      className="flex items-center gap-1.5 bg-[#0b5f86] text-white text-[10px] font-bold px-3 py-1.5 rounded-lg hover:bg-[#0f73a3] transition-colors cursor-pointer disabled:opacity-50"
+                      className="flex min-h-11 items-center gap-1.5 bg-umkm-brand text-white text-xs font-bold px-4 rounded-lg hover:bg-umkm-brand-hover transition-colors cursor-pointer disabled:opacity-50"
                     >
                       {reprocessing ? <RefreshCw size={11} className="animate-spin" /> : <RotateCcw size={11} />}
-                      {reprocessing ? "Memproses..." : "Proses Ulang AI"}
+                      {reprocessing ? "Memproses..." : "Baca ulang"}
                     </button>
                     <button
                       type="button"
                       onClick={() => { setIsEditingCaption(false); setEditableCaption(transcription); }}
-                      className="flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer"
+                      className="flex min-h-11 items-center gap-1 text-xs font-bold text-umkm-muted bg-white border border-umkm-line px-4 rounded-lg hover:bg-umkm-surface cursor-pointer"
                     >
                       <X size={11} /> Batal
                     </button>
-                    <span className="text-[10px] text-[#6e859e] ml-auto">Edit caption → proses ulang item AI</span>
+                    <span className="text-xs text-umkm-subtle ml-auto">Edit caption → proses ulang item AI</span>
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-[#1b2a3a] font-medium leading-relaxed">&quot;{editableCaption || transcription}&quot;</p>
+                <p className="text-xs text-umkm-ink font-medium leading-relaxed">&quot;{editableCaption || transcription}&quot;</p>
               )}
             </div>
 
             {/* Extracted items */}
-            <div className="bg-white rounded-2xl p-5 border border-[#e3e9f0] shadow-card space-y-4">
+            <div className="bg-white rounded-2xl p-5 border border-umkm-line shadow-card space-y-4">
               <div className="flex items-start justify-between gap-2 flex-wrap">
-                <h3 className="font-bold text-sm text-[#1b2a3a] flex-shrink-0">Item Teridentifikasi ({items.length})</h3>
+                <h3 className="font-bold text-sm text-umkm-ink flex-shrink-0">Catatan yang ditemukan ({items.length})</h3>
                 <div className="flex flex-wrap gap-1.5 text-xs font-bold">
-                  <span className="text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-200 whitespace-nowrap">
+                  <span className="text-umkm-success bg-umkm-success-soft px-2 py-1 rounded-full border border-umkm-success-line whitespace-nowrap">
                     +Rp{totalMasuk.toLocaleString("id-ID")}
                   </span>
-                  <span className="text-rose-700 bg-rose-50 px-2 py-1 rounded-full border border-rose-200 whitespace-nowrap">
+                  <span className="text-umkm-danger bg-umkm-danger-soft px-2 py-1 rounded-full border border-umkm-danger-line whitespace-nowrap">
                     -Rp{totalKeluar.toLocaleString("id-ID")}
                   </span>
                 </div>
@@ -1243,48 +1246,60 @@ export default function CatatPage() {
 
               <div className="space-y-3">
                 {items.map((it) => (
-                  <div key={it.id} className="p-3.5 rounded-xl border border-[#e3e9f0] bg-[#f5fbf8] flex items-start justify-between gap-3">
+                  <div key={it.id} className="p-3.5 rounded-xl border border-umkm-line bg-white flex items-start justify-between gap-3">
                     {editingId === it.id ? (
                       <div className="flex-1 space-y-2">
-                        <input
-                          value={editFields.item}
-                          onChange={(e) => setEditFields((p) => ({ ...p, item: e.target.value }))}
-                          className="w-full text-xs p-2 rounded border border-[#0b5f86]"
-                        />
-                        <div className="flex gap-2">
+                        <label className="block text-xs font-bold text-umkm-muted">
+                          Nama barang atau keterangan
                           <input
-                            value={editFields.qty}
-                            onChange={(e) => setEditFields((p) => ({ ...p, qty: e.target.value }))}
-                            className="w-1/2 text-xs p-2 rounded border"
+                            value={editFields.item}
+                            onChange={(e) => setEditFields((p) => ({ ...p, item: e.target.value }))}
+                            className="mt-1 min-h-11 w-full rounded-lg border border-umkm-brand px-3 text-sm font-normal text-umkm-ink"
                           />
-                          <div className="w-1/2">
-                            <InlineMoneyInput
-                              value={editFields.nominal || null}
-                              onChange={(value) => setEditFields((p) => ({ ...p, nominal: value ?? 0 }))}
-                              ariaLabel="Nominal baris ini"
+                        </label>
+                        <div className="flex gap-2">
+                          <label className="block w-1/2 text-xs font-bold text-umkm-muted">
+                            Jumlah
+                            <input
+                              value={editFields.qty}
+                              onChange={(e) => setEditFields((p) => ({ ...p, qty: e.target.value }))}
+                              className="mt-1 min-h-11 w-full rounded-lg border border-umkm-line-strong px-3 text-sm font-normal text-umkm-ink"
                             />
+                          </label>
+                          <div className="w-1/2 text-xs font-bold text-umkm-muted">
+                            <span className="block">Nominal</span>
+                            <div className="mt-1">
+                              <InlineMoneyInput
+                                value={editFields.nominal || null}
+                                onChange={(value) => setEditFields((p) => ({ ...p, nominal: value ?? 0 }))}
+                                ariaLabel="Nominal baris ini"
+                              />
+                            </div>
                           </div>
                         </div>
-                        <div className="flex justify-end gap-1">
-                          <button onClick={() => saveEditing(it.id)} className="p-1 text-emerald-600 cursor-pointer"><Check size={16} /></button>
-                          <button onClick={() => setEditingId(null)} className="p-1 text-slate-400 cursor-pointer"><X size={16} /></button>
+                        <div className="flex justify-end gap-2">
+                          <button type="button" onClick={() => setEditingId(null)} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-umkm-line px-3 text-xs font-bold text-umkm-muted hover:bg-umkm-surface"><X size={16} /> Batal</button>
+                          <button type="button" onClick={() => saveEditing(it.id)} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-umkm-brand px-3 text-xs font-bold text-white hover:bg-umkm-brand-deep"><Check size={16} /> Pakai</button>
                         </div>
                       </div>
                     ) : (
                       <div className="w-full space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="font-bold text-xs text-[#1b2a3a]">{it.item}</p>
-                            <p className="text-[11px] text-[#4a6280]">
+                            <p className="font-bold text-xs text-umkm-ink">{it.item}</p>
+                            <p className="text-xs text-umkm-muted">
                               {it.qty} · <span className="font-semibold">{categoryLabel(it.category.emkmCategoryCode, it.category.emkmCategorySubtype)}</span>
                             </p>
+                            <p className={`mt-1 text-sm font-bold ${it.type === "masuk" ? "text-umkm-success" : "text-umkm-danger"}`}>
+                              {it.type === "masuk" ? "+" : "−"}Rp{it.nominal.toLocaleString("id-ID")}
+                            </p>
                           </div>
-                          <div className="flex shrink-0 items-center gap-3">
-                            <span className={`text-xs font-bold ${it.type === "masuk" ? "text-emerald-700" : "text-rose-600"}`}>
-                              {it.type === "masuk" ? "+" : "-"}Rp{it.nominal.toLocaleString("id-ID")}
-                            </span>
-                            <button onClick={() => startEditing(it)} aria-label="Ubah item" className="text-slate-400 hover:text-slate-600 cursor-pointer"><Edit2 size={14} /></button>
-                            <button onClick={() => handleDeleteItem(it.id)} aria-label="Hapus item" className="text-red-400 hover:text-red-600 cursor-pointer"><Trash2 size={14} /></button>
+                          {/* Dua sasaran 44px dengan jarak. Dulu dua ikon 14px tanpa
+                              bantalan, berimpitan -- hapus dan ubah terlalu dekat
+                              untuk ibu jari. */}
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button type="button" onClick={() => startEditing(it)} aria-label={`Ubah ${it.item}`} className="grid size-11 place-items-center rounded-lg text-umkm-muted hover:bg-umkm-surface-muted hover:text-umkm-ink"><Edit2 size={16} /></button>
+                            <button type="button" onClick={() => handleDeleteItem(it.id)} aria-label={`Hapus ${it.item}`} className="grid size-11 place-items-center rounded-lg text-umkm-danger hover:bg-umkm-danger-soft"><Trash2 size={16} /></button>
                           </div>
                         </div>
                         <CategoryChips
@@ -1304,7 +1319,7 @@ export default function CatatPage() {
                 <button
                   type="button"
                   onClick={handleStartOver}
-                  className="px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer"
+                  className="px-4 py-3 rounded-xl border border-umkm-line text-umkm-muted font-bold text-xs hover:bg-umkm-surface cursor-pointer"
                 >
                   Mulai ulang
                 </button>
@@ -1312,7 +1327,7 @@ export default function CatatPage() {
                   type="button"
                   onClick={handleConfirmSave}
                   disabled={saving || items.length === 0}
-                  className="flex-1 bg-[#0b5f86] text-white font-bold py-3 rounded-xl text-xs hover:bg-[#0f73a3] transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  className="flex-1 bg-umkm-brand text-white font-bold py-3 rounded-xl text-xs hover:bg-umkm-brand-hover transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
                   {saving ? "Menyimpan catatan..." : "Simpan catatan"}
                 </button>

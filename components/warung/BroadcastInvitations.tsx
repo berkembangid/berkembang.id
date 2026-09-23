@@ -101,46 +101,46 @@ export function BroadcastInvitations() {
   if (invitations.length === 0) return null;
 
   return (
-    <section className="rounded-2xl border border-[#e3e9f0] bg-white p-4 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
+    <section className="rounded-2xl border border-umkm-line bg-white p-4 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
       <div className="flex items-center gap-2.5">
-        <span className="grid size-9 place-items-center rounded-xl bg-[#eef8fd] text-[#0f73a3]"><Megaphone size={17} /></span>
+        <span className="grid size-9 place-items-center rounded-xl bg-umkm-brand-soft text-umkm-brand-hover"><Megaphone size={17} /></span>
         <div>
-          <p className="text-sm font-bold text-[#1b2a3a]">Tawaran pendampingan</p>
-          <p className="text-[11px] text-[#6e859e]">Dari dinas di wilayah usaha Anda. Gratis, dan ikut atau tidak sepenuhnya pilihan Anda.</p>
+          <p className="text-sm font-bold text-umkm-ink">Tawaran pendampingan</p>
+          <p className="text-xs text-umkm-subtle">Dari dinas di wilayah usaha Anda. Gratis, dan ikut atau tidak sepenuhnya pilihan Anda.</p>
         </div>
       </div>
 
       <ul className="mt-3 grid gap-3">
         {invitations.map((row) => (
-          <li key={row.id} className="rounded-xl border border-[#e3e9f0] p-3">
-            <p className="text-xs font-bold text-[#0b5f86]">{row.institutionName}</p>
-            <p className="mt-1.5 whitespace-pre-line text-xs leading-relaxed text-[#1b2a3a]">{row.message}</p>
+          <li key={row.id} className="rounded-xl border border-umkm-line p-3">
+            <p className="text-xs font-bold text-umkm-brand">{row.institutionName}</p>
+            <p className="mt-1.5 whitespace-pre-line text-xs leading-relaxed text-umkm-ink">{row.message}</p>
 
             {(row.eventDate || row.eventPlace || row.eventLink) && (
-              <p className="mt-2 flex flex-wrap gap-3 text-[10px] font-medium text-[#6e859e]">
+              <p className="mt-2 flex flex-wrap gap-3 text-xs font-medium text-umkm-subtle">
                 {row.eventDate && <span className="inline-flex items-center gap-1"><CalendarCheck size={11} /> {tanggal(row.eventDate)}</span>}
                 {row.eventPlace && <span className="inline-flex items-center gap-1"><MapPin size={11} /> {row.eventPlace}</span>}
-                {row.eventLink && <a href={row.eventLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 break-all font-bold text-[#0b5f86] underline underline-offset-2"><Link2 size={11} /> Tautan pendaftaran</a>}
+                {row.eventLink && <a href={row.eventLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 break-all font-bold text-umkm-brand underline underline-offset-2"><Link2 size={11} /> Tautan pendaftaran</a>}
               </p>
             )}
 
             {row.joinedAt ? (
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <span className="inline-flex min-h-6 items-center gap-1 rounded-full border border-[#a9ebd0] bg-[#edfbf5] px-2.5 text-[10px] font-bold text-[#0a5c42]">
+                <span className="inline-flex min-h-6 items-center gap-1 rounded-full border border-umkm-success-line bg-umkm-success-soft px-2.5 text-xs font-bold text-umkm-success">
                   <Check size={11} /> Anda ikut
                 </span>
                 <button
                   type="button"
                   disabled={busyId === row.id}
                   onClick={() => void ubah(row, false)}
-                  className="text-[11px] font-bold text-[#6e859e] underline underline-offset-2 disabled:opacity-50"
+                  className="text-xs font-bold text-umkm-subtle underline underline-offset-2 disabled:opacity-50"
                 >
                   Batal ikut
                 </button>
               </div>
             ) : (
               <>
-                <p className="mt-2 text-[10px] leading-relaxed text-[#6e859e]">
+                <p className="mt-2 text-xs leading-relaxed text-umkm-subtle">
                   Kalau Anda ikut, nama usaha dan nama Anda akan terlihat oleh dinas ini. Sekarang
                   mereka belum tahu siapa Anda.
                 </p>
@@ -148,7 +148,7 @@ export function BroadcastInvitations() {
                   type="button"
                   disabled={busyId === row.id}
                   onClick={() => void ubah(row, true)}
-                  className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-50"
+                  className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white disabled:opacity-50"
                 >
                   {busyId === row.id ? "Menyimpan..." : "Saya ikut"}
                 </button>

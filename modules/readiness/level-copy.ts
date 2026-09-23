@@ -26,14 +26,14 @@ export const levelNames: Record<ReadinessLevel, string> = {
 
 /** Arti setiap anak tangga: apa yang terbuka, bukan seberapa bagus nilainya. */
 export const levelMeaning: Record<ReadinessLevel, string> = {
-  MULAI: "Catatanmu baru dimulai. Tingkat berikutnya terbuka setelah dua minggu mencatat.",
-  TEMBAGA: "Catatanmu sudah hidup. Tingkat berikutnya membuka laporan 3 bulan siap cetak.",
-  PERAK: "Laporan 3 bulan siap cetak sudah terbuka. Tingkat berikutnya membuat berkasmu lengkap di mata lembaga.",
-  EMAS: "Catatan dan dokumenmu lengkap. Berkas usahamu siap dilihat lembaga mana pun.",
+  MULAI: "Catatan Anda baru dimulai. Tingkat berikutnya terbuka setelah dua minggu mencatat.",
+  TEMBAGA: "Catatan Anda sudah hidup. Tingkat berikutnya membuka laporan 3 bulan siap cetak.",
+  PERAK: "Laporan 3 bulan siap cetak sudah terbuka. Tingkat berikutnya membuat berkas Anda lengkap di mata lembaga.",
+  EMAS: "Catatan dan dokumen Anda lengkap. Berkas usaha Anda siap dilihat lembaga mana pun.",
 };
 
 export const pillarNames: Record<"A" | "B" | "C" | "D", { title: string; tag: string }> = {
-  A: { title: "Kebiasaan mencatat", tag: "seberapa hidup catatanmu" },
+  A: { title: "Kebiasaan mencatat", tag: "seberapa hidup catatan Anda" },
   B: { title: "Kualitas catatan", tag: "seberapa bisa dipercaya" },
   C: { title: "Legalitas & profil", tag: "seberapa dikenali" },
   D: { title: "Kesiapan laporan", tag: "seberapa siap dibaca" },
@@ -72,7 +72,7 @@ export function componentCopy(component: EvaluatedComponent): ComponentCopy {
           ? `Mencatat ${round(value)} dari ${targetNext} hari`
           : `Mencatat ${round(value)} hari bulan ini`,
         hint: done
-          ? "Kebiasaanmu sudah kuat. Terus begini."
+          ? "Kebiasaan Anda sudah kuat. Terus begini."
           : "Sedikit lagi — mencatat hari ini menambah satu.",
         action: done ? null : { label: "Catat", href: "/umkm/catat" },
       };
@@ -98,7 +98,7 @@ export function componentCopy(component: EvaluatedComponent): ComponentCopy {
       return {
         title: noData
           ? "Belum ada catatan untuk diperiksa"
-          : `${percent(value)} catatan sudah kamu cek`,
+          : `${percent(value)} catatan sudah Anda cek`,
         hint: noData
           ? "Setelah ada catatan, bagian ini terisi sendiri."
           : done
@@ -124,7 +124,7 @@ export function componentCopy(component: EvaluatedComponent): ComponentCopy {
         hint: noData
           ? "Bagian ini menunggu belanja di atas Rp500 ribu. Belum ada bukan berarti kurang."
           : done
-            ? "Belanja besarmu berbukti."
+            ? "Belanja besar Anda berbukti."
             : "Foto nota untuk belanja di atas Rp500 ribu.",
         action: done || noData ? null : { label: "Lihat", href: "/umkm/laporan" },
       };
@@ -134,12 +134,12 @@ export function componentCopy(component: EvaluatedComponent): ComponentCopy {
           ? "Sisa bahan rutin dihitung"
           : `Hitung stok ${round(value)} bulan terakhir`,
         hint: done
-          ? "Untung bulananmu sudah menghitung sisa bahan."
+          ? "Untung bulanan Anda sudah menghitung sisa bahan."
           : "Akhir bulan, cek sisa bahan sekali saja.",
         action: done ? null : { label: "Hitung", href: "/umkm/laporan" },
       };
     case "B5": {
-      // Tiga keadaan, tiga kalimat. Yang pertama TIDAK berbunyi "uangmu masih
+      // Tiga keadaan, tiga kalimat. Yang pertama TIDAK berbunyi "uang Anda masih
       // tercampur": kita tidak tahu itu. Yang kita tahu hanya bahwa belum ada
       // yang dicatat, dan itulah yang ditulis.
       const tercatat = (value ?? 0) >= 1;
@@ -150,10 +150,10 @@ export function componentCopy(component: EvaluatedComponent): ComponentCopy {
             ? "Rekening usaha sudah dicatat"
             : "Rekening usaha belum dicatat",
         hint: done
-          ? "Uang usahamu punya wadah sendiri, dan berkasnya tersimpan di lemari."
+          ? "Uang usaha Anda punya wadah sendiri, dan berkasnya tersimpan di lemari."
           : tercatat
             ? "Lampirkan rekening koran atau foto halaman depan buku tabungan sebagai buktinya."
-            : "Rekening sendiri membuat laporan usahamu bisa dibaca tanpa memilah belanja rumah.",
+            : "Rekening sendiri membuat laporan usaha Anda bisa dibaca tanpa memilah belanja rumah.",
         action: done
           ? null
           : {
@@ -168,7 +168,7 @@ export function componentCopy(component: EvaluatedComponent): ComponentCopy {
           ? "Izin usaha lengkap"
           : `${round(value)} dari ${targetNext ?? 4} izin sudah tersimpan`,
         hint: done
-          ? "Dokumen wajib sektormu sudah ada dan sudah kamu cek."
+          ? "Dokumen wajib sektor Anda sudah ada dan sudah Anda cek."
           : "Lengkapi izin yang belum ada — NIB gratis dan bisa diurus sendiri.",
         action: done ? null : { label: "Unggah", href: "/umkm/profil/dokumen" },
       };
@@ -184,7 +184,7 @@ export function componentCopy(component: EvaluatedComponent): ComponentCopy {
       return {
         title: done ? "Kondisi awal usaha sudah diisi" : "Kondisi awal usaha belum diisi",
         hint: done
-          ? "Angka-angka laporanmu punya titik mulai yang jelas."
+          ? "Angka-angka laporan Anda punya titik mulai yang jelas."
           : "Tanpa ini, laporan tidak tahu dari mana harus mulai menghitung.",
         action: done ? null : { label: "Isi", href: "/umkm/profil/kondisi-awal" },
       };
@@ -192,7 +192,7 @@ export function componentCopy(component: EvaluatedComponent): ComponentCopy {
       return {
         title: `${round(value)} dari ${targetNext ?? 3} bulan penuh tercatat`,
         hint: done
-          ? "Rentang catatanmu cukup untuk laporan yang bermakna."
+          ? "Rentang catatan Anda cukup untuk laporan yang bermakna."
           : "Satu bulan penuh lagi, laporan yang lebih panjang bisa dicetak.",
         action: done ? null : { label: "Catat", href: "/umkm/catat" },
       };
@@ -217,5 +217,5 @@ export function statusTone(status: ComponentStatus): "success" | "attention" | "
 /** Kalimat "langkah paling berdampak" untuk kartu hero dan Beranda. */
 export function stepHeadline(id: ComponentId, missingCount: number): string {
   const remaining = missingCount <= 1 ? "Tinggal ini" : `Tinggal ${missingCount} syarat lagi`;
-  return `${remaining} — ini yang paling cepat kamu selesaikan.`;
+  return `${remaining} — ini yang paling cepat Anda selesaikan.`;
 }

@@ -44,16 +44,16 @@ export function ReadinessMiniCard() {
   return (
     <Link
       href="/umkm/kesiapan"
-      className="block rounded-2xl border border-[#c8d3de] bg-white px-4 py-3.5 transition-colors hover:bg-[#f7f9fb]"
+      className="block rounded-2xl border border-umkm-line-strong bg-white px-4 py-3.5 transition-colors hover:bg-umkm-surface"
     >
-      <span className="flex items-center justify-between text-[13px] text-[#4a6280]">
+      <span className="flex items-center justify-between text-[13px] text-umkm-muted">
         Tingkat kesiapan
-        <ShieldCheck size={15} className="text-[#0b5f86]" />
+        <ShieldCheck size={15} className="text-umkm-brand" />
       </span>
-      <strong className="mt-0.5 block text-2xl font-bold text-[#1b2a3a]">{data.levelName}</strong>
+      <strong className="mt-0.5 block text-2xl font-bold text-umkm-ink">{data.levelName}</strong>
 
       {data.nextLevel && (
-        <span className="mt-2 block h-2 overflow-hidden rounded-full bg-[#e3e9f0]">
+        <span className="mt-2 block h-2 overflow-hidden rounded-full bg-umkm-line">
           <i
             className="block h-full rounded-full bg-[#1fcb8f]"
             style={{ width: `${Math.round(data.nextLevel.progress * 100)}%` }}
@@ -61,20 +61,20 @@ export function ReadinessMiniCard() {
         </span>
       )}
 
-      <span className="mt-2 block text-[11px] leading-relaxed text-[#4a6280]">
+      <span className="mt-2 block text-xs leading-relaxed text-umkm-muted">
         {data.nextLevel ? (
           <>
             {missingCount <= 1 ? "Tinggal satu syarat" : `${missingCount} syarat lagi`} menuju{" "}
-            <b className="text-[#1b2a3a]">{data.nextLevel.name}</b>
+            <b className="text-umkm-ink">{data.nextLevel.name}</b>
             {data.step && (
               <>
                 {" "}· langkah tercepat:{" "}
-                <span className="font-bold text-[#0b5f86]">{data.step.title.toLowerCase()}</span>
+                <span className="font-bold text-umkm-brand">{data.step.title.toLowerCase()}</span>
               </>
             )}
           </>
         ) : (
-          "Catatan dan dokumenmu sudah lengkap."
+          "Catatan dan dokumen Anda sudah lengkap."
         )}
       </span>
     </Link>

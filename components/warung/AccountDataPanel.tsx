@@ -103,7 +103,7 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
   return (
     <div className="space-y-3">
       {problem && (
-        <p className="flex items-start gap-2 rounded-xl border border-[#f0d9a8] bg-[#fdf8ee] px-3 py-2 text-[11px] leading-relaxed text-[#8a6412]">
+        <p className="flex items-start gap-2 rounded-xl border border-umkm-warning-line bg-umkm-warning-soft px-3 py-2 text-xs leading-relaxed text-umkm-warning">
           <AlertCircle size={13} className="mt-0.5 shrink-0" /> {problem}
         </p>
       )}
@@ -112,20 +112,20 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
         type="button"
         onClick={() => void exportData()}
         disabled={exporting}
-        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#c8d3de] bg-white px-4 py-3 text-xs font-bold text-[#4a6280] transition-colors hover:bg-[#f7f9fb] disabled:opacity-60"
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-umkm-line-strong bg-white px-4 py-3 text-xs font-bold text-umkm-muted transition-colors hover:bg-umkm-surface disabled:opacity-60"
       >
         {exporting ? <LoaderCircle size={14} className="animate-spin" /> : <Download size={14} />}
         {exporting ? "Menyiapkan berkas…" : "Unduh semua data saya"}
       </button>
-      <p className="px-1 text-[10px] leading-relaxed text-[#6e859e]">
+      <p className="px-1 text-xs leading-relaxed text-umkm-subtle">
         Berisi profil, seluruh catatan uang sebagai berkas tabel, dan dokumen yang pernah Anda
         unggah. Boleh diberikan ke siapa pun yang Anda mau.
       </p>
 
       {stage === "scheduled" ? (
-        <div className="rounded-xl border border-[#f0d9a8] bg-[#fdf8ee] px-3.5 py-3">
-          <p className="text-xs font-bold text-[#8a6412]">Akun dijadwalkan dihapus</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-[#8a6412]">
+        <div className="rounded-xl border border-umkm-warning-line bg-umkm-warning-soft px-3.5 py-3">
+          <p className="text-xs font-bold text-umkm-warning">Akun dijadwalkan dihapus</p>
+          <p className="mt-1 text-xs leading-relaxed text-umkm-warning">
             Izin akses lembaga sudah dicabut sekarang juga. Data Anda dihapus pada{" "}
             <strong>{scheduledText || "30 hari lagi"}</strong>. Sebelum tanggal itu Anda masih bisa
             membatalkannya sendiri, dan semuanya kembali seperti semula — kecuali izin akses, yang
@@ -134,34 +134,34 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
           <button
             type="button"
             onClick={() => void cancelDeletion()}
-            className="mt-2.5 min-h-11 w-full rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white"
+            className="mt-2.5 min-h-11 w-full rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white"
           >
             Batalkan penghapusan
           </button>
         </div>
       ) : stage === "confirming" ? (
-        <div className="rounded-xl border border-[#e3e9f0] bg-white px-3.5 py-3">
-          <p className="text-xs font-bold text-[#1b2a3a]">Yakin mau menghapus akun?</p>
-          <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-[#4a6280]">
+        <div className="rounded-xl border border-umkm-line bg-white px-3.5 py-3">
+          <p className="text-xs font-bold text-umkm-ink">Yakin mau menghapus akun?</p>
+          <ul className="mt-1.5 space-y-1 text-xs leading-relaxed text-umkm-muted">
             <li>· Izin akses lembaga dicabut sekarang juga.</li>
             <li>· Data Anda dihapus 30 hari lagi.</li>
             <li>· Sebelum tanggal itu Anda bisa membatalkannya sendiri.</li>
           </ul>
-          <p className="mt-1.5 text-[11px] font-bold text-[#4a6280]">
+          <p className="mt-1.5 text-xs font-bold text-umkm-muted">
             Sebaiknya unduh dulu data Anda sebelum melanjutkan.
           </p>
           <div className="mt-2.5 flex gap-2">
             <button
               type="button"
               onClick={() => setStage("idle")}
-              className="min-h-11 flex-1 rounded-xl border border-[#c8d3de] bg-white text-xs font-bold text-[#4a6280]"
+              className="min-h-11 flex-1 rounded-xl border border-umkm-line-strong bg-white text-xs font-bold text-umkm-muted"
             >
               Batal
             </button>
             <button
               type="button"
               onClick={() => void requestDeletion()}
-              className="min-h-11 flex-1 rounded-xl bg-[#b4304a] text-xs font-bold text-white"
+              className="min-h-11 flex-1 rounded-xl bg-umkm-danger text-xs font-bold text-white"
             >
               Ya, hapus akun saya
             </button>
@@ -172,7 +172,7 @@ export function AccountDataPanel({ scheduledFor }: { scheduledFor?: string | nul
           type="button"
           onClick={() => setStage("confirming")}
           disabled={stage === "working"}
-          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#c8d3de] bg-white px-4 py-3 text-xs font-bold text-[#b4304a] transition-colors hover:bg-[#fdf1f3] disabled:opacity-60"
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-umkm-line-strong bg-white px-4 py-3 text-xs font-bold text-umkm-danger transition-colors hover:bg-umkm-danger-soft disabled:opacity-60"
         >
           <Trash2 size={14} /> Hapus akun
         </button>

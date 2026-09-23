@@ -6,7 +6,7 @@ import { profileSectorOptions } from "@/modules/accounting/sector-mapping";
 import { LegalitySummary } from "@/components/warung/LegalitySummary";
 import { BusinessAccountSummary } from "@/components/warung/BusinessAccountSummary";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { User, Mail, Building2, Phone, Save, FileText, Camera, LogOut, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
@@ -59,12 +59,28 @@ interface ProfileRecord {
   onboarding_seen_at?: string | null;
 }
 
-function FormField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/**
+ * Label yang benar-benar terhubung.
+ *
+ * `htmlFor` untuk satu isian: label lama berdiri sendiri, jadi pembaca layar
+ * mengumumkan kotak tanpa nama dan mengetuk labelnya tidak memfokuskan apa
+ * pun. Tanpa `htmlFor` isinya kumpulan pilihan (chip), yang diberi nama
+ * sebagai satu kelompok -- label tidak boleh membungkus tombol, karena
+ * mengetuk labelnya akan ikut menekan chip pertama.
+ */
+function FormField({ label, hint, htmlFor, children }: { label: string; hint?: string; htmlFor?: string; children: React.ReactNode }) {
+  const generatedId = useId();
+  const labelId = `${generatedId}-label`;
+  const hintId = hint ? `${htmlFor ?? generatedId}-hint` : undefined;
   return (
     <div className="space-y-1.5">
-      <label className="block text-xs font-bold text-[#1b2a3a]">{label}</label>
-      {children}
-      {hint && <p className="text-[10px] leading-relaxed text-[#6e859e]">{hint}</p>}
+      {htmlFor ? (
+        <label htmlFor={htmlFor} className="block text-xs font-bold text-umkm-ink">{label}</label>
+      ) : (
+        <p id={labelId} className="text-xs font-bold text-umkm-ink">{label}</p>
+      )}
+      {htmlFor ? children : <div role="group" aria-labelledby={labelId} aria-describedby={hintId}>{children}</div>}
+      {hint && <p id={hintId} className="text-xs leading-relaxed text-umkm-subtle">{hint}</p>}
     </div>
   );
 }
@@ -94,11 +110,12 @@ function ChipGroup<T extends string>({
         <button
           key={opt.value}
           type="button"
+          aria-pressed={isActive(opt.value)}
           onClick={() => toggle(opt.value)}
           className={`inline-flex min-h-11 items-center text-xs font-semibold px-4 rounded-full border transition-colors ${
             isActive(opt.value)
-              ? "bg-[#0b5f86] text-white border-[#0b5f86]"
-              : "bg-white text-[#4a6280] border-[#c8d3de] hover:border-[#0b5f86] hover:text-[#0b5f86]"
+              ? "bg-umkm-brand text-white border-umkm-brand"
+              : "bg-white text-umkm-muted border-umkm-line-strong hover:border-umkm-brand hover:text-umkm-brand"
           }`}
         >
           {opt.label}
@@ -342,7 +359,7 @@ export default function ProfilPage() {
           actions={
             <button
               onClick={handleSignOut}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#c8d3de] bg-white px-4 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9] transition-colors"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-line-strong bg-white px-4 text-xs font-bold text-umkm-muted hover:bg-umkm-surface-muted transition-colors"
             >
               <LogOut size={14} /> Keluar
             </button>
@@ -371,22 +388,25 @@ export default function ProfilPage() {
         )}
         <form onSubmit={handleSave} className="space-y-4">
           {/* Identity card */}
-          <div className="flex items-center gap-4 rounded-2xl border border-[#e3e9f0] bg-white p-4 shadow-[0_4px_16px_rgba(27,42,58,.04)]">
+          <div className="flex items-center gap-4 rounded-2xl border border-umkm-line bg-white p-4 shadow-[0_4px_16px_rgba(27,42,58,.04)]">
             <div className="relative shrink-0">
-              <div className="grid h-16 w-16 place-items-center rounded-2xl bg-[#d6eefa] text-xl font-extrabold text-[#0b5f86] overflow-hidden">
+              <div className="grid h-16 w-16 place-items-center rounded-2xl bg-umkm-brand-tint text-xl font-extrabold text-umkm-brand overflow-hidden">
                 {previewAvatar ? (
                   <Image src={previewAvatar} alt="Foto profil" width={64} height={64} unoptimized className="h-full w-full object-cover" />
                 ) : initials}
               </div>
-              <label htmlFor="avatar-upload" className="absolute -bottom-1 -right-1 grid h-7 w-7 cursor-pointer place-items-center rounded-full bg-[#0b5f86] text-white shadow-md hover:bg-[#0f73a3] transition-colors" title="Ganti foto">
-                <Camera size={12} />
-                <input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+              {/* Lingkaran 28px yang terlihat, di dalam sasaran sentuh 44px. */}
+              <label htmlFor="avatar-upload" className="group absolute -bottom-3 -right-3 grid size-11 cursor-pointer place-items-center" aria-label="Ganti foto profil">
+                <span className="grid size-7 place-items-center rounded-full bg-umkm-brand text-white shadow-md transition-colors group-hover:bg-umkm-brand-hover">
+                  <Camera size={12} />
+                </span>
+                <input id="avatar-upload" type="file" accept="image/*" className="sr-only" onChange={handleAvatarChange} />
               </label>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold text-[#1b2a3a]">{form.namaUsaha || "Nama usaha belum diisi"}</p>
-              <p className="truncate text-xs text-[#6e859e]">{form.namaPemilik || "Nama pemilik"} · {form.sektor}</p>
-              <p className="truncate text-[10px] text-[#9fb0c2]">{form.email}</p>
+              <p className="truncate text-sm font-bold text-umkm-ink">{form.namaUsaha || "Nama usaha belum diisi"}</p>
+              <p className="truncate text-xs text-umkm-subtle">{form.namaPemilik || "Nama pemilik"} · {form.sektor}</p>
+              <p className="truncate text-xs text-umkm-subtle">{form.email}</p>
             </div>
           </div>
 
@@ -394,19 +414,20 @@ export default function ProfilPage() {
           <div className="grid gap-4 md:grid-cols-2">
 
             {/* Usaha */}
-            <section className="rounded-2xl border border-[#e3e9f0] bg-white shadow-[0_4px_16px_rgba(27,42,58,.04)]">
-              <div className="flex items-center gap-2 border-b border-[#f0f4f8] px-5 py-4">
-                <Building2 size={15} className="text-[#0b5f86]" />
-                <h2 className="text-xs font-bold text-[#1b2a3a]">Informasi usaha</h2>
+            <section className="rounded-2xl border border-umkm-line bg-white shadow-[0_4px_16px_rgba(27,42,58,.04)]">
+              <div className="flex items-center gap-2 border-b border-umkm-line-soft px-5 py-4">
+                <Building2 size={15} className="text-umkm-brand" />
+                <h2 className="text-xs font-bold text-umkm-ink">Informasi usaha</h2>
               </div>
               <div className="space-y-4 p-5">
-                <FormField label="Nama usaha">
+                <FormField label="Nama usaha" htmlFor="profil-nama-usaha">
                   <input
                     required
+                    id="profil-nama-usaha"
                     value={form.namaUsaha}
                     onChange={(e) => setForm({ ...form, namaUsaha: e.target.value })}
                     placeholder="Contoh: Warung Ayam Geprek Ibu Sari"
-                    className="w-full rounded-xl border border-[#c8d3de] px-3 py-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                    className="w-full rounded-xl border border-umkm-line-strong px-3 py-3 text-sm outline-none transition-colors focus:border-umkm-brand"
                   />
                 </FormField>
 
@@ -430,13 +451,14 @@ export default function ProfilPage() {
                 </FormField>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <FormField label="Tahun mulai usaha">
+                  <FormField label="Tahun mulai usaha" htmlFor="profil-tahun-mulai">
                     <input
+                      id="profil-tahun-mulai"
                       value={form.tahunMulai}
                       onChange={(e) => setForm({ ...form, tahunMulai: e.target.value.replace(/[^0-9]/g, "").slice(0, 4) })}
                       inputMode="numeric"
                       placeholder="2019"
-                      className="w-full rounded-xl border border-[#c8d3de] px-3 py-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                      className="w-full rounded-xl border border-umkm-line-strong px-3 py-3 text-sm outline-none transition-colors focus:border-umkm-brand"
                     />
                   </FormField>
 
@@ -458,8 +480,9 @@ export default function ProfilPage() {
                   />
                 </FormField>
 
-                <FormField label="Kota / kabupaten usaha">
+                <FormField label="Kota / kabupaten usaha" htmlFor="profil-kota">
                   <CitySelect
+                    id="profil-kota"
                     value={form.lokasi}
                     onChange={(val) => setForm({ ...form, lokasi: val })}
                     placeholder="Pilih kota..."
@@ -467,13 +490,14 @@ export default function ProfilPage() {
                   />
                 </FormField>
 
-                <FormField label="Alamat lengkap">
+                <FormField label="Alamat lengkap" htmlFor="profil-alamat">
                   <textarea
                     rows={2}
+                    id="profil-alamat"
                     value={form.alamat}
                     onChange={(e) => setForm({ ...form, alamat: e.target.value })}
                     placeholder="Jl. Merdeka No. 12, Kelurahan X"
-                    className="w-full rounded-xl border border-[#c8d3de] px-3 py-3 text-sm outline-none transition-colors focus:border-[#0b5f86] resize-none"
+                    className="w-full rounded-xl border border-umkm-line-strong px-3 py-3 text-sm outline-none transition-colors focus:border-umkm-brand resize-none"
                   />
                 </FormField>
               </div>
@@ -481,59 +505,62 @@ export default function ProfilPage() {
 
             {/* Kontak & Legalitas */}
             <div className="space-y-4">
-              <section className="rounded-2xl border border-[#e3e9f0] bg-white shadow-[0_4px_16px_rgba(27,42,58,.04)]">
-                <div className="flex items-center gap-2 border-b border-[#f0f4f8] px-5 py-4">
-                  <User size={15} className="text-[#0b5f86]" />
-                  <h2 className="text-xs font-bold text-[#1b2a3a]">Kontak</h2>
+              <section className="rounded-2xl border border-umkm-line bg-white shadow-[0_4px_16px_rgba(27,42,58,.04)]">
+                <div className="flex items-center gap-2 border-b border-umkm-line-soft px-5 py-4">
+                  <User size={15} className="text-umkm-brand" />
+                  <h2 className="text-xs font-bold text-umkm-ink">Kontak</h2>
                 </div>
                 <div className="space-y-4 p-5">
-                  <FormField label="Nama pemilik usaha">
+                  <FormField label="Nama pemilik usaha" htmlFor="profil-nama-pemilik">
                     <div className="relative">
                       <input
                         required
+                        id="profil-nama-pemilik"
                         value={form.namaPemilik}
                         onChange={(e) => setForm({ ...form, namaPemilik: e.target.value })}
                         placeholder="Contoh: Ibu Sari"
-                        className="w-full rounded-xl border border-[#c8d3de] py-3 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                        className="w-full rounded-xl border border-umkm-line-strong py-3 pl-9 pr-3 text-sm outline-none transition-colors focus:border-umkm-brand"
                       />
-                      <User size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9fb0c2]" />
+                      <User size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-umkm-faint" />
                     </div>
                   </FormField>
 
-                  <FormField label="Email terdaftar">
+                  <FormField label="Email terdaftar" htmlFor="profil-email">
                     <div className="relative">
                       <input
                         disabled
+                        id="profil-email"
                         value={form.email}
-                        className="w-full rounded-xl border border-[#e3e9f0] bg-[#f8fafc] py-3 pl-9 pr-3 text-sm text-[#6e859e] cursor-not-allowed"
+                        className="w-full rounded-xl border border-umkm-line bg-umkm-surface py-3 pl-9 pr-3 text-sm text-umkm-subtle cursor-not-allowed"
                       />
-                      <Mail size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9fb0c2]" />
+                      <Mail size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-umkm-faint" />
                     </div>
                   </FormField>
 
-                  <FormField label="Nomor WhatsApp / telepon">
+                  <FormField label="Nomor WhatsApp / telepon" htmlFor="profil-telepon">
                     <div className="relative">
                       <input
                         type="tel"
+                        id="profil-telepon"
                         value={form.phone}
                         onChange={(e) => setForm({ ...form, phone: e.target.value })}
                         placeholder="081234567890"
-                        className="w-full rounded-xl border border-[#c8d3de] py-3 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#0b5f86]"
+                        className="w-full rounded-xl border border-umkm-line-strong py-3 pl-9 pr-3 text-sm outline-none transition-colors focus:border-umkm-brand"
                       />
-                      <Phone size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9fb0c2]" />
+                      <Phone size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-umkm-faint" />
                     </div>
                   </FormField>
                 </div>
               </section>
 
               {/* Legalitas */}
-              <section className="rounded-2xl border border-[#e3e9f0] bg-white shadow-[0_4px_16px_rgba(27,42,58,.04)]">
-                <div className="flex items-center justify-between border-b border-[#f0f4f8] px-5 py-4">
+              <section className="rounded-2xl border border-umkm-line bg-white shadow-[0_4px_16px_rgba(27,42,58,.04)]">
+                <div className="flex items-center justify-between border-b border-umkm-line-soft px-5 py-4">
                   <div className="flex items-center gap-2">
-                    <FileText size={15} className="text-[#0b5f86]" />
-                    <h2 className="text-xs font-bold text-[#1b2a3a]">Legalitas usaha</h2>
+                    <FileText size={15} className="text-umkm-brand" />
+                    <h2 className="text-xs font-bold text-umkm-ink">Legalitas usaha</h2>
                   </div>
-                  <Link href="/umkm/profil/dokumen" className="-mr-2 flex min-h-11 items-center gap-1 rounded-lg px-2 text-[11px] font-bold text-[#0b5f86] hover:bg-[#f3f6f9]">
+                  <Link href="/umkm/profil/dokumen" className="-mr-2 flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs font-bold text-umkm-brand hover:bg-umkm-surface-muted">
                     Kelola dokumen <ChevronRight size={11} />
                   </Link>
                 </div>
@@ -543,7 +570,7 @@ export default function ProfilPage() {
                   {/* Rekening usaha duduk di sini, bukan di Laporan: ia bagian
                       dari « usaha saya seperti apa », sama seperti izin. */}
                   <div>
-                    <label className="mb-2 block text-xs font-bold text-[#4a6280]">Pemisahan uang usaha</label>
+                    <label className="mb-2 block text-xs font-bold text-umkm-muted">Pemisahan uang usaha</label>
                     <BusinessAccountSummary />
                   </div>
                 </div>
@@ -556,7 +583,7 @@ export default function ProfilPage() {
             <button
               type="submit"
               disabled={saving || loadState !== "ready"}
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-8 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#0f73a3] disabled:opacity-50 sm:w-auto"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-umkm-brand px-8 text-sm font-bold text-white shadow-sm transition-colors hover:bg-umkm-brand-hover disabled:opacity-50 sm:w-auto"
             >
               <Save size={15} />
               {saving ? "Menyimpan..." : loadState === "loading" ? "Memuat profil..." : "Simpan perubahan"}
@@ -565,10 +592,10 @@ export default function ProfilPage() {
         </form>
 
         {/* Data & Privasi — di bawah form agar tidak mengganggu alur utama */}
-        <section aria-labelledby="privasi-akun" className="space-y-3 border-t border-[#f0f4f8] pt-4">
+        <section aria-labelledby="privasi-akun" className="space-y-3 border-t border-umkm-line-soft pt-4">
           <div>
-            <h2 id="privasi-akun" className="text-xs font-bold text-[#1b2a3a]">Data & akun Anda</h2>
-            <p className="mt-0.5 text-[10px] leading-relaxed text-[#6e859e]">
+            <h2 id="privasi-akun" className="text-xs font-bold text-umkm-ink">Data & akun Anda</h2>
+            <p className="mt-0.5 text-xs leading-relaxed text-umkm-subtle">
               Catatan usaha ini milik Anda. Anda boleh membawanya pergi kapan saja.
             </p>
           </div>

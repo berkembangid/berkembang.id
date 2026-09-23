@@ -4,8 +4,8 @@
   "description": "Platform pendamping UMKM berbasis AI untuk catat keuangan dan naik kelas",
   "start_url": "/umkm",
   "display": "standalone",
-  "background_color": "#fbf8ff",
-  "theme_color": "#001b85",
+  "background_color": "#f4f9fc",
+  "theme_color": "#0f73a3",
   "orientation": "portrait",
   "lang": "id",
   "icons": [

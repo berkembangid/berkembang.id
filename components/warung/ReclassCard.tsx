@@ -21,6 +21,7 @@ import {
 } from "@/modules/accounting/templates";
 import { formatIdr } from "@/modules/accounting/warung";
 import { notifyFromError, notifySuccess } from "@/lib/notify";
+import { formatTanggal } from "@/lib/format";
 
 export function ReclassCard() {
   const [transactions, setTransactions] = useState<NeedsReclassView[]>([]);
@@ -70,24 +71,24 @@ export function ReclassCard() {
   return (
     <section
       aria-labelledby="reclass-title"
-      className="rounded-2xl border border-[#f0d9a8] bg-[#fdf8ee] p-4 shadow-sm"
+      className="rounded-2xl border border-umkm-warning-line bg-umkm-warning-soft p-4 shadow-sm"
     >
       <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#8a6412]">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-umkm-warning">
           <Tags size={18} />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 id="reclass-title" className="text-sm font-bold text-[#5c3700]">
+          <h2 id="reclass-title" className="text-sm font-bold text-umkm-warning-strong">
             {transactions.length} catatan lama perlu dicek kategorinya
           </h2>
-          <p className="mt-1 text-xs leading-relaxed text-[#7a4f0a]">
+          <p className="mt-1 text-xs leading-relaxed text-umkm-warning-strong">
             Catatan ini dibuat sebelum ada pilihan kategori. Pilih satu kategori supaya untung bulan ini
             terhitung benar.
           </p>
           <button
             type="button"
             onClick={() => setExpanded((value) => !value)}
-            className="mt-3 min-h-11 rounded-xl bg-[#8a6412] px-4 text-xs font-bold text-white"
+            className="mt-3 min-h-11 rounded-xl bg-umkm-warning px-4 text-xs font-bold text-white"
           >
             {expanded ? "Tutup daftar" : "Cek sekarang"}
           </button>
@@ -97,16 +98,16 @@ export function ReclassCard() {
       {expanded && (
         <ul className="mt-4 space-y-2">
           {transactions.map((item) => (
-            <li key={item.transactionId} className="rounded-xl border border-[#f0d9a8] bg-white p-3">
+            <li key={item.transactionId} className="rounded-xl border border-umkm-warning-line bg-white p-3">
               <div className="flex items-start justify-between gap-3">
                 <span className="min-w-0">
-                  <strong className="block truncate text-xs text-[#1b2a3a]">{item.description}</strong>
-                  <small className="text-[10px] text-[#6e859e]">
-                    {item.transactionDate} · {item.direction === "income" ? "uang masuk" : "uang keluar"}
+                  <strong className="block truncate text-xs text-umkm-ink">{item.description}</strong>
+                  <small className="text-xs text-umkm-subtle">
+                    {formatTanggal(item.transactionDate)} · {item.direction === "income" ? "uang masuk" : "uang keluar"}
                   </small>
                 </span>
                 <span
-                  className={`shrink-0 text-xs font-black ${item.direction === "income" ? "text-[#0b7a55]" : "text-[#b4304a]"}`}
+                  className={`shrink-0 text-xs font-black ${item.direction === "income" ? "text-umkm-success" : "text-umkm-danger"}`}
                 >
                   {item.direction === "income" ? "+" : "-"}
                   {formatIdr(item.amountIdr)}
@@ -133,14 +134,14 @@ export function ReclassCard() {
                             choice.categoryCode === 6 ? "5290" : choice.subtype,
                           )
                         }
-                        className="min-h-11 rounded-full border border-[#d8dcff] bg-white px-3 py-2 text-xs font-bold text-[#3a3f63] disabled:opacity-50"
+                        className="min-h-11 rounded-full border border-umkm-line-strong bg-white px-3 py-2 text-xs font-bold text-umkm-ink-soft disabled:opacity-50"
                       >
                         {choice.label}
                       </button>
                     ))}
                   {item.direction === "expense" && (
                     <details className="w-full">
-                      <summary className="cursor-pointer py-2 text-[11px] font-bold text-[#0b5f86]">
+                      <summary className="cursor-pointer py-2 text-xs font-bold text-umkm-brand">
                         Biaya usaha yang lebih rinci
                       </summary>
                       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -152,7 +153,7 @@ export function ReclassCard() {
                               type="button"
                               disabled={busyId === item.transactionId}
                               onClick={() => void apply(item.transactionId, 6, choice.subtype)}
-                              className="min-h-11 rounded-full border border-[#d8dcff] bg-white px-3 py-2 text-xs font-bold text-[#3a3f63] disabled:opacity-50"
+                              className="min-h-11 rounded-full border border-umkm-line-strong bg-white px-3 py-2 text-xs font-bold text-umkm-ink-soft disabled:opacity-50"
                             >
                               {choice.label}
                             </button>
@@ -161,7 +162,7 @@ export function ReclassCard() {
                     </details>
                   )}
                   {busyId === item.transactionId && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold text-[#6e859e]">
+                    <span className="flex items-center gap-1 text-xs font-bold text-umkm-subtle">
                       <LoaderCircle className="animate-spin" size={12} /> Menyimpan...
                     </span>
                   )}
@@ -170,7 +171,7 @@ export function ReclassCard() {
                 <button
                   type="button"
                   onClick={() => setOpenId(item.transactionId)}
-                  className="mt-2 min-h-11 text-xs font-bold text-[#0b5f86]"
+                  className="mt-2 min-h-11 text-xs font-bold text-umkm-brand"
                 >
                   Pilih kategori
                 </button>

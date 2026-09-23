@@ -159,22 +159,22 @@ export function StockCountCard({
   return (
     <section
       className={`rounded-2xl border p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)] ${
-        highlighted ? "border-[#f0d49a] bg-[#fdf7ec]" : "border-[#e3e9f0] bg-white"
+        highlighted ? "border-umkm-warning-line bg-umkm-warning-soft" : "border-umkm-line bg-white"
       }`}
     >
       <div className="flex items-start gap-3">
-        <Package size={18} className="mt-0.5 shrink-0 text-[#0b5f86]" />
+        <Package size={18} className="mt-0.5 shrink-0 text-umkm-brand" />
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-[#1b2a3a]">
+          <h3 className="text-sm font-bold text-umkm-ink">
             Sisa bahan akhir {monthLabel(month)} kira-kira senilai berapa?
           </h3>
-          <p className="mt-1 text-xs leading-relaxed text-[#6e859e]">
+          <p className="mt-1 text-xs leading-relaxed text-umkm-subtle">
             {month < runningMonth
               ? "Bulan itu sudah lewat tanpa dihitung, jadi untungnya masih memikul bahan yang sebenarnya belum terpakai."
               : "Bahan yang sudah dibeli tapi belum terpakai bukan biaya bulan ini. Perkiraan kasar sudah cukup, dan boleh dilewati."}
           </p>
           {selectable.length > 1 && (
-            <label className="mt-2 block text-[11px] font-bold text-[#4a6280]">
+            <label className="mt-2 block text-xs font-bold text-umkm-muted">
               Bulan yang dihitung
               <select
                 value={month}
@@ -182,7 +182,7 @@ export function StockCountCard({
                   setChosen(event.target.value);
                   setEditing(false);
                 }}
-                className="mt-1 block min-h-11 w-full max-w-xs rounded-xl border border-[#d5dfe9] bg-white px-3 text-xs font-medium outline-none focus:border-[#0b5f86]"
+                className="mt-1 block min-h-11 w-full max-w-xs rounded-xl border border-umkm-line-strong bg-white px-3 text-xs font-medium outline-none focus:border-umkm-brand"
               >
                 {selectable.map((option) => (
                   <option key={option} value={option}>
@@ -206,7 +206,7 @@ export function StockCountCard({
           />
 
           {draft !== null && (
-            <p className="rounded-xl border border-[#addcf4] bg-[#eef8fd] p-3 text-xs font-semibold leading-relaxed text-[#1b2a3a]">
+            <p className="rounded-xl border border-umkm-brand-line bg-umkm-brand-soft p-3 text-xs font-semibold leading-relaxed text-umkm-ink">
               {stockEffectSentence(state.bookValueIdr, draft)}
             </p>
           )}
@@ -219,7 +219,7 @@ export function StockCountCard({
                   setEditing(false);
                   setDraft(saved.countedValueIdr);
                 }}
-                className="min-h-11 rounded-xl border border-[#d5dfe9] px-4 text-xs font-bold text-[#1b2a3a]"
+                className="min-h-11 rounded-xl border border-umkm-line-strong px-4 text-xs font-bold text-umkm-ink"
               >
                 Batal
               </button>
@@ -228,19 +228,19 @@ export function StockCountCard({
               type="button"
               disabled={busy || draft === null}
               onClick={() => void submit()}
-              className="min-h-11 flex-1 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-50"
+              className="min-h-11 flex-1 rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white disabled:opacity-50"
             >
               {busy ? "Menyimpan..." : saved ? "Perbarui hitungan" : "Simpan hitungan"}
             </button>
           </div>
         </div>
       ) : (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#f6f9fb] p-3">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-umkm-surface p-3">
           <div>
-            <p className="text-xs font-bold text-[#1b2a3a]">
+            <p className="text-xs font-bold text-umkm-ink">
               Sudah dihitung: {formatIdr(saved.countedValueIdr)}
             </p>
-            <p className="mt-0.5 text-[11px] text-[#6e859e]">
+            <p className="mt-0.5 text-xs text-umkm-subtle">
               {saved.adjustmentIdr === 0
                 ? "Pas dengan catatan."
                 : saved.adjustmentIdr > 0
@@ -251,7 +251,7 @@ export function StockCountCard({
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#d5dfe9] bg-white px-3 text-xs font-bold text-[#1b2a3a]"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-line-strong bg-white px-3 text-xs font-bold text-umkm-ink"
           >
             <RotateCcw size={13} /> Hitung ulang
           </button>
@@ -259,8 +259,8 @@ export function StockCountCard({
       )}
 
       {effect && (
-        <p role="status" className="mt-3 flex items-start gap-1.5 text-xs font-semibold text-[#1b2a3a]">
-          <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-[#0b7a55]" /> {effect}
+        <p role="status" className="mt-3 flex items-start gap-1.5 text-xs font-semibold text-umkm-ink">
+          <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-umkm-success" /> {effect}
         </p>
       )}
     </section>

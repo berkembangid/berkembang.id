@@ -34,17 +34,17 @@ const rungMeaning: Record<string, string> = {
 function Ladder({ level }: { level: ReadinessLevelPayload["level"] }) {
   const current = readinessLevels.indexOf(level);
   return (
-    <ol className="flex items-start gap-2">
+    <ol aria-label="Tangga tingkat kesiapan" className="flex items-start gap-2">
       {readinessLevels.map((rung, index) => {
         const done = index < current;
         const now = index === current;
         return (
-          <li key={rung} className="relative flex-1 pt-7 text-center">
+          <li key={rung} aria-current={now ? "step" : undefined} className="relative flex-1 pt-7 text-center">
             {index > 0 && (
               <span
                 aria-hidden
                 className={`absolute left-[calc(-50%+10px)] top-[9px] z-0 h-0.5 w-[calc(100%-20px)] ${
-                  done || now ? "bg-[#1fcb8f]" : "bg-[#c8d3de]"
+                  done || now ? "bg-[#1fcb8f]" : "bg-umkm-line-strong"
                 }`}
               />
             )}
@@ -52,21 +52,23 @@ function Ladder({ level }: { level: ReadinessLevelPayload["level"] }) {
               aria-hidden
               className={`absolute left-1/2 top-0 z-10 h-5 w-5 -translate-x-1/2 rounded-full border-2 ${
                 now
-                  ? "border-[#1b2a3a] bg-[#1b2a3a] shadow-[0_0_0_4px_rgba(27,42,58,.12)]"
+                  ? "border-umkm-ink bg-umkm-ink shadow-[0_0_0_4px_rgba(27,42,58,.12)]"
                   : done
                     ? "border-[#1fcb8f] bg-[#1fcb8f]"
-                    : "border-[#c8d3de] bg-white"
+                    : "border-umkm-line-strong bg-white"
               }`}
             />
             <span
               className={`block text-xs font-bold ${
-                now ? "text-[#1b2a3a]" : done ? "text-[#0a5c42]" : "text-[#6e859e]"
+                now ? "text-umkm-ink" : done ? "text-umkm-success" : "text-umkm-subtle"
               }`}
             >
               {levelNames[rung]}
+              {/* Warna titik tidak terbaca pembaca layar; keadaannya disebut. */}
+              <span className="sr-only">{now ? " — tingkat Anda sekarang" : done ? " — sudah dilewati" : " — belum"}</span>
             </span>
             {rungMeaning[rung] && (
-              <span className="mt-0.5 block text-[10px] font-normal leading-tight text-[#6e859e]">
+              <span className="mt-0.5 block text-xs font-normal leading-tight text-umkm-subtle">
                 {rungMeaning[rung]}
               </span>
             )}
@@ -83,7 +85,7 @@ function HabitRing({ value, target }: { value: number; target: number }) {
   return (
     <div className="relative h-[52px] w-[52px] shrink-0">
       <svg width="52" height="52" className="-rotate-90" aria-hidden>
-        <circle cx="26" cy="26" r="22" fill="none" stroke="#e3e9f0" strokeWidth="6" />
+        <circle cx="26" cy="26" r="22" fill="none" className="stroke-umkm-line" strokeWidth="6" />
         <circle
           cx="26"
           cy="26"
@@ -96,7 +98,7 @@ function HabitRing({ value, target }: { value: number; target: number }) {
           strokeLinecap="round"
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-[#1b2a3a]">
+      <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-umkm-ink">
         {value}/{target}
       </span>
     </div>
@@ -105,11 +107,11 @@ function HabitRing({ value, target }: { value: number; target: number }) {
 
 const dotClass = {
   success: "bg-[#1fcb8f] text-white",
-  attention: "bg-[#f5c453] text-[#5c3700]",
-  neutral: "bg-[#c8d3de] text-white",
+  attention: "bg-[#f5c453] text-umkm-warning-strong",
+  neutral: "bg-umkm-line-strong text-white",
 } as const;
 
-const barClass = { A: "bg-[#1fcb8f]", B: "bg-[#74e3b9]", C: "bg-[#29abe2]", D: "bg-[#7cc8ec]" } as const;
+const barClass = { A: "bg-[#1fcb8f]", B: "bg-[#74e3b9]", C: "bg-umkm-sky", D: "bg-umkm-brand-line" } as const;
 const pillarIcon = { A: "🔥", B: "🪙", C: "📄", D: "📊" } as const;
 
 export default function ReadinessLevelPage() {
@@ -136,8 +138,8 @@ export default function ReadinessLevelPage() {
   if (problem) {
     return (
       <DashboardPage width="compact">
-        <PageHeader title="Langkah usaha saya" description="Semua dinilai otomatis dari catatan dan dokumenmu." icon={ShieldCheck} />
-        <p className="rounded-2xl border border-[#f0d9a8] bg-[#fdf8ee] px-4 py-3 text-xs text-[#8a6412]">
+        <PageHeader title="Langkah usaha saya" description="Semua dinilai otomatis dari catatan dan dokumen Anda." icon={ShieldCheck} />
+        <p className="rounded-2xl border border-umkm-warning-line bg-umkm-warning-soft px-4 py-3 text-xs text-umkm-warning">
           {problem}{" "}
           <button type="button" onClick={() => void load()} className="-mx-1.5 inline-flex min-h-11 items-center rounded-lg px-1.5 font-bold underline">
             Coba lagi
@@ -150,8 +152,8 @@ export default function ReadinessLevelPage() {
   if (!data) {
     return (
       <DashboardPage width="compact">
-        <PageHeader title="Langkah usaha saya" description="Semua dinilai otomatis dari catatan dan dokumenmu." icon={ShieldCheck} />
-        <p className="flex items-center gap-2 px-1 py-6 text-xs text-[#6e859e]">
+        <PageHeader title="Langkah usaha saya" description="Semua dinilai otomatis dari catatan dan dokumen Anda." icon={ShieldCheck} />
+        <p className="flex items-center gap-2 px-1 py-6 text-xs text-umkm-subtle">
           <LoaderCircle size={14} className="animate-spin" /> Memuat tingkat kesiapan…
         </p>
       </DashboardPage>
@@ -166,13 +168,13 @@ export default function ReadinessLevelPage() {
     <DashboardPage width="compact">
       <PageHeader
         title="Langkah usaha saya"
-        description="Semua dinilai otomatis dari catatan dan dokumenmu — tidak ada yang perlu diklaim."
+        description="Semua dinilai otomatis dari catatan dan dokumen Anda — tidak ada yang perlu diklaim."
         icon={ShieldCheck}
         actions={
           <button
             type="button"
             onClick={() => void load()}
-            className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-umkm-line bg-white px-3 text-xs font-bold text-umkm-muted hover:bg-umkm-surface-muted"
           >
             <RefreshCcw size={14} /> Muat ulang
           </button>
@@ -182,30 +184,30 @@ export default function ReadinessLevelPage() {
       {/* ── Kartu tingkat ─────────────────────────────────────────────── */}
       <section
         aria-labelledby="tingkat-judul"
-        className="rounded-2xl bg-gradient-to-br from-[#d3f5e7] to-[#d6eefa] p-5"
+        className="rounded-2xl bg-gradient-to-br from-[#d3f5e7] to-umkm-brand-tint p-5"
       >
-        <h2 id="tingkat-judul" className="text-[11px] font-bold uppercase tracking-[.04em] text-[#4a6280]">
-          Tingkat kesiapan usahamu
+        <h2 id="tingkat-judul" className="text-[11px] font-bold uppercase tracking-[.04em] text-umkm-muted">
+          Tingkat kesiapan usaha Anda
         </h2>
-        <p className="mt-0.5 text-[34px] font-bold leading-tight tracking-tight text-[#1b2a3a]">
+        <p className="mt-0.5 text-[34px] font-bold leading-tight tracking-tight text-umkm-ink">
           {data.levelName}
         </p>
-        <p className="mb-4 text-sm text-[#243b55]">{data.levelMeaning}</p>
+        <p className="mb-4 text-sm text-umkm-ink-soft">{data.levelMeaning}</p>
 
         <Ladder level={data.level} />
 
         {data.step && (
           <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-white px-3.5 py-3">
             <div className="min-w-0">
-              <p className="text-sm font-bold text-[#1b2a3a]">
+              <p className="text-sm font-bold text-umkm-ink">
                 Langkah paling berdampak: {data.step.title}
               </p>
-              <p className="mt-0.5 text-xs text-[#4a6280]">{data.step.headline}</p>
+              <p className="mt-0.5 text-xs text-umkm-muted">{data.step.headline}</p>
             </div>
             {data.step.action && (
               <Link
                 href={data.step.action.href}
-                className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[#3ee6a8] px-4 text-xs font-bold text-[#1b2a3a]"
+                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-[#3ee6a8] px-4 text-xs font-bold text-umkm-ink"
               >
                 Kerjakan <ArrowRight size={14} />
               </Link>
@@ -220,13 +222,20 @@ export default function ReadinessLevelPage() {
           <section
             key={pillar.id}
             aria-labelledby={`pilar-${pillar.id}`}
-            className="rounded-2xl border border-[#c8d3de] bg-white p-5"
+            className="rounded-2xl border border-umkm-line-strong bg-white p-5"
           >
-            <h3 id={`pilar-${pillar.id}`} className="flex flex-wrap items-center gap-x-2 text-[15px] font-bold text-[#1b2a3a]">
+            <h3 id={`pilar-${pillar.id}`} className="flex flex-wrap items-center gap-x-2 text-[15px] font-bold text-umkm-ink">
               <span aria-hidden>{pillarIcon[pillar.id]}</span> {pillar.title}
-              <span className="text-[11.5px] font-normal text-[#4a6280]">— {pillar.tag}</span>
+              <span className="text-[11.5px] font-normal text-umkm-muted">— {pillar.tag}</span>
             </h3>
-            <div className="my-3 h-2 overflow-hidden rounded-full bg-[#e3e9f0]">
+            <div
+              role="progressbar"
+              aria-labelledby={`pilar-${pillar.id}`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(pillar.progress * 100)}
+              className="my-3 h-2 overflow-hidden rounded-full bg-umkm-line"
+            >
               <i
                 className={`block h-full rounded-full ${barClass[pillar.id]}`}
                 style={{ width: `${Math.round(pillar.progress * 100)}%` }}
@@ -239,7 +248,7 @@ export default function ReadinessLevelPage() {
                 return (
                   <li
                     key={component.id}
-                    className="flex items-start gap-2.5 border-t border-[#e3e9f0] py-2.5 text-[13.5px] first:border-t-0"
+                    className="flex items-start gap-2.5 border-t border-umkm-line py-2.5 text-[13.5px] first:border-t-0"
                   >
                     {isHabit ? (
                       <HabitRing
@@ -249,21 +258,21 @@ export default function ReadinessLevelPage() {
                     ) : (
                       <span
                         aria-hidden
-                        className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[11px] ${dotClass[component.tone]}`}
+                        className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-xs ${dotClass[component.tone]}`}
                       >
                         {component.tone === "success" ? "✓" : component.tone === "attention" ? "!" : ""}
                       </span>
                     )}
                     <span className="min-w-0 flex-1">
-                      <b className="font-bold text-[#1b2a3a]">{component.title}</b>
-                      <span className="mt-0.5 block text-[12.5px] leading-relaxed text-[#4a6280]">
+                      <b className="font-bold text-umkm-ink">{component.title}</b>
+                      <span className="mt-0.5 block text-[12.5px] leading-relaxed text-umkm-muted">
                         {component.hint}
                       </span>
                     </span>
                     {component.action && (
                       <Link
                         href={component.action.href}
-                        className="shrink-0 pt-0.5 text-[12.5px] font-bold text-[#0b5f86]"
+                        className="-my-2.5 inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-[12.5px] font-bold text-umkm-brand hover:bg-umkm-brand-soft"
                       >
                         {component.action.label} →
                       </Link>
@@ -277,11 +286,11 @@ export default function ReadinessLevelPage() {
       </div>
 
       {/* ── Tentang penilaian ini ─────────────────────────────────────── */}
-      <section className="rounded-xl border border-[#e3e9f0] bg-[#f3f6f9] px-4 py-3 text-[12.5px] leading-relaxed text-[#4a6280]">
-        <b className="text-[#243b55]">Tentang penilaian ini.</b> {data.disclaimer} Aturannya terbuka
+      <section className="rounded-xl border border-umkm-line bg-umkm-surface-muted px-4 py-3 text-[12.5px] leading-relaxed text-umkm-muted">
+        <b className="text-umkm-ink-soft">Tentang penilaian ini.</b> {data.disclaimer} Aturannya terbuka
         (versi {data.formulaVersion}).
         <span className="mt-2 block">
-          <Link href="/umkm/kesiapan/metodologi" className="font-bold text-[#0b5f86]">
+          <Link href="/umkm/kesiapan/metodologi" className="inline-flex min-h-11 items-center font-bold text-umkm-brand">
             Lihat cara kami menghitung →
           </Link>
         </span>

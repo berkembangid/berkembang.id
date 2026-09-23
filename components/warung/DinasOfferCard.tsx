@@ -90,25 +90,25 @@ export function DinasOfferCard() {
   const named = offer.institutionName;
 
   return (
-    <section className="rounded-2xl border border-[#addcf4] bg-[#f4fbff] p-4">
+    <section className="rounded-2xl border border-umkm-brand-line bg-umkm-brand-soft p-4">
       <div className="flex items-center gap-2.5">
-        <span className="grid size-9 place-items-center rounded-xl bg-white text-[#0f73a3]">
+        <span className="grid size-9 place-items-center rounded-xl bg-white text-umkm-brand-hover">
           <Building2 size={17} />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-bold text-[#1b2a3a]">
+          <p className="text-sm font-bold text-umkm-ink">
             {named ? `${named} bisa mendampingi usaha Anda` : "Dinas di kota Anda bisa mendampingi usaha Anda"}
           </p>
-          <p className="text-[11px] text-[#4a6280]">Gratis, dan sepenuhnya pilihan Anda.</p>
+          <p className="text-xs text-umkm-muted">Gratis, dan sepenuhnya pilihan Anda.</p>
         </div>
       </div>
 
-      <p className="mt-3 text-xs leading-relaxed text-[#1b2a3a]">
+      <p className="mt-3 text-xs leading-relaxed text-umkm-ink">
         Dinas pembina bisa melihat keadaan usaha Anda dan mengundang Anda ke pendampingan.
       </p>
 
       {/* Akibatnya, disebut terang-terangan dan sebelum tombolnya. */}
-      <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-[#0a4763]">
+      <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-umkm-brand-deep">
         <Eye size={13} className="mt-0.5 shrink-0" />
         <span>
           Kalau Anda memilihnya, <strong className="font-bold">nama usaha dan nama Anda</strong> akan
@@ -120,7 +120,7 @@ export function DinasOfferCard() {
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <Link
           href="/umkm/profil"
-          className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white"
+          className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white"
         >
           Lihat selengkapnya <ArrowRight size={15} />
         </Link>
@@ -128,7 +128,7 @@ export function DinasOfferCard() {
           type="button"
           onClick={() => void tunda()}
           disabled={busy}
-          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#c8d3de] bg-white px-4 text-xs font-bold text-[#34496a] disabled:opacity-50"
+          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-umkm-line-strong bg-white px-4 text-xs font-bold text-umkm-ink-soft disabled:opacity-50"
         >
           Nanti dulu
         </button>

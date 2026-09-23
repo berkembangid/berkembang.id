@@ -55,7 +55,7 @@ test("akun dengan riwayat tidak dimulai dari Mulai", async ({ page }) => {
   // Evaluasi retroaktif: akun lama mendapat tingkat sesuai datanya pada
   // pembacaan pertama, bukan default terendah.
   await page.goto("/umkm/kesiapan");
-  const level = page.locator("section", { hasText: "Tingkat kesiapan usahamu" }).first();
+  const level = page.locator("section", { hasText: "Tingkat kesiapan usaha Anda" }).first();
   await expect(level).toBeVisible({ timeout: 30_000 });
   const text = await level.innerText();
   expect(
@@ -116,6 +116,6 @@ test("rute lama dialihkan ke Perjalanan", async ({ page }) => {
   for (const path of ["/umkm/roadmap", "/umkm/score", "/umkm/gaps"]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/umkm\/perjalanan$/);
-    await expect(page.getByText("Tingkat kesiapan usahamu")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Tingkat kesiapan usaha Anda")).toBeVisible({ timeout: 30_000 });
   }
 });

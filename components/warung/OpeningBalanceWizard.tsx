@@ -40,6 +40,7 @@ import { formatIdr } from "@/modules/accounting/warung";
 import { useConfirm } from "@/components/ui/confirm";
 import { notifySuccess } from "@/lib/notify";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
+import { formatTanggal } from "@/lib/format";
 
 type InventoryItemRow = { name: string; amount: number | null };
 type InventoryGroup = { items: InventoryItemRow[]; other: number | null };
@@ -81,9 +82,9 @@ function depreciationNote(row: AssetRow): string | null {
 }
 
 const inputClass =
-  "min-h-11 w-full rounded-xl border border-[#d5dfe9] bg-white px-3 text-sm font-medium text-[#1b2a3a] outline-none focus:border-[#0b5f86]";
-const labelClass = "block text-xs font-bold text-[#1b2a3a]";
-const helperClass = "mt-1 text-[11px] leading-relaxed text-[#6e859e]";
+  "min-h-11 w-full rounded-xl border border-umkm-line-strong bg-white px-3 text-sm font-medium text-umkm-ink outline-none focus:border-umkm-brand";
+const labelClass = "block text-xs font-bold text-umkm-ink";
+const helperClass = "mt-1 text-xs leading-relaxed text-umkm-subtle";
 
 function amount(value: number | null) {
   return value ?? 0;
@@ -150,7 +151,7 @@ export function OpeningBalanceWizard({
   const submit = async () => {
     const yes = await confirm({
       title: "Simpan kondisi awal usaha?",
-      description: `Milik usaha ${formatIdr(ownedTotal)}, masih harus dibayar ${formatIdr(payableTotal)}, jadi modal usaha ${formatIdr(netWorth)} per ${startDate}. Kondisi awal hanya diisi sekali. Kalau nanti ada yang keliru, perbaikannya lewat catat pemasukan atau pengeluaran biasa -- layar ini tidak terbuka lagi.`,
+      description: `Milik usaha ${formatIdr(ownedTotal)}, masih harus dibayar ${formatIdr(payableTotal)}, jadi modal usaha ${formatIdr(netWorth)} per ${formatTanggal(startDate, "long")}. Kondisi awal hanya diisi sekali. Kalau nanti ada yang keliru, perbaikannya lewat catat pemasukan atau pengeluaran biasa -- layar ini tidak terbuka lagi.`,
       confirmLabel: "Ya, simpan",
       cancelLabel: "Periksa lagi",
     });
@@ -201,7 +202,7 @@ export function OpeningBalanceWizard({
       };
       await saveOpeningBalancesClient(payload);
       notifySuccess("Kondisi awal usaha tersimpan", {
-        description: `Modal usaha Anda mulai dihitung dari ${formatIdr(netWorth)} per ${startDate}.`,
+        description: `Modal usaha Anda mulai dihitung dari ${formatIdr(netWorth)} per ${formatTanggal(startDate, "long")}.`,
         duration: 7000,
       });
       onDone();
@@ -268,7 +269,7 @@ export function OpeningBalanceWizard({
                 type="button"
                 aria-label="Hapus baris"
                 onClick={() => setReceivables((rows) => rows.filter((_, i) => i !== index))}
-                className="min-h-11 shrink-0 rounded-xl px-2 text-[#b4304a]"
+                className="min-h-11 shrink-0 rounded-xl px-2 text-umkm-danger"
               >
                 <X size={16} />
               </button>
@@ -277,7 +278,7 @@ export function OpeningBalanceWizard({
           <button
             type="button"
             onClick={() => setReceivables((rows) => [...rows, { name: "", amount: null }])}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#addcf4] bg-[#eef8fd] px-3 text-xs font-bold text-[#0b5f86]"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-brand-line bg-umkm-brand-soft px-3 text-xs font-bold text-umkm-brand"
           >
             <Plus size={14} /> Tambah pelanggan
           </button>
@@ -291,7 +292,7 @@ export function OpeningBalanceWizard({
       body: (
         <div className="space-y-3">
           {payables.map((row, index) => (
-            <div key={index} className="space-y-2 rounded-xl border border-[#e3e9f0] p-3">
+            <div key={index} className="space-y-2 rounded-xl border border-umkm-line p-3">
               <div className="flex gap-2">
                 <input
                   value={row.name}
@@ -305,7 +306,7 @@ export function OpeningBalanceWizard({
                   type="button"
                   aria-label="Hapus baris"
                   onClick={() => setPayables((rows) => rows.filter((_, i) => i !== index))}
-                  className="min-h-11 shrink-0 rounded-xl px-2 text-[#b4304a]"
+                  className="min-h-11 shrink-0 rounded-xl px-2 text-umkm-danger"
                 >
                   <X size={16} />
                 </button>
@@ -358,7 +359,7 @@ export function OpeningBalanceWizard({
             onClick={() =>
               setPayables((rows) => [...rows, { name: "", amount: null, lenderType: "KOPERASI", installment: null }])
             }
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#addcf4] bg-[#eef8fd] px-3 text-xs font-bold text-[#0b5f86]"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-brand-line bg-umkm-brand-soft px-3 text-xs font-bold text-umkm-brand"
           >
             <Plus size={14} /> Tambah utang
           </button>
@@ -372,9 +373,9 @@ export function OpeningBalanceWizard({
       body: (
         <div className="space-y-5">
           {inventoryKinds.map((kind) => (
-            <div key={kind} className="rounded-xl border border-[#e3e9f0] p-3">
-              <p className="text-xs font-bold text-[#1b2a3a]">{inventoryKindLabels[kind]}</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-[#6e859e]">{inventoryKindHelpers[kind]}</p>
+            <div key={kind} className="rounded-xl border border-umkm-line p-3">
+              <p className="text-xs font-bold text-umkm-ink">{inventoryKindLabels[kind]}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-umkm-subtle">{inventoryKindHelpers[kind]}</p>
 
               {inventory[kind].items.length > 0 && (
                 <div className="mt-3 space-y-2">
@@ -407,7 +408,7 @@ export function OpeningBalanceWizard({
                         type="button"
                         aria-label="Hapus barang"
                         onClick={() => editKind(kind, (group) => ({ ...group, items: group.items.filter((_, i) => i !== index) }))}
-                        className="min-h-11 shrink-0 rounded-xl px-2 text-[#b4304a]"
+                        className="min-h-11 shrink-0 rounded-xl px-2 text-umkm-danger"
                       >
                         <X size={16} />
                       </button>
@@ -420,7 +421,7 @@ export function OpeningBalanceWizard({
                 <button
                   type="button"
                   onClick={() => editKind(kind, (group) => ({ ...group, items: [...group.items, { name: "", amount: null }] }))}
-                  className="mt-2 min-h-11 text-[11px] font-bold text-[#0b5f86]"
+                  className="mt-2 min-h-11 text-xs font-bold text-umkm-brand"
                 >
                   + Sebutkan barangnya
                 </button>
@@ -441,13 +442,13 @@ export function OpeningBalanceWizard({
               </div>
 
               {kindTotal(kind) > 0 && (
-                <p className="mt-2 text-[11px] font-bold text-[#1b2a3a]">
+                <p className="mt-2 text-xs font-bold text-umkm-ink">
                   Jumlah {inventoryKindLabels[kind].toLowerCase()}: {formatIdr(kindTotal(kind))}
                 </p>
               )}
             </div>
           ))}
-          <p className="rounded-xl border border-[#e3e9f0] bg-[#f8fafc] p-3 text-xs font-bold text-[#1b2a3a]">
+          <p className="rounded-xl border border-umkm-line bg-umkm-surface p-3 text-xs font-bold text-umkm-ink">
             Jumlah stok barang: {formatIdr(inventoryTotal)}
           </p>
         </div>
@@ -459,7 +460,7 @@ export function OpeningBalanceWizard({
       body: (
         <div className="space-y-3">
           {assets.map((row, index) => (
-            <div key={index} className="space-y-2 rounded-xl border border-[#e3e9f0] p-3">
+            <div key={index} className="space-y-2 rounded-xl border border-umkm-line p-3">
               <div className="flex gap-2">
                 <input
                   value={row.name}
@@ -473,7 +474,7 @@ export function OpeningBalanceWizard({
                   type="button"
                   aria-label="Hapus baris"
                   onClick={() => setAssets((rows) => rows.filter((_, i) => i !== index))}
-                  className="min-h-11 shrink-0 rounded-xl px-2 text-[#b4304a]"
+                  className="min-h-11 shrink-0 rounded-xl px-2 text-umkm-danger"
                 >
                   <X size={16} />
                 </button>
@@ -549,7 +550,7 @@ export function OpeningBalanceWizard({
                       className={`${inputClass} w-20`}
                       aria-label="Umur ekonomis dalam tahun"
                     />
-                    <span className="text-xs font-bold text-[#6e859e]">tahun</span>
+                    <span className="text-xs font-bold text-umkm-subtle">tahun</span>
                   </div>
                   <span className={helperClass}>
                     Perkiraan saja. Bawaannya {defaultUsefulLifeMonths[row.category] / 12} tahun untuk{" "}
@@ -565,7 +566,7 @@ export function OpeningBalanceWizard({
                 langsung terbaca, dan angkanya bisa ia cocokkan sendiri.
               */}
               {depreciationNote(row) && (
-                <p className="rounded-xl border border-[#dbe8f0] bg-[#f2f8fb] p-3 text-[11px] leading-relaxed text-[#0b5f86]">
+                <p className="rounded-xl border border-umkm-line bg-umkm-surface p-3 text-xs leading-relaxed text-umkm-brand">
                   {depreciationNote(row)}
                 </p>
               )}
@@ -576,7 +577,7 @@ export function OpeningBalanceWizard({
             onClick={() =>
               setAssets((rows) => [...rows, { name: "", cost: null, acquiredOn: startDate, category: "peralatan", years: String(defaultUsefulLifeMonths.peralatan / 12) }])
             }
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#addcf4] bg-[#eef8fd] px-3 text-xs font-bold text-[#0b5f86]"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-brand-line bg-umkm-brand-soft px-3 text-xs font-bold text-umkm-brand"
           >
             <Plus size={14} /> Tambah alat
           </button>
@@ -589,32 +590,32 @@ export function OpeningBalanceWizard({
   const isSummary = step === steps.length;
 
   return (
-    <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_8px_30px_rgba(27,42,58,.04)]">
+    <section className="rounded-2xl border border-umkm-line bg-white p-5 shadow-[0_8px_30px_rgba(27,42,58,.04)]">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-[#0b5f86]">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-umkm-brand">
           Kondisi awal usaha ·{" "}
           {Math.min(step + 1, steps.length)} dari {steps.length}
         </p>
         {onSkip && !isSummary && (
-          <button type="button" onClick={onSkip} className="min-h-11 text-[11px] font-bold text-[#6e859e]">
+          <button type="button" onClick={onSkip} className="min-h-11 text-xs font-bold text-umkm-subtle">
             Nanti saja
           </button>
         )}
       </div>
 
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#eef2f6]">
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-umkm-line-soft">
         <div
-          className="h-full rounded-full bg-[#0b5f86] transition-[width]"
+          className="h-full rounded-full bg-umkm-brand transition-[width]"
           style={{ width: `${((isSummary ? steps.length : step) / steps.length) * 100}%` }}
         />
       </div>
 
       {isSummary ? (
         <div className="mt-5 space-y-4">
-          <h2 className="text-base font-bold text-[#1b2a3a]">
+          <h2 className="text-base font-bold text-umkm-ink">
             Modal usaha Anda saat ini {formatIdr(netWorth)}
           </h2>
-          <p className="text-xs leading-relaxed text-[#6e859e]">
+          <p className="text-xs leading-relaxed text-umkm-subtle">
             Angka ini adalah semua yang usaha punya ({formatIdr(ownedTotal)}) dikurangi yang masih harus dibayar (
             {formatIdr(payableTotal)}).
             {netWorth < 0
@@ -637,7 +638,7 @@ export function OpeningBalanceWizard({
           </label>
 
           {error && (
-            <p role="alert" className="rounded-xl border border-[#f3c6cf] bg-[#fdf1f3] p-3 text-xs font-semibold text-[#b4304a]">
+            <p role="alert" className="rounded-xl border border-umkm-danger-line bg-umkm-danger-soft p-3 text-xs font-semibold text-umkm-danger">
               {error}
             </p>
           )}
@@ -645,7 +646,7 @@ export function OpeningBalanceWizard({
             <button
               type="button"
               onClick={() => setStep(steps.length - 1)}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#d5dfe9] px-4 text-xs font-bold text-[#1b2a3a]"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-line-strong px-4 text-xs font-bold text-umkm-ink"
             >
               <ArrowLeft size={14} /> Kembali
             </button>
@@ -653,7 +654,7 @@ export function OpeningBalanceWizard({
               type="button"
               disabled={busy}
               onClick={() => void submit()}
-              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-60"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white disabled:opacity-60"
             >
               {busy ? <LoaderCircle className="animate-spin" size={15} /> : <CheckCircle2 size={15} />}
               {busy ? "Menyimpan..." : "Mulai"}
@@ -663,8 +664,8 @@ export function OpeningBalanceWizard({
       ) : (
         <div className="mt-5 space-y-4">
           <div>
-            <h2 className="text-base font-bold text-[#1b2a3a]">{steps[step].title}</h2>
-            <p className="mt-1 text-xs leading-relaxed text-[#6e859e]">{steps[step].helper}</p>
+            <h2 className="text-base font-bold text-umkm-ink">{steps[step].title}</h2>
+            <p className="mt-1 text-xs leading-relaxed text-umkm-subtle">{steps[step].helper}</p>
           </div>
           {steps[step].body}
           <div className="flex gap-2">
@@ -672,7 +673,7 @@ export function OpeningBalanceWizard({
               <button
                 type="button"
                 onClick={() => setStep((value) => value - 1)}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#d5dfe9] px-4 text-xs font-bold text-[#1b2a3a]"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-umkm-line-strong px-4 text-xs font-bold text-umkm-ink"
               >
                 <ArrowLeft size={14} /> Kembali
               </button>
@@ -680,7 +681,7 @@ export function OpeningBalanceWizard({
             <button
               type="button"
               onClick={() => setStep((value) => value + 1)}
-              className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white"
             >
               Lanjut <ArrowRight size={14} />
             </button>

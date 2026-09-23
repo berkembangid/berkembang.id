@@ -74,11 +74,11 @@ const statusPresentation: Record<
   DocumentView["status"],
   { label: string; className: string }
 > = {
-  uploaded: { label: "Menunggu verifikasi", className: "bg-amber-50 text-amber-700 border-amber-200" },
-  processing: { label: "Sedang diproses", className: "bg-blue-50 text-blue-700 border-blue-200" },
-  verified: { label: "Terverifikasi", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  rejected: { label: "Perlu diperbaiki", className: "bg-red-50 text-red-700 border-red-200" },
-  superseded: { label: "Diarsipkan", className: "bg-slate-100 text-slate-600 border-slate-200" },
+  uploaded: { label: "Menunggu verifikasi", className: "bg-umkm-warning-soft text-umkm-warning border-umkm-warning-line" },
+  processing: { label: "Sedang diproses", className: "bg-umkm-brand-soft text-umkm-brand border-umkm-brand-line" },
+  verified: { label: "Terverifikasi", className: "bg-umkm-success-soft text-umkm-success border-umkm-success-line" },
+  rejected: { label: "Perlu diperbaiki", className: "bg-umkm-danger-soft text-umkm-danger border-umkm-danger-line" },
+  superseded: { label: "Diarsipkan", className: "bg-umkm-surface-muted text-umkm-muted border-umkm-line" },
 };
 
 function documentStatusPresentation(document: DocumentView) {
@@ -87,19 +87,19 @@ function documentStatusPresentation(document: DocumentView) {
     return statusPresentation[document.status];
   }
   if (document.status === "processing" || ["queued", "processing"].includes(document.currentExtraction?.status ?? "")) {
-    return { label: "Sedang membaca data", className: "bg-blue-50 text-blue-700 border-blue-200" };
+    return { label: "Sedang membaca data", className: "bg-umkm-brand-soft text-umkm-brand border-umkm-brand-line" };
   }
   if (document.currentExtraction?.status === "failed") {
-    return { label: "Data belum terbaca", className: "bg-red-50 text-red-700 border-red-200" };
+    return { label: "Data belum terbaca", className: "bg-umkm-danger-soft text-umkm-danger border-umkm-danger-line" };
   }
   if (document.currentExtraction?.status === "succeeded" && document.currentExtraction.extractor === "metadata") {
-    return { label: "Perlu diunggah ulang", className: "bg-slate-100 text-slate-600 border-slate-200" };
+    return { label: "Perlu diunggah ulang", className: "bg-umkm-surface-muted text-umkm-muted border-umkm-line" };
   }
   if (["owner_confirmed", "owner_corrected"].includes(document.currentExtraction?.ownerReviewStatus ?? "")) {
-    return { label: "Dikonfirmasi pemilik", className: "bg-indigo-50 text-indigo-700 border-indigo-200" };
+    return { label: "Dikonfirmasi pemilik", className: "bg-umkm-brand-soft text-umkm-brand border-umkm-brand-line" };
   }
   if (document.currentExtraction?.status === "succeeded") {
-    return { label: "Data siap dikonfirmasi", className: "bg-amber-50 text-amber-700 border-amber-200" };
+    return { label: "Data siap dikonfirmasi", className: "bg-umkm-warning-soft text-umkm-warning border-umkm-warning-line" };
   }
   return statusPresentation.uploaded;
 }
@@ -333,7 +333,7 @@ export default function UploadPage() {
       <PageHeader title="Dokumen usaha" description="Simpan dan perbarui dokumen usaha di satu tempat. Anda tetap mengendalikan siapa yang dapat mengaksesnya." icon={FileText} actions={<button
           type="button"
           onClick={() => void loadDocuments()}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#e3e9f0] bg-white px-3 text-xs font-bold text-[#4a6280] hover:bg-[#f3f6f9]"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-umkm-line bg-white px-3 text-xs font-bold text-umkm-muted hover:bg-umkm-surface-muted"
         >
           <RefreshCcw size={14} /> Muat ulang
         </button>} />
@@ -345,7 +345,7 @@ export default function UploadPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-10 text-sm font-semibold text-slate-500">
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-umkm-line bg-white p-10 text-sm font-semibold text-umkm-subtle">
           <LoaderCircle className="animate-spin" size={18} /> Memuat dokumen...
         </div>
       ) : (
@@ -361,11 +361,11 @@ export default function UploadPage() {
               <section key={shelf.id} aria-labelledby={`shelf-${shelf.id}`}>
                 <div className="mb-3 flex items-end justify-between gap-4">
                   <div>
-                    <h2 id={`shelf-${shelf.id}`} className="text-base font-black text-slate-800">{shelf.title}</h2>
-                    <p className="mt-0.5 text-xs text-slate-500">{shelf.description}</p>
+                    <h2 id={`shelf-${shelf.id}`} className="text-base font-black text-umkm-ink">{shelf.title}</h2>
+                    <p className="mt-0.5 text-xs text-umkm-subtle">{shelf.description}</p>
                   </div>
                   {requirements.length > 0 && (
-                    <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
+                    <span className="shrink-0 rounded-full bg-umkm-surface-muted px-2.5 py-1 text-xs font-bold text-umkm-muted">
                       {completed} dari {requirements.length} tersedia
                     </span>
                   )}
@@ -375,23 +375,23 @@ export default function UploadPage() {
 
                 {shelf.id === "bukti_transaksi" && (
                   (cabinet?.evidence.length ?? 0) === 0 ? (
-                    <p className="rounded-2xl border border-dashed border-[#c8d3de] bg-white px-5 py-8 text-center text-xs leading-relaxed text-[#6e859e]">
-                      Nota akan muncul di sini saat kamu memfotonya dari catatan.
+                    <p className="rounded-2xl border border-dashed border-umkm-line-strong bg-white px-5 py-8 text-center text-xs leading-relaxed text-umkm-subtle">
+                      Nota akan muncul di sini saat Anda memfotonya dari catatan.
                     </p>
                   ) : (
                     <ul className="space-y-2">
                       {(cabinet?.evidence ?? []).map((item) => (
-                        <li key={item.id} className="flex items-center gap-3 rounded-2xl border border-[#e3e9f0] bg-white px-3.5 py-3">
-                          <FileText size={16} className="shrink-0 text-[#0b5f86]" />
+                        <li key={item.id} className="flex items-center gap-3 rounded-2xl border border-umkm-line bg-white px-3.5 py-3">
+                          <FileText size={16} className="shrink-0 text-umkm-brand" />
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-bold text-[#1b2a3a]">{item.name}</p>
-                            <p className="mt-0.5 text-[10px] text-[#6e859e]">
+                            <p className="truncate text-xs font-bold text-umkm-ink">{item.name}</p>
+                            <p className="mt-0.5 text-xs text-umkm-subtle">
                               {new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" }).format(new Date(item.createdAt))}
                               {item.transactionId ? " · menempel pada satu catatan" : " · belum tertaut"}
                             </p>
                           </div>
                           {item.transactionId && (
-                            <Link href="/umkm/laporan" className="shrink-0 text-[10px] font-bold text-[#0b5f86]">
+                            <Link href="/umkm/laporan" className="shrink-0 text-xs font-bold text-umkm-brand">
                               Lihat catatan
                             </Link>
                           )}
@@ -408,45 +408,45 @@ export default function UploadPage() {
             const presentation = document ? documentStatusPresentation(document) : null;
             const limit = maxDocumentBytes(requirement.type) / 1024 / 1024;
             return (
-              <article key={requirement.type} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <article key={requirement.type} className="rounded-2xl border border-umkm-line bg-white p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-3">
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${document ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"}`}>
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${document ? "bg-umkm-success-soft text-umkm-success" : "bg-umkm-brand-soft text-umkm-brand"}`}>
                       {document?.status === "verified" ? <CheckCircle2 size={20} /> : <FileText size={20} />}
                     </div>
                     <div className="min-w-0">
-                      <h2 className="text-sm font-bold text-slate-800">
+                      <h2 className="text-sm font-bold text-umkm-ink">
                         {documentTypeLabels[requirement.type]}
                         {(() => {
                           const level = requirementLabel(requirementByType.get(requirement.type)?.requirement ?? null);
                           if (!level) return null;
                           return (
-                            <span className={`ml-2 rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                            <span className={`ml-2 rounded px-1.5 py-0.5 text-xs font-bold ${
                               level.tone === "attention"
-                                ? "bg-[#fdf8ee] text-[#8a6412]"
-                                : "bg-slate-100 text-slate-600"
+                                ? "bg-umkm-warning-soft text-umkm-warning"
+                                : "bg-umkm-surface-muted text-umkm-muted"
                             }`}>
                               {level.text}
                             </span>
                           );
                         })()}
                       </h2>
-                      <p className="mt-0.5 text-xs text-slate-400">
+                      <p className="mt-0.5 text-xs text-umkm-subtle">
                         {requirementByType.get(requirement.type)?.note ?? requirement.description}
                       </p>
                     </div>
                   </div>
                   {presentation && (
-                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold ${presentation.className}`}>
+                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${presentation.className}`}>
                       {presentation.label}
                     </span>
                   )}
                 </div>
 
                 {document ? (
-                  <div className="mt-4 space-y-3 border-t border-slate-100 pt-3">
+                  <div className="mt-4 space-y-3 border-t border-umkm-line-soft pt-3">
                     {(document.docNumber || document.validUntil || !document.hasFile) && (
-                      <div className="rounded-xl bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-600">
+                      <div className="rounded-xl bg-umkm-surface px-3 py-2 text-xs leading-relaxed text-umkm-muted">
                         {document.docNumber && <p>No. {document.docNumber}</p>}
                         {document.validUntil && (
                           <p>
@@ -454,7 +454,7 @@ export default function UploadPage() {
                             {new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(new Date(`${document.validUntil}T12:00:00+07:00`))}
                           </p>
                         )}
-                        <p className="mt-0.5 font-bold text-slate-500">
+                        <p className="mt-0.5 font-bold text-umkm-subtle">
                           {assuranceText(document.assuranceLevel, document.hasFile)}
                         </p>
                       </div>
@@ -465,26 +465,26 @@ export default function UploadPage() {
                     {document.hasFile
                       && expiringDocumentTypes.includes(requirement.type)
                       && !document.validUntil && (
-                      <p className="rounded-xl border border-[#f0d9a8] bg-[#fdf8ee] px-3 py-2 text-[11px] leading-relaxed text-[#8a6412]">
+                      <p className="rounded-xl border border-umkm-warning-line bg-umkm-warning-soft px-3 py-2 text-xs leading-relaxed text-umkm-warning">
                         Isi masa berlakunya biar bisa kami ingatkan sebelum habis.
                       </p>
                     )}
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-slate-700">{document.name}</p>
-                        <p className="mt-0.5 text-[10px] text-slate-400">Versi {document.currentVersion} · {fileSizeLabel(document.fileSize)}</p>
+                        <p className="truncate text-xs font-semibold text-umkm-ink-soft">{document.name}</p>
+                        <p className="mt-0.5 text-xs text-umkm-subtle">Versi {document.currentVersion} · {fileSizeLabel(document.fileSize)}</p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
-                        <button type="button" onClick={() => void handleView(document.id)} className="rounded-lg p-2 text-blue-600 hover:bg-blue-50" aria-label="Lihat dokumen">
+                        <button type="button" onClick={() => void handleView(document.id)} className="rounded-lg p-2 text-umkm-brand hover:bg-umkm-brand-soft" aria-label="Lihat dokumen">
                           <Eye size={15} />
                         </button>
-                        <button type="button" onClick={() => void handleArchive(document)} disabled={isBusy} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50" aria-label="Arsipkan dokumen">
+                        <button type="button" onClick={() => void handleArchive(document)} disabled={isBusy} className="rounded-lg p-2 text-umkm-subtle hover:bg-umkm-surface-muted disabled:opacity-50" aria-label="Arsipkan dokumen">
                           <Archive size={15} />
                         </button>
                       </div>
                     </div>
                     {(document.rejectionReason || document.notes || document.currentExtraction?.status === "failed") && (
-                      <p className={`rounded-lg p-2.5 text-[11px] leading-relaxed ${document.rejectionReason ? "bg-red-50 text-red-700" : "bg-slate-50 text-slate-600"}`}>
+                      <p className={`rounded-lg p-2.5 text-xs leading-relaxed ${document.rejectionReason ? "bg-umkm-danger-soft text-umkm-danger" : "bg-umkm-surface text-umkm-muted"}`}>
                         {document.rejectionReason ?? (document.currentExtraction?.status === "failed"
                           ? "Data belum berhasil dibaca. Foto dokumen dari dekat, pastikan seluruh sisi terlihat, tulisan tidak buram, dan hindari tangkapan layar yang menyisakan area kosong."
                           : document.notes)}
@@ -495,7 +495,7 @@ export default function UploadPage() {
                         type="button"
                         onClick={() => void handleReviewOcr(document)}
                         disabled={isBusy}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-700 hover:border-amber-400 disabled:opacity-50"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-umkm-warning-line bg-umkm-warning-soft px-4 py-2.5 text-xs font-bold text-umkm-warning hover:border-umkm-warning-line disabled:opacity-50"
                       >
                         <CheckCircle2 size={14} />
                         {["owner_confirmed", "owner_corrected"].includes(document.currentExtraction.ownerReviewStatus)
@@ -508,13 +508,13 @@ export default function UploadPage() {
                         type="button"
                         onClick={() => void handleRetryReading(document)}
                         disabled={isBusy}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-umkm-brand px-4 py-2.5 text-xs font-bold text-white hover:bg-umkm-brand-deep disabled:opacity-50"
                       >
                         {isBusy ? <LoaderCircle className="animate-spin" size={14} /> : <RefreshCcw size={14} />}
                         {isBusy ? "Sedang mencoba..." : "Coba baca lagi"}
                       </button>
                     )}
-                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-blue-200 bg-blue-50/50 px-4 py-2.5 text-xs font-bold text-blue-600 hover:border-blue-400">
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-umkm-brand-line bg-umkm-brand-soft/50 px-4 py-2.5 text-xs font-bold text-umkm-brand hover:border-umkm-sky">
                       {isBusy ? <LoaderCircle className="animate-spin" size={14} /> : <Clock3 size={14} />}
                       {isBusy ? "Memproses..." : "Unggah versi pengganti"}
                       <input
@@ -527,8 +527,8 @@ export default function UploadPage() {
                     </label>
                   </div>
                 ) : (
-                  <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
-                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-4 py-3 text-xs font-bold text-white hover:bg-[#0a5273]">
+                  <div className="mt-4 space-y-2 border-t border-umkm-line-soft pt-3">
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-umkm-brand px-4 py-3 text-xs font-bold text-white hover:bg-umkm-brand-deep">
                       {isBusy ? <LoaderCircle className="animate-spin" size={14} /> : <Camera size={14} />}
                       {isBusy ? "Memproses..." : "Foto dokumennya"}
                       <input
@@ -540,7 +540,7 @@ export default function UploadPage() {
                         onChange={(event) => void handleFileSelection(event, requirement.type)}
                       />
                     </label>
-                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 px-4 py-2.5 text-[11px] font-bold text-slate-500 hover:border-blue-400 hover:text-blue-600">
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-umkm-line px-4 py-2.5 text-xs font-bold text-umkm-subtle hover:border-umkm-sky hover:text-umkm-brand">
                       <Upload size={13} />
                       {`Pilih dari galeri atau file (maks. ${limit} MB)`}
                       <input

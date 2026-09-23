@@ -32,8 +32,8 @@ import { formatIdr } from "@/modules/accounting/warung";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
 
 const fieldClass =
-  "min-h-11 w-full rounded-xl border border-[#d5dfe9] bg-white px-3 text-sm font-medium text-[#1b2a3a] outline-none focus:border-[#0b5f86]";
-const labelClass = "block text-[11px] font-bold text-[#1b2a3a]";
+  "min-h-11 w-full rounded-xl border border-umkm-line-strong bg-white px-3 text-sm font-medium text-umkm-ink outline-none focus:border-umkm-brand";
+const labelClass = "block text-xs font-bold text-umkm-ink";
 
 /** Bulan terakhir alat ini masih punya nilai, dalam bahasa sehari-hari. */
 export function depreciationEndsOn(asset: FixedAssetView): string {
@@ -99,7 +99,7 @@ export function AssetLoanRegister({
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-[#0b5f86]"
+        className="inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-umkm-brand"
       >
         <ArrowLeft size={14} /> Kembali ke kondisi usaha
       </button>
@@ -127,13 +127,13 @@ export function AssetLoanRegister({
       </div>
 
       {loading ? (
-        <div role="status" className="flex items-center justify-center gap-2 rounded-2xl bg-white p-10 text-sm text-[#6e859e]">
+        <div role="status" className="flex items-center justify-center gap-2 rounded-2xl bg-white p-10 text-sm text-umkm-subtle">
           <LoaderCircle className="animate-spin" size={18} /> Memuat daftar...
         </div>
       ) : (
         <>
-          <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
-            <h3 className="text-sm font-bold text-[#1b2a3a]">Alat usaha</h3>
+          <section className="rounded-2xl border border-umkm-line bg-white p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
+            <h3 className="text-sm font-bold text-umkm-ink">Alat usaha</h3>
             {assets.length === 0 ? (
               <div className="mt-4">
                 <EmptyState
@@ -143,7 +143,7 @@ export function AssetLoanRegister({
                 />
               </div>
             ) : (
-              <ul className="mt-3 divide-y divide-[#eef2f6]">
+              <ul className="mt-3 divide-y divide-umkm-line-soft">
                 {assets.map((asset) => (
                   <AssetRow
                     key={asset.id}
@@ -159,8 +159,8 @@ export function AssetLoanRegister({
             )}
           </section>
 
-          <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
-            <h3 className="text-sm font-bold text-[#1b2a3a]">Pinjaman</h3>
+          <section className="rounded-2xl border border-umkm-line bg-white p-5 shadow-[0_8px_28px_rgba(27,42,58,.04)]">
+            <h3 className="text-sm font-bold text-umkm-ink">Pinjaman</h3>
             {loans.length === 0 ? (
               <div className="mt-4">
                 <EmptyState
@@ -170,7 +170,7 @@ export function AssetLoanRegister({
                 />
               </div>
             ) : (
-              <ul className="mt-3 divide-y divide-[#eef2f6]">
+              <ul className="mt-3 divide-y divide-umkm-line-soft">
                 {loans.map((loan) => (
                   <LoanRow key={loan.id} loan={loan} />
                 ))}
@@ -224,7 +224,7 @@ function AssetRow({
     <li className="py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 text-xs font-bold text-[#1b2a3a]">
+          <p className="flex flex-wrap items-center gap-2 text-xs font-bold text-umkm-ink">
             {asset.name}
             {asset.disposedOn ? (
               <StatusBadge tone="neutral">Sudah tidak dipakai</StatusBadge>
@@ -234,11 +234,11 @@ function AssetRow({
               <StatusBadge tone="neutral">Dari catatan belanja</StatusBadge>
             )}
           </p>
-          <p className="mt-1 text-[11px] text-[#6e859e]">
+          <p className="mt-1 text-xs text-umkm-subtle">
             Dibeli {asset.acquiredOn} · harga dulu {formatIdr(asset.originalCostIdr)}
           </p>
           {!asset.disposedOn && (
-            <p className="mt-0.5 text-[11px] text-[#6e859e]">
+            <p className="mt-0.5 text-xs text-umkm-subtle">
               Nilainya sekarang {formatIdr(asset.bookValueIdr)}, turun {formatIdr(asset.monthlyDepreciationIdr)} tiap
               bulan sampai {depreciationEndsOn(asset)}.
             </p>
@@ -249,7 +249,7 @@ function AssetRow({
             <button
               type="button"
               onClick={() => setMode("dispose")}
-              className="min-h-11 rounded-lg px-2 text-[11px] font-bold text-[#6e859e]"
+              className="min-h-11 rounded-lg px-2 text-xs font-bold text-umkm-subtle"
             >
               Sudah tidak dipakai
             </button>
@@ -258,8 +258,8 @@ function AssetRow({
       </div>
 
       {mode === "dispose" && (
-        <div className="mt-3 space-y-3 rounded-xl border border-[#e3e9f0] p-3">
-          <p className="text-[11px] leading-relaxed text-[#6e859e]">
+        <div className="mt-3 space-y-3 rounded-xl border border-umkm-line p-3">
+          <p className="text-xs leading-relaxed text-umkm-subtle">
             Setelah ini {asset.name} tidak dihitung lagi sebagai milik usaha, dan nilainya berhenti turun tiap bulan.
           </p>
           <label className={labelClass}>
@@ -278,7 +278,7 @@ function AssetRow({
             <div className="mt-1.5">
               <InlineMoneyInput ariaLabel="Hasil penjualan alat" value={proceeds} onChange={setProceeds} />
             </div>
-            <span className="mt-1 block text-[11px] text-[#6e859e]">
+            <span className="mt-1 block text-xs text-umkm-subtle">
               Kosongkan kalau dibuang atau rusak.
             </span>
           </label>
@@ -286,7 +286,7 @@ function AssetRow({
             <button
               type="button"
               onClick={() => setMode("view")}
-              className="min-h-11 rounded-xl border border-[#d5dfe9] px-4 text-xs font-bold text-[#1b2a3a]"
+              className="min-h-11 rounded-xl border border-umkm-line-strong px-4 text-xs font-bold text-umkm-ink"
             >
               Batal
             </button>
@@ -294,7 +294,7 @@ function AssetRow({
               type="button"
               disabled={busy}
               onClick={() => void dispose()}
-              className="min-h-11 flex-1 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-50"
+              className="min-h-11 flex-1 rounded-xl bg-umkm-brand px-4 text-xs font-bold text-white disabled:opacity-50"
             >
               {busy ? "Menyimpan..." : "Ya, sudah tidak dipakai"}
             </button>
@@ -319,19 +319,19 @@ function LoanRow({ loan }: { loan: LoanView }) {
     <li className="py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 text-xs font-bold text-[#1b2a3a]">
+          <p className="flex flex-wrap items-center gap-2 text-xs font-bold text-umkm-ink">
             {loan.lenderName}
             <StatusBadge tone={loan.fromOpeningBalance ? "info" : "neutral"}>
               {loan.fromOpeningBalance ? "Dari kondisi awal" : "Dari catatan uang masuk"}
             </StatusBadge>
           </p>
-          <p className="mt-1 text-[11px] text-[#6e859e]">
+          <p className="mt-1 text-xs text-umkm-subtle">
             {lenderTypeLabels[loan.lenderType as LenderType] ?? loan.lenderType} · sisa{" "}
             {formatIdr(loan.outstandingIdr)}
             {loan.paidIdr > 0 ? ` · sudah dibayar ${formatIdr(loan.paidIdr)}` : ""}
           </p>
           {loan.monthlyInstallmentIdr && (
-            <p className="mt-0.5 text-[11px] text-[#6e859e]">
+            <p className="mt-0.5 text-xs text-umkm-subtle">
               Cicilan {formatIdr(loan.monthlyInstallmentIdr)} tiap bulan
             </p>
           )}

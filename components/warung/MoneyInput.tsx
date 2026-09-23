@@ -63,10 +63,10 @@ export function formatMoneyInput(value: number | null): string {
  */
 function MoneyField({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-11 items-stretch overflow-hidden rounded-xl border border-[#d5dfe9] bg-white transition-colors focus-within:border-[#0b5f86]">
+    <div className="flex min-h-11 items-stretch overflow-hidden rounded-xl border border-umkm-line-strong bg-white transition-colors focus-within:border-umkm-brand">
       <span
         aria-hidden
-        className="flex shrink-0 items-center border-r border-[#e3e9f0] bg-[#f5f7fb] px-3 text-sm font-bold text-[#6e859e]"
+        className="flex shrink-0 items-center border-r border-umkm-line bg-umkm-surface px-3 text-sm font-bold text-umkm-subtle"
       >
         Rp
       </span>
@@ -76,7 +76,7 @@ function MoneyField({ children }: { children: React.ReactNode }) {
 }
 
 const fieldClass =
-  "min-h-11 min-w-0 flex-1 border-0 bg-transparent px-3 text-sm font-medium tabular-nums text-[#1b2a3a] outline-none";
+  "min-h-11 min-w-0 flex-1 border-0 bg-transparent px-3 text-sm font-medium tabular-nums text-umkm-ink outline-none";
 
 export function MoneyInput({
   label,
@@ -90,7 +90,7 @@ export function MoneyInput({
   const id = useId();
   return (
     <div className={compact ? "" : "block"}>
-      <label htmlFor={id} className="block text-xs font-bold text-[#1b2a3a]">
+      <label htmlFor={id} className="block text-xs font-bold text-umkm-ink">
         {label}
       </label>
       <div className="mt-1.5">
@@ -108,7 +108,7 @@ export function MoneyInput({
         </MoneyField>
       </div>
       {helper && (
-        <p id={`${id}-helper`} className="mt-1 text-[11px] leading-relaxed text-[#6e859e]">
+        <p id={`${id}-helper`} className="mt-1 text-xs leading-relaxed text-umkm-subtle">
           {helper}
         </p>
       )}

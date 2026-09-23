@@ -38,7 +38,7 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
       <div className={`mx-auto w-full px-4 pt-5 md:px-7 md:pt-7 ${width}`}>
         <nav
           aria-label="Bagian profil usaha"
-          className="flex gap-1 overflow-x-auto rounded-full border border-[#e3e9f0] bg-[#f5f7fb] p-1"
+          className="flex gap-1 overflow-x-auto rounded-full border border-umkm-line bg-umkm-surface p-1"
         >
           {TABS.map(({ href, label, Icon }) => {
             const active = pathname === href;
@@ -60,7 +60,7 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
                   menghias, jadi ikonnya yang mengalah di layar sempit.
                 */
                 className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2 text-xs font-bold transition-colors sm:gap-2 sm:px-3 ${
-                  active ? "bg-white text-[#001b85] shadow-sm" : "text-[#6e859e] hover:text-[#1b2a3a]"
+                  active ? "bg-white text-umkm-brand shadow-sm" : "text-umkm-subtle hover:text-umkm-ink"
                 }`}
               >
                 <Icon size={14} className="hidden shrink-0 sm:block" />

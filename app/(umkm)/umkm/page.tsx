@@ -123,12 +123,12 @@ export default function BerandaPage() {
             <h1 className={styles.mobileTitle}>Keuangan usaha hari ini</h1>
           </header>
 
-          {error && <div role="alert" className="flex gap-2 rounded-2xl border border-[#f4b0a8] bg-[#feecea] p-4 text-xs text-[#8a1c12]"><AlertCircle size={17} />{error}</div>}
+          {error && <div role="alert" className="flex gap-2 rounded-2xl border border-umkm-danger-line bg-umkm-danger-soft p-4 text-xs text-umkm-danger-strong"><AlertCircle size={17} />{error}</div>}
 
           <section aria-labelledby="cash-flow-title" className={styles.balanceCard}>
             <p className={styles.eyebrow}>Sisa uang hari ini</p>
             <h2 id="cash-flow-title" className={styles.balance}>{formatSignedIdr(cashFlow)}</h2>
-            <p className="mt-1 text-[10px] text-white/75">Dari catatan yang sudah Anda cek</p>
+            <p className="mt-1 text-xs text-white/75">Dari catatan yang sudah Anda cek</p>
             <div className={styles.balanceMeta}>
               <span className={styles.balancePill}>{todayTransactions.length} catatan</span>
               <span>Masuk {formatIdr(income)}</span>
@@ -165,26 +165,26 @@ export default function BerandaPage() {
               <h2 id="activity-mobile-title" className={styles.sectionTitle}>Aktivitas</h2>
               <Link href="/umkm/laporan" className={styles.sectionLink}>Lihat semua</Link>
             </div>
-            {loading ? <p role="status" className="py-8 text-center text-xs text-[#6e859e]">Menyiapkan aktivitas...</p> : activities.length === 0 ? <EmptyActivity /> : activities.slice(0, 4).map((item) => <ActivityRow key={item.id} item={item} />)}
+            {loading ? <p role="status" className="py-8 text-center text-xs text-umkm-subtle">Menyiapkan aktivitas...</p> : activities.length === 0 ? <EmptyActivity /> : activities.slice(0, 4).map((item) => <ActivityRow key={item.id} item={item} />)}
           </section>
 
           <section aria-labelledby="journey-mobile-title" className={`${styles.whiteCard} ${styles.journeyCard}`}>
             <div className={styles.sectionHeader}>
-              <div><p className={styles.eyebrow} style={{ color: "#0f73a3" }}>Perjalanan usaha</p><h2 id="journey-mobile-title" className={styles.sectionTitle}>Kesiapan data</h2></div>
+              <div><p className={styles.eyebrow} style={{ color: "var(--umkm-brand-hover)" }}>Perjalanan usaha</p><h2 id="journey-mobile-title" className={styles.sectionTitle}>Kesiapan data</h2></div>
               <Link href="/umkm/kesiapan" className={styles.sectionLink}>Detail</Link>
             </div>
             <div className={styles.missionRow}>
               <div className={styles.mission}>
                 <strong>{readiness?.step?.title ?? "Semua langkah utama sudah didukung data"}</strong>
                 <p>{readiness?.step?.headline ?? "Lanjutkan kebiasaan mencatat agar ringkasan usaha tetap lengkap."}</p>
-                <Link href={readiness?.step?.action?.href ?? "/umkm/kesiapan"} className="-mx-2 mt-2 inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-[11px] font-extrabold text-[#0b5f86] hover:bg-[#eef8fd]">Lanjutkan <ChevronRight size={12} /></Link>
+                <Link href={readiness?.step?.action?.href ?? "/umkm/kesiapan"} className="-mx-2 mt-2 inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs font-extrabold text-umkm-brand hover:bg-umkm-brand-soft">Lanjutkan <ChevronRight size={12} /></Link>
               </div>
             </div>
           </section>
 
           <section aria-labelledby="actions-mobile-title" className={styles.whiteCard}>
-            <div className={styles.sectionHeader}><h2 id="actions-mobile-title" className={styles.sectionTitle}>Perlu perhatian</h2><span className="text-[10px] text-[#9fb0c2]">{actions.length} item</span></div>
-            {loading ? <p className="py-5 text-center text-xs text-[#6e859e]">Memeriksa data...</p> : actions.length === 0 ? <div className="flex items-center gap-2 py-4 text-xs text-[#0b7a55]"><CheckCircle2 size={17} /> Semua beres untuk saat ini.</div> : actions.slice(0, 3).map((item) => <ActionRow key={item.id} item={item} />)}
+            <div className={styles.sectionHeader}><h2 id="actions-mobile-title" className={styles.sectionTitle}>Perlu perhatian</h2><span className="text-xs text-umkm-subtle">{actions.length} item</span></div>
+            {loading ? <p className="py-5 text-center text-xs text-umkm-subtle">Memeriksa data...</p> : actions.length === 0 ? <div className="flex items-center gap-2 py-4 text-xs text-umkm-success"><CheckCircle2 size={17} /> Semua beres untuk saat ini.</div> : actions.slice(0, 3).map((item) => <ActionRow key={item.id} item={item} />)}
           </section>
         </div>
       </div>
@@ -196,7 +196,7 @@ export default function BerandaPage() {
             <p className={styles.desktopSubheading}>Pantau uang masuk, biaya, dan kesiapan data usaha Anda dalam satu tempat.</p>
           </header>
 
-          {error && <div role="alert" className="mt-5 flex gap-2 rounded-xl border border-[#f4b0a8] bg-[#feecea] p-4 text-xs text-[#8a1c12]"><AlertCircle size={17} />{error}</div>}
+          {error && <div role="alert" className="mt-5 flex gap-2 rounded-xl border border-umkm-danger-line bg-umkm-danger-soft p-4 text-xs text-umkm-danger-strong"><AlertCircle size={17} />{error}</div>}
 
           <div className="mt-5">
             <ReminderStrip />
@@ -214,36 +214,36 @@ export default function BerandaPage() {
 
           <div className={styles.desktopGrid}>
             <section aria-labelledby="activity-desktop-title" className={styles.panel}>
-              <div className={styles.panelHeader}><div><h2 id="activity-desktop-title" className={styles.panelTitle}>Aktivitas terbaru</h2><p className="mt-1 text-[10px] text-[#6e859e]">Catatan dan perubahan terbaru di usaha Anda</p></div><Link href="/umkm/laporan" className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-[#e3e9f0] px-3 text-[11px] font-bold text-[#34496a] hover:bg-[#f7f9fb]">Buka laporan</Link></div>
-              <div className={styles.panelBody}>{loading ? <p className="py-10 text-center text-xs text-[#6e859e]">Menyiapkan aktivitas...</p> : activities.length === 0 ? <EmptyActivity /> : activities.map((item) => <ActivityRow key={item.id} item={item} />)}</div>
+              <div className={styles.panelHeader}><div><h2 id="activity-desktop-title" className={styles.panelTitle}>Aktivitas terbaru</h2><p className="mt-1 text-xs text-umkm-subtle">Catatan dan perubahan terbaru di usaha Anda</p></div><Link href="/umkm/laporan" className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-umkm-line px-3 text-xs font-bold text-umkm-ink-soft hover:bg-umkm-surface">Buka laporan</Link></div>
+              <div className={styles.panelBody}>{loading ? <p className="py-10 text-center text-xs text-umkm-subtle">Menyiapkan aktivitas...</p> : activities.length === 0 ? <EmptyActivity /> : activities.map((item) => <ActivityRow key={item.id} item={item} />)}</div>
             </section>
 
             <section aria-labelledby="action-desktop-title" className={styles.panel}>
-              <div className={styles.panelHeader}><div><h2 id="action-desktop-title" className={styles.panelTitle}>Perlu perhatian</h2><p className="mt-1 text-[10px] text-[#6e859e]">{actions.length} hal untuk ditinjau</p></div><Sparkles size={16} className="text-[#1590c7]" /></div>
-              <div className={styles.panelBody}>{loading ? <p className="py-10 text-center text-xs text-[#6e859e]">Memeriksa data...</p> : actions.length === 0 ? <div className="flex items-center gap-2 py-8 text-xs text-[#0b7a55]"><CheckCircle2 size={17} /> Semua beres untuk saat ini.</div> : actions.map((item) => <ActionRow key={item.id} item={item} />)}</div>
+              <div className={styles.panelHeader}><div><h2 id="action-desktop-title" className={styles.panelTitle}>Perlu perhatian</h2><p className="mt-1 text-xs text-umkm-subtle">{actions.length} hal untuk ditinjau</p></div><Sparkles size={16} className="text-umkm-sky" /></div>
+              <div className={styles.panelBody}>{loading ? <p className="py-10 text-center text-xs text-umkm-subtle">Memeriksa data...</p> : actions.length === 0 ? <div className="flex items-center gap-2 py-8 text-xs text-umkm-success"><CheckCircle2 size={17} /> Semua beres untuk saat ini.</div> : actions.map((item) => <ActionRow key={item.id} item={item} />)}</div>
             </section>
 
             <section aria-labelledby="mission-desktop-title" className={`${styles.panel} ${styles.fullWidth}`}>
               <div className={styles.panelHeader}>
                 <div>
                   <h2 id="mission-desktop-title" className={styles.panelTitle}>Langkah usaha berikutnya</h2>
-                  <p className="mt-1 text-[10px] text-[#6e859e]">Rekomendasi berdasarkan data yang sudah tersedia</p>
+                  <p className="mt-1 text-xs text-umkm-subtle">Rekomendasi berdasarkan data yang sudah tersedia</p>
                 </div>
-                <Link href="/umkm/kesiapan" className="-mx-2 inline-flex min-h-11 items-center rounded-lg px-2 text-[11px] font-bold text-[#0b5f86] hover:bg-[#eef8fd]">Lihat perjalanan</Link>
+                <Link href="/umkm/kesiapan" className="-mx-2 inline-flex min-h-11 items-center rounded-lg px-2 text-xs font-bold text-umkm-brand hover:bg-umkm-brand-soft">Lihat perjalanan</Link>
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5">
                 <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eef8fd] text-[#0b5f86]">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-umkm-brand-soft text-umkm-brand">
                     <Sparkles size={18} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-[#1b2a3a]">{readiness?.step?.title ?? "Data utama usaha sudah lengkap"}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-[#6e859e]">{readiness?.step?.headline ?? "Terus catat transaksi yang benar-benar terjadi agar ringkasan tetap terbaru."}</p>
+                    <p className="text-sm font-bold text-umkm-ink">{readiness?.step?.title ?? "Data utama usaha sudah lengkap"}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-umkm-subtle">{readiness?.step?.headline ?? "Terus catat transaksi yang benar-benar terjadi agar ringkasan tetap terbaru."}</p>
                   </div>
                 </div>
                 <Link
                   href={readiness?.step?.action?.href ?? "/umkm/kesiapan"}
-                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-5 text-xs font-bold text-white hover:bg-[#0f73a3] transition-colors shadow-sm self-stretch sm:self-auto"
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-umkm-brand px-5 text-xs font-bold text-white hover:bg-umkm-brand-hover transition-colors shadow-sm self-stretch sm:self-auto"
                 >
                   {readiness?.step?.action?.label ?? "Lanjutkan"} <ArrowRight size={14} />
                 </Link>
@@ -270,9 +270,9 @@ function ActivityRow({ item }: { item: ActivityItem }) {
 }
 
 function ActionRow({ item }: { item: ActionItem }) {
-  return <Link href={item.href} className={styles.actionRow}><span className={styles.actionDot} /><span className="min-w-0 flex-1"><strong>{item.title}</strong><small className="truncate">{item.description}</small></span><ChevronRight size={14} className="text-[#9fb0c2]" /></Link>;
+  return <Link href={item.href} className={styles.actionRow}><span className={styles.actionDot} /><span className="min-w-0 flex-1"><strong>{item.title}</strong><small className="truncate">{item.description}</small></span><ChevronRight size={14} className="text-umkm-faint" /></Link>;
 }
 
 function EmptyActivity() {
-  return <div className="flex flex-col items-center py-8 text-center"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#eef8fd] text-[#0f73a3]"><Mic size={19} /></span><p className="mt-3 text-xs font-bold text-[#34496a]">Belum ada aktivitas usaha</p><Link href="/umkm/catat" className="mt-2 text-[10px] font-bold text-[#0b5f86]">Buat catatan pertama</Link></div>;
+  return <div className="flex flex-col items-center py-8 text-center"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-umkm-brand-soft text-umkm-brand-hover"><Mic size={19} /></span><p className="mt-3 text-xs font-bold text-umkm-ink-soft">Belum ada aktivitas usaha</p><Link href="/umkm/catat" className="mt-2 text-xs font-bold text-umkm-brand">Buat catatan pertama</Link></div>;
 }

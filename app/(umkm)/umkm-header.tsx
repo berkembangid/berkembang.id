@@ -82,19 +82,19 @@ export default function UmkmHeader({
             <Link
               href={heading.parentHref}
               aria-label={`Kembali ke ${heading.parentLabel}`}
-              className="grid size-11 shrink-0 place-items-center rounded-xl border border-[#e3e9f0] text-[#4a6280] transition-colors hover:bg-[#f3f6f9] hover:text-[#1b2a3a]"
+              className="grid size-11 shrink-0 place-items-center rounded-xl border border-umkm-line text-umkm-muted transition-colors hover:bg-umkm-surface-muted hover:text-umkm-ink"
             >
               <ArrowLeft size={16} />
             </Link>
           )}
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9fb0c2]">
+            <p className="text-[11px] font-bold uppercase tracking-[.12em] text-umkm-subtle">
               {heading.parentLabel ?? businessName ?? "Ruang usaha"}
             </p>
-            <h1 className="mt-0.5 flex items-center gap-2 truncate text-sm font-bold text-[#1b2a3a]">
-              <heading.Icon size={15} className="shrink-0 text-[#0b5f86]" />
+            <p className="mt-0.5 flex items-center gap-2 truncate text-sm font-bold text-umkm-ink">
+              <heading.Icon size={15} className="shrink-0 text-umkm-brand" />
               {heading.title}
-            </h1>
+            </p>
           </div>
         </div>
 
@@ -102,12 +102,12 @@ export default function UmkmHeader({
           {!onCapture && (
             <Link
               href="/umkm/catat"
-              className="mr-1 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#0b5f86] px-3.5 text-xs font-bold text-white transition-colors hover:bg-[#0a5375]"
+              className="mr-1 inline-flex min-h-11 items-center gap-2 rounded-xl bg-umkm-brand px-3.5 text-xs font-bold text-white transition-colors hover:bg-umkm-brand-deep"
             >
               <Mic size={15} /> Catat transaksi
             </Link>
           )}
-          <Link href="/umkm/panduan" aria-label="Buka panduan usaha" className={`${styles.iconButton} border border-[#e3e9f0] text-[#4a6280]`}>
+          <Link href="/umkm/panduan" aria-label="Buka panduan usaha" className={`${styles.iconButton} border border-umkm-line text-umkm-muted`}>
             <Sparkles size={16} />
           </Link>
           <NotificationBell notices={notices} unread={unread} onOpened={onNoticesSeen} />
@@ -115,7 +115,7 @@ export default function UmkmHeader({
             <button
               type="button"
               aria-label="Menu akun"
-              className="ml-1 grid size-11 place-items-center rounded-full bg-[#d6eefa] text-[10px] font-extrabold text-[#0b5f86]"
+              className="ml-1 grid size-11 place-items-center rounded-full bg-umkm-brand-tint text-xs font-extrabold text-umkm-brand"
             >
               {initials(userName)}
             </button>
@@ -140,13 +140,13 @@ export default function UmkmHeader({
             <Link
               href={heading.parentHref ?? "/umkm"}
               aria-label={`Kembali ke ${heading.parentLabel ?? "Beranda"}`}
-              className="grid size-11 shrink-0 place-items-center rounded-xl text-[#4a6280] active:bg-[#eef2f6]"
+              className="grid size-11 shrink-0 place-items-center rounded-xl text-umkm-muted active:bg-umkm-line-soft"
             >
               <ArrowLeft size={19} />
             </Link>
             <div className="min-w-0">
-              <h1 className="truncate text-sm font-bold text-[#1b2a3a]">{heading.title}</h1>
-              {heading.hint && <p className="truncate text-[10px] text-[#6e859e]">{heading.hint}</p>}
+              <p className="truncate text-sm font-bold text-umkm-ink">{heading.title}</p>
+              {heading.hint && <p className="truncate text-xs text-umkm-subtle">{heading.hint}</p>}
             </div>
           </div>
         )}
@@ -158,7 +158,7 @@ export default function UmkmHeader({
             <button
               type="button"
               aria-label="Menu akun"
-              className="grid size-11 place-items-center rounded-full bg-[#d6eefa] text-[10px] font-extrabold text-[#0b5f86]"
+              className="grid size-11 place-items-center rounded-full bg-umkm-brand-tint text-xs font-extrabold text-umkm-brand"
             >
               {initials(userName)}
             </button>
@@ -189,11 +189,11 @@ function NotificationBell({
     <Popover.Root onOpenChange={(open) => { if (open) onOpened(); }}>
       <Popover.Trigger
         aria-label={unread ? `Buka pemberitahuan, ${unread} baru` : "Buka pemberitahuan"}
-        className={`${styles.iconButton} ${compact ? "" : "border border-[#e3e9f0] text-[#4a6280]"}`}
+        className={`${styles.iconButton} ${compact ? "" : "border border-umkm-line text-umkm-muted"}`}
       >
         <Bell size={17} />
         {unread > 0 && (
-          <span aria-hidden className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-[#f5c453] px-1 text-[8px] font-black text-[#5c3700]">
+          <span aria-hidden className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-[#f5c453] px-1 text-xs font-black text-umkm-warning-strong">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -209,12 +209,12 @@ function NotificationBell({
             style={{ width: "min(92vw, 390px)" }}
             className={`${styles.notificationPanel} p-4 duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95`}
           >
-            <div className="flex items-center justify-between border-b border-[#eef2f6] pb-3">
+            <div className="flex items-center justify-between border-b border-umkm-line-soft pb-3">
               <div>
-                <Popover.Title className="text-sm font-bold text-[#1b2a3a]">Pemberitahuan terbaru</Popover.Title>
-                <Popover.Description className="mt-0.5 text-[10px] text-[#6e859e]">Berdasarkan catatan usaha Anda</Popover.Description>
+                <Popover.Title className="text-sm font-bold text-umkm-ink">Pemberitahuan terbaru</Popover.Title>
+                <Popover.Description className="mt-0.5 text-xs text-umkm-subtle">Berdasarkan catatan usaha Anda</Popover.Description>
               </div>
-              <Popover.Close aria-label="Tutup pemberitahuan" className="grid h-10 w-10 place-items-center rounded-xl text-[#6e859e] hover:bg-[#f3f6f9]">
+              <Popover.Close aria-label="Tutup pemberitahuan" className="grid h-10 w-10 place-items-center rounded-xl text-umkm-subtle hover:bg-umkm-surface-muted">
                 <X size={17} />
               </Popover.Close>
             </div>
@@ -223,21 +223,21 @@ function NotificationBell({
               {notices.length === 0 ? (
                 <div className="py-8 text-center">
                   <CheckCircle2 className="mx-auto text-[#0fa974]" />
-                  <p className="mt-2 text-xs font-bold text-[#34496a]">Belum ada pemberitahuan</p>
-                  <p className="mt-1 text-[10px] text-[#6e859e]">Catatan transaksi Anda akan muncul di sini.</p>
+                  <p className="mt-2 text-xs font-bold text-umkm-ink-soft">Belum ada pemberitahuan</p>
+                  <p className="mt-1 text-xs text-umkm-subtle">Catatan transaksi Anda akan muncul di sini.</p>
                 </div>
               ) : (
                 notices.map((notice) => {
                   const income = noticeDirection(notice) === "income";
                   const value = Number(notice.amount_idr ?? notice.nominal ?? 0);
                   return (
-                    <div key={notice.id} className="flex items-center gap-3 rounded-xl border border-[#eef2f6] bg-[#f8fafc] p-3">
-                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${income ? "bg-[#edfbf5] text-[#0b7a55]" : "bg-[#f3f6f9] text-[#4a6280]"}`}>
+                    <div key={notice.id} className="flex items-center gap-3 rounded-xl border border-umkm-line-soft bg-umkm-surface p-3">
+                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${income ? "bg-umkm-success-soft text-umkm-success" : "bg-umkm-surface-muted text-umkm-muted"}`}>
                         {income ? <ArrowDownLeft size={15} /> : <ArrowUpRight size={15} />}
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-bold tabular-nums text-[#1b2a3a]">{income ? "+" : "−"}Rp{value.toLocaleString("id-ID")}</p>
-                        <p className="truncate text-[10px] text-[#6e859e]">{notice.item}</p>
+                        <p className="truncate text-xs font-bold tabular-nums text-umkm-ink">{income ? "+" : "−"}Rp{value.toLocaleString("id-ID")}</p>
+                        <p className="truncate text-xs text-umkm-subtle">{notice.item}</p>
                       </div>
                     </div>
                   );
@@ -248,13 +248,13 @@ function NotificationBell({
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Popover.Close
                 render={<Link href="/umkm/notifikasi" />}
-                className="flex min-h-11 items-center justify-center rounded-xl border border-[#e3e9f0] text-xs font-bold text-[#34496a]"
+                className="flex min-h-11 items-center justify-center rounded-xl border border-umkm-line text-xs font-bold text-umkm-ink-soft"
               >
                 Lihat semua
               </Popover.Close>
               <Popover.Close
                 render={<Link href="/umkm/laporan" />}
-                className="flex min-h-11 items-center justify-center rounded-xl bg-[#0b5f86] text-xs font-bold text-white"
+                className="flex min-h-11 items-center justify-center rounded-xl bg-umkm-brand text-xs font-bold text-white"
               >
                 Buka laporan
               </Popover.Close>
@@ -306,8 +306,8 @@ function AccountMenu({
         <DropdownMenuTrigger render={children as React.ReactElement<Record<string, unknown>>} />
         <DropdownMenuContent>
           <DropdownMenuLabel>
-            <p className="truncate text-sm font-bold text-[#1b2a3a]">{userName}</p>
-            <p className="truncate text-xs text-[#6e859e]">{businessName || "Lengkapi profil usaha"}</p>
+            <p className="truncate text-sm font-bold text-umkm-ink">{userName}</p>
+            <p className="truncate text-xs text-umkm-subtle">{businessName || "Lengkapi profil usaha"}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuLinkItem render={<Link href="/umkm/profil" />}><Building2 />Informasi usaha</DropdownMenuLinkItem>

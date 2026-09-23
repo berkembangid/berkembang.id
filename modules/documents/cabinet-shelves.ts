@@ -110,7 +110,7 @@ export const expiringDocumentTypes: readonly DocumentType[] = ["pirt", "halal", 
 export function assuranceText(level: string, hasFile: boolean): string {
   if (!hasFile) return "Baru nomornya";
   if (level === "attested") return "Diperiksa pendamping";
-  if (level === "confirmed") return "Sudah kamu cek";
+  if (level === "confirmed") return "Sudah Anda cek";
   if (level === "checked") return "Terbaca";
   return "Tersimpan";
 }
