@@ -95,10 +95,15 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    // Pembersihan bisa terjadi sebelum `load` selesai (StrictMode menjalankan
+    // efek dua kali). Tanpa penanda ini, pemanggilan pertama tetap berlangganan
+    // setelah dibersihkan, dan pemanggilan kedua mendapat saluran bernama sama
+    // yang sudah `subscribe()` -- Supabase menolak `.on()` pada saluran itu.
+    let cancelled = false;
 
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user || cancelled) return;
       currentUserId.current = user.id;
 
       const [profile, transactionResult] = await Promise.all([
@@ -110,6 +115,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
           .order("created_at", { ascending: false })
           .limit(8),
       ]);
+      if (cancelled) return;
 
       setUserName(profile.data?.name ?? user.user_metadata?.nama_pemilik ?? user.email?.split("@")[0] ?? "Pengguna");
       setBusinessName(profile.data?.nama_usaha ?? user.user_metadata?.nama_usaha ?? "");
@@ -120,7 +126,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       // lagi di sini — pekerjaan jaringan untuk data yang memang tidak boleh
       // dilihat, dan bergantung pada penyaring di sisi klien untuk kebenaran.
       channel = supabase
-        .channel(`umkm-transaction-notices-${user.id}`)
+        .channel(`umkm-transaction-notices-${user.id}-${crypto.randomUUID()}`)
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "transactions", filter: `user_id=eq.${user.id}` },
@@ -131,6 +137,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
 
     void load();
     return () => {
+      cancelled = true;
       if (channel) void supabase.removeChannel(channel);
     };
   }, []);
