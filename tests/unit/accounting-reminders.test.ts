@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupReminders, reminderGroupText } from "@/components/warung/ReminderStrip";
+import { groupReminders, reminderGroupText, reminderHref } from "@/components/warung/ReminderStrip";
 import type { ReminderView } from "@/modules/accounting/period";
 
 function reminder(overrides: Partial<ReminderView> = {}): ReminderView {
@@ -97,5 +97,27 @@ describe("kalimat pengingat", () => {
         expect(text).not.toMatch(/plafon|layak|disetujui|ditolak|skor/i);
       }
     }
+  });
+});
+
+describe("pengingat masa berlaku dokumen", () => {
+  const expiring = (subject: string, dueDate: string, daysOverdue = 0) => ({
+    kind: "DOKUMEN_KEDALUWARSA" as const, periodMonth: dueDate.slice(0, 7), dueDate, daysOverdue, urgent: true, subject,
+  });
+
+  it("menyebut nama dokumennya dan membawa ke layar Dokumen", () => {
+    const [group] = groupReminders([expiring("PIRT Warung", "2099-10-12")]);
+    expect(reminderGroupText(group).title).toContain("PIRT Warung habis");
+    expect(reminderHref(group.kind)).toBe("/umkm/profil/dokumen");
+  });
+
+  it("membedakan yang sudah habis dari yang segera habis", () => {
+    const [group] = groupReminders([expiring("Sertifikat Halal", "2020-01-01", 30)]);
+    expect(reminderGroupText(group).title).toContain("sudah habis");
+  });
+
+  it("mengumpulkan beberapa dokumen dalam satu kalimat", () => {
+    const [group] = groupReminders([expiring("PIRT", "2099-10-01"), expiring("Halal", "2099-10-05")]);
+    expect(reminderGroupText(group).title).toBe("2 dokumen izin segera habis masa berlakunya");
   });
 });

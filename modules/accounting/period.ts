@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { withPortalRpc } from "@/lib/supabase/portal";
 import { activeBusinessId } from "@/modules/ledger/ledger-repository";
 import { AccountingOperationError, accountingOperationError } from "@/modules/accounting/accounting-errors";
 import {
@@ -696,7 +697,7 @@ export async function getTaxEstimate(userId: string, asOf: string): Promise<TaxE
  * pengingat hilang sendiri pada detik pemilik mengerjakannya, tidak bisa
  * muncul dua kali, dan tidak pernah basi setelah datanya dikoreksi.
  */
-export type ReminderKind = "HITUNG_STOK" | "TUTUP_KAS";
+export type ReminderKind = "HITUNG_STOK" | "TUTUP_KAS" | "DOKUMEN_KEDALUWARSA";
 
 export type ReminderView = {
   kind: ReminderKind;
@@ -704,6 +705,8 @@ export type ReminderView = {
   dueDate: string;
   daysOverdue: number;
   urgent: boolean;
+  /** Nama dokumen, untuk pengingat masa berlaku. */
+  subject?: string;
 };
 
 export async function getPendingReminders(userId: string, asOf: string): Promise<ReminderView[]> {
@@ -714,11 +717,24 @@ export async function getPendingReminders(userId: string, asOf: string): Promise
     p_as_of: asOf,
   });
   fail(error);
-  return (data ?? []).map((row) => ({
+  const ledgerReminders: ReminderView[] = (data ?? []).map((row) => ({
     kind: row.kind as ReminderKind,
     periodMonth: row.period_month.slice(0, 7),
     dueDate: row.due_date,
     daysOverdue: Number(row.days_overdue),
     urgent: row.urgent === true,
   }));
+  // Masa berlaku dokumen (0108). Dibaca terpisah dan tidak boleh
+  // menggagalkan pengingat buku kas: kalau fungsi ini belum terpasang di
+  // suatu lingkungan, yang hilang hanya pengingat dokumennya.
+  const expiry = await withPortalRpc(client).rpc("fn_document_expiry_reminders", { p_business_id: businessId, p_as_of: asOf });
+  const documentReminders: ReminderView[] = expiry.error || !Array.isArray(expiry.data) ? [] : (expiry.data as Array<{ name: string; valid_until: string; days_left: number }>).map((row) => ({
+    kind: "DOKUMEN_KEDALUWARSA" as const,
+    periodMonth: row.valid_until.slice(0, 7),
+    dueDate: row.valid_until,
+    daysOverdue: Math.max(0, -Number(row.days_left)),
+    urgent: Number(row.days_left) <= 7,
+    subject: row.name,
+  }));
+  return [...ledgerReminders, ...documentReminders];
 }

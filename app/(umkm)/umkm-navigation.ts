@@ -67,7 +67,7 @@ export type ScreenHeading = {
 const SCREENS: Array<{ path: string; exact?: boolean } & ScreenHeading> = [
   { path: "/umkm", exact: true, title: "Beranda", Icon: Home },
   { path: "/umkm/profil/dokumen", title: "Dokumen usaha", hint: "Simpan berkas legalitas usaha", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: FileText },
-  { path: "/umkm/profil/kondisi-awal", title: "Kondisi awal keuangan", hint: "Titik mulai pembukuan usaha", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: Wallet },
+  { path: "/umkm/profil/kondisi-awal", title: "Kondisi keuangan usaha", hint: "Titik mulai dan posisi hari ini", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: Wallet },
   { path: "/umkm/profil/rekening", title: "Rekening usaha", hint: "Pisahkan uang usaha dari uang rumah", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: Landmark },
   { path: "/umkm/profil/izin", title: "Izin & program", hint: "Siapa yang bisa melihat data usaha", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: ShieldCheck },
   { path: "/umkm/profil", title: "Profil usaha", hint: "Kenali usaha Anda", Icon: Building2 },
@@ -75,7 +75,7 @@ const SCREENS: Array<{ path: string; exact?: boolean } & ScreenHeading> = [
   { path: "/umkm/laporan", title: "Buku kas & laporan", hint: "Ringkasan uang usaha", Icon: BarChart3 },
   { path: "/umkm/kesiapan/metodologi", title: "Cara kami menghitung", parentHref: "/umkm/perjalanan", parentLabel: "Perjalanan", Icon: Target },
   { path: "/umkm/perjalanan", title: "Perjalanan usaha", hint: "Langkah demi langkah", Icon: Map },
-  { path: "/umkm/panduan", title: "Panduan usaha", hint: "Tanya apa saja soal usaha", Icon: Sparkles },
+  { path: "/umkm/panduan", title: "Panduan usaha", hint: "Cara memakai dan jawaban singkat", Icon: Sparkles },
   { path: "/umkm/notifikasi", title: "Pemberitahuan", parentHref: "/umkm", parentLabel: "Beranda", Icon: Bell },
   { path: "/umkm/akuntan", title: "Mode akuntan", parentHref: "/umkm/laporan", parentLabel: "Laporan", Icon: BarChart3 },
 ];

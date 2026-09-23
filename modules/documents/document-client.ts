@@ -124,3 +124,10 @@ export async function retryDocumentExtraction(documentId: string) {
     { method: "POST" },
   );
 }
+
+export async function setDocumentValidity(documentId: string, validUntil: string | null) {
+  return requestData<{ documentId: string; validUntil: string | null }>(
+    `/api/v1/documents/${encodeURIComponent(documentId)}/validity`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ validUntil }) },
+  );
+}

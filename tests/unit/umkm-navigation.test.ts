@@ -14,7 +14,7 @@ import { NAVIGATION, isActivePath, resolveHeading } from "@/app/(umkm)/umkm-navi
 describe("judul layar", () => {
   it("memberi nama sendiri untuk halaman dalam, bukan nama induknya", () => {
     expect(resolveHeading("/umkm/profil/dokumen").title).toBe("Dokumen usaha");
-    expect(resolveHeading("/umkm/profil/kondisi-awal").title).toBe("Kondisi awal keuangan");
+    expect(resolveHeading("/umkm/profil/kondisi-awal").title).toBe("Kondisi keuangan usaha");
     expect(resolveHeading("/umkm/profil").title).toBe("Profil usaha");
   });
 

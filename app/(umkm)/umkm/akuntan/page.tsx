@@ -48,6 +48,7 @@ import { listTransactionAttachments } from "@/modules/documents/evidence-client"
 import { DashboardPage, DashboardPanel, EmptyState, PageHeader, PanelHeader } from "@/components/dashboard";
 import { jakartaDate } from "@/modules/ledger/capture-schema";
 import { formatTanggal } from "@/lib/format";
+import { notifyInfo, notifyWarning } from "@/lib/notify";
 
 type View = "journal" | "ledger" | "trial";
 
@@ -213,8 +214,14 @@ function useAsync<T>(load: () => Promise<T>, fallback: string) {
   return { data, loading, error, reload: run };
 }
 
+/** Batas API jurnal (accounting-schema: max 200). */
+const JOURNAL_MAX = 200;
+
 function JournalPanel({ from, to }: { from: string; to: string }) {
-  const load = useCallback(() => getJournalClient({ from, to, limit: 100 }), [from, to]);
+  // Dimulai 100; bila masih ada lanjutan, satu ketukan menaikkannya ke batas
+  // API sebelum meminta pemeriksa mempersempit tanggal.
+  const [limit, setLimit] = useState(100);
+  const load = useCallback(() => getJournalClient({ from, to, limit }), [from, to, limit]);
   const { data, loading, error, reload } = useAsync(load, "Jurnal belum dapat dimuat.");
 
   if (loading) return <Loading label="Memuat jurnal umum..." />;
@@ -233,7 +240,12 @@ function JournalPanel({ from, to }: { from: string; to: string }) {
     <DashboardPanel>
       <PanelHeader
         title="Jurnal Umum"
-        description={`${data.entries.length} entri${data.hasMore ? ", masih ada lanjutannya — persempit tanggalnya" : ""}.`}
+        description={`${data.entries.length} entri${data.hasMore ? (limit < JOURNAL_MAX ? ", masih ada lanjutannya" : ", masih ada lanjutannya — persempit tanggalnya untuk melihat sisanya") : ""}.`}
+        action={data.hasMore && limit < JOURNAL_MAX ? (
+          <button type="button" onClick={() => setLimit(JOURNAL_MAX)} className="inline-flex min-h-11 items-center rounded-lg border border-umkm-line px-3 text-xs font-bold text-umkm-brand hover:bg-umkm-brand-soft">
+            Tampilkan hingga {JOURNAL_MAX} entri
+          </button>
+        ) : undefined}
       />
       <div className="px-4 pb-4 md:px-5">
         {/*
@@ -279,22 +291,29 @@ function EvidenceClip({ transactionId, count }: { transactionId: string; count: 
         try {
           const attachments = await listTransactionAttachments(transactionId);
           const first = attachments[0];
-          if (!first) return;
+          // Dulu diam saja bila daftarnya kosong -- ketukan yang tidak
+          // menghasilkan apa-apa terbaca sebagai tombol rusak.
+          if (!first) {
+            notifyInfo("Bukti untuk catatan ini sudah dilepas atau diarsipkan.");
+            return;
+          }
           const { signedUrl } = await createDocumentSignedUrl(first.documentId);
           window.open(signedUrl, "_blank", "noopener,noreferrer");
+          if (attachments.length > 1) notifyInfo(`Membuka bukti pertama dari ${attachments.length}. Semuanya ada di Buku Kas.`);
         } catch {
           setFailed(true);
+          notifyWarning("Bukti belum bisa dibuka. Coba lagi sebentar.");
         } finally {
           setBusy(false);
         }
       }}
       aria-label={`Lihat bukti (${count})`}
       title={failed ? "Bukti belum bisa dibuka. Coba lagi." : `Lihat bukti (${count})`}
-      className={`inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-xs font-bold transition-colors ${
+      className={`-my-3 inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-1.5 text-xs font-bold transition-colors ${
         failed ? "text-umkm-warning hover:bg-umkm-warning-soft" : "text-umkm-brand hover:bg-umkm-brand-soft"
       } disabled:opacity-40`}
     >
-      <Paperclip size={11} />
+      <Paperclip size={14} aria-hidden />
       {count > 1 ? count : ""}
     </button>
   );
@@ -436,7 +455,7 @@ function TrialBalancePanel({ asOf }: { asOf: string }) {
     <DashboardPanel>
       <PanelHeader
         title="Neraca Saldo"
-        description={`Saldo setiap akun per ${data.asOf}. Satu akun berada di satu sisi saja, dan kedua jumlahnya harus sama.`}
+        description={`Saldo setiap akun per ${formatTanggal(data.asOf, "long")} (tanggal akhir rentang; tanggal awal tidak berlaku untuk neraca saldo). Satu akun berada di satu sisi saja, dan kedua jumlahnya harus sama.`}
       />
       <div className="px-4 py-4 md:px-5">
         <div

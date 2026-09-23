@@ -47,6 +47,8 @@ import {
 } from "@/modules/documents/document-schema";
 import type { DocumentView } from "@/modules/documents/document-repository";
 import { uploadDocumentFile, uploadStageText } from "@/modules/documents/document-upload";
+import { ValidityEditor } from "@/components/documents/ValidityEditor";
+import { formatTanggal } from "@/lib/format";
 
 
 function inspectImageQuality(file: File) {
@@ -74,9 +76,9 @@ const statusPresentation: Record<
   DocumentView["status"],
   { label: string; className: string }
 > = {
-  uploaded: { label: "Menunggu verifikasi", className: "bg-umkm-warning-soft text-umkm-warning border-umkm-warning-line" },
+  uploaded: { label: "Tersimpan", className: "bg-umkm-warning-soft text-umkm-warning border-umkm-warning-line" },
   processing: { label: "Sedang diproses", className: "bg-umkm-brand-soft text-umkm-brand border-umkm-brand-line" },
-  verified: { label: "Terverifikasi", className: "bg-umkm-success-soft text-umkm-success border-umkm-success-line" },
+  verified: { label: "Sudah Anda cek", className: "bg-umkm-success-soft text-umkm-success border-umkm-success-line" },
   rejected: { label: "Perlu diperbaiki", className: "bg-umkm-danger-soft text-umkm-danger border-umkm-danger-line" },
   superseded: { label: "Diarsipkan", className: "bg-umkm-surface-muted text-umkm-muted border-umkm-line" },
 };
@@ -152,13 +154,18 @@ export default function UploadPage() {
     try {
       const [records, cabinetResponse] = await Promise.all([
         listDocuments(),
-        fetch("/api/v1/documents/cabinet").then((response) => response.json()).catch(() => null),
+        fetch("/api/v1/documents/cabinet")
+          .then((response) => (response.ok ? response.json() : null))
+          .catch(() => null),
       ]);
       setDocuments(records);
       // Lemarinya tetap berguna kalau kelengkapan sektor gagal dimuat; yang
       // hilang hanya lencana, bukan dokumennya.
-      setCabinet((cabinetResponse as { data?: CabinetPayload } | null)?.data ?? null);
-      setMessage((current) => current?.tone === "error" ? null : current);
+      const cabinetData = (cabinetResponse as { data?: CabinetPayload } | null)?.data ?? null;
+      setCabinet(cabinetData);
+      // Tanpa data lemari, lencana « Fondasi » hilang dan Akta Pendirian
+      // untuk badan usaha tidak tampil. Dikatakan, bukan disembunyikan.
+      setMessage(cabinetData ? null : { tone: "info", text: "Daftar dokumen yang dibutuhkan usaha Anda belum dapat dimuat. Dokumen Anda tetap aman; coba Muat ulang." });
     } catch (error) {
       setMessage({
         tone: "error",
@@ -356,7 +363,11 @@ export default function UploadPage() {
             // pernah bisa ia buat.
             const requirements = uploadCardsFor(cabinet?.bentukUsaha ?? "perorangan")
               .filter((item) => item.shelf === shelf.id);
-            const completed = requirements.filter((item) => documentsByType.has(item.type)).length;
+            // Dokumen yang perlu diperbaiki belum dihitung « tersedia ».
+            const completed = requirements.filter((item) => {
+              const document = documentsByType.get(item.type);
+              return document && document.status !== "rejected";
+            }).length;
             return (
               <section key={shelf.id} aria-labelledby={`shelf-${shelf.id}`}>
                 <div className="mb-3 flex items-end justify-between gap-4">
@@ -391,7 +402,7 @@ export default function UploadPage() {
                             </p>
                           </div>
                           {item.transactionId && (
-                            <Link href="/umkm/laporan" className="shrink-0 text-xs font-bold text-umkm-brand">
+                            <Link href="/umkm/laporan?tab=kas" className="inline-flex min-h-11 shrink-0 items-center text-xs font-bold text-umkm-brand">
                               Lihat catatan
                             </Link>
                           )}
@@ -415,7 +426,7 @@ export default function UploadPage() {
                       {document?.status === "verified" ? <CheckCircle2 size={20} /> : <FileText size={20} />}
                     </div>
                     <div className="min-w-0">
-                      <h2 className="text-sm font-bold text-umkm-ink">
+                      <h3 className="text-sm font-bold text-umkm-ink">
                         {documentTypeLabels[requirement.type]}
                         {(() => {
                           const level = requirementLabel(requirementByType.get(requirement.type)?.requirement ?? null);
@@ -430,7 +441,7 @@ export default function UploadPage() {
                             </span>
                           );
                         })()}
-                      </h2>
+                      </h3>
                       <p className="mt-0.5 text-xs text-umkm-subtle">
                         {requirementByType.get(requirement.type)?.note ?? requirement.description}
                       </p>
@@ -448,11 +459,8 @@ export default function UploadPage() {
                     {(document.docNumber || document.validUntil || !document.hasFile) && (
                       <div className="rounded-xl bg-umkm-surface px-3 py-2 text-xs leading-relaxed text-umkm-muted">
                         {document.docNumber && <p>No. {document.docNumber}</p>}
-                        {document.validUntil && (
-                          <p>
-                            Berlaku sampai{" "}
-                            {new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(new Date(`${document.validUntil}T12:00:00+07:00`))}
-                          </p>
+                        {document.validUntil && !expiringDocumentTypes.includes(requirement.type) && (
+                          <p>Berlaku sampai {formatTanggal(document.validUntil, "long")}</p>
                         )}
                         <p className="mt-0.5 font-bold text-umkm-subtle">
                           {assuranceText(document.assuranceLevel, document.hasFile)}
@@ -462,12 +470,8 @@ export default function UploadPage() {
                     {/* Masa berlaku yang kosong pada izin yang memang punya masa
                         berlaku bukan kesalahan -- ia hanya belum diisi, dan
                         pengingatnya tidak bisa bekerja tanpa itu. */}
-                    {document.hasFile
-                      && expiringDocumentTypes.includes(requirement.type)
-                      && !document.validUntil && (
-                      <p className="rounded-xl border border-umkm-warning-line bg-umkm-warning-soft px-3 py-2 text-xs leading-relaxed text-umkm-warning">
-                        Isi masa berlakunya biar bisa kami ingatkan sebelum habis.
-                      </p>
+                    {document.hasFile && expiringDocumentTypes.includes(requirement.type) && document.status !== "superseded" && (
+                      <ValidityEditor documentId={document.id} validUntil={document.validUntil} onSaved={() => void loadDocuments()} />
                     )}
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -475,10 +479,10 @@ export default function UploadPage() {
                         <p className="mt-0.5 text-xs text-umkm-subtle">Versi {document.currentVersion} · {fileSizeLabel(document.fileSize)}</p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
-                        <button type="button" onClick={() => void handleView(document.id)} className="rounded-lg p-2 text-umkm-brand hover:bg-umkm-brand-soft" aria-label="Lihat dokumen">
+                        <button type="button" onClick={() => void handleView(document.id)} className="grid size-11 place-items-center rounded-lg text-umkm-brand hover:bg-umkm-brand-soft" aria-label="Lihat dokumen">
                           <Eye size={15} />
                         </button>
-                        <button type="button" onClick={() => void handleArchive(document)} disabled={isBusy} className="rounded-lg p-2 text-umkm-subtle hover:bg-umkm-surface-muted disabled:opacity-50" aria-label="Arsipkan dokumen">
+                        <button type="button" onClick={() => void handleArchive(document)} disabled={isBusy} className="grid size-11 place-items-center rounded-lg text-umkm-subtle hover:bg-umkm-surface-muted disabled:opacity-50" aria-label="Arsipkan dokumen">
                           <Archive size={15} />
                         </button>
                       </div>

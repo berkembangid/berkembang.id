@@ -54,6 +54,15 @@ export type InstitutionPortalSupplement = {
       };
     };
     Functions: {
+      /** 0108 -- masa berlaku dokumen izin dan pengingatnya. */
+      set_document_validity: {
+        Args: { p_document_id: string; p_valid_until: string | null };
+        Returns: import("@/types/database.generated").Json;
+      };
+      fn_document_expiry_reminders: {
+        Args: { p_business_id: string; p_as_of: string };
+        Returns: Array<{ document_id: string; doc_type: string; name: string; valid_until: string; days_left: number }>;
+      };
       /** 0107 -- program yang diikuti pemilik, dan jalan keluarnya. */
       list_my_programs: {
         Args: Record<string, never>;

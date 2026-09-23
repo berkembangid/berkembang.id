@@ -57,6 +57,30 @@ interface ProfileRecord {
 }
 
 /**
+ * Empat bagian yang sama dengan komponen kesiapan C2 -- angka di sini dan di
+ * halaman Perjalanan tidak boleh berbeda.
+ */
+function profileCompleteness(form: { tahunMulai: string; alamat: string; phone: string; kanalPenjualan: string[] }) {
+  const parts = [
+    { label: "tahun mulai usaha", filled: /^\d{4}$/.test(form.tahunMulai) },
+    { label: "alamat", filled: form.alamat.trim().length > 0 },
+    { label: "nomor WhatsApp", filled: form.phone.trim().length > 0 },
+    { label: "asal pembeli", filled: form.kanalPenjualan.length > 0 },
+  ];
+  return { total: parts.length, filled: parts.filter((part) => part.filled).length, missing: parts.filter((part) => !part.filled).map((part) => part.label) };
+}
+
+/** Salah isi yang paling sering: tahun salah ketik dan nomor terlalu pendek. */
+function profileProblem(form: { tahunMulai: string; phone: string }): string | null {
+  const year = Number(form.tahunMulai);
+  const thisYear = new Date().getFullYear();
+  if (form.tahunMulai && (year < 1950 || year > thisYear)) return `Tahun mulai usaha harus antara 1950 dan ${thisYear}.`;
+  const digits = form.phone.replace(/[^\d]/g, "");
+  if (form.phone.trim() && (digits.length < 9 || digits.length > 15)) return "Nomor WhatsApp terlihat belum lengkap. Tulis seperti 081234567890.";
+  return null;
+}
+
+/**
  * Label yang benar-benar terhubung.
  *
  * `htmlFor` untuk satu isian: label lama berdiri sendiri, jadi pembaca layar
@@ -158,6 +182,8 @@ export default function ProfilPage() {
    */
   const [loadState, setLoadState] = useState<"loading" | "ready" | "failed">("loading");
   const [reloadKey, setReloadKey] = useState(0);
+  // Isi formulir saat terakhir dimuat atau disimpan, untuk tahu ada yang berubah.
+  const [savedSnapshot, setSavedSnapshot] = useState("");
 
   useEffect(() => {
     async function loadUserProfile() {
@@ -190,7 +216,7 @@ export default function ProfilPage() {
         // melewatinya.
         setShowTour(dbProfile ? dbProfile.onboarding_seen_at === null : false);
 
-        setForm({
+        const loaded = {
           email: user.email || "",
           namaPemilik: namaPemilik,
           namaUsaha: namaUsaha || dbProfile?.name || "",
@@ -200,11 +226,13 @@ export default function ProfilPage() {
           phone: phone,
           nib: nib,
           avatarUrl: avatar,
-          bentukUsaha: dbProfile?.bentuk_usaha === "badan_usaha" ? "badan_usaha" : "perorangan",
+          bentukUsaha: (dbProfile?.bentuk_usaha === "badan_usaha" ? "badan_usaha" : "perorangan") as "perorangan" | "badan_usaha",
           tahunMulai: dbProfile?.tahun_mulai_usaha ? String(dbProfile.tahun_mulai_usaha) : "",
           jumlahKaryawan: dbProfile?.jumlah_karyawan || "",
           kanalPenjualan: dbProfile?.kanal_penjualan || [],
-        });
+        };
+        setForm(loaded);
+        setSavedSnapshot(JSON.stringify(loaded));
 
         if (avatar) setPreviewAvatar(avatar);
         setDeletionScheduledFor(dbProfile?.deletion_scheduled_for ?? null);
@@ -228,6 +256,8 @@ export default function ProfilPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loadState !== "ready") return;
+    const problem = profileProblem(form);
+    if (problem) { notifyWarning(problem); return; }
     setSaving(true);
 
     try {
@@ -305,7 +335,12 @@ export default function ProfilPage() {
         throw new Error("Profil belum berhasil disimpan. Silakan coba lagi.");
       }
 
-      setForm((prev) => ({ ...prev, avatarUrl: finalAvatarUrl }));
+      setForm((prev) => {
+        const next = { ...prev, avatarUrl: finalAvatarUrl };
+        setSavedSnapshot(JSON.stringify(next));
+        return next;
+      });
+      setSelectedFile(null);
       notifySuccess("Profil usaha tersimpan", {
         description: "Nama ini yang muncul di laporan dan berkas yang Anda bagikan.",
       });
@@ -318,6 +353,17 @@ export default function ProfilPage() {
   };
 
   const initials = (form.namaUsaha || form.namaPemilik || "U").charAt(0).toUpperCase();
+  const dirty = loadState === "ready" && (selectedFile !== null || JSON.stringify(form) !== savedSnapshot);
+  const completeness = profileCompleteness(form);
+
+  // Perubahan yang belum disimpan tidak boleh hilang karena satu ketukan
+  // tombol kembali. Formulirnya panjang, dan tombol Simpan ada di dasarnya.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   return (
     <>
@@ -348,6 +394,15 @@ export default function ProfilPage() {
               Coba muat lagi
             </button>
           </FeedbackBanner>
+        )}
+        {loadState === "ready" && completeness.filled < completeness.total && (
+          <section aria-label="Kelengkapan profil" className="rounded-2xl border border-umkm-brand-line bg-umkm-brand-soft p-4">
+            <p className="text-sm font-bold text-umkm-ink">Profil terisi {completeness.filled} dari {completeness.total} bagian</p>
+            <p className="mt-0.5 text-xs text-umkm-muted">Belum diisi: {completeness.missing.join(", ")}. Lembaga membaca bagian ini lebih dulu.</p>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white" role="progressbar" aria-label="Kelengkapan profil" aria-valuemin={0} aria-valuemax={completeness.total} aria-valuenow={completeness.filled}>
+              <div className="h-full rounded-full bg-umkm-brand" style={{ width: `${(completeness.filled / completeness.total) * 100}%` }} />
+            </div>
+          </section>
         )}
         <form onSubmit={handleSave} className="space-y-4">
           {/* Identity card */}
@@ -541,8 +596,10 @@ export default function ProfilPage() {
             </div>
           </div>
 
-          {/* Save button */}
-          <div className="flex justify-end pb-2 pt-1">
+          {/* Menempel di dasar layar ponsel (di atas bilah menu), supaya
+              Simpan terlihat tanpa menggulir ke ujung formulir. */}
+          <div className="sticky bottom-24 z-10 -mx-1 flex flex-wrap items-center justify-end gap-3 rounded-2xl bg-umkm-canvas/95 px-1 py-2 backdrop-blur md:static md:bottom-auto md:bg-transparent md:backdrop-blur-none">
+            {dirty && <p role="status" className="mr-auto text-xs font-semibold text-umkm-warning">Ada perubahan yang belum disimpan</p>}
             <button
               type="submit"
               disabled={saving || loadState !== "ready"}
