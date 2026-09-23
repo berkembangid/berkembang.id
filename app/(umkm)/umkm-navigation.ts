@@ -24,6 +24,17 @@ export const NAVIGATION: NavItem[] = [
   { label: "Panduan", href: "/umkm/panduan", Icon: Sparkles },
 ];
 
+/**
+ * Menekan « Catat » saat sudah berada di layar Catat.
+ *
+ * Tautan ke alamat yang sama tidak memasang ulang halamannya, jadi pemilik
+ * yang baru menyimpan tetap tertahan di layar « berhasil » padahal jelas
+ * ingin mencatat lagi. Menu mengirim peristiwa ini; halaman Catat yang
+ * memutuskan apakah aman kembali ke awal (draf yang belum disimpan tidak
+ * pernah dibuang diam-diam).
+ */
+export const CATAT_RESTART_EVENT = "berkembang:catat-baru";
+
 export function isActivePath(pathname: string, item: NavItem) {
   if (item.href === "/umkm") return pathname === "/umkm";
   return (item.matches ?? [item.href]).some((path) => pathname.startsWith(path));

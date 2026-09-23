@@ -64,3 +64,23 @@ export function closingPromptText(now: Date): string {
     ? `Tutup kas ${label}, dagangan kemarin`
     : `Tutup kas ${label}`;
 }
+
+/**
+ * Nama hari yang sedang ditutup, untuk judul dan tombol dialog.
+ *
+ * Dialog tutup kas dibuka dari pengingat hari mana pun. Tulisan « hari ini »
+ * pada dialog yang sebenarnya menutup kemarin membuat pemilik ragu apakah
+ * yang terkunci dagangan yang benar. Tanggal lain disebut lengkap, tidak
+ * pernah dalam bentuk mentah 2026-09-23.
+ */
+export function closingDayLabel(isoDate: string, now: Date): string {
+  const today = jakartaMoment(now).date;
+  if (isoDate === today) return "hari ini";
+  if (isoDate === shiftDays(today, -1)) return "kemarin";
+  return `tanggal ${new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(`${isoDate}T12:00:00+07:00`))}`;
+}

@@ -186,7 +186,7 @@ export function componentCopy(component: EvaluatedComponent): ComponentCopy {
         hint: done
           ? "Angka-angka laporanmu punya titik mulai yang jelas."
           : "Tanpa ini, laporan tidak tahu dari mana harus mulai menghitung.",
-        action: done ? null : { label: "Isi", href: "/umkm/laporan" },
+        action: done ? null : { label: "Isi", href: "/umkm/profil/kondisi-awal" },
       };
     case "D2":
       return {

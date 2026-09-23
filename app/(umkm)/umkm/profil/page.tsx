@@ -11,7 +11,7 @@ import { User, Mail, Building2, Phone, Save, FileText, Camera, LogOut, ChevronRi
 import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 import OwnerConsentPanel from "@/modules/consent/owner-consent-panel";
-import { DashboardPage, PageHeader } from "@/components/dashboard";
+import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure, notifySuccess, notifyWarning } from "@/lib/notify";
 import { DinasAffiliationCard } from "@/components/warung/DinasAffiliationCard";
@@ -136,61 +136,72 @@ export default function ProfilPage() {
   // sebelum profilnya selesai dibaca.
   const [showTour, setShowTour] = useState<boolean | null>(null);
 
+  /**
+   * Formulir baru boleh disimpan setelah profilnya selesai dibaca.
+   *
+   * Sebelum terbaca, isian masih nilai bawaan (sektor « Kuliner », kolom
+   * kosong). Menekan Simpan pada saat itu -- atau setelah pembacaannya gagal
+   * -- menimpa profil asli dengan nilai bawaan tersebut.
+   */
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "failed">("loading");
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
     async function loadUserProfile() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          let dbProfile: ProfileRecord | null = null;
-          try {
-            const { data: prof } = await supabase
-              .from("profiles")
-              .select("*")
-              .eq("id", user.id)
-              .maybeSingle();
-            dbProfile = prof;
-          } catch (e) {
-            console.warn("Profile table load skipped:", e);
-          }
-
-          const namaUsaha = dbProfile?.nama_usaha || user.user_metadata?.nama_usaha || "";
-          const namaPemilik = dbProfile?.nama_pemilik || dbProfile?.name || user.user_metadata?.nama_pemilik || user.user_metadata?.name || "";
-          const sektor = dbProfile?.sektor_usaha || user.user_metadata?.sektor_usaha || "Kuliner";
-          const lokasi = dbProfile?.lokasi || user.user_metadata?.lokasi || "";
-          const phone = dbProfile?.phone || user.user_metadata?.phone || "";
-          const nib = dbProfile?.nib || user.user_metadata?.nib || "";
-          const alamat = dbProfile?.alamat || user.user_metadata?.alamat || "";
-          const avatar = dbProfile?.avatar_url || user.user_metadata?.avatar_url || "";
-          // Profil yang gagal dibaca tidak dianggap baru: perkenalan yang
-          // muncul karena bacaan gagal akan muncul pada orang yang sudah
-          // melewatinya.
-          setShowTour(dbProfile ? dbProfile.onboarding_seen_at === null : false);
-
-          setForm({
-            email: user.email || "",
-            namaPemilik: namaPemilik,
-            namaUsaha: namaUsaha || dbProfile?.name || "",
-            sektor: sektor,
-            lokasi: lokasi,
-            alamat: alamat,
-            phone: phone,
-            nib: nib,
-            avatarUrl: avatar,
-            bentukUsaha: dbProfile?.bentuk_usaha === "badan_usaha" ? "badan_usaha" : "perorangan",
-            tahunMulai: dbProfile?.tahun_mulai_usaha ? String(dbProfile.tahun_mulai_usaha) : "",
-            jumlahKaryawan: dbProfile?.jumlah_karyawan || "",
-            kanalPenjualan: dbProfile?.kanal_penjualan || [],
-          });
-
-          if (avatar) setPreviewAvatar(avatar);
-          setDeletionScheduledFor(dbProfile?.deletion_scheduled_for ?? null);
+        if (!user) {
+          setLoadState("failed");
+          return;
         }
-      } catch (err) {
-        console.error("Error loading profile:", err);
+        const { data: profileRow, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (profileError) {
+          setLoadState("failed");
+          return;
+        }
+        const dbProfile = profileRow as ProfileRecord | null;
+        const namaUsaha = dbProfile?.nama_usaha || user.user_metadata?.nama_usaha || "";
+        const namaPemilik = dbProfile?.nama_pemilik || dbProfile?.name || user.user_metadata?.nama_pemilik || user.user_metadata?.name || "";
+        const sektor = dbProfile?.sektor_usaha || user.user_metadata?.sektor_usaha || "Kuliner";
+        const lokasi = dbProfile?.lokasi || user.user_metadata?.lokasi || "";
+        const phone = dbProfile?.phone || user.user_metadata?.phone || "";
+        const nib = dbProfile?.nib || user.user_metadata?.nib || "";
+        const alamat = dbProfile?.alamat || user.user_metadata?.alamat || "";
+        const avatar = dbProfile?.avatar_url || user.user_metadata?.avatar_url || "";
+        // Profil yang gagal dibaca tidak dianggap baru: perkenalan yang
+        // muncul karena bacaan gagal akan muncul pada orang yang sudah
+        // melewatinya.
+        setShowTour(dbProfile ? dbProfile.onboarding_seen_at === null : false);
+
+        setForm({
+          email: user.email || "",
+          namaPemilik: namaPemilik,
+          namaUsaha: namaUsaha || dbProfile?.name || "",
+          sektor: sektor,
+          lokasi: lokasi,
+          alamat: alamat,
+          phone: phone,
+          nib: nib,
+          avatarUrl: avatar,
+          bentukUsaha: dbProfile?.bentuk_usaha === "badan_usaha" ? "badan_usaha" : "perorangan",
+          tahunMulai: dbProfile?.tahun_mulai_usaha ? String(dbProfile.tahun_mulai_usaha) : "",
+          jumlahKaryawan: dbProfile?.jumlah_karyawan || "",
+          kanalPenjualan: dbProfile?.kanal_penjualan || [],
+        });
+
+        if (avatar) setPreviewAvatar(avatar);
+        setDeletionScheduledFor(dbProfile?.deletion_scheduled_for ?? null);
+        setLoadState("ready");
+      } catch {
+        setLoadState("failed");
       }
     }
-    loadUserProfile();
-  }, []);
+    void loadUserProfile();
+  }, [reloadKey]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -203,6 +214,7 @@ export default function ProfilPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loadState !== "ready") return;
     setSaving(true);
 
     try {
@@ -262,6 +274,10 @@ export default function ProfilPage() {
           nama_usaha: form.namaUsaha,
           sektor_usaha: form.sektor,
           lokasi: form.lokasi,
+          // Alamat dulu hanya masuk metadata akun. Formulir membaca
+          // `profiles.alamat` lebih dulu, jadi alamat yang diubah terlihat
+          // kembali ke nilai lama -- dan kesiapan C2 tidak pernah naik.
+          alamat: form.alamat,
           phone: form.phone,
           email: form.email,
           avatar_url: finalAvatarUrl,
@@ -341,6 +357,18 @@ export default function ProfilPage() {
         */}
         <DinasAffiliationCard />
 
+        {loadState === "failed" && (
+          <FeedbackBanner tone="error" title="Profil belum dapat dimuat">
+            Isian di bawah belum tentu isi profil Anda, jadi tombol Simpan dimatikan supaya tidak menimpanya.{" "}
+            <button
+              type="button"
+              onClick={() => { setLoadState("loading"); setReloadKey((key) => key + 1); }}
+              className="inline-flex min-h-11 items-center font-bold underline"
+            >
+              Coba muat lagi
+            </button>
+          </FeedbackBanner>
+        )}
         <form onSubmit={handleSave} className="space-y-4">
           {/* Identity card */}
           <div className="flex items-center gap-4 rounded-2xl border border-[#e3e9f0] bg-white p-4 shadow-[0_4px_16px_rgba(27,42,58,.04)]">
@@ -527,11 +555,11 @@ export default function ProfilPage() {
           <div className="flex justify-end pb-2 pt-1">
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || loadState !== "ready"}
               className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0b5f86] px-8 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#0f73a3] disabled:opacity-50 sm:w-auto"
             >
               <Save size={15} />
-              {saving ? "Menyimpan..." : "Simpan perubahan"}
+              {saving ? "Menyimpan..." : loadState === "loading" ? "Memuat profil..." : "Simpan perubahan"}
             </button>
           </div>
         </form>

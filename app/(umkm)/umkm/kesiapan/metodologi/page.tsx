@@ -14,7 +14,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, LoaderCircle, ScrollText } from "lucide-react";
-import { DashboardPage, PageHeader } from "@/components/dashboard";
+import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 
 type Methodology = {
   formulaVersion: string;
@@ -68,19 +68,26 @@ function threshold(value: number | null, id?: string): string {
 
 export default function MetodologiPage() {
   const [data, setData] = useState<Methodology | null>(null);
+  // Gagal dibedakan dari "sedang memuat". Dulu keduanya sama-sama `null`, jadi
+  // satu pemuatan yang gagal membuat roda berputar selamanya.
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
       try {
         const response = await fetch("/api/v1/readiness/methodology");
+        if (!response.ok) throw new Error(String(response.status));
         const payload = (await response.json()) as { data?: Methodology };
-        setData(payload.data ?? null);
+        if (!payload.data) throw new Error("empty");
+        setData(payload.data);
+        setFailed(false);
       } catch {
-        setData(null);
+        setFailed(true);
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [attempt]);
 
   return (
     <DashboardPage width="compact">
@@ -98,8 +105,19 @@ export default function MetodologiPage() {
         }
       />
 
-      {!data ? (
-        <p className="flex items-center gap-2 px-1 py-6 text-xs text-[#6e859e]">
+      {!data && failed ? (
+        <FeedbackBanner tone="error" title="Aturan belum dapat dimuat">
+          Periksa sambungan internet, lalu coba lagi.{" "}
+          <button
+            type="button"
+            onClick={() => { setFailed(false); setAttempt((value) => value + 1); }}
+            className="inline-flex min-h-11 items-center font-bold underline"
+          >
+            Coba lagi
+          </button>
+        </FeedbackBanner>
+      ) : !data ? (
+        <p role="status" className="flex items-center gap-2 px-1 py-6 text-xs text-[#6e859e]">
           <LoaderCircle size={14} className="animate-spin" /> Memuat aturan…
         </p>
       ) : (

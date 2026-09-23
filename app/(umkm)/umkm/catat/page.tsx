@@ -31,6 +31,7 @@ import { EvidencePrompt, type EvidenceTarget } from "@/components/warung/Evidenc
 import { nudgeCopy, nudgeLevelForBatch, type NudgeLevel } from "@/modules/ledger/evidence-nudge";
 import { compressImageFile } from "@/modules/documents/image-compression";
 import { attachDocumentTo, uploadEvidencePhoto } from "@/modules/documents/evidence-client";
+import { CATAT_RESTART_EVENT } from "../../umkm-navigation";
 
 // ───────── TYPES ─────────
 /**
@@ -214,6 +215,10 @@ export default function CatatPage() {
   const [savedIsAsset, setSavedIsAsset] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [captureId, setCaptureId] = useState<string | null>(null);
+  // Batas tunggu habis sementara pembacaan masih berjalan di server. Layar
+  // pemrosesan lalu berhenti berputar dan menawarkan jalan keluar; tanpa ini
+  // pemilik hanya bisa menatap roda yang tidak pernah selesai.
+  const [stalled, setStalled] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -236,6 +241,7 @@ export default function CatatPage() {
   }, [applyCaption]);
 
   const pollCapture = useCallback(async (activeCaptureId: string) => {
+    setStalled(false);
     for (let attempt = 0; attempt < 75; attempt += 1) {
       const capture = await getCapture(activeCaptureId);
       if (capture.status === "needs_review") {
@@ -268,9 +274,7 @@ export default function CatatPage() {
       }
       await new Promise((resolve) => window.setTimeout(resolve, 800));
     }
-    setErrorMessage(
-      "Pemrosesan masih berjalan di latar belakang. Refresh halaman untuk memeriksa statusnya.",
-    );
+    setStalled(true);
   }, [applyCapture, router]);
 
   useEffect(() => {
@@ -705,6 +709,53 @@ export default function CatatPage() {
     receiptPhotoRef.current = null;
   };
 
+  /**
+   * Kembali ke layar awal setelah catatan tersimpan. Draf sudah dibersihkan
+   * saat menyimpan; yang tersisa hanya ajakan bukti dari catatan sebelumnya.
+   */
+  const startFresh = useCallback(() => {
+    setSavedTargets([]);
+    setSavedNudge("none");
+    setSavedIsAsset(false);
+    setErrorMessage("");
+    setStep("ready");
+  }, []);
+
+  useEffect(() => {
+    // Hanya dari layar awal atau layar berhasil. Draf yang sedang diperiksa
+    // dan rekaman yang sedang dikirim tidak boleh hilang karena satu ketukan
+    // menu yang mungkin tidak disengaja.
+    const onRestart = () => {
+      if (step === "success") startFresh();
+    };
+    window.addEventListener(CATAT_RESTART_EVENT, onRestart);
+    return () => window.removeEventListener(CATAT_RESTART_EVENT, onRestart);
+  }, [step, startFresh]);
+
+  /** Tunggu sekali lagi, dari awal hitungan. */
+  const checkAgain = () => {
+    if (captureId) void pollCapture(captureId);
+  };
+
+  /**
+   * Pembacaan terlalu lama: pemilik menulis sendiri. Hasil suara yang sudah
+   * terbaca dibawa ke kotak tulisan supaya tidak perlu diulang dari nol.
+   * Catatan di server dibatalkan agar tidak muncul lagi sebagai « perlu
+   * diperiksa » di Beranda.
+   */
+  const writeInstead = async () => {
+    if (captureId) {
+      try { await cancelCapture(captureId); } catch {}
+    }
+    localStorage.removeItem(ACTIVE_CAPTURE_STORAGE_KEY);
+    setCaptureId(null);
+    setStalled(false);
+    setTypedText(editableCaption || transcription || typedText);
+    setInputMode("text");
+    setErrorMessage("");
+    setStep("ready");
+  };
+
   // ── Item editing ────────────────────────────────────────────────
   /**
    * Menghapus satu baris draf tidak perlu dialog: dialog untuk hal sekecil ini
@@ -1003,11 +1054,23 @@ export default function CatatPage() {
 
         {/* ── PROCESSING ─────────────────────────────────────────── */}
         {(["uploading", "processing", "saving"] as Step[]).includes(step) && (
+          step === "processing" && stalled ? (
+            <div role="status" aria-live="polite" className="bg-white rounded-3xl p-10 border border-[#e3e9f0] shadow-card text-center space-y-4 animate-fade-in">
+              <RefreshCw size={36} className="text-[#9fb0c2] mx-auto" />
+              <h2 className="font-headline text-lg font-bold text-[#1b2a3a]">Pembacaannya lebih lama dari biasa</h2>
+              <p className="mx-auto max-w-md text-xs leading-relaxed text-[#4a6280]">Catatan Anda aman dan masih dibaca di latar belakang. Anda bisa menunggu sebentar lagi, atau menuliskannya sendiri sekarang.</p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+                <button type="button" onClick={checkAgain} className="min-h-11 rounded-xl bg-[#0b5f86] px-5 text-xs font-bold text-white hover:bg-[#0a5375]">Periksa lagi</button>
+                <button type="button" onClick={() => void writeInstead()} className="min-h-11 rounded-xl border border-[#e3e9f0] bg-white px-5 text-xs font-bold text-[#4a6280] hover:bg-[#f7f9fb]">Tulis sendiri</button>
+              </div>
+            </div>
+          ) : (
           <div role="status" aria-live="polite" className="bg-white rounded-3xl p-10 border border-[#e3e9f0] shadow-card text-center space-y-4 animate-fade-in">
             <RefreshCw size={36} className="animate-spin text-[#0b5f86] mx-auto" />
-            <h2 className="font-headline text-lg font-bold text-[#1b2a3a]">{step === "uploading" ? "Mengirim rekaman dengan aman..." : step === "processing" ? "Membaca isi catatan..." : "Menyimpan catatan..."}</h2>
-            <p className="text-xs text-[#4a6280]">{step === "uploading" ? "Jangan tutup halaman sampai rekaman selesai dikirim." : step === "processing" ? "Nominal dan jenis transaksi sedang disiapkan untuk Anda periksa." : "Data yang sudah Anda periksa sedang dimasukkan ke buku kas."}</p>
+            <h2 className="font-headline text-lg font-bold text-[#1b2a3a]">{step === "uploading" ? (inputMode === "camera" ? "Mengirim foto nota dengan aman..." : inputMode === "text" ? "Mengirim tulisan..." : "Mengirim rekaman dengan aman...") : step === "processing" ? "Membaca isi catatan..." : "Menyimpan catatan..."}</h2>
+            <p className="text-xs text-[#4a6280]">{step === "uploading" ? "Jangan tutup halaman sampai selesai dikirim." : step === "processing" ? "Nominal dan jenis transaksi sedang disiapkan untuk Anda periksa." : "Data yang sudah Anda periksa sedang dimasukkan ke buku kas."}</p>
           </div>
+          )
         )}
 
         {/* ── TERSIMPAN, LALU PINTU A ────────────────────────────── */}
@@ -1037,13 +1100,22 @@ export default function CatatPage() {
               );
             })()}
 
-            <button
-              type="button"
-              onClick={() => router.push("/umkm/laporan")}
-              className="min-h-11 w-full rounded-xl border border-[#e3e9f0] bg-white text-xs font-bold text-[#4a6280] transition-colors hover:bg-[#f7f9fb]"
-            >
-              Selesai
-            </button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={startFresh}
+                className="min-h-11 w-full rounded-xl bg-[#0b5f86] text-xs font-bold text-white transition-colors hover:bg-[#0a5375]"
+              >
+                Catat lagi
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push("/umkm/laporan?tab=kas")}
+                className="min-h-11 w-full rounded-xl border border-[#e3e9f0] bg-white text-xs font-bold text-[#4a6280] transition-colors hover:bg-[#f7f9fb]"
+              >
+                Lihat buku kas
+              </button>
+            </div>
           </div>
         )}
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   businessDayStartHour,
+  closingDayLabel,
   closingPromptText,
   closingTargetDate,
   isClosingPreviousDay,
@@ -79,5 +80,24 @@ describe("kalimat ajakan tutup kas", () => {
     for (const iso of ["2026-09-02T20:00:00Z", "2026-09-03T05:00:00Z", "2026-09-30T19:00:00Z"]) {
       expect(closingPromptText(utc(iso))).toMatch(/\d+ [A-Z][a-z]+/);
     }
+  });
+});
+
+describe("nama hari pada dialog tutup kas", () => {
+  // 10.00 WIB, 23 September.
+  const now = utc("2026-09-23T03:00:00Z");
+
+  it("menyebut hari ini dan kemarin dengan kata, bukan tanggal", () => {
+    expect(closingDayLabel("2026-09-23", now)).toBe("hari ini");
+    expect(closingDayLabel("2026-09-22", now)).toBe("kemarin");
+  });
+
+  it("menyebut tanggal lain lengkap, tidak dalam bentuk ISO", () => {
+    expect(closingDayLabel("2026-09-20", now)).toBe("tanggal 20 September 2026");
+  });
+
+  it("memakai tanggal Jakarta, bukan UTC", () => {
+    // 01.00 WIB, 23 September = 18.00 UTC, 22 September.
+    expect(closingDayLabel("2026-09-23", utc("2026-09-22T18:00:00Z"))).toBe("hari ini");
   });
 });

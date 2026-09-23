@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure, notifyInfo } from "@/lib/notify";
 import UmkmHeader, { type TransactionNotice } from "./umkm-header";
-import { NAVIGATION, isActivePath } from "./umkm-navigation";
+import { CATAT_RESTART_EVENT, NAVIGATION, isActivePath } from "./umkm-navigation";
 import styles from "./umkm-shell.module.css";
 
 /**
@@ -163,6 +163,12 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
     window.location.href = "/auth/login";
   }, [confirm]);
 
+  const restartCaptureIfHere = useCallback((href: string) => {
+    if (href === "/umkm/catat" && pathname === "/umkm/catat") {
+      window.dispatchEvent(new Event(CATAT_RESTART_EVENT));
+    }
+  }, [pathname]);
+
   return (
     <div className={styles.shell}>
       <aside className={styles.sidebar}>
@@ -181,7 +187,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
           {NAVIGATION.map((item) => {
             const active = isActivePath(pathname, item);
             return (
-              <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`${styles.navLink} ${active ? styles.navLinkActive : ""}`}>
+              <Link key={item.href} href={item.href} onClick={() => restartCaptureIfHere(item.href)} aria-current={active ? "page" : undefined} className={`${styles.navLink} ${active ? styles.navLinkActive : ""}`}>
                 <item.Icon size={17} />
                 <span>{item.label}</span>
               </Link>
@@ -220,6 +226,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
 
         <Link
           href={MOBILE_VOICE.href}
+          onClick={() => restartCaptureIfHere(MOBILE_VOICE.href)}
           aria-current={isActivePath(pathname, MOBILE_VOICE) ? "page" : undefined}
           aria-label="Catat dengan suara"
           className={styles.voiceSlot}

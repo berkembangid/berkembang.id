@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { ReadinessMiniCard } from "@/components/warung/ReadinessMiniCard";
 import Link from "next/link";
-import { AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CalendarCheck, CheckCircle2, ChevronRight, CircleEllipsis, FileText, Mic, Plus, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
+import { AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CalendarCheck, CheckCircle2, ChevronRight, CircleEllipsis, FileText, Mic, Plus, Sparkles, WalletCards } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ReminderStrip } from "@/components/warung/ReminderStrip";
 import { closingPromptText, closingTargetDate } from "@/modules/ledger/closing-day";
+import { jakartaDate } from "@/modules/ledger/ledger-schema";
 import { ReclassCard } from "@/components/warung/ReclassCard";
 import { BroadcastInvitations } from "@/components/warung/BroadcastInvitations";
 import { DinasOfferCard } from "@/components/warung/DinasOfferCard";
@@ -31,6 +32,8 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
 }
 function formatIdr(value: number) { return `Rp${value.toLocaleString("id-ID")}`; }
+/** Minus di depan "Rp", bukan "Rp-5.000" yang terbaca seperti salah ketik. */
+function formatSignedIdr(value: number) { return `${value < 0 ? "−" : ""}${formatIdr(Math.abs(value))}`; }
 
 export default function BerandaPage() {
   const [name, setName] = useState("Pengguna");
@@ -48,7 +51,10 @@ export default function BerandaPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Sesi berakhir. Silakan masuk kembali.");
-        const today = new Date().toISOString().slice(0, 10);
+        // Tanggal usaha adalah tanggal di Jakarta. `toISOString()` memberi
+        // tanggal UTC, sehingga antara pukul 00:00 dan 07:00 WIB kartu "hari
+        // ini" menampilkan catatan kemarin.
+        const today = jakartaDate();
         const [profile, todayResult, recentResult, captureResult, documentResult, requestResult, readinessResponse] = await Promise.all([
           supabase.from("profiles").select("name,nama_pemilik,nama_usaha").eq("auth_user_id", user.id).maybeSingle(),
           supabase.from("transactions").select("id,direction,type,amount_idr,nominal,item,transaction_date,created_at").eq("transaction_date", today).neq("ledger_status", "cancelled"),
@@ -108,12 +114,6 @@ export default function BerandaPage() {
   const expense = todayTransactions.filter((row) => transactionDirection(row) === "expense").reduce((sum, row) => sum + transactionAmount(row), 0);
   const cashFlow = income - expense;
 
-  // Fondasi = komponen kesiapan yang sudah punya cukup bukti untuk dinilai.
-  // Yang "not_applicable" tidak ikut dihitung: meminta pemilik melengkapi
-  // sesuatu yang tidak berlaku untuk usahanya adalah tangga yang tidak
-  // pernah bisa dinaiki sampai atas.
-
-
   return (
     <main className={styles.page}>
       <div className={styles.mobileOnly}>
@@ -127,7 +127,7 @@ export default function BerandaPage() {
 
           <section aria-labelledby="cash-flow-title" className={styles.balanceCard}>
             <p className={styles.eyebrow}>Sisa uang hari ini</p>
-            <h2 id="cash-flow-title" className={styles.balance}>{cashFlow < 0 ? "−" : ""}{formatIdr(Math.abs(cashFlow))}</h2>
+            <h2 id="cash-flow-title" className={styles.balance}>{formatSignedIdr(cashFlow)}</h2>
             <p className="mt-1 text-[10px] text-white/75">Dari catatan yang sudah Anda cek</p>
             <div className={styles.balanceMeta}>
               <span className={styles.balancePill}>{todayTransactions.length} catatan</span>
@@ -174,7 +174,6 @@ export default function BerandaPage() {
               <Link href="/umkm/kesiapan" className={styles.sectionLink}>Detail</Link>
             </div>
             <div className={styles.missionRow}>
-              
               <div className={styles.mission}>
                 <strong>{readiness?.step?.title ?? "Semua langkah utama sudah didukung data"}</strong>
                 <p>{readiness?.step?.headline ?? "Lanjutkan kebiasaan mencatat agar ringkasan usaha tetap lengkap."}</p>
@@ -204,7 +203,7 @@ export default function BerandaPage() {
           </div>
 
           <section aria-label="Ringkasan hari ini" className={styles.kpiGrid}>
-            <KpiCard label="Sisa uang hari ini" value={formatIdr(cashFlow)} meta="Pemasukan dikurangi pengeluaran" Icon={WalletCards} tone="neutral" />
+            <KpiCard label="Sisa uang hari ini" value={formatSignedIdr(cashFlow)} meta="Pemasukan dikurangi pengeluaran" Icon={WalletCards} tone="neutral" />
             <KpiCard label="Uang masuk" value={formatIdr(income)} meta="Dari catatan hari ini" Icon={ArrowDownLeft} tone="positive" />
             <KpiCard label="Uang keluar" value={formatIdr(expense)} meta="Belanja dan biaya hari ini" Icon={ArrowUpRight} tone="neutral" />
             {/* Tangga, bukan rapor. "17/100" memberi tahu pemilik bahwa ia
