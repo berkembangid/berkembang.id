@@ -220,7 +220,7 @@ function DrilldownView({ data, band, legality }: {
     <DashboardPanel>
       <PanelHeader
         title={data.anonymousSuppressed ? "Belum memilih pembina" : `Belum memilih pembina · ${data.anonymousTotal}`}
-        description="Usaha yang belum memilih lembaga pembina tampil sebagai kode, selamanya — bukan sampai diminta. Broadcast pendampingan adalah cara menjangkau mereka tanpa perlu identitasnya."
+        description="Usaha yang belum memilih lembaga pembina tampil sebagai kode, selamanya — bukan sampai diminta. Siaran pendampingan adalah cara menjangkau mereka tanpa perlu identitasnya."
       />
       {data.anonymousSuppressed
         ? <div className="px-5 pb-5">
@@ -282,7 +282,7 @@ export default async function RegionSummaryPage({
       <EmptyState
         icon={ShieldCheck}
         title="Layar ini untuk dinas dengan wilayah kerja"
-        description="Lembaga Anda bekerja dengan usaha yang memberi izin satu per satu, bukan dengan angka seluruh kota. Kandidat yang tersedia ada di layar Temukan."
+        description="Lembaga Anda bekerja dengan usaha yang memberi izin satu per satu, bukan dengan angka seluruh kota. Usaha yang bisa Anda ajak ada di layar Temukan."
         action={{ label: "Buka Temukan kandidat", href: "/lembaga" }}
       />
     </DashboardPage>;

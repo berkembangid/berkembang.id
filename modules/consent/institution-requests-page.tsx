@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   ArrowRight, Ban, CalendarDays, CheckCircle2, Clock3, FolderOpen, Hourglass, RefreshCw, TimerOff, XCircle,
 } from "lucide-react";
@@ -11,6 +10,7 @@ import { consentScopeLabels, type ConsentScope } from "@/modules/consent/consent
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { notifyFromError, notifySuccess } from "@/lib/notify";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
+import { usePortal } from "@/modules/consent/portal-copy";
 import { BusinessFacts, BusinessHeading, CardSkeleton, Empty, SearchBox, formatDate, relativeDays, type BusinessSummary } from "@/modules/consent/candidate-ui";
 
 type Request = {
@@ -43,8 +43,8 @@ function statusOf(value: string) {
 }
 
 export default function InstitutionRequestsPage() {
-  const pathname = usePathname();
-  const portalBase = pathname.startsWith("/investor") ? "/investor" : "/lembaga";
+  const portal = usePortal();
+  const portalBase = portal.base;
   const { selectedId } = useInstitution();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,7 +124,7 @@ export default function InstitutionRequestsPage() {
     && (!needle || [item.candidateCode, item.business?.sector, item.business?.generalLocation].some((value) => value?.toLowerCase().includes(needle))));
 
   return <DashboardPage>
-    <PageHeader title="Permintaan akses" description="Setiap usaha yang pernah Anda minta profilnya, beserta status tinjauan admin dan masa izinnya." icon={Clock3} />
+    <PageHeader title={portal.requestsTitle} description="Setiap usaha yang pernah Anda minta profilnya, beserta status tinjauan admin dan masa izinnya." icon={Clock3} />
     {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
 
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -153,8 +153,8 @@ export default function InstitutionRequestsPage() {
     {loading ? <div className="space-y-3" aria-hidden>{Array.from({ length: 3 }, (_, index) => <CardSkeleton key={index} />)}</div>
       : scoped.length === 0 ? <Empty
         title="Belum ada permintaan"
-        description="Temukan usaha yang cocok, lalu tekan Ajukan ketertarikan. Permintaannya muncul di sini beserta statusnya."
-        action={{ label: "Temukan kandidat", href: portalBase }}
+        description={`Cari usaha yang cocok di ${portal.discoverLabel}, lalu tekan Ajukan ketertarikan. Permintaannya muncul di sini beserta statusnya.`}
+        action={{ label: portal.discoverCta, href: portalBase }}
       />
       : visible.length === 0 ? <Empty
         title="Tidak ada yang cocok"

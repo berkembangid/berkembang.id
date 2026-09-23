@@ -42,7 +42,7 @@ function initials(value: string) {
 }
 
 /**
- * Header bersama portal Lembaga dan Admin.
+ * Header bersama portal Lembaga, Investor, dan Admin.
  *
  * SATU KOMPONEN, BUKAN DUA. Keduanya memakai `.topbar` yang sama persis dan
  * punya kebutuhan yang sama persis: tahu di layar mana, bisa kembali, bisa
@@ -118,9 +118,9 @@ export default function PortalHeader({
             {notifications.unread > 0 && (
               <span
                 aria-hidden
-                className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[#b4304a] px-1 text-[8px] font-black text-white"
+                className="absolute -right-1.5 -top-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-[#b4304a] px-1 text-[9px] font-black text-white"
               >
-                {notifications.unread > 9 ? "9+" : notifications.unread}
+                {notifications.unread > 99 ? "99+" : notifications.unread}
               </span>
             )}
           </button>

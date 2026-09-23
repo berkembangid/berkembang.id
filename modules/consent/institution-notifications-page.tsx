@@ -1,17 +1,17 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { Bell, CheckCheck } from "lucide-react";
 import { DashboardPage, PageHeader } from "@/components/dashboard";
 import { NotificationList, useNotifications } from "@/modules/consent/notification-center";
+import { usePortal } from "@/modules/consent/portal-copy";
 
 /**
  * Alamat `/notifikasi` tetap hidup untuk penanda dan tautan lama, tetapi
  * jalan utamanya kini panel dari lonceng. Isinya daftar yang sama persis.
  */
 export default function InstitutionNotificationsPage() {
-  const pathname = usePathname();
-  const portalBase = pathname.startsWith("/investor") ? "/investor" : "/lembaga";
+  const portal = usePortal();
+  const portalBase = portal.base;
   const state = useNotifications();
 
   return <DashboardPage>

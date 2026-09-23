@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   ArrowRight, CalendarCheck2, Download, Eye, FileCheck2, FileText, Hourglass, LockKeyhole, RefreshCw, ShieldCheck, X,
 } from "lucide-react";
@@ -11,6 +10,7 @@ import { DashboardPage, FeedbackBanner, PageHeader, StatusBadge } from "@/compon
 import { useConfirm } from "@/components/ui/confirm";
 import { notifyFromError, notifySuccess } from "@/lib/notify";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
+import { usePortal } from "@/modules/consent/portal-copy";
 import {
   BusinessFacts, BusinessHeading, CardSkeleton, DAY_MS, Empty, SearchBox, TierBadge, formatDate, type BusinessSummary,
 } from "@/modules/consent/candidate-ui";
@@ -58,8 +58,8 @@ function levelLabel(value: unknown) {
 }
 
 export default function InstitutionProfilesPage() {
-  const pathname = usePathname();
-  const portalBase = pathname.startsWith("/investor") ? "/investor" : "/lembaga";
+  const portal = usePortal();
+  const portalBase = portal.base;
   const { selectedId } = useInstitution();
   const [dossiers, setDossiers] = useState<DossierRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,7 +125,7 @@ export default function InstitutionProfilesPage() {
   async function downloadPdf(dossier: DossierRow) {
     const yes = await confirm({
       title: `Unduh berkas ${dossier.candidateCode}?`,
-      description: "Unduhan memakai satu kuota dossier lembaga Anda dan tercatat di jejak dokumen yang dilihat pemilik usahanya. Berkasnya ber-watermark dan bernomor.",
+      description: "Unduhan memakai satu kuota dosir organisasi Anda dan tercatat di jejak dokumen yang dilihat pemilik usahanya. Berkasnya ber-watermark dan bernomor.",
       confirmLabel: "Unduh",
       cancelLabel: "Batal",
     });
@@ -195,7 +195,7 @@ export default function InstitutionProfilesPage() {
 
   return <DashboardPage>
     <PageHeader
-      title="Dosir usaha"
+      title={portal.dossiersTitle}
       description="Snapshot beku saat admin menyetujui: kesiapan, keuangan 6 bulan, legalitas, kualitas data, dan jejak dokumen."
       icon={FileCheck2}
       actions={<StatusBadge tone="success"><ShieldCheck size={13} className="mr-1.5" />{dossiers.length} izin aktif</StatusBadge>}
@@ -214,7 +214,7 @@ export default function InstitutionProfilesPage() {
       : dossiers.length === 0 ? <Empty
         title="Belum ada dosir aktif"
         description="Dosir muncul setelah admin menyetujui permintaan Anda dan pemilik usaha memberi izin."
-        action={{ label: "Temukan kandidat", href: portalBase }}
+        action={{ label: portal.discoverCta, href: portalBase }}
       />
       : visible.length === 0 ? <Empty title="Tidak ada yang cocok" description="Coba kata kunci lain." onReset={() => setQuery("")} />
       : <div className="grid gap-4 lg:grid-cols-2">{visible.map((dossier) => <DossierCard
@@ -382,7 +382,7 @@ function DetailDialog({ dossier, detail, loading, error, downloading, onDownload
           </Block>
 
           <Block title="Jejak dokumen">
-            {(!detail.reportTrail || detail.reportTrail.length === 0) && <p className="text-xs text-[#6e859e]">Belum ada PDF yang diterbitkan ke lembaga ini.</p>}
+            {(!detail.reportTrail || detail.reportTrail.length === 0) && <p className="text-xs text-[#6e859e]">Belum ada PDF yang diterbitkan untuk organisasi ini.</p>}
             {detail.reportTrail?.map((issue) => <div key={issue.id} className="flex items-center gap-2.5 rounded-xl bg-[#f6f8fb] p-3 text-xs">
               <FileText size={14} className="shrink-0 text-[#0b5f86]" />
               <div><p className="font-bold text-[#1b2a3a]">No. {issue.document_uid}</p><p className="text-[#6e859e]">{issue.report_kind} · {formatDate(issue.created_at, "—")}</p></div>

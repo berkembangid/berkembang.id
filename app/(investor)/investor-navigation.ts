@@ -1,57 +1,68 @@
 import {
-  Bell, Bookmark, Briefcase, Clock3, FolderOpen, ScrollText, Settings2, TrendingUp,
+  Bell, Bookmark, Clock3, FolderOpen, ScrollText, Settings2, TrendingUp,
 } from "lucide-react";
-import type { PortalRoute } from "@/components/shell/portal-navigation";
+import type { PortalNavItem, PortalRoute } from "@/components/shell/portal-navigation";
 
 /**
- * Judul setiap layar portal investor / offtaker.
+ * Menu dan judul layar portal investor / offtaker.
  *
- * Investor / Offtaker berfokus pada eksplorasi kandidat UMKM yang telah opt-in,
- * peninjauan shortlist usaha, pengajuan ketertarikan (izin akses/kemitraan),
- * dan pemantauan profil usaha yang telah diizinkan.
+ * Judul di sini, label menu, dan judul halaman di bawah header harus menyebut
+ * hal yang sama dengan kata yang sama. Dulu satu layar punya tiga nama --
+ * "Pengajuan Minat" di menu, "Pengajuan Minat & Akses" di header, dan
+ * "Permintaan akses" di halaman -- dan orang tidak yakin ketiganya satu layar.
+ * Huruf kapitalnya mengikuti portal lembaga: hanya di awal kalimat.
  */
+export const INVESTOR_NAV: readonly PortalNavItem[] = [
+  { href: "/investor", label: "Katalog UMKM", Icon: TrendingUp },
+  { href: "/investor/tersimpan", label: "Tersimpan", Icon: Bookmark },
+  { href: "/investor/permintaan", label: "Pengajuan minat", Icon: Clock3 },
+  { href: "/investor/dosir", label: "Profil berizin", Icon: FolderOpen },
+  { href: "/investor/notifikasi", label: "Notifikasi", Icon: Bell, opensNotifications: true },
+  { href: "/investor/organisasi", label: "Entitas & tim", Icon: Settings2 },
+  { href: "/investor/audit", label: "Log audit", Icon: ScrollText },
+];
+
 export const INVESTOR_ROUTES: readonly PortalRoute[] = [
   {
     match: "/investor",
     exact: true,
-    title: "Katalog UMKM & Kemitraan",
-    hint: "Identitas tersamar sesuai izin pemilik usaha",
+    title: "Katalog UMKM",
+    hint: "Identitas tersamar sampai pemilik usaha setuju",
     Icon: TrendingUp,
   },
   {
     match: "/investor/tersimpan",
-    title: "Kandidat Tersimpan",
-    hint: "Kandidat usaha potensial yang Anda simpan",
+    title: "Kandidat tersimpan",
+    hint: "Usaha yang Anda simpan untuk ditinjau kembali",
     Icon: Bookmark,
   },
   {
     match: "/investor/permintaan",
-    title: "Pengajuan Minat & Akses",
-    hint: "Permintaan mediasi dan izin profil ke admin platform",
+    title: "Pengajuan minat",
+    hint: "Menunggu tinjauan admin platform",
     Icon: Clock3,
   },
   {
     match: "/investor/dosir",
-    title: "Profil UMKM Berizin",
-    hint: "Dossier lengkap usaha yang telah disetujui",
+    title: "Profil berizin",
+    hint: "Hanya yang izinnya masih berlaku",
     Icon: FolderOpen,
   },
   {
     match: "/investor/notifikasi",
     title: "Pemberitahuan",
-    hint: "Update pengajuan akses dan persetujuan kemitraan",
     Icon: Bell,
   },
   {
     match: "/investor/organisasi",
-    title: "Profil Entitas & Tim",
-    hint: "Kelola entitas bisnis, kontak PIC, dan anggota tim",
+    title: "Entitas & tim",
+    hint: "Profil entitas dan anggota tim",
     Icon: Settings2,
   },
   {
     match: "/investor/audit",
-    title: "Log Audit Akses",
-    hint: "Riwayat pemeriksaan dan unduhan berkas usaha",
+    title: "Log audit",
+    hint: "Setiap pembukaan dan unduhan tercatat",
     Icon: ScrollText,
   },
 ];

@@ -2,7 +2,22 @@ import {
   BarChart2, Bell, Bookmark, Clock3, FolderOpen, LayoutGrid, Map, Megaphone, ScrollText, Settings2,
   TrendingUp,
 } from "lucide-react";
-import type { PortalRoute } from "@/components/shell/portal-navigation";
+import type { PortalNavItem, PortalRoute } from "@/components/shell/portal-navigation";
+
+/** Menu samping portal lembaga. Judul layarnya di `LEMBAGA_ROUTES` di bawah. */
+export const LEMBAGA_NAV: readonly PortalNavItem[] = [
+  { href: "/lembaga", label: "Temukan", Icon: TrendingUp },
+  { href: "/lembaga/wilayah", label: "Ringkasan wilayah", Icon: Map, requiresRegionWide: true },
+  { href: "/lembaga/siaran", label: "Siaran", Icon: Megaphone, requiresRegionWide: true },
+  { href: "/lembaga/tersimpan", label: "Tersimpan", Icon: Bookmark },
+  { href: "/lembaga/permintaan", label: "Permintaan", Icon: Clock3 },
+  { href: "/lembaga/dosir", label: "Profil berizin", Icon: FolderOpen },
+  { href: "/lembaga/program", label: "Program", Icon: LayoutGrid },
+  { href: "/lembaga/analitik", label: "Analitik program", Icon: BarChart2 },
+  { href: "/lembaga/notifikasi", label: "Notifikasi", Icon: Bell, opensNotifications: true },
+  { href: "/lembaga/organisasi", label: "Organisasi", Icon: Settings2 },
+  { href: "/lembaga/audit", label: "Log audit", Icon: ScrollText },
+];
 
 /**
  * Judul setiap layar portal lembaga.
@@ -55,7 +70,7 @@ export const LEMBAGA_ROUTES: readonly PortalRoute[] = [
   {
     match: "/lembaga/analitik",
     title: "Analitik program",
-    hint: "Agregat peserta, tanpa angka rupiah per usaha",
+    hint: "Permintaan dan akses profil, tanpa angka rupiah per usaha",
     parent: { href: "/lembaga/program", label: "Program pembinaan" },
     Icon: BarChart2,
   },

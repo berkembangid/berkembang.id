@@ -28,6 +28,24 @@ export type PortalRoute = {
   Icon?: LucideIcon;
 };
 
+/**
+ * Satu item menu samping portal lembaga/investor.
+ *
+ * `requiresRegionWide` menandai layar yang hanya berarti bagi lembaga
+ * berwilayah. Menu yang menjanjikan layar lalu menjawab 403 lebih buruk
+ * daripada menu yang tidak ada, jadi item itu disaring -- bukan dinonaktifkan.
+ *
+ * `opensNotifications` membuat item membuka panel pemberitahuan alih-alih
+ * berpindah halaman: orangnya tetap di layar yang sedang ia kerjakan.
+ */
+export type PortalNavItem = {
+  href: string;
+  label: string;
+  Icon: LucideIcon;
+  requiresRegionWide?: boolean;
+  opensNotifications?: boolean;
+};
+
 export type PortalHeading = {
   title: string;
   hint?: string;

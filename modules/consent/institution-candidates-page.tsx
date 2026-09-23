@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   Activity, ArrowRight, Bookmark, BookmarkCheck, Building2, CalendarClock, Clock3, FileCheck2, Files,
   FolderOpen, MapPin, Search, ShieldCheck, SlidersHorizontal, X,
@@ -12,6 +11,7 @@ import { DashboardPage, FeedbackBanner, PageHeader, StatusBadge } from "@/compon
 import { useConfirm } from "@/components/ui/confirm";
 import { notifyFromError, notifyInfo, notifySuccess } from "@/lib/notify";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
+import { usePortal } from "@/modules/consent/portal-copy";
 import { Fact, TierBadge, activityTone } from "@/modules/consent/candidate-ui";
 
 type Candidate = {
@@ -53,31 +53,24 @@ function filterLabel(key: keyof Filters, value: string) {
 }
 
 export default function InstitutionCandidatesPage() {
-  const pathname = usePathname();
-  const portalBase = pathname.startsWith("/investor") ? "/investor" : "/lembaga";
-  const { selectedId, selected: selectedOrg } = useInstitution();
+  const portal = usePortal();
+  const portalBase = portal.base;
+  const { selectedId } = useInstitution();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [total, setTotal] = useState(0);
   const [isDinas, setIsDinas] = useState(false);
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [scopes, setScopes] = useState<ConsentScope[]>(defaultScopes);
 
-  // Dibaca dari kolomnya, bukan ditebak dari namanya.
+  // Tujuan bawaan permintaan izin, menurut portal yang sedang dibuka.
   //
-  // Yang ditentukan baris ini bukan tampilan: ia memilih TUJUAN bawaan
-  // permintaan izin akses, dan tujuan itu tersimpan di `consent_grants` lalu
-  // dibaca pemilik usaha sebelum menekan setuju. Tujuan adalah bagian dari
-  // dasar hukum persetujuan (UU 27/2022), jadi menurunkannya dari potongan
-  // kata pada sebuah nama berarti pemilik bisa menyetujui tujuan yang bukan
-  // tujuan sesungguhnya.
-  //
-  // Bawaannya bukan investor: kalau kolomnya belum terbaca, yang muncul
-  // kalimat pendampingan dan pembiayaan -- pernyataan yang lebih sempit,
-  // bukan yang lebih luas.
-  const isInvestorViewer = selectedOrg?.portalKind === "investor";
-  const defaultPurpose = isInvestorViewer
-    ? "Menilai kelayakan kemitraan bisnis, offtaking hasil produksi, atau investasi UMKM."
-    : "Menilai kecocokan usaha untuk program pendampingan dan pembiayaan.";
+  // Yang ditentukan baris ini bukan tampilan: ia memilih TUJUAN yang tersimpan
+  // di `consent_grants` dan dibaca pemilik usaha sebelum menekan setuju.
+  // Tujuan adalah bagian dari dasar hukum persetujuan (UU 27/2022). Portalnya
+  // dibaca dari alamat, dan alamat itu dijaga `proxy.ts` menurut
+  // `institutions.portal_kind` -- pemilih organisasi juga hanya menawarkan
+  // organisasi sejenis portalnya -- jadi keduanya tidak bisa bersilangan.
+  const defaultPurpose = portal.purposeDefault;
   const [purpose, setPurpose] = useState(defaultPurpose);
 
   const [duration, setDuration] = useState(30);
@@ -272,7 +265,7 @@ export default function InstitutionCandidatesPage() {
     try {
       const response = await fetch("/api/v1/profile-access/requests", {
         method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID(), ...institutionHeaders(selectedId) },
-        body: JSON.stringify({ candidateCode: selected.candidateCode, purposeCode: "program_review", purposeDescription: purpose,
+        body: JSON.stringify({ candidateCode: selected.candidateCode, purposeCode: portal.purposeCode, purposeDescription: purpose,
           requestedScopes: scopes, requiredScopes: ["financial_summary"].filter((item) => scopes.includes(item as ConsentScope)),
           requestedDurationDays: duration, downloadRequested }),
       });
@@ -298,17 +291,13 @@ export default function InstitutionCandidatesPage() {
 
   return <DashboardPage>
     <PageHeader
-      title={isInvestorViewer ? "Katalog UMKM & Kemitraan" : "Kandidat pendanaan"}
-      description={
-        isDinas
-          ? "Daftar seluruh usaha aktif untuk pembinaan dan penyaluran program Dinas."
-          : isInvestorViewer
-          ? "Eksplorasi potensi kemitraan usaha, offtaking, dan investasi UMKM terkurasi secara anonim."
-          : "Bandingkan kesiapan data usaha secara anonim. Tanpa skor, tanpa peringkat, tanpa rupiah — identitas terbuka hanya setelah pemiliknya setuju."
-      }
+      title={portal.discoverTitle}
+      description={isDinas && portal.key === "lembaga"
+        ? "Daftar seluruh usaha aktif di wilayah Anda untuk pembinaan dan penyaluran program Dinas."
+        : portal.discoverDescription}
       icon={Building2}
       actions={
-        isDinas ? (
+        isDinas && portal.key === "lembaga" ? (
           <StatusBadge tone="info"><ShieldCheck size={13} className="mr-1.5" />Akses penuh Dinas</StatusBadge>
         ) : (
           <StatusBadge tone="success"><ShieldCheck size={13} className="mr-1.5" />Identitas tersamar</StatusBadge>
@@ -412,7 +401,7 @@ export default function InstitutionCandidatesPage() {
       : candidates.length === 0 ? <div className="flex flex-col items-center rounded-2xl border border-dashed border-[#c8d3de] bg-white px-6 py-14 text-center">
         <span className="grid size-12 place-items-center rounded-2xl bg-[#eef8fd] text-[#0f73a3]"><Search size={20} /></span>
         <h2 className="mt-3 text-sm font-bold text-[#1b2a3a]">{hasAnyFilter ? "Tidak ada usaha yang cocok" : "Belum ada usaha yang membuka diri"}</h2>
-        <p className="mt-1 max-w-sm text-xs leading-relaxed text-[#6e859e]">{hasAnyFilter ? "Longgarkan saringan atau coba kata kunci lain." : "Usaha muncul di sini setelah pemiliknya memilih untuk bisa ditemukan lembaga."}</p>
+        <p className="mt-1 max-w-sm text-xs leading-relaxed text-[#6e859e]">{hasAnyFilter ? "Longgarkan saringan atau coba kata kunci lain." : `Usaha muncul di sini setelah pemiliknya memilih untuk bisa ditemukan ${portal.actor}.`}</p>
         {hasAnyFilter && <button type="button" onClick={resetFilters} className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white">Hapus semua saringan</button>}
       </div>
       : <>
