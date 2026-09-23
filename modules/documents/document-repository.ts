@@ -362,12 +362,15 @@ function parseDocumentBaseOrNull(
   return null;
 }
 
-export async function listDocumentRecords(): Promise<DocumentView[]> {
+/**
+ * `archived: true` = rak arsip: hanya dokumen yang sudah diganti atau
+ * diarsipkan pemiliknya. Bawaannya justru kebalikannya -- rak kerja tidak
+ * pernah menampilkan arsip.
+ */
+export async function listDocumentRecords(options: { archived?: boolean } = {}): Promise<DocumentView[]> {
   const client = await createServerSupabaseClient();
-  const { data, error } = await client
-    .from("documents")
-    .select("*")
-    .neq("status", "superseded")
+  const base = client.from("documents").select("*");
+  const { data, error } = await (options.archived ? base.eq("status", "superseded") : base.neq("status", "superseded"))
     .order("updated_at", { ascending: false });
   if (error) throw new DocumentOperationError("SERVICE_UNAVAILABLE", { cause: error });
   const documents = data ?? [];
@@ -517,7 +520,13 @@ export async function confirmDocumentExtractionRecord(
   return parseRpc(confirmedExtractionSchema, data);
 }
 
-export async function createDocumentDownloadUrl(documentId: string, userId: string) {
+/**
+ * Dokumen arsip hanya bisa diunduh bila diminta TERANG-TERANGAN dari rak arsip
+ * (`allowArchived`). Jalur lain tetap menolaknya: arsip bukan berkas yang
+ * sedang berlaku, dan tautan yang dibuat tanpa sadar ke berkas lama bisa
+ * terkirim sebagai bukti yang sudah tidak benar.
+ */
+export async function createDocumentDownloadUrl(documentId: string, userId: string, options: { allowArchived?: boolean } = {}) {
   const client = await createServerSupabaseClient();
   const { data: document, error } = await client
     .from("documents")
@@ -526,7 +535,7 @@ export async function createDocumentDownloadUrl(documentId: string, userId: stri
     .maybeSingle();
   if (error) throw new DocumentOperationError("SERVICE_UNAVAILABLE", { cause: error });
   if (!document?.storage_path) throw new DocumentOperationError("DOCUMENT_NOT_FOUND");
-  if (document.status === "superseded") throw new DocumentOperationError("DOCUMENT_ARCHIVED");
+  if (document.status === "superseded" && !options.allowArchived) throw new DocumentOperationError("DOCUMENT_ARCHIVED");
 
   const admin = createServiceRoleClient();
   const { data: signed, error: signedError } = await admin.storage
@@ -541,7 +550,7 @@ export async function createDocumentDownloadUrl(documentId: string, userId: stri
     target_type: "document",
     target_id: document.id,
     status: "success",
-    metadata: { ttl_seconds: 60 },
+    metadata: { ttl_seconds: 60, archived: document.status === "superseded" },
   });
   if (auditError) throw new DocumentOperationError("SERVICE_UNAVAILABLE", { cause: auditError });
   return { signedUrl: signed.signedUrl, expiresInSeconds: 60 as const };

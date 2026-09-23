@@ -104,11 +104,17 @@ export async function confirmDocumentExtraction(
   });
 }
 
-export async function createDocumentSignedUrl(documentId: string) {
+export async function createDocumentSignedUrl(documentId: string, options: { archived?: boolean } = {}) {
   return requestData<{ signedUrl: string; expiresInSeconds: number }>(
-    `/api/v1/documents/${encodeURIComponent(documentId)}/signed-url`,
+    `/api/v1/documents/${encodeURIComponent(documentId)}/signed-url${options.archived ? "?arsip=1" : ""}`,
     { method: "POST" },
   );
+}
+
+/** Rak arsip: dokumen yang sudah diganti atau diarsipkan. */
+export async function listArchivedDocuments() {
+  const result = await requestData<{ documents: DocumentView[] }>("/api/v1/documents?arsip=1", { cache: "no-store" });
+  return result.documents;
 }
 
 export async function archiveDocument(documentId: string) {

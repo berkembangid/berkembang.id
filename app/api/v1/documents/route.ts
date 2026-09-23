@@ -4,7 +4,7 @@ import { listDocumentRecords, type DocumentView } from "@/modules/documents/docu
 
 export type ListDocumentsRouteDependencies = {
   authenticate: () => Promise<{ id: string } | null>;
-  listDocuments: () => Promise<DocumentView[]>;
+  listDocuments: (options?: { archived?: boolean }) => Promise<DocumentView[]>;
 };
 
 const defaultDependencies: ListDocumentsRouteDependencies = {
@@ -14,11 +14,12 @@ const defaultDependencies: ListDocumentsRouteDependencies = {
 
 export async function handleListDocumentsRequest(
   dependencies: ListDocumentsRouteDependencies = defaultDependencies,
+  options: { archived?: boolean } = {},
 ) {
   try {
     const user = await dependencies.authenticate();
     if (!user) return documentErrorResponse(new DocumentOperationError("UNAUTHENTICATED"));
-    const documents = await dependencies.listDocuments();
+    const documents = await dependencies.listDocuments(options);
     return Response.json(
       { data: { documents } },
       { headers: { "Cache-Control": "private, no-store" } },
@@ -28,6 +29,8 @@ export async function handleListDocumentsRequest(
   }
 }
 
-export async function GET() {
-  return handleListDocumentsRequest();
+/** `?arsip=1` = rak arsip. */
+export async function GET(request: Request) {
+  const archived = new URL(request.url).searchParams.get("arsip") === "1";
+  return handleListDocumentsRequest(defaultDependencies, { archived });
 }

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { DocumentOcrReviewDialog } from "@/components/documents/DocumentOcrReviewDialog";
 import { ReportArchivePanel } from "@/components/warung/ReportArchivePanel";
+import { ArchivedDocumentsShelf } from "@/components/documents/ArchivedDocumentsShelf";
 import {
   assuranceText,
   cabinetShelves,
@@ -116,6 +117,7 @@ function fileSizeLabel(bytes: number | null) {
 export default function UploadPage() {
   const { confirm } = useConfirm();
   const [documents, setDocuments] = useState<DocumentView[]>([]);
+  const [archiveVersion, setArchiveVersion] = useState(0);
   const [busyType, setBusyType] = useState<DocumentType | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingUpload, setPendingUpload] = useState<{
@@ -326,7 +328,8 @@ export default function UploadPage() {
     setBusyType(document.docType);
     try {
       await archiveDocument(document.id);
-      notifySuccess("Dokumen diarsipkan", { description: "Riwayat dan catatan aksesnya tetap tersimpan." });
+      notifySuccess("Dokumen diarsipkan", { description: "Riwayat dan catatan aksesnya tetap tersimpan, dan berkasnya bisa dilihat di « Dokumen yang diarsipkan »." });
+      setArchiveVersion((value) => value + 1);
       await loadDocuments();
     } catch (error) {
       notifyFromError(error, "Dokumen belum dapat diarsipkan.");
@@ -567,6 +570,8 @@ export default function UploadPage() {
         </div>
       )}
 
+      {/* Dimuat ulang setiap kali ada yang diarsipkan dari layar ini. */}
+      <ArchivedDocumentsShelf key={archiveVersion} />
 
       {ocrReview && (
         <DocumentOcrReviewDialog
