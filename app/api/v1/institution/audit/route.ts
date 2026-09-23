@@ -3,20 +3,58 @@ import { gagal } from "@/lib/api/galat";
 import { withPortalRpc } from "@/lib/supabase/portal";
 import { createServerSupabaseClient, getAuthenticatedUser } from "@/lib/supabase/server";
 import { institutionHeader, resolveSelectedInstitution } from "@/lib/api/institution";
+import { fallbackCandidateCode, summarizeRequestedBusinesses } from "@/modules/consent/consent-repository";
 
-/** Log audit organisasi: siapa membuka apa, kapan — untuk ADMIN organisasi. */
+const ARTIFACTS = ["CANDIDATE_LIST", "SHORTLIST", "ORGANIZATION", "PROGRAM_DASH", "PDF", "DOSSIER"] as const;
+const PAGE_SIZE = 50;
+
+/**
+ * Log audit organisasi: siapa membuka apa, kapan.
+ *
+ * Setiap baris dikirim BESERTA nama anggotanya dan kode UMKM-nya. Dulu layar
+ * ini menampilkan "anggota ee4bc4b2 · usaha 7f3a…" -- potongan UUID yang
+ * tidak bisa dicocokkan siapa pun dengan orang atau usaha mana pun, padahal
+ * menjawab "siapa" adalah satu-satunya tujuan log ini.
+ *
+ * `?jenis=` menyaring jenis artefak, `?sebelum=` (cap waktu baris terakhir)
+ * memuat halaman berikutnya.
+ */
 export async function GET(request: Request) {
   if (!await getAuthenticatedUser()) return gagal("UNAUTHENTICATED", 401);
   const client = await createServerSupabaseClient();
   const selected = await resolveSelectedInstitution(client, request);
   if (!selected) return gagal("FORBIDDEN", 403);
-  const { data, error } = await client.from("institution_view_logs")
+
+  const url = new URL(request.url);
+  const artifact = url.searchParams.get("jenis");
+  const before = url.searchParams.get("sebelum");
+  let query = client.from("institution_view_logs")
     .select("id,institution_id,member_id,business_id,artifact,artifact_id,action,occurred_at")
     .eq("institution_id", selected)
     .order("occurred_at", { ascending: false })
-    .limit(100);
+    .limit(PAGE_SIZE + 1);
+  if (artifact && (ARTIFACTS as readonly string[]).includes(artifact)) query = query.eq("artifact", artifact);
+  if (before && !Number.isNaN(Date.parse(before))) query = query.lt("occurred_at", before);
+  const { data, error } = await query;
   if (error) return gagal("AUDIT_UNAVAILABLE", 503);
-  return NextResponse.json({ data: data ?? [] }, { headers: { "Cache-Control": "private, no-store" } });
+
+  const rows = (data ?? []).slice(0, PAGE_SIZE);
+  const businessIds = [...new Set(rows.map((row) => row.business_id).filter((value): value is string => Boolean(value)))];
+  const [directory, summaries] = await Promise.all([
+    withPortalRpc(client).rpc("institution_member_directory", { p_institution_id: selected }),
+    summarizeRequestedBusinesses(businessIds),
+  ]);
+  const members = new Map(((Array.isArray(directory.data) ? directory.data : []) as Array<{ id: string; display_name: string | null; email: string | null }>)
+    .map((row) => [row.id, row.display_name ?? row.email ?? null]));
+
+  return NextResponse.json({
+    data: rows.map((row) => ({
+      ...row,
+      memberName: row.member_id ? members.get(row.member_id) ?? "Anggota yang sudah keluar" : null,
+      businessCode: row.business_id ? summaries.get(row.business_id)?.candidateCode ?? fallbackCandidateCode(row.business_id) : null,
+    })),
+    hasMore: (data ?? []).length > PAGE_SIZE,
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(request: Request) {

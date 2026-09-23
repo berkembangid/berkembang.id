@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Building2, Mail, Trash2, UserPlus, Users } from "lucide-react";
-import { DashboardPage, EmptyState, FeedbackBanner, PageHeader } from "@/components/dashboard";
+import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure, notifySuccess } from "@/lib/notify";
 import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
+import { formatDate } from "@/modules/consent/candidate-ui";
+import { usePortal } from "@/modules/consent/portal-copy";
 
 /**
  * Organisasi & anggota, portal lembaga.
@@ -70,7 +72,10 @@ function pesanGalat(body: unknown, cadangan: string): string {
 }
 
 export default function InstitutionOrganizationPage() {
-  const { institutions, selectedId, selected, select, loading } = useInstitution();
+  const portal = usePortal();
+  // Pilihan organisasi ada di menu samping; halaman ini tidak lagi punya
+  // deretan tombol organisasi kedua yang bisa berbeda dengannya.
+  const { selectedId, selected, loading } = useInstitution();
   const [institution, setInstitution] = useState<Institution | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
@@ -79,7 +84,7 @@ export default function InstitutionOrganizationPage() {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const isOrgAdmin = selected?.role === "admin";
+  const isOrgAdmin = selected?.role?.toLowerCase() === "admin";
 
   /**
    * Satu-satunya sumber kebenaran layar ini.
@@ -152,7 +157,7 @@ export default function InstitutionOrganizationPage() {
       setEmail("");
       notifySuccess(
         body?.data?.reactivated ? "Anggota diaktifkan kembali" : "Anggota ditambahkan",
-        { description: "Masuk sebagai VIEWER dan langsung bisa membuka portal." },
+        { description: "Masuk sebagai Peninjau dan langsung bisa membuka portal." },
       );
       await muat();
     } catch {
@@ -232,217 +237,129 @@ export default function InstitutionOrganizationPage() {
     }
   }
 
+  if (loading || (!institution && !loadError)) {
+    return <DashboardPage>
+      <PageHeader title={portal.organizationTitle} description="Identitas organisasi, anggota, dan lisensi." icon={Building2} />
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2" aria-hidden>
+        <div className="h-44 animate-pulse rounded-2xl bg-white" />
+        <div className="h-44 animate-pulse rounded-2xl bg-white" />
+        <div className="h-56 animate-pulse rounded-2xl bg-white lg:col-span-2" />
+      </div>
+    </DashboardPage>;
+  }
+
   return (
     <DashboardPage>
-      <PageHeader
-        title="Organisasi"
-        description="Kelola identitas organisasi, anggota, dan lisensi pilot."
-        icon={Building2}
-      />
+      <PageHeader title={portal.organizationTitle} description="Identitas organisasi, anggota, dan lisensi." icon={Building2} />
       {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
 
-      {institutions.length > 1 && (
-        <section aria-label="Pilih organisasi" className="mt-5 flex flex-wrap gap-2">
-          {institutions.map((row) => (
-            <button
-              key={row.institutionId}
-              onClick={() => select(row.institutionId)}
-              aria-pressed={row.institutionId === selectedId}
-              className={`min-h-11 rounded-full px-4 text-xs font-bold ${
-                row.institutionId === selectedId
-                  ? "bg-[#0b5f86] text-white"
-                  : "border border-slate-300 bg-white text-slate-600"
-              }`}
-            >
-              {row.name} · {row.role.toUpperCase()}
-            </button>
-          ))}
-        </section>
-      )}
-
-      {loading || !institution ? (
-        <EmptyState
-          icon={Building2}
-          title="Organisasi belum tersedia"
-          description="Hubungi admin platform untuk menyiapkan organisasi."
-        />
-      ) : (
+      {!institution ? null : (
         /*
-          `grid-cols-[minmax(0,1fr)]`, bukan sekadar `grid`.
-
-          Track grid bawaan berukuran `auto`, yang berarti TIDAK PERNAH lebih
-          sempit dari min-content item terlebar. Di 360px satu kartu memaksa
-          track menjadi 346px, dan karena hanya satu kolom, KETIGA kartu ikut
-          melebihi layar -- lalu `overflow-x: hidden` di shell menyembunyikan
-          akibatnya alih-alih memperbaikinya: tepi kanannya terpotong diam-diam.
-
-          `minmax(0,1fr)` mengizinkan tracknya menyusut, dan isinya yang
-          memotong diri.
+          `grid-cols-[minmax(0,1fr)]`, bukan sekadar `grid`: track grid bawaan
+          tidak pernah lebih sempit dari isinya yang terlebar, jadi satu kartu
+          di 360px memaksa ketiganya melebihi layar.
         */
-        <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="text-xs font-bold uppercase tracking-wide text-[#0b5f86]">Profil organisasi</p>
-            <h2 className="mt-2 text-xl font-black text-slate-900">{institution.name}</h2>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-              <Info label="Jenis" value={institution.type} />
-              <Info label="Status" value={institution.status === "active" ? "Aktif" : institution.status} />
-              <Info
-                label="Verifikasi"
-                value={institution.verification_status === "verified" ? "Terverifikasi" : "Menunggu"}
-              />
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+          <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_1px_2px_rgba(16,40,64,.04)]">
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#0b5f86]">Profil organisasi</p>
+            <h2 className="mt-1.5 text-lg font-bold text-[#1b2a3a]">{institution.name}</h2>
+            <div className="mt-4 grid grid-cols-2 gap-2.5 text-xs">
+              <Info label="Jenis" value={institution.type || "—"} />
+              <Info label="Status" value={institution.status === "active" ? "Aktif" : "Tidak aktif"} />
+              <Info label="Verifikasi" value={institution.verification_status === "verified" ? "Terverifikasi" : institution.verification_status === "rejected" ? "Ditolak" : "Menunggu"} />
               <Info label="Anggota aktif" value={String(aktif)} />
             </div>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="text-xs font-bold uppercase tracking-wide text-[#0b5f86]">Lisensi pilot</p>
+          <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_1px_2px_rgba(16,40,64,.04)]">
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#0b5f86]">Lisensi</p>
             {/*
-              Dua kolom di layar paling sempit, tiga mulai dari 400px.
-
-              "Kredit terpakai" tidak bisa menyusut lebih sempit dari katanya,
-              jadi tiga kolom pada 360px memaksa kartunya melebihi lebar layar
-              -- dan `overflow-x: hidden` di shell MENYEMBUNYIKAN akibatnya
-              alih-alih memperbaikinya: tepi kanan kartunya terpotong diam-diam.
+              Kursi ditulis "2 dari 10", bukan "10": angka tunggal membuat
+              batasnya tak terlihat sampai ia menolak penambahan -- dan pada
+              saat itu orangnya sudah mengetik surel.
             */}
-            <div className="mt-4 grid grid-cols-2 gap-3 text-center min-[400px]:grid-cols-3">
-              {/*
-                Kursi ditulis sebagai "2 dari 10", bukan "10".
-                Angka tunggal membuat batasnya tak terlihat sampai ia menolak
-                penambahan -- dan pada saat itu orangnya sudah mengetik surel.
-              */}
-              <Metric label="Kursi terpakai" value={kursi === null ? String(aktif) : `${aktif}/${kursi}`} />
-              <Metric label="Kredit dossier" value={String(entitlement?.dossier_credits ?? 0)} />
-              <Metric label="Kredit terpakai" value={String(entitlement?.credits_used ?? 0)} />
+            <div className="mt-4 grid grid-cols-2 gap-2.5 min-[400px]:grid-cols-3">
+              <Metric label="Kursi terpakai" value={kursi === null ? String(aktif) : `${aktif} dari ${kursi}`} />
+              <Metric label="Kuota dosir" value={entitlement?.dossier_credits ? String(entitlement.dossier_credits) : "Tanpa batas"} />
+              <Metric label="Dosir terpakai" value={String(entitlement?.credits_used ?? 0)} />
             </div>
-            <p className="mt-2 text-xs text-slate-500">
-              Periode: {entitlement?.license_from ?? "—"} s.d. {entitlement?.license_to ?? "—"}
+            <p className="mt-3 text-xs text-[#6e859e]">
+              Berlaku {formatDate(entitlement?.license_from ?? null, "—")} sampai {formatDate(entitlement?.license_to ?? null, "tanpa batas")}
+              {entitlement?.plan_note && <> · {entitlement.plan_note}</>}
             </p>
-            {entitlement?.plan_note && (
-              <p className="mt-1 text-xs text-slate-500">Paket: {entitlement.plan_note}</p>
-            )}
-            <p className="mt-3 text-xs leading-5 text-slate-500">
-              Penagihan manual pada fase pilot. Kredit hanya berkurang saat permintaan disetujui. Admin
-              platform mengatur lisensi dari halaman admin.
+            <p className="mt-2 text-xs leading-5 text-[#8aa0b6]">
+              Kuota berkurang saat permintaan disetujui pemilik usaha. Lisensi diatur admin platform.
             </p>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-2">
-            <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-              <Users size={17} className="text-[#0b5f86]" />
-              Anggota organisasi
-            </h2>
+          <section className="rounded-2xl border border-[#e3e9f0] bg-white p-5 shadow-[0_1px_2px_rgba(16,40,64,.04)] lg:col-span-2">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-[#1b2a3a]"><Users size={17} className="text-[#0b5f86]" />Anggota</h2>
+              <p className="text-xs text-[#6e859e]">{aktif} aktif{kursi !== null && ` dari ${kursi} kursi`}</p>
+            </div>
 
-            {members.length === 0 ? (
-              <EmptyState
-                icon={Users}
-                title="Belum ada anggota"
-                description="Tambahkan rekan kerja lewat surel akun BERKEMBANG.ID mereka."
-              />
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {members.map((member) => (
-                  <li
-                    key={member.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-slate-800">
-                        {sebutan(member)}
-                        {member.is_self && (
-                          <span className="ml-2 rounded bg-[#d6eefa] px-1.5 py-0.5 text-[10px] font-bold text-[#0b5f86]">
-                            Anda
-                          </span>
-                        )}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
-                        {member.email ?? "Surel belum terbaca"}
-                      </p>
+            {members.length === 0
+              ? <p className="mt-3 rounded-xl bg-[#f6f8fb] p-5 text-center text-xs text-[#6e859e]">Belum ada anggota. Tambahkan rekan kerja lewat surel akun Berkembang.id mereka.</p>
+              : <ul className="mt-3 divide-y divide-[#eef2f6] rounded-xl border border-[#eef2f6]">
+                {members.map((member) => {
+                  const role = member.role.toLowerCase();
+                  const canManage = isOrgAdmin && role !== "admin" && !member.is_self;
+                  return <li key={member.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#d6eefa] text-[11px] font-extrabold text-[#0b5f86]">{inisial(member)}</span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-[#1b2a3a]">
+                          {sebutan(member)}
+                          {member.is_self && <span className="ml-2 rounded bg-[#eef8fd] px-1.5 py-0.5 text-[10px] font-bold text-[#0b5f86]">Anda</span>}
+                        </p>
+                        <p className="truncate text-xs text-[#6e859e]">{member.email ?? "Surel belum terbaca"}</p>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-[#0b5f86] ring-1 ring-slate-200">
-                        {member.role}
-                      </span>
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                          member.status === "active"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-amber-50 text-amber-700"
-                        }`}
-                      >
+                      <span title="Peran hanya dapat diubah admin platform" className="inline-flex min-h-7 items-center rounded-full border border-[#d5dee8] px-2.5 text-[11px] font-bold text-[#34496a]">{roleLabel(role)}</span>
+                      <span className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-[11px] font-bold ${member.status === "active" ? "border-[#a9ebd0] bg-[#edfbf5] text-[#0a5c42]" : "border-[#f5d58a] bg-[#fff8e6] text-[#6b4700]"}`}>
                         {member.status === "active" ? "Aktif" : "Nonaktif"}
                       </span>
-
                       {/*
-                        Baris admin dan baris sendiri tidak diberi tombol sama
-                        sekali. Basis data menolak keduanya, dan tombol yang
-                        selalu ditolak hanya mengajari orang bahwa layar ini
-                        tidak bisa dipercaya.
+                        Baris pengelola dan baris sendiri tidak diberi tombol.
+                        Basis data menolak keduanya, dan tombol yang selalu
+                        ditolak hanya mengajari orang bahwa layar ini tidak bisa
+                        dipercaya.
                       */}
-                      {isOrgAdmin && member.role !== "ADMIN" && !member.is_self && (
-                        <>
-                          <button
-                            onClick={() =>
-                              void ubahStatus(member, member.status === "active" ? "suspended" : "active")
-                            }
-                            className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 text-[11px] font-bold text-slate-700 hover:border-[#0b5f86]"
-                          >
-                            {member.status === "active" ? "Nonaktifkan" : "Aktifkan"}
-                          </button>
-                          <button
-                            onClick={() => void keluarkan(member)}
-                            aria-label={`Keluarkan ${sebutan(member)}`}
-                            className="grid size-11 place-items-center rounded-lg border border-slate-300 bg-white text-slate-500 hover:border-red-300 hover:text-red-600"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                          </button>
-                        </>
-                      )}
+                      {canManage && <>
+                        <button type="button" onClick={() => void ubahStatus(member, member.status === "active" ? "suspended" : "active")} className="min-h-11 rounded-xl border border-[#d5dee8] bg-white px-3.5 text-xs font-bold text-[#34496a] hover:bg-[#f6f8fb]">
+                          {member.status === "active" ? "Nonaktifkan" : "Aktifkan"}
+                        </button>
+                        <button type="button" onClick={() => void keluarkan(member)} aria-label={`Keluarkan ${sebutan(member)}`} title="Keluarkan dari organisasi" className="grid size-11 place-items-center rounded-xl border border-[#d5dee8] bg-white text-[#6e859e] hover:border-[#f4b0a8] hover:text-[#b4304a]">
+                          <Trash2 size={15} aria-hidden />
+                        </button>
+                      </>}
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+                  </li>;
+                })}
+              </ul>}
 
-            {isOrgAdmin && (
-              <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-3">
-                <div className="flex flex-wrap items-end gap-2">
-                  <label className="text-xs font-bold text-slate-600">
-                    Surel rekan kerja
-                    <div className="mt-1 flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3">
-                      <Mail className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        placeholder="nama@dinas.go.id"
-                        disabled={kursiPenuh}
-                        className="min-h-11 w-56 font-normal outline-none disabled:bg-transparent"
-                      />
-                    </div>
-                  </label>
-                  <button
-                    disabled={busy || kursiPenuh || !email.trim()}
-                    onClick={() => void tambah()}
-                    className="flex min-h-11 items-center gap-1.5 rounded-xl bg-[#0b5f86] px-4 text-xs font-bold text-white disabled:opacity-50"
-                  >
-                    <UserPlus size={14} />
-                    {busy ? "Menyimpan..." : "Tambah anggota"}
+            {isOrgAdmin ? (
+              <form className="mt-4 rounded-xl border border-dashed border-[#c8d3de] p-4" onSubmit={(event) => { event.preventDefault(); void tambah(); }}>
+                <label htmlFor="member-email" className="text-xs font-bold text-[#4a6280]">Tambah anggota lewat surel</label>
+                <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
+                  <div className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-[#d5dee8] bg-white px-3 focus-within:border-[#0b5f86] focus-within:ring-2 focus-within:ring-[#0b5f86]/15">
+                    <Mail size={16} className="shrink-0 text-[#8aa0b6]" aria-hidden />
+                    <input id="member-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nama@organisasi.co.id" disabled={kursiPenuh} className="min-h-11 w-full min-w-0 bg-transparent text-sm outline-none" />
+                  </div>
+                  <button type="submit" disabled={busy || kursiPenuh || !email.trim()} className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#0b5f86] px-4 text-sm font-bold text-white hover:bg-[#094f70] disabled:opacity-50">
+                    <UserPlus size={15} />{busy ? "Menyimpan…" : "Tambah anggota"}
                   </button>
                 </div>
-
-                <p className="mt-2 text-xs leading-5 text-slate-500">
+                <p className="mt-2 text-xs leading-5 text-[#6e859e]">
                   {kursiPenuh
                     ? "Kursi lisensi sudah terpakai semua. Nonaktifkan satu anggota lebih dulu, atau hubungi admin platform untuk menambah kursi."
-                    : "Orangnya harus sudah punya akun BERKEMBANG.ID dengan surel itu. Anggota baru masuk sebagai VIEWER — peran hanya dapat diubah admin platform."}
+                    : "Orangnya harus sudah punya akun Berkembang.id dengan surel itu. Anggota baru masuk sebagai Peninjau — peran hanya dapat diubah admin platform."}
                 </p>
-              </div>
-            )}
-
-            {!isOrgAdmin && (
-              <p className="mt-3 text-xs text-slate-500">
-                Hanya ADMIN organisasi yang dapat mengelola anggota.
-              </p>
+              </form>
+            ) : (
+              <p className="mt-3 text-xs text-[#6e859e]">Hanya pengelola organisasi yang dapat menambah atau menonaktifkan anggota.</p>
             )}
           </section>
         </div>
@@ -456,20 +373,28 @@ function sebutan(member: Member): string {
   return member.display_name ?? member.email ?? "Anggota tanpa nama";
 }
 
+function inisial(member: Member): string {
+  const words = sebutan(member).split(/[\s@.]+/).filter(Boolean);
+  return ((words[0]?.[0] ?? "?") + (words[1]?.[0] ?? "")).toUpperCase();
+}
+
+/**
+ * Nama peran dalam bahasa layar. API anggota mengirim huruf besar ("ADMIN"),
+ * konteks organisasi mengirim huruf kecil ("admin"); keduanya dinormalkan
+ * lebih dulu, lalu diterjemahkan.
+ */
+function roleLabel(role: string): string {
+  const normalized = role.toLowerCase();
+  if (normalized === "admin") return "Pengelola";
+  if (normalized === "analyst" || normalized === "reviewer") return "Analis";
+  if (normalized === "viewer") return "Peninjau";
+  return role;
+}
+
 function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl bg-slate-50 p-3">
-      <p className="text-slate-500">{label}</p>
-      <p className="mt-1 font-bold text-slate-800">{value}</p>
-    </div>
-  );
+  return <div className="rounded-xl bg-[#f6f8fb] p-3"><p className="text-[#6e859e]">{label}</p><p className="mt-1 font-bold text-[#1b2a3a]">{value}</p></div>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xl font-black text-slate-900">{value}</p>
-      <p className="mt-1 text-[11px] text-slate-500">{label}</p>
-    </div>
-  );
+  return <div className="min-w-0 rounded-xl bg-[#f6f8fb] p-3"><p className="truncate text-base font-bold text-[#1b2a3a]">{value}</p><p className="mt-0.5 text-[11px] text-[#6e859e]">{label}</p></div>;
 }

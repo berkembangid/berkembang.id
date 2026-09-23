@@ -8,6 +8,7 @@ import {
 import { useConfirm } from "@/components/ui/confirm";
 import { notifyFromError, notifySuccess } from "@/lib/notify";
 import { audienceLabel } from "@/modules/broadcast/broadcast-messages";
+import { institutionHeaders, useInstitution } from "@/modules/institution/institution-context";
 
 const BANDS = ["Rutin mencatat", "Mulai rutin", "Jarang mencatat", "Belum mulai"] as const;
 
@@ -51,7 +52,7 @@ function tanggal(value: string | null): string {
 }
 
 /**
- * Ruang broadcast untuk dinas.
+ * Ruang siaran pendampingan untuk dinas.
  *
  * Yang perlu dibaca dari layar ini, dan karena itu ditulis di layarnya sendiri
  * bukan hanya di kode: pesan ini tidak langsung terkirim. Dinas yang mengira
@@ -61,7 +62,13 @@ function tanggal(value: string | null): string {
  */
 export default function InstitutionBroadcastPanel() {
   const { confirm } = useConfirm();
+  // Organisasi terpilih ikut dikirim: dulu rute ini selalu memakai keanggotaan
+  // tertua, jadi anggota dua dinas melihat kuota dan riwayat dinas yang salah.
+  const { selectedId } = useInstitution();
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [audienceError, setAudienceError] = useState(false);
+  const [participantsLoading, setParticipantsLoading] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const [band, setBand] = useState<string>("");
   const [legality, setLegality] = useState<string>("");
@@ -75,17 +82,22 @@ export default function InstitutionBroadcastPanel() {
   const [participants, setParticipants] = useState<Participant[]>([]);
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/v1/institution/broadcasts", { cache: "no-store" });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error?.message ?? "Daftar broadcast belum dapat dimuat.");
-    setWorkspace(body.data as Workspace);
-  }, []);
+    try {
+      const response = await fetch("/api/v1/institution/broadcasts", { cache: "no-store", headers: institutionHeaders(selectedId) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message ?? "Daftar siaran belum dapat dimuat.");
+      setWorkspace(body.data as Workspace);
+      setLoadError("");
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedId]);
 
   // Ditunda satu putaran, idiom yang sama dengan kartu beranda lain: memanggil
   // `setState` langsung di dalam effect memicu render berantai.
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      load().catch((error) => setLoadError(error instanceof Error ? error.message : "Daftar broadcast belum dapat dimuat."));
+      load().catch((error) => setLoadError(error instanceof Error ? error.message : "Daftar siaran belum dapat dimuat."));
     }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
@@ -97,12 +109,17 @@ export default function InstitutionBroadcastPanel() {
     const params = new URLSearchParams();
     if (band) params.set("mencatat", band);
     if (legality) params.set("legalitas", legality);
-    fetch(`/api/v1/institution/broadcasts/audience?${params.toString()}`, { cache: "no-store", signal: controller.signal })
+    fetch(`/api/v1/institution/broadcasts/audience?${params.toString()}`, { cache: "no-store", signal: controller.signal, headers: institutionHeaders(selectedId) })
       .then(async (response) => ({ ok: response.ok, body: await response.json() }))
-      .then(({ ok, body }) => { if (ok) setAudience(body.data as Audience); })
-      .catch(() => undefined);
+      .then(({ ok, body }) => {
+        // Dulu kegagalan di sini ditelan dan angkanya diam di "—" selamanya.
+        if (!ok) throw new Error("audience");
+        setAudience(body.data as Audience);
+        setAudienceError(false);
+      })
+      .catch((error) => { if (!(error instanceof Error && error.name === "AbortError")) setAudienceError(true); });
     return () => controller.abort();
-  }, [band, legality]);
+  }, [band, legality, selectedId]);
 
   async function kirim() {
     const sasaran = audienceLabel(band || null, legality === "lengkap" ? true : legality === "belum" ? false : null);
@@ -111,7 +128,7 @@ export default function InstitutionBroadcastPanel() {
       : `Pesan ini akan sampai ke ${audience?.count ?? 0} usaha.`;
 
     const yes = await confirm({
-      title: "Ajukan broadcast ini?",
+      title: "Ajukan siaran ini?",
       description: `Sasaran: ${sasaran}. ${jumlah} Pengelola Berkembang.id meninjaunya lebih dulu, dan pesannya baru terkirim setelah disetujui. Pesan yang sudah terkirim tidak bisa ditarik kembali.`,
       confirmLabel: "Ajukan",
       cancelLabel: "Periksa lagi",
@@ -122,7 +139,7 @@ export default function InstitutionBroadcastPanel() {
     try {
       const response = await fetch("/api/v1/institution/broadcasts", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...institutionHeaders(selectedId) },
         body: JSON.stringify({
           message,
           recordingBand: band || null,
@@ -133,12 +150,12 @@ export default function InstitutionBroadcastPanel() {
         }),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error?.message ?? "Broadcast belum dapat diajukan.");
-      notifySuccess("Broadcast diajukan. Pengelola Berkembang.id akan meninjaunya.");
+      if (!response.ok) throw new Error(body.error?.message ?? "Siaran belum dapat diajukan.");
+      notifySuccess("Siaran diajukan. Pengelola Berkembang.id akan meninjaunya.");
       setMessage(""); setEventDate(""); setEventPlace(""); setEventLink("");
       await load();
     } catch (error) {
-      notifyFromError(error, "Broadcast belum dapat diajukan.");
+      notifyFromError(error, "Siaran belum dapat diajukan.");
     } finally {
       setBusy(false);
     }
@@ -146,21 +163,24 @@ export default function InstitutionBroadcastPanel() {
 
   async function bukaPeserta(id: string) {
     if (openParticipants === id) { setOpenParticipants(null); return; }
+    setParticipantsLoading(id);
     try {
-      const response = await fetch(`/api/v1/institution/broadcasts/${id}/participants`, { cache: "no-store" });
+      const response = await fetch(`/api/v1/institution/broadcasts/${id}/participants`, { cache: "no-store", headers: institutionHeaders(selectedId) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message ?? "Daftar peserta belum dapat dimuat.");
       setParticipants(body.data as Participant[]);
       setOpenParticipants(id);
     } catch (error) {
       notifyFromError(error, "Daftar peserta belum dapat dimuat.");
+    } finally {
+      setParticipantsLoading(null);
     }
   }
 
   if (loadError) {
     return <DashboardPage>
       <PageHeader title="Siaran pendampingan" description="Tawaran yang dikirim ke usaha berdasarkan keadaannya, bukan namanya." icon={Megaphone} />
-      <FeedbackBanner tone="error" title="Ruang broadcast belum bisa dibuka">{loadError}</FeedbackBanner>
+      <FeedbackBanner tone="error" title="Ruang siaran belum bisa dibuka">{loadError}</FeedbackBanner>
     </DashboardPage>;
   }
 
@@ -176,15 +196,17 @@ export default function InstitutionBroadcastPanel() {
     <section className="grid gap-3 sm:grid-cols-2">
       <MetricCard
         label="Sisa kuota bulan ini"
-        value={workspace ? `${workspace.quotaLeft} dari ${workspace.quotaMonthly}` : "—"}
+        value={workspace ? `${workspace.quotaLeft} dari ${workspace.quotaMonthly}` : "Memuat…"}
         helper="Kuotanya kembali pada awal bulan berikutnya"
         icon={Send}
         tone={workspace && workspace.quotaLeft === 0 ? "attention" : "brand"}
       />
       <MetricCard
         label="Akan menerima pesan ini"
-        value={audience ? (audience.suppressed ? "Tidak ditampilkan" : `${audience.count} usaha`) : "—"}
-        helper={audience?.suppressed
+        value={audienceError ? "Belum terhitung" : audience ? (audience.suppressed ? "Tidak ditampilkan" : `${audience.count} usaha`) : "Menghitung…"}
+        helper={audienceError
+          ? "Jumlah penerima belum bisa dihitung. Ubah sasaran atau muat ulang halaman."
+          : audience?.suppressed
           ? `Kelompok berisi kurang dari ${audience.minCell} usaha tidak melaporkan jumlahnya — pesannya tetap sampai`
           : "Dihitung ulang setiap sasarannya diubah"}
         icon={Users}
@@ -246,7 +268,7 @@ export default function InstitutionBroadcastPanel() {
               className="mt-1.5 min-h-11 w-full rounded-xl border border-[#c8d3de] bg-white px-3 text-xs font-normal" />
           </label>
           <label className="text-xs font-bold text-[#1b2a3a]">Tautan pendaftaran (opsional)
-            <input value={eventLink} onChange={(event) => setEventLink(event.target.value)} maxLength={300}
+            <input type="url" inputMode="url" placeholder="https://" value={eventLink} onChange={(event) => setEventLink(event.target.value)} maxLength={300}
               className="mt-1.5 min-h-11 w-full rounded-xl border border-[#c8d3de] bg-white px-3 text-xs font-normal" />
           </label>
         </div>
@@ -263,16 +285,18 @@ export default function InstitutionBroadcastPanel() {
           disabled={busy || terlaluPendek || (workspace?.quotaLeft ?? 0) === 0}
           className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-xl bg-[#0b5f86] px-5 text-xs font-bold text-white disabled:opacity-50"
         >
-          <Send size={15} /> {busy ? "Mengajukan..." : "Ajukan broadcast"}
+          <Send size={15} /> {busy ? "Mengajukan…" : "Ajukan siaran"}
         </button>
       </div>
     </DashboardPanel>
 
     <DashboardPanel>
-      <PanelHeader title="Broadcast yang pernah diajukan" description="Beserta berapa yang menerima dan berapa yang menyatakan ikut." />
-      {!workspace || workspace.broadcasts.length === 0
+      <PanelHeader title="Siaran yang pernah diajukan" description="Beserta berapa yang menerima dan berapa yang menyatakan ikut." />
+      {loading || !workspace
+        ? <div className="space-y-3 p-5 pt-0" aria-hidden>{Array.from({ length: 2 }, (_, index) => <div key={index} className="h-20 animate-pulse rounded-xl bg-[#f6f8fb]" />)}</div>
+        : workspace.broadcasts.length === 0
         ? <div className="p-5 pt-0">
-            <EmptyState icon={Megaphone} title="Belum ada broadcast" description="Tawaran pertama Anda akan muncul di sini setelah diajukan." />
+            <EmptyState icon={Megaphone} title="Belum ada siaran" description="Tawaran pertama Anda akan muncul di sini setelah diajukan." />
           </div>
         : <ul className="divide-y divide-[#eef2f6]">
             {workspace.broadcasts.map((row) => (
@@ -298,16 +322,16 @@ export default function InstitutionBroadcastPanel() {
                     </span>
                     <span className="font-semibold text-[#0a5c42]">{row.joined} menyatakan ikut</span>
                     {row.joined > 0 && (
-                      <button type="button" onClick={() => void bukaPeserta(row.id)} className="font-bold text-[#0b5f86] underline underline-offset-2">
-                        {openParticipants === row.id ? "Sembunyikan peserta" : "Lihat peserta"}
+                      <button type="button" onClick={() => void bukaPeserta(row.id)} disabled={participantsLoading === row.id} aria-expanded={openParticipants === row.id} className="inline-flex min-h-9 items-center font-bold text-[#0b5f86] underline underline-offset-2 disabled:opacity-60">
+                        {participantsLoading === row.id ? "Memuat peserta…" : openParticipants === row.id ? "Sembunyikan peserta" : "Lihat peserta"}
                       </button>
                     )}
                   </div>
                 )}
                 {openParticipants === row.id && (
                   <ul className="mt-3 divide-y divide-[#eef2f6] rounded-xl border border-[#e3e9f0]">
-                    {participants.map((person) => (
-                      <li key={person.businessName} className="px-3 py-2 text-xs">
+                    {participants.map((person, index) => (
+                      <li key={`${person.businessName}-${person.joinedAt}-${index}`} className="px-3 py-2 text-xs">
                         <span className="font-semibold text-[#1b2a3a]">{person.businessName}</span>
                         <span className="text-[#6e859e]"> · {person.ownerName ?? "Pemilik belum mengisi nama"} · {person.sector}</span>
                       </li>

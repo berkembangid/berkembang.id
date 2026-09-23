@@ -202,8 +202,8 @@ function DrilldownView({ data, band, legality }: {
                 ))}
               </tr></thead>
               <tbody>
-                {data.affiliated.map((row) => (
-                  <tr key={row.businessName}>
+                {data.affiliated.map((row, index) => (
+                  <tr key={`${row.businessName}-${index}`}>
                     <td className="border-b border-[#eef2f6] px-2 py-2.5 font-semibold text-[#1b2a3a]">{row.businessName}</td>
                     <td className="border-b border-[#eef2f6] px-2 py-2.5 text-[#1b2a3a]">{row.ownerName ?? "Belum diisi"}</td>
                     <td className="border-b border-[#eef2f6] px-2 py-2.5 text-[#6e859e]">{row.sector}</td>
