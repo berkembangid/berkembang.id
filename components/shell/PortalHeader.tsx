@@ -29,8 +29,11 @@ type PortalHeaderProps = {
   contextHint?: string;
   menuLinks?: readonly PortalMenuLink[];
   onSignOut: () => void;
-  /** Lonceng hanya muncul bila portalnya memang punya halaman pemberitahuan. */
-  notifications?: { href: string; unread: number };
+  /**
+   * Lonceng hanya muncul bila portalnya punya pemberitahuan. Ia membuka panel
+   * di tempat (`onOpen`), bukan berpindah halaman.
+   */
+  notifications?: { unread: number; onOpen: () => void };
 };
 
 function initials(value: string) {
@@ -100,8 +103,10 @@ export default function PortalHeader({
         <span className={`${styles.portalBadge} hidden sm:inline-block`}>{badge}</span>
 
         {notifications && (
-          <Link
-            href={notifications.href}
+          <button
+            type="button"
+            onClick={notifications.onOpen}
+            aria-haspopup="dialog"
             aria-label={
               notifications.unread
                 ? `Buka pemberitahuan, ${notifications.unread} belum dibaca`
@@ -118,7 +123,7 @@ export default function PortalHeader({
                 {notifications.unread > 9 ? "9+" : notifications.unread}
               </span>
             )}
-          </Link>
+          </button>
         )}
 
         <DropdownMenu>

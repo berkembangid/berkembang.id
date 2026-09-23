@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -10,6 +10,7 @@ import { useConfirm } from "@/components/ui/confirm";
 import { notifyFailure } from "@/lib/notify";
 import { InstitutionProvider, useInstitution } from "@/modules/institution/institution-context";
 import PortalHeader from "@/components/shell/PortalHeader";
+import { NotificationPanel, useNotifications } from "@/modules/consent/notification-center";
 import { LEMBAGA_ROUTES } from "./lembaga-navigation";
 import styles from "../dashboard-shell.module.css";
 
@@ -44,8 +45,8 @@ function InstitutionSwitcher() {
   </label>;
 }
 
-function SidebarShell({ pathname, mobileOpen, setMobileOpen, unread, contextName, regionWide, handleSignOut }: {
-  pathname: string; mobileOpen: boolean; setMobileOpen: (open: boolean) => void; unread: number; contextName: string; regionWide: boolean; handleSignOut: () => void;
+function SidebarShell({ pathname, mobileOpen, setMobileOpen, unread, onOpenNotifications, contextName, regionWide, handleSignOut }: {
+  pathname: string; mobileOpen: boolean; setMobileOpen: (open: boolean) => void; unread: number; onOpenNotifications: () => void; contextName: string; regionWide: boolean; handleSignOut: () => void;
 }) {
   return <>
     {mobileOpen && <button type="button" aria-label="Tutup menu" className={styles.backdrop} onClick={() => setMobileOpen(false)} />}
@@ -56,6 +57,8 @@ function SidebarShell({ pathname, mobileOpen, setMobileOpen, unread, contextName
         <p className={styles.groupLabel}>Ruang kerja</p>
         {NAV_ITEMS.filter((item) => !item.regionWide || regionWide).map((item) => {
           const active = item.href === "/lembaga" ? pathname === item.href : pathname.startsWith(item.href);
+          // Notifikasi membuka panel, bukan halaman: orangnya tetap di layar yang sedang ia kerjakan.
+          if (item.badge) return <button key={item.href} type="button" aria-haspopup="dialog" onClick={() => { setMobileOpen(false); onOpenNotifications(); }} className={`${styles.navLink} w-[calc(100%-20px)] text-left`}><item.Icon size={16} /><span>{item.label}</span>{unread > 0 && <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-black text-white">{unread > 99 ? "99+" : unread}</span>}</button>;
           return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} aria-current={active ? "page" : undefined} className={`${styles.navLink} ${active ? styles.navActive : ""}`}><item.Icon size={16} /><span>{item.label}</span>{item.badge && unread > 0 && <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-black text-white">{unread > 99 ? "99+" : unread}</span>}</Link>;
         })}
       </nav>
@@ -68,7 +71,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const { confirm } = useConfirm();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notifications = useNotifications(pathname);
   const { selected } = useInstitution();
 
   async function handleSignOut() {
@@ -88,19 +92,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     window.location.href = "/auth/login";
   }
 
-  useEffect(() => {
-    fetch("/api/v1/notifications", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((body) => {
-        const rows = (body.data ?? []) as Array<{ status: string }>;
-        setUnread(rows.filter((row) => row.status === "unread").length);
-      })
-      .catch(() => undefined);
-  }, [pathname]);
 
   return (
     <div data-world="institusi" className={styles.portal}>
-      <SidebarShell pathname={pathname} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} unread={unread} contextName={selected?.name ?? "Akun lembaga"} regionWide={selected?.regionWide === true} handleSignOut={handleSignOut} />
+      <SidebarShell pathname={pathname} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} unread={notifications.unread} onOpenNotifications={() => setNotificationsOpen(true)} contextName={selected?.name ?? "Akun lembaga"} regionWide={selected?.regionWide === true} handleSignOut={handleSignOut} />
       <div className={styles.main}>
         <PortalHeader
           routes={LEMBAGA_ROUTES}
@@ -114,11 +109,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             { href: "/lembaga/organisasi", label: "Organisasi & anggota", Icon: Settings2 },
             { href: "/lembaga/audit", label: "Log audit", Icon: ScrollText },
           ]}
-          notifications={{ href: "/lembaga/notifikasi", unread }}
+          notifications={{ unread: notifications.unread, onOpen: () => setNotificationsOpen(true) }}
           onSignOut={() => void handleSignOut()}
         />
         {children}
       </div>
+      <NotificationPanel open={notificationsOpen} onClose={() => setNotificationsOpen(false)} state={notifications} portalBase="/lembaga" />
     </div>
   );
 }
