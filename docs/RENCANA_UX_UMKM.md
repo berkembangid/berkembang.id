@@ -12,11 +12,9 @@ diketahui sebelum digabung:
 
 **Wajib sebelum rilis**
 
-- Migrasi baru **0107–0110** belum diterapkan ke demo maupun produksi.
-  Semuanya lulus `npm run db:test` dan uji asap per fungsi di PostgreSQL
-  lokal. Tanpa migrasinya: layar Izin (program & riwayat akses), masa
-  berlaku dokumen, Utang piutang, dan Catatan rutin menampilkan galat; laporan
-  bulanan dan pengingat tetap berjalan (bagian barunya kosong).
+- Migrasi baru **0107–0110** sudah diterapkan ke demo dan produksi pada
+  24 September 2026 (0102 juga menyusul ke demo). Semuanya lulus
+  `npm run db:test` dan uji asap per fungsi di PostgreSQL lokal sebelumnya.
 - Tampilan belum diperiksa dengan sesi UMKM sungguhan. Layar baru diperiksa
   lewat Playwright dengan API tiruan; kenaikan ukuran huruf di Fase 1 belum
   dilihat per layar dengan data asli.
