@@ -23,7 +23,10 @@ const createdCaptureSchema = z.object({
   inputMethod: captureInputMethodSchema,
   status: captureStatusSchema,
   storagePath: z.string().nullable(),
-  capturePath: z.enum(["TEXT_ONLY", "WHISPER"]).nullable().optional(),
+  // Harus memuat ketiga jalur `CapturePath`. Dulu "OCR" tertinggal di sini:
+  // capture foto lahir di basis data, lalu jawabannya ditolak parser ini,
+  // sehingga foto nota tidak pernah mendapat sesi unggah.
+  capturePath: z.enum(["TEXT_ONLY", "WHISPER", "OCR"]).nullable().optional(),
   createdAt: z.string(),
   idempotent: z.boolean(),
 });

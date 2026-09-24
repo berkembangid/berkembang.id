@@ -9,6 +9,7 @@ import {
   type DocumentOcrResult,
   type OcrDocumentType,
 } from "@/modules/documents/document-schema";
+import { defaultGroqVisionModel } from "@/modules/ai/receipt-text";
 
 export type DocumentExtractionResult = DocumentOcrResult;
 export type DocumentExtractionInput = {
@@ -206,7 +207,7 @@ function createGeminiProvider(apiKey: string): DocumentExtractionProvider {
 }
 
 function createGroqProvider(apiKey: string): DocumentExtractionProvider {
-  const model = process.env.DOCUMENT_GROQ_MODEL ?? "qwen/qwen3.6-27b";
+  const model = process.env.DOCUMENT_GROQ_MODEL ?? defaultGroqVisionModel;
   const client = new Groq({ apiKey });
   return {
     name: "groq",
