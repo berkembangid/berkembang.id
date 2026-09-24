@@ -60,3 +60,8 @@ next-env.d.ts
 *.html
 # Halaman tanpa sinyal untuk service worker Ruang Usaha (public/sw.js).
 !public/offline.html
+
+# Salinan lingkungan demo berisi kunci sungguhan, walau namanya tanpa titik di depan.
+env.demo
+env.*
+!env.example
