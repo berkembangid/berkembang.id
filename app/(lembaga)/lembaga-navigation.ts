@@ -19,7 +19,6 @@ export const LEMBAGA_NAV: readonly PortalNavItem[] = [
   { group: "Akses data", href: "/lembaga/dosir", label: "Profil berizin", Icon: FolderOpen },
   { group: "Pendampingan", href: "/lembaga/program", label: "Program", Icon: LayoutGrid },
   { group: "Pendampingan", href: "/lembaga/siaran", label: "Siaran", Icon: Megaphone, requiresRegionWide: true },
-  { group: "Organisasi", href: "/lembaga/notifikasi", label: "Notifikasi", Icon: Bell, opensNotifications: true },
   { group: "Organisasi", href: "/lembaga/organisasi", label: "Organisasi & anggota", Icon: Settings2 },
   { group: "Organisasi", href: "/lembaga/audit", label: "Log audit", Icon: ScrollText },
 ];
