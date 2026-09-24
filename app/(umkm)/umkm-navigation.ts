@@ -1,10 +1,11 @@
 import {
-  BarChart3, Bell, BookOpen, Building2, Calculator, CalendarDays, FileText, Home, Landmark, Map, Mic, Repeat,
-  Scale, ShieldCheck, Sparkles, Target, User, Users, Wallet,
+  BarChart3, Bell, BookOpen, Building2, Calculator, CalendarDays, FileText, Home, Landmark, Map, Mic, Package, Repeat,
+  Receipt, Scale, ShieldCheck, Sparkles, Target, User, Users, Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-export type NavItem = { label: string; href: string; Icon: LucideIcon; matches?: string[] };
+/** `group` adalah judul kelompok di menu samping; item sekelompok ditulis berurutan. */
+export type NavItem = { label: string; href: string; Icon: LucideIcon; group: string; matches?: string[] };
 
 /**
  * Profil naik ke urutan kedua, dan Dokumen tidak lagi berdiri sendiri.
@@ -14,14 +15,17 @@ export type NavItem = { label: string; href: string; Icon: LucideIcon; matches?:
  * profil di urutan keenam, dokumen di menu terpisah, dan kondisi awal
  * terselip sebagai tab di dalam Laporan. Sekarang ketiganya satu menu dengan
  * tiga tab, dan menu itu berada tepat setelah Beranda.
+ *
+ * Kelompoknya: usaha itu sendiri, uangnya, lalu arah bertumbuhnya. Bilah menu
+ * bawah di ponsel tidak memakai kelompok ini.
  */
 export const NAVIGATION: NavItem[] = [
-  { label: "Beranda", href: "/umkm", Icon: Home },
-  { label: "Profil", href: "/umkm/profil", Icon: User, matches: ["/umkm/profil"] },
-  { label: "Catat", href: "/umkm/catat", Icon: Mic },
-  { label: "Laporan", href: "/umkm/laporan", Icon: FileText, matches: ["/umkm/laporan", "/umkm/akuntan"] },
-  { label: "Perjalanan", href: "/umkm/perjalanan", Icon: Map, matches: ["/umkm/perjalanan", "/umkm/kesiapan"] },
-  { label: "Panduan", href: "/umkm/panduan", Icon: Sparkles },
+  { group: "Usaha", label: "Beranda", href: "/umkm", Icon: Home },
+  { group: "Usaha", label: "Profil", href: "/umkm/profil", Icon: User, matches: ["/umkm/profil"] },
+  { group: "Keuangan", label: "Catat", href: "/umkm/catat", Icon: Mic },
+  { group: "Keuangan", label: "Laporan", href: "/umkm/laporan", Icon: FileText, matches: ["/umkm/laporan", "/umkm/akuntan", "/umkm/nota"] },
+  { group: "Berkembang", label: "Perjalanan", href: "/umkm/perjalanan", Icon: Map, matches: ["/umkm/perjalanan", "/umkm/kesiapan"] },
+  { group: "Berkembang", label: "Panduan", href: "/umkm/panduan", Icon: Sparkles },
 ];
 
 /**
@@ -45,7 +49,7 @@ export const CATAT_RESTART_EVENT = "berkembang:catat-baru";
  *
  * `tab` null berarti tujuan di luar halaman Laporan (`href` dipakai apa adanya).
  */
-export type LaporanTab = "bulan-ini" | "utang-piutang" | "kas" | "kondisi" | "bank";
+export type LaporanTab = "bulan-ini" | "utang-piutang" | "kas" | "kondisi" | "produk" | "bank";
 
 export type LaporanSection = {
   tab: LaporanTab | null;
@@ -60,6 +64,7 @@ export const LAPORAN_SECTIONS: LaporanSection[] = [
   { tab: "bulan-ini", href: "/umkm/laporan?tab=bulan-ini", label: "Bulan ini", description: "Untung rugi, pengingat, dan ringkasan bulan berjalan", Icon: CalendarDays, tone: "success" },
   { tab: "kas", href: "/umkm/laporan?tab=kas", label: "Buku kas", description: "Setiap uang masuk dan keluar, tutup kas harian", Icon: BookOpen, tone: "brand" },
   { tab: "kondisi", href: "/umkm/laporan?tab=kondisi", label: "Kondisi usaha", description: "Yang Anda punya, yang harus dibayar, dan milik bersih", Icon: Scale, tone: "success" },
+  { tab: "produk", href: "/umkm/laporan?tab=produk", label: "Untung per produk", description: "Produk mana yang paling menghasilkan", Icon: Package, tone: "warning" },
   { tab: "utang-piutang", href: "/umkm/laporan?tab=utang-piutang", label: "Utang piutang", description: "Siapa yang belum bayar, dan ke siapa Anda berutang", Icon: Users, tone: "warning" },
   { tab: "bank", href: "/umkm/laporan?tab=bank", label: "Untuk bank", description: "Laporan untuk pengajuan pinjaman", Icon: Landmark, tone: "brand" },
   { tab: null, href: "/umkm/akuntan", label: "Mode akuntan", description: "Laporan lengkap untuk dibaca akuntan Anda", Icon: Calculator, tone: "neutral" },
@@ -105,8 +110,10 @@ const SCREENS: Array<{ path: string; exact?: boolean } & ScreenHeading> = [
   { path: "/umkm/profil/rekening", title: "Rekening usaha", hint: "Pisahkan uang usaha dari uang rumah", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: Landmark },
   { path: "/umkm/profil/izin", title: "Izin & program", hint: "Siapa yang bisa melihat data usaha", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: ShieldCheck },
   { path: "/umkm/profil", title: "Profil usaha", hint: "Kenali usaha Anda", Icon: Building2 },
+  { path: "/umkm/catat/impor", title: "Impor mutasi rekening", hint: "Dari CSV internet banking", parentHref: "/umkm/catat", parentLabel: "Catat", Icon: Landmark },
   { path: "/umkm/catat/rutin", title: "Catatan rutin", hint: "Sewa, gaji, listrik, cicilan", parentHref: "/umkm/catat", parentLabel: "Catat", Icon: Repeat },
   { path: "/umkm/catat", title: "Catat transaksi", hint: "Uang masuk dan uang keluar", Icon: Mic },
+  { path: "/umkm/nota", title: "Nota pembeli", hint: "Kirim atau cetak nota", parentHref: "/umkm/laporan?tab=kas", parentLabel: "Buku kas", Icon: Receipt },
   { path: "/umkm/laporan", title: "Laporan", hint: "Ringkasan uang usaha", Icon: BarChart3 },
   { path: "/umkm/kesiapan/metodologi", title: "Cara kami menghitung", parentHref: "/umkm/perjalanan", parentLabel: "Perjalanan", Icon: Target },
   { path: "/umkm/perjalanan", title: "Perjalanan usaha", hint: "Langkah demi langkah", Icon: Map },

@@ -54,6 +54,15 @@ export type InstitutionPortalSupplement = {
       };
     };
     Functions: {
+      /** 0115 -- daftar produk. */
+      upsert_product: {
+        Args: { p_id: string | null; p_name: string; p_unit: string | null; p_sell_price_idr: number | null; p_cost_price_idr: number };
+        Returns: import("@/types/database.generated").Json;
+      };
+      archive_product: {
+        Args: { p_id: string };
+        Returns: import("@/types/database.generated").Json;
+      };
       /** 0114 -- target bulanan. */
       set_monthly_target: {
         Args: { p_revenue_target_idr: number | null; p_expense_limit_idr: number | null };

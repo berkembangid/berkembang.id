@@ -16,6 +16,9 @@ export const cancelLedgerTransactionClient = (id: string, reason: string) => req
 export const closeLedgerDayClient = (data: CloseLedgerDayInput) => requestData<{ closingId: string }>("/api/v1/ledger/daily-closing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
 export const getTransactionChangesClient = (id: string) => requestData<TransactionChangeView[]>(`/api/v1/ledger/transactions/${id}`, { cache: "no-store" });
 export const getContactBalancesClient = () => requestData<import("@/modules/ledger/contact-balances").ContactBalance[]>("/api/v1/contacts", { cache: "no-store" });
+export const getProductsClient = () => requestData<import("@/modules/ledger/product-margin").Product[]>("/api/v1/products", { cache: "no-store" });
+export const saveProductClient = (product: { id: string | null; name: string; unit: string | null; sellPriceIdr: number | null; costPriceIdr: number }) => requestData<{ id: string }>("/api/v1/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(product) });
+export const archiveProductClient = (id: string) => requestData<{ id: string; active: false }>(`/api/v1/products/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const getMonthlyTargetClient = () => requestData<import("@/modules/ledger/targets").MonthlyTarget>("/api/v1/targets", { cache: "no-store" });
 export const setMonthlyTargetClient = (target: import("@/modules/ledger/targets").MonthlyTarget) => requestData<import("@/modules/ledger/targets").MonthlyTarget>("/api/v1/targets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(target) });
 export const getContactDirectoryClient = () => requestData<import("@/modules/ledger/contact-balances").ContactDirectory>("/api/v1/contacts/directory", { cache: "no-store" });

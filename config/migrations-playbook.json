@@ -132,6 +132,7 @@
     "0111_alat_milik_sendiri.sql",
     "0112_jual_alat_ikut_penyusutan_awal.sql",
     "0113_gabung_kontak.sql",
-    "0114_target_bulanan.sql"
+    "0114_target_bulanan.sql",
+    "0115_produk_dan_modal.sql"
   ]
 }

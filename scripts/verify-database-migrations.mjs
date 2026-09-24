@@ -5638,6 +5638,7 @@ async function verifyFreshDatabase() {
   await verifyDinasAuthority();
   await verifyContactMerge();
   await verifyMonthlyTarget();
+  await verifyProducts();
 }
 
 // 0113: gabung kontak. Dijalankan paling akhir karena mengubah rincian
@@ -5697,6 +5698,33 @@ async function verifyMonthlyTarget() {
   );
   await asAuthenticatedCommitted(userB, "select public.set_monthly_target(null, null)");
   assert.equal(await scalar(`select count(*)::int as value from public.monthly_targets where business_id = '${businessB}'`), 0, "clearing both removes the row");
+}
+
+// 0115: daftar produk -- hanya lewat RPC, nama unik per usaha.
+async function verifyProducts() {
+  const userB = "b0000000-0000-4000-8000-000000000001";
+  const userA = "a0000000-0000-4000-8000-000000000001";
+  const businessB = "b1000000-0000-4000-8000-000000000001";
+  const created = await asAuthenticatedCommitted(userB, "select public.upsert_product(null, 'Nasi kotak', 'kotak', 15000, 9000) as value");
+  const productId = created.rows[0].value.id;
+  await expectAuthenticatedRejected(userB, "select public.upsert_product(null, ' nasi KOTAK ', null, null, 1)", "23505");
+  await asAuthenticatedCommitted(userB, `select public.upsert_product('${productId}', 'Nasi kotak', 'kotak', 16000, 9500)`);
+  assert.equal(
+    Number(await scalar(`select cost_price_idr::bigint as value from public.products where id = '${productId}'`)),
+    9500,
+    "an edit updates the product in place",
+  );
+  await expectAuthenticatedRejected(userB, "select public.upsert_product(null, 'Es teh', null, 0, 1000)", "22023");
+  await expectAuthenticatedRejected(userB, `insert into public.products (business_id, name, cost_price_idr) values ('${businessB}', 'Liar', 1)`, "42501");
+  assert.equal(
+    (await asAuthenticated(userA, "select count(*)::int as value from public.products")).rows[0].value,
+    0,
+    "another owner must not see this business's products",
+  );
+  await expectAuthenticatedRejected(userA, `select public.archive_product('${productId}')`, "P0002");
+  await asAuthenticatedCommitted(userB, `select public.archive_product('${productId}')`);
+  // Nama produk yang diarsipkan boleh dipakai lagi.
+  await asAuthenticatedCommitted(userB, "select public.upsert_product(null, 'Nasi kotak', 'kotak', 17000, 10000)");
 }
 
 async function verifyLegacyBackfill() {
