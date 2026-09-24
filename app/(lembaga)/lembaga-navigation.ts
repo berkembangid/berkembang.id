@@ -1,22 +1,26 @@
 import {
-  BarChart2, Bell, Bookmark, Clock3, FolderOpen, LayoutGrid, Map, Megaphone, ScrollText, Settings2,
+  Bell, Bookmark, Clock3, FolderOpen, LayoutDashboard, LayoutGrid, Map, Megaphone, ScrollText, Settings2,
   TrendingUp,
 } from "lucide-react";
 import type { PortalNavItem, PortalRoute } from "@/components/shell/portal-navigation";
 
-/** Menu samping portal lembaga. Judul layarnya di `LEMBAGA_ROUTES` di bawah. */
+/**
+ * Menu samping portal lembaga. Judul layarnya di `LEMBAGA_ROUTES` di bawah.
+ *
+ * Kelompoknya mengikuti urutan kerja: cari usaha, minta izin membuka
+ * profilnya, dampingi lewat program, lalu urusan organisasi sendiri.
+ */
 export const LEMBAGA_NAV: readonly PortalNavItem[] = [
-  { href: "/lembaga", label: "Temukan", Icon: TrendingUp },
-  { href: "/lembaga/wilayah", label: "Ringkasan wilayah", Icon: Map, requiresRegionWide: true },
-  { href: "/lembaga/siaran", label: "Siaran", Icon: Megaphone, requiresRegionWide: true },
-  { href: "/lembaga/tersimpan", label: "Tersimpan", Icon: Bookmark },
-  { href: "/lembaga/permintaan", label: "Permintaan", Icon: Clock3 },
-  { href: "/lembaga/dosir", label: "Profil berizin", Icon: FolderOpen },
-  { href: "/lembaga/program", label: "Program", Icon: LayoutGrid },
-  { href: "/lembaga/analitik", label: "Analitik program", Icon: BarChart2 },
-  { href: "/lembaga/notifikasi", label: "Notifikasi", Icon: Bell, opensNotifications: true },
-  { href: "/lembaga/organisasi", label: "Organisasi", Icon: Settings2 },
-  { href: "/lembaga/audit", label: "Log audit", Icon: ScrollText },
+  { group: "Ringkasan", href: "/lembaga/analitik", label: "Dashboard", Icon: LayoutDashboard },
+  { group: "Cari UMKM", href: "/lembaga", label: "Temukan", Icon: TrendingUp },
+  { group: "Cari UMKM", href: "/lembaga/wilayah", label: "Ringkasan wilayah", Icon: Map, requiresRegionWide: true },
+  { group: "Cari UMKM", href: "/lembaga/tersimpan", label: "Tersimpan", Icon: Bookmark },
+  { group: "Akses data", href: "/lembaga/permintaan", label: "Permintaan", Icon: Clock3 },
+  { group: "Akses data", href: "/lembaga/dosir", label: "Profil berizin", Icon: FolderOpen },
+  { group: "Pendampingan", href: "/lembaga/program", label: "Program", Icon: LayoutGrid },
+  { group: "Pendampingan", href: "/lembaga/siaran", label: "Siaran", Icon: Megaphone, requiresRegionWide: true },
+  { group: "Organisasi", href: "/lembaga/organisasi", label: "Organisasi & anggota", Icon: Settings2 },
+  { group: "Organisasi", href: "/lembaga/audit", label: "Log audit", Icon: ScrollText },
 ];
 
 /**
@@ -69,10 +73,9 @@ export const LEMBAGA_ROUTES: readonly PortalRoute[] = [
   { match: "/lembaga/program", title: "Program pembinaan", Icon: LayoutGrid },
   {
     match: "/lembaga/analitik",
-    title: "Analitik program",
-    hint: "Permintaan dan akses profil, tanpa angka rupiah per usaha",
-    parent: { href: "/lembaga/program", label: "Program pembinaan" },
-    Icon: BarChart2,
+    title: "Dashboard",
+    hint: "Ringkasan permintaan, izin, dan program — tanpa angka rupiah per usaha",
+    Icon: LayoutDashboard,
   },
   { match: "/lembaga/notifikasi", title: "Pemberitahuan", Icon: Bell },
   { match: "/lembaga/organisasi", title: "Organisasi & anggota", Icon: Settings2 },

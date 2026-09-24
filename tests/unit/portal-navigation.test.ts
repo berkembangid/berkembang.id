@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolvePortalHeading } from "@/components/shell/portal-navigation";
+import { groupPortalNav, resolvePortalHeading } from "@/components/shell/portal-navigation";
 import { ADMIN_ROUTES } from "@/app/(admin)/admin-navigation";
-import { LEMBAGA_ROUTES } from "@/app/(lembaga)/lembaga-navigation";
+import { LEMBAGA_NAV, LEMBAGA_ROUTES } from "@/app/(lembaga)/lembaga-navigation";
+import { INVESTOR_NAV } from "@/app/(investor)/investor-navigation";
+import { NAVIGATION } from "@/app/(umkm)/umkm-navigation";
 
 /**
  * Satu aturan yang diuji di sini, dan seluruh tabel judul bergantung padanya:
@@ -78,5 +80,22 @@ describe("judul layar portal", () => {
     for (const path of institusi) {
       expect(resolvePortalHeading(path, LEMBAGA_ROUTES, "CADANGAN").title, path).not.toBe("CADANGAN");
     }
+  });
+});
+
+describe("kelompok menu samping", () => {
+  it("menjaga urutan dan tidak memecah satu kelompok menjadi dua", () => {
+    for (const [portal, nav] of [["lembaga", LEMBAGA_NAV], ["investor", INVESTOR_NAV], ["umkm", NAVIGATION]] as const) {
+      const labels = groupPortalNav(nav).map((group) => group.label);
+      // Kelompok yang muncul dua kali berarti itemnya ditulis terpisah di tabel.
+      expect(new Set(labels).size, portal).toBe(labels.length);
+      expect(groupPortalNav(nav).flatMap((group) => group.items), portal).toEqual([...nav]);
+    }
+  });
+
+  it("tidak meninggalkan judul kelompok kosong saat item tersaring", () => {
+    const tanpaWilayah = LEMBAGA_NAV.filter((item) => !item.requiresRegionWide);
+    for (const group of groupPortalNav(tanpaWilayah)) expect(group.items.length, group.label).toBeGreaterThan(0);
+    expect(groupPortalNav(LEMBAGA_NAV)[0]).toMatchObject({ label: "Ringkasan", items: [{ label: "Dashboard" }] });
   });
 });

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, CheckCircle2, Eye, FileSearch, LayoutGrid, Percent, Users } from "lucide-react";
+import { CheckCircle2, ChevronRight, Eye, FileSearch, LayoutDashboard, LayoutGrid, Percent, Users } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { selectedInstitutionFromCookies } from "@/lib/api/institution";
 import {
@@ -18,12 +18,22 @@ type Analytics = {
   everApproved: number;
   accessCount: number;
   conversion: string;
-  weeklyRequests: { label: string; primary: number }[];
+  weeklyRequests: { label: string; primary: number; secondary: number }[];
+  statusCounts: { key: string; label: string; color: string; count: number }[];
   perProgram: { id: string; name: string; status: string; requests: number }[];
   unassigned: number;
 };
 
 const WEEKS = 7;
+// Label dan warnanya sama dengan lencana di layar Permintaan, supaya warna
+// yang sama berarti keadaan yang sama di kedua layar.
+const REQUEST_STATUSES = [
+  { key: "pending", label: "Menunggu", color: "#e0a526" },
+  { key: "approved", label: "Disetujui", color: "#12906a" },
+  { key: "expired", label: "Kedaluwarsa", color: "#8aa0b6" },
+  { key: "rejected", label: "Ditolak", color: "#c0392b" },
+  { key: "cancelled", label: "Dibatalkan", color: "#c8d3de" },
+] as const;
 const shortDate = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short" });
 
 /**
@@ -71,11 +81,18 @@ async function loadAnalytics(): Promise<{ data: Analytics } | { error: string }>
       start.setHours(0, 0, 0, 0);
       const end = new Date(start);
       end.setDate(start.getDate() + 7);
+      const inWeek = requestRows.filter((request) => { const created = new Date(request.created_at); return created >= start && created < end; });
       return {
         label: shortDate.format(start),
-        primary: requestRows.filter((request) => { const created = new Date(request.created_at); return created >= start && created < end; }).length,
+        primary: inWeek.length,
+        secondary: inWeek.filter((request) => request.status === "approved").length,
       };
     });
+
+    const statusCounts = REQUEST_STATUSES.map((status) => ({
+      ...status,
+      count: requestRows.filter((request) => request.status === status.key).length,
+    }));
 
     const perProgram = programRows.map((program) => ({
       ...program,
@@ -93,6 +110,7 @@ async function loadAnalytics(): Promise<{ data: Analytics } | { error: string }>
         accessCount: accessRows.length,
         conversion,
         weeklyRequests,
+        statusCounts,
         perProgram,
         unassigned: requestRows.filter((request) => !request.program_id).length,
       },
@@ -102,12 +120,34 @@ async function loadAnalytics(): Promise<{ data: Analytics } | { error: string }>
   }
 }
 
-export default async function LembagaAnalyticsPage() {
+/** Satu batang bertumpuk: berapa bagian permintaan yang ada di tiap status. */
+function StatusBreakdown({ rows, total }: { rows: Analytics["statusCounts"]; total: number }) {
+  const percent = (count: number) => `${Math.round((count / total) * 100)}%`;
+  const present = rows.filter((row) => row.count > 0);
+  return <div className="p-5 pt-0">
+    <div className="flex h-3 overflow-hidden rounded-full bg-[#eef2f6]" role="img" aria-label="Sebaran status permintaan akses">
+      {present.map((row) => <span key={row.key} className="h-full" style={{ width: `${(row.count / total) * 100}%`, backgroundColor: row.color }} title={`${row.label}: ${row.count}`} />)}
+    </div>
+    <ul className="mt-4 grid gap-1 sm:grid-cols-2 xl:grid-cols-5">
+      {rows.map((row) => <li key={row.key}>
+        <Link href="/lembaga/permintaan" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-[#f6f8fb]">
+          <i className="size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: row.color }} />
+          <span className="flex-1 text-[#34496a]">{row.label}</span>
+          <span className="font-bold tabular-nums text-[#1b2a3a]">{row.count.toLocaleString("id-ID")}</span>
+          <span className="w-9 text-right tabular-nums text-[#6e859e]">{percent(row.count)}</span>
+          <ChevronRight size={12} className="text-[#8aa0b6]" />
+        </Link>
+      </li>)}
+    </ul>
+  </div>;
+}
+
+export default async function LembagaDashboardPage() {
   const result = await loadAnalytics();
   const header = <PageHeader
-    title="Analitik program"
-    description="Permintaan akses dan profil berizin organisasi Anda. Semua angka agregat — tanpa rupiah per usaha."
-    icon={BarChart3}
+    title="Dashboard"
+    description="Ringkasan permintaan akses, izin, dan program organisasi Anda. Semua angka agregat — tanpa rupiah per usaha."
+    icon={LayoutDashboard}
     actions={<Link href="/lembaga/program" className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-[#d5dee8] bg-white px-3.5 text-xs font-bold text-[#0b5f86] hover:bg-[#f6f8fb]"><LayoutGrid size={14} />Kelola program</Link>}
   />;
 
@@ -132,9 +172,14 @@ export default async function LembagaAnalyticsPage() {
       <div className="p-5 pt-0">
         {data.requestCount === 0
           ? <p className="rounded-xl bg-[#f6f8fb] p-6 text-center text-xs text-[#6e859e]">Belum ada permintaan akses. Grafiknya muncul setelah permintaan pertama dikirim dari Temukan.</p>
-          : <ComparisonBarChart data={data.weeklyRequests} primaryLabel="Permintaan akses" />}
+          : <ComparisonBarChart data={data.weeklyRequests} primaryLabel="Permintaan" secondaryLabel="Disetujui" />}
       </div>
     </DashboardPanel>
+
+    {data.requestCount > 0 && <DashboardPanel>
+      <PanelHeader title="Status permintaan" description="Keadaan semua permintaan akses saat ini. Pilih salah satu untuk membuka daftarnya." />
+      <StatusBreakdown rows={data.statusCounts} total={data.requestCount} />
+    </DashboardPanel>}
 
     <DashboardPanel>
       <PanelHeader title="Permintaan per program" description="Permintaan yang dikirim lewat program pembinaan. Permintaan dari Temukan tanpa program dihitung terpisah." />

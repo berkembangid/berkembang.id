@@ -67,7 +67,22 @@ const PROMPT = [
 /** Teks lebih pendek dari ini bukan struk -- ia foto buram atau salah bidik. */
 export const minimumReceiptTextLength = 4;
 
-const timeoutMs = Number(process.env.AI_PROVIDER_TIMEOUT_MS) || 20000;
+/**
+ * Batas waktu membaca foto, terpisah dari `AI_PROVIDER_TIMEOUT_MS`.
+ *
+ * Memakai batas penyedia yang sama (18 detik) membuat nota yang jelas pun
+ * gagal: hitungan modelnya sendiri setengah detik, tetapi mengirim gambar
+ * dan antrean Groq memakan 2-22 detik. 30 detik masih menyisakan tempat
+ * untuk langkah pembacaan teks sesudahnya di dalam batas 60 detik rute
+ * `process`.
+ */
+function ocrTimeoutMs() {
+  const configured = Number(process.env.CAPTURE_OCR_TIMEOUT_MS);
+  return Number.isSafeInteger(configured) && configured >= 1_000 && configured <= 40_000 ? configured : 30_000;
+}
+
+/** Model penglihatan yang sekarang tersedia di Groq. "qwen3.6" sudah ditarik. */
+export const defaultGroqVisionModel = "qwen/qwen3.8-27b";
 
 export async function readReceiptText(input: ReceiptOcrInput): Promise<ReceiptOcrResult> {
   const apiKey = process.env.GROQ_API_KEY;
@@ -75,10 +90,10 @@ export async function readReceiptText(input: ReceiptOcrInput): Promise<ReceiptOc
     throw new ReceiptOcrError("Layanan pembaca foto sedang tidak aktif.", true);
   }
 
-  const model = process.env.CAPTURE_GROQ_OCR_MODEL ?? process.env.DOCUMENT_GROQ_MODEL ?? "qwen/qwen3.6-27b";
+  const model = process.env.CAPTURE_GROQ_OCR_MODEL ?? process.env.DOCUMENT_GROQ_MODEL ?? defaultGroqVisionModel;
   const client = new Groq({ apiKey });
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), ocrTimeoutMs());
 
   try {
     const response = await client.chat.completions.create(

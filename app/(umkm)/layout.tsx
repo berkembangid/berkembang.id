@@ -12,8 +12,10 @@ import { useNotifications } from "@/modules/consent/notification-center";
 import UmkmHeader, { type TransactionNotice } from "./umkm-header";
 import { UmkmNotificationsContext } from "./umkm-notifications";
 import { CATAT_RESTART_EVENT, NAVIGATION, isActivePath } from "./umkm-navigation";
+import { groupPortalNav } from "@/components/shell/portal-navigation";
 import styles from "./umkm-shell.module.css";
 import { LaporanMenu } from "./laporan-menu";
+import { PROFILE_UPDATED_EVENT, UserAvatar, type ProfileUpdatedDetail } from "./user-avatar";
 
 const LAPORAN_HREF = "/umkm/laporan";
 
@@ -64,7 +66,20 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
   const [seenAt, setSeenAt] = useState<string | null>(null);
   const [userName, setUserName] = useState("Pengguna");
   const [businessName, setBusinessName] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const currentUserId = useRef<string | null>(null);
+
+  // Profil yang baru disimpan langsung terlihat di sidebar dan header.
+  useEffect(() => {
+    const onProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<ProfileUpdatedDetail>).detail ?? {};
+      if (detail.name) setUserName(detail.name);
+      if (detail.businessName !== undefined) setBusinessName(detail.businessName);
+      if (detail.avatarUrl !== undefined) setAvatarUrl(detail.avatarUrl || null);
+    };
+    window.addEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
+  }, []);
   // Pemberitahuan akun dari basis data: izin, unduhan dosir, undangan dinas.
   // Dimuat ulang setiap pindah layar, supaya yang baru ikut terbaca.
   const accountNotices = useNotifications(pathname);
@@ -119,7 +134,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
       currentUserId.current = user.id;
 
       const [profile, transactionResult] = await Promise.all([
-        supabase.from("profiles").select("name,nama_usaha").eq("auth_user_id", user.id).maybeSingle(),
+        supabase.from("profiles").select("name,nama_usaha,avatar_url").eq("auth_user_id", user.id).maybeSingle(),
         supabase
           .from("transactions")
           .select("id,direction,type,amount_idr,nominal,item,transaction_date,tanggal,created_at,user_id")
@@ -131,6 +146,8 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
 
       setUserName(profile.data?.name ?? user.user_metadata?.nama_pemilik ?? user.email?.split("@")[0] ?? "Pengguna");
       setBusinessName(profile.data?.nama_usaha ?? user.user_metadata?.nama_usaha ?? "");
+      // Foto dari Profil lebih dulu; akun Google membawa fotonya sendiri di metadata.
+      setAvatarUrl(profile.data?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || null);
       setNotices((transactionResult.data ?? []) as TransactionNotice[]);
 
       // Penyaringan dilakukan di server. Sebelumnya setiap penyisipan pada
@@ -223,9 +240,10 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
             className="h-8 w-auto object-contain"
           />
         </Link>
-        <p className={styles.navLabel}>Ruang usaha</p>
         <nav aria-label="Menu utama UMKM">
-          {NAVIGATION.map((item) => {
+          {groupPortalNav(NAVIGATION).map((group) => <div key={group.label} role="group" aria-label={group.label}>
+          <p className={styles.navLabel} aria-hidden>{group.label}</p>
+          {group.items.map((item) => {
             const active = isActivePath(pathname, item);
             if (item.href === LAPORAN_HREF) {
               return (
@@ -242,10 +260,11 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
               </Link>
             );
           })}
+          </div>)}
         </nav>
         <div className={styles.profile}>
           <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-umkm-brand-tint text-xs font-extrabold text-umkm-brand">{userName.slice(0, 2).toUpperCase()}</div>
+            <UserAvatar name={userName} src={avatarUrl} className="size-9" />
             <Link href="/umkm/profil" className="flex min-h-11 min-w-0 flex-1 flex-col justify-center">
               <p className="truncate text-xs font-bold text-umkm-ink">{userName}</p>
               <p className="truncate text-xs text-umkm-subtle">{businessName || "Kelola profil usaha"}</p>
@@ -259,6 +278,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
         <UmkmHeader
           userName={userName}
           businessName={businessName}
+          avatarUrl={avatarUrl}
           notices={notices}
           accountNotices={accountNotices}
           unread={unread}
