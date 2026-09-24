@@ -12,6 +12,7 @@ import { useNotifications } from "@/modules/consent/notification-center";
 import UmkmHeader, { type TransactionNotice } from "./umkm-header";
 import { UmkmNotificationsContext } from "./umkm-notifications";
 import { CATAT_RESTART_EVENT, NAVIGATION, isActivePath } from "./umkm-navigation";
+import { groupPortalNav } from "@/components/shell/portal-navigation";
 import styles from "./umkm-shell.module.css";
 import { LaporanMenu } from "./laporan-menu";
 
@@ -223,9 +224,10 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
             className="h-8 w-auto object-contain"
           />
         </Link>
-        <p className={styles.navLabel}>Ruang usaha</p>
         <nav aria-label="Menu utama UMKM">
-          {NAVIGATION.map((item) => {
+          {groupPortalNav(NAVIGATION).map((group) => <div key={group.label} role="group" aria-label={group.label}>
+          <p className={styles.navLabel} aria-hidden>{group.label}</p>
+          {group.items.map((item) => {
             const active = isActivePath(pathname, item);
             if (item.href === LAPORAN_HREF) {
               return (
@@ -242,6 +244,7 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
               </Link>
             );
           })}
+          </div>)}
         </nav>
         <div className={styles.profile}>
           <div className="flex items-center gap-3">

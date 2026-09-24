@@ -12,7 +12,7 @@ import { notifyFailure } from "@/lib/notify";
 import { useInstitution } from "@/modules/institution/institution-context";
 import { NotificationPanel, useNotifications } from "@/modules/consent/notification-center";
 import PortalHeader, { type PortalMenuLink } from "./PortalHeader";
-import type { PortalNavItem, PortalRoute } from "./portal-navigation";
+import { groupPortalNav, type PortalNavItem, type PortalRoute } from "./portal-navigation";
 import styles from "@/app/dashboard-shell.module.css";
 
 /**
@@ -32,7 +32,6 @@ export type PortalShellProps = {
   eyebrow: string;
   badge: string;
   fallbackTitle: string;
-  groupLabel: string;
   navLabel: string;
   ContextIcon: LucideIcon;
   switcherLabel: string;
@@ -80,7 +79,7 @@ function OrganizationSwitcher({ label }: { label: string }) {
 }
 
 export default function PortalShell({
-  base, nav, routes, eyebrow, badge, fallbackTitle, groupLabel, navLabel, ContextIcon, switcherLabel,
+  base, nav, routes, eyebrow, badge, fallbackTitle, navLabel, ContextIcon, switcherLabel,
   fallbackContextName, contextHint, menuLinks, signOutDescription, children,
 }: PortalShellProps) {
   const { confirm } = useConfirm();
@@ -123,7 +122,7 @@ export default function PortalShell({
     setNotificationsOpen(true);
   }
 
-  const items = nav.filter((item) => !item.requiresRegionWide || selected?.regionWide === true);
+  const groups = groupPortalNav(nav.filter((item) => !item.requiresRegionWide || selected?.regionWide === true));
   // Di ponsel, menu yang tergeser keluar layar tetap terbaca pembaca layar dan
   // tetap bisa dicapai dengan Tab. `inert` menutupnya sampai dibuka.
   const sidebarHidden = !isDesktop && !mobileOpen;
@@ -147,9 +146,10 @@ export default function PortalShell({
             </div>
           </div>
         </div>
-        <nav aria-label={navLabel} className={styles.group}>
-          <p className={styles.groupLabel}>{groupLabel}</p>
-          {items.map((item) => {
+        <nav aria-label={navLabel} className="flex-1 overflow-y-auto pb-4">
+          {groups.map((group) => <div key={group.label} role="group" aria-label={group.label} className={styles.group}>
+          <p className={styles.groupLabel} aria-hidden>{group.label}</p>
+          {group.items.map((item) => {
             if (item.opensNotifications) {
               return <button
                 key={item.href}
@@ -173,6 +173,7 @@ export default function PortalShell({
               <item.Icon size={16} /><span>{item.label}</span>
             </Link>;
           })}
+          </div>)}
         </nav>
         <div className={styles.sidebarFooter}>
           <button type="button" onClick={() => void handleSignOut()} className={`${styles.navLink} !m-0 w-full`}><LogOut size={16} /><span>Keluar akun</span></button>

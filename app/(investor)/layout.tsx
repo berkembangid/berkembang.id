@@ -14,7 +14,6 @@ export default function InvestorLayout({ children }: { children: React.ReactNode
       eyebrow="Investor & offtaker"
       badge="Kemitraan UMKM"
       fallbackTitle="Portal investor"
-      groupLabel="Kemitraan & investasi"
       navLabel="Menu portal investor"
       ContextIcon={Briefcase}
       switcherLabel="Entitas aktif"

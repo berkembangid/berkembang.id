@@ -13,13 +13,13 @@ import type { PortalNavItem, PortalRoute } from "@/components/shell/portal-navig
  * Huruf kapitalnya mengikuti portal lembaga: hanya di awal kalimat.
  */
 export const INVESTOR_NAV: readonly PortalNavItem[] = [
-  { href: "/investor", label: "Katalog UMKM", Icon: TrendingUp },
-  { href: "/investor/tersimpan", label: "Tersimpan", Icon: Bookmark },
-  { href: "/investor/permintaan", label: "Pengajuan minat", Icon: Clock3 },
-  { href: "/investor/dosir", label: "Profil berizin", Icon: FolderOpen },
-  { href: "/investor/notifikasi", label: "Notifikasi", Icon: Bell, opensNotifications: true },
-  { href: "/investor/organisasi", label: "Entitas & tim", Icon: Settings2 },
-  { href: "/investor/audit", label: "Log audit", Icon: ScrollText },
+  { group: "Cari UMKM", href: "/investor", label: "Katalog UMKM", Icon: TrendingUp },
+  { group: "Cari UMKM", href: "/investor/tersimpan", label: "Tersimpan", Icon: Bookmark },
+  { group: "Akses data", href: "/investor/permintaan", label: "Pengajuan minat", Icon: Clock3 },
+  { group: "Akses data", href: "/investor/dosir", label: "Profil berizin", Icon: FolderOpen },
+  { group: "Entitas", href: "/investor/notifikasi", label: "Notifikasi", Icon: Bell, opensNotifications: true },
+  { group: "Entitas", href: "/investor/organisasi", label: "Entitas & tim", Icon: Settings2 },
+  { group: "Entitas", href: "/investor/audit", label: "Log audit", Icon: ScrollText },
 ];
 
 export const INVESTOR_ROUTES: readonly PortalRoute[] = [

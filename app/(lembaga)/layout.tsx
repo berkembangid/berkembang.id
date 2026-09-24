@@ -14,7 +14,6 @@ export default function LembagaLayout({ children }: { children: React.ReactNode 
       eyebrow="Portal lembaga"
       badge="Akses berizin"
       fallbackTitle="Portal lembaga"
-      groupLabel="Ruang kerja"
       navLabel="Menu portal lembaga"
       ContextIcon={Building2}
       switcherLabel="Organisasi aktif"

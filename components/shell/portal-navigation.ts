@@ -37,14 +37,35 @@ export type PortalRoute = {
  *
  * `opensNotifications` membuat item membuka panel pemberitahuan alih-alih
  * berpindah halaman: orangnya tetap di layar yang sedang ia kerjakan.
+ *
+ * `group` adalah judul kelompok di menu samping. Item dengan kelompok yang
+ * sama harus ditulis berurutan: menu memulai kelompok baru setiap kali
+ * judulnya berganti, persis seperti urutan di tabel.
  */
 export type PortalNavItem = {
   href: string;
   label: string;
+  group: string;
   Icon: LucideIcon;
   requiresRegionWide?: boolean;
   opensNotifications?: boolean;
 };
+
+/**
+ * Item menu dikelompokkan menurut `group`, dengan urutan tabel dipertahankan.
+ * Item yang tersaring (misalnya layar khusus lembaga berwilayah) tidak
+ * meninggalkan judul kelompok kosong, karena pengelompokan dilakukan sesudah
+ * penyaringan.
+ */
+export function groupPortalNav<T extends { group: string }>(items: readonly T[]) {
+  const groups: { label: string; items: T[] }[] = [];
+  for (const item of items) {
+    const last = groups[groups.length - 1];
+    if (last && last.label === item.group) last.items.push(item);
+    else groups.push({ label: item.group, items: [item] });
+  }
+  return groups;
+}
 
 export type PortalHeading = {
   title: string;
