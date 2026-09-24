@@ -238,7 +238,7 @@ export default function InstitutionProgramPage() {
         title="Program pembinaan"
         description="Undang UMKM lewat kode gabung, lalu pantau perkembangannya secara agregat tanpa rupiah. Membuka laporan satu usaha tetap butuh izin pemiliknya."
         icon={LayoutGrid}
-        actions={<Link href="/lembaga/analitik" className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-[#d5dee8] bg-white px-3.5 text-xs font-bold text-[#0b5f86] hover:bg-[#f6f8fb]"><BarChart3 size={14} />Analitik program</Link>}
+        actions={<Link href="/lembaga/analitik" className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-[#d5dee8] bg-white px-3.5 text-xs font-bold text-[#0b5f86] hover:bg-[#f6f8fb]"><BarChart3 size={14} />Dashboard</Link>}
       />
       {loadError && <FeedbackBanner tone="error" live>{loadError}</FeedbackBanner>}
 
