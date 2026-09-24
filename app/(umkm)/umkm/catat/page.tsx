@@ -32,6 +32,7 @@ import { compressImageFile } from "@/modules/documents/image-compression";
 import { attachDocumentTo, uploadEvidencePhoto } from "@/modules/documents/evidence-client";
 import { CATAT_RESTART_EVENT } from "../../umkm-navigation";
 import { RecordingCard } from "./_components/recording-card";
+import { ContinuousSession } from "./_components/continuous-session";
 import { listPendingUploads, removePendingUpload, savePendingUpload, shouldQueueForRetry } from "@/modules/ledger/pending-uploads";
 import { ReviewItem } from "./_components/review-item";
 import { CaptionWithEvidence } from "./_components/caption-with-evidence";
@@ -72,11 +73,27 @@ const SUGGESTIONS = [
 
 /** Batas panjang satu rekaman. */
 const MAX_RECORD_SECONDS = 120;
+const VOICE_MODE_STORAGE_KEY = "berkembang:catat-mode-suara";
 // ─────────────────────────────────────────────────────────────────
 export default function CatatPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("ready");
   const [inputMode, setInputMode] = useState<InputMode>("voice");
+  // Rekam sekali (bawaan) atau terus-menerus sambil berjualan. Diingat per
+  // perangkat: penjual yang memakainya di warung biasanya memakainya lagi.
+  const [voiceMode, setVoiceMode] = useState<"sekali" | "terus">("sekali");
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        if (localStorage.getItem(VOICE_MODE_STORAGE_KEY) === "terus") setVoiceMode("terus");
+      } catch {}
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const chooseVoiceMode = useCallback((mode: "sekali" | "terus") => {
+    setVoiceMode(mode);
+    try { localStorage.setItem(VOICE_MODE_STORAGE_KEY, mode); } catch {}
+  }, []);
   // Sakelar dibaca sekali di awal. Nilai awalnya menganggap suara menyala dan
   // kamera mati -- kalau pembacaannya gagal, yang hilang hanya tombol yang
   // memang baru, dan cara mencatat yang sudah dipakai orang tidak ikut hilang.
@@ -894,8 +911,29 @@ export default function CatatPage() {
               ))}
             </div>
 
-            {/* Voice Box */}
+            {/* Sekali: rekam, tunggu, periksa. Terus-menerus: sambil berjualan. */}
             {inputMode === "voice" && (
+              <div role="group" aria-label="Cara merekam" className="mx-auto flex max-w-xs gap-1 rounded-full border border-umkm-line bg-white p-1">
+                {(["sekali", "terus"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={voiceMode === mode}
+                    onClick={() => chooseVoiceMode(mode)}
+                    className={`min-h-11 flex-1 rounded-full text-xs font-bold transition-colors ${voiceMode === mode ? "bg-umkm-brand-soft text-umkm-brand" : "text-umkm-subtle"}`}
+                  >
+                    {mode === "sekali" ? "Sekali" : "Terus-menerus"}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {inputMode === "voice" && voiceMode === "terus" && (
+              <ContinuousSession onExit={() => chooseVoiceMode("sekali")} />
+            )}
+
+            {/* Voice Box */}
+            {inputMode === "voice" && voiceMode === "sekali" && (
               <div className="bg-white rounded-3xl p-8 border border-umkm-line shadow-card text-center space-y-6 animate-fade-in">
                 <div className="w-16 h-16 rounded-2xl bg-umkm-brand-soft flex items-center justify-center mx-auto text-umkm-brand">
                   <Mic size={32} />

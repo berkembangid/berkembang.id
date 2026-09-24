@@ -1,5 +1,5 @@
 import {
-  BarChart3, Bell, BookOpen, Building2, Calculator, CalendarDays, FileText, Home, Landmark, Map, Mic, Package, Repeat,
+  BarChart3, Bell, BookOpen, Building2, Calculator, CalendarDays, ClipboardCheck, FileText, Home, Landmark, Map, Mic, Package, Repeat,
   Receipt, Scale, ShieldCheck, Sparkles, Target, User, Users, Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -110,6 +110,7 @@ const SCREENS: Array<{ path: string; exact?: boolean } & ScreenHeading> = [
   { path: "/umkm/profil/rekening", title: "Rekening usaha", hint: "Pisahkan uang usaha dari uang rumah", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: Landmark },
   { path: "/umkm/profil/izin", title: "Izin & program", hint: "Siapa yang bisa melihat data usaha", parentHref: "/umkm/profil", parentLabel: "Profil", Icon: ShieldCheck },
   { path: "/umkm/profil", title: "Profil usaha", hint: "Kenali usaha Anda", Icon: Building2 },
+  { path: "/umkm/catat/periksa", title: "Periksa hasil catat", hint: "Perbaiki, lalu simpan sekaligus", parentHref: "/umkm/catat", parentLabel: "Catat", Icon: ClipboardCheck },
   { path: "/umkm/catat/impor", title: "Impor mutasi rekening", hint: "Dari CSV internet banking", parentHref: "/umkm/catat", parentLabel: "Catat", Icon: Landmark },
   { path: "/umkm/catat/rutin", title: "Catatan rutin", hint: "Sewa, gaji, listrik, cicilan", parentHref: "/umkm/catat", parentLabel: "Catat", Icon: Repeat },
   { path: "/umkm/catat", title: "Catat transaksi", hint: "Uang masuk dan uang keluar", Icon: Mic },

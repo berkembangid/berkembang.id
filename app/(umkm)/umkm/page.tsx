@@ -80,7 +80,7 @@ export default function BerandaPage() {
         const requests = (requestResult.data ?? []) as RequestRow[];
         const required: ActionItem[] = [];
         for (const capture of captures) {
-          if (capture.status === "needs_review") required.push({ id: `capture-${capture.id}`, title: "Periksa catatan sebelum disimpan", description: "Hasil suara menunggu pemeriksaan Anda.", href: `/umkm/catat?capture=${capture.id}` });
+          if (capture.status === "needs_review") required.push({ id: `capture-${capture.id}`, title: "Periksa catatan sebelum disimpan", description: "Hasil suara menunggu pemeriksaan Anda.", href: "/umkm/catat/periksa" });
           else if (capture.status === "failed") required.push({ id: `capture-${capture.id}`, title: "Catatan belum berhasil dibaca", description: capture.failure_message ?? "Coba kembali atau tulis secara manual.", href: `/umkm/catat?capture=${capture.id}` });
           else required.push({ id: `capture-${capture.id}`, title: "Catatan masih diproses", description: "Buka kembali untuk melihat perkembangan terbaru.", href: `/umkm/catat?capture=${capture.id}` });
         }
