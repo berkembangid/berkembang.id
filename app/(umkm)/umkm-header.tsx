@@ -17,6 +17,7 @@ import {
 import { WelcomeTour } from "@/components/warung/WelcomeTour";
 import { notificationTypeLabels, type NotificationState } from "@/modules/consent/notification-center";
 import { umkmNotificationTarget } from "./umkm-notifications";
+import { UserAvatar } from "./user-avatar";
 import { laporanSectionFor, resolveHeading, type ScreenHeading } from "./umkm-navigation";
 import styles from "./umkm-shell.module.css";
 
@@ -36,6 +37,7 @@ export type TransactionNotice = {
 type HeaderProps = {
   userName: string;
   businessName: string;
+  avatarUrl: string | null;
   notices: TransactionNotice[];
   accountNotices: NotificationState;
   unread: number;
@@ -45,10 +47,6 @@ type HeaderProps = {
 
 function noticeDirection(notice: TransactionNotice) {
   return notice.direction ?? (notice.type === "masuk" ? "income" : "expense");
-}
-
-function initials(name: string) {
-  return name.slice(0, 2).toUpperCase();
 }
 
 /**
@@ -93,7 +91,7 @@ function ScreenTitleFromQuery({ heading, pathname }: { heading: ScreenHeading; p
 }
 
 export default function UmkmHeader({
-  userName, businessName, notices, accountNotices, unread, onNoticesSeen, onSignOut,
+  userName, businessName, avatarUrl, notices, accountNotices, unread, onNoticesSeen, onSignOut,
 }: HeaderProps) {
   const pathname = usePathname();
   const heading = resolveHeading(pathname);
@@ -141,9 +139,9 @@ export default function UmkmHeader({
             <button
               type="button"
               aria-label="Menu akun"
-              className="ml-1 grid size-11 place-items-center rounded-full bg-umkm-brand-tint text-xs font-extrabold text-umkm-brand"
+              className="ml-1 grid size-11 place-items-center overflow-hidden rounded-full"
             >
-              {initials(userName)}
+              <UserAvatar name={userName} src={avatarUrl} className="size-full" />
             </button>
           </AccountMenu>
         </div>
@@ -184,9 +182,9 @@ export default function UmkmHeader({
             <button
               type="button"
               aria-label="Menu akun"
-              className="grid size-11 place-items-center rounded-full bg-umkm-brand-tint text-xs font-extrabold text-umkm-brand"
+              className="grid size-11 place-items-center overflow-hidden rounded-full"
             >
-              {initials(userName)}
+              <UserAvatar name={userName} src={avatarUrl} className="size-full" />
             </button>
           </AccountMenu>
         </div>

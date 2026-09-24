@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 import CitySelect from "@/components/CitySelect";
 import { DashboardPage, FeedbackBanner, PageHeader } from "@/components/dashboard";
 import { notifyFailure, notifySuccess, notifyWarning } from "@/lib/notify";
+import { PROFILE_UPDATED_EVENT, type ProfileUpdatedDetail } from "../../user-avatar";
 
 /**
  * Pilihan sektor datang dari tabel pemetaan, bukan daftar tersendiri.
@@ -333,6 +334,10 @@ export default function ProfilPage() {
         return next;
       });
       setSelectedFile(null);
+      // Sidebar dan header membaca profil sekali saat dibuka; beri tahu mereka.
+      window.dispatchEvent(new CustomEvent<ProfileUpdatedDetail>(PROFILE_UPDATED_EVENT, {
+        detail: { name: form.namaPemilik || form.namaUsaha, businessName: form.namaUsaha, avatarUrl: finalAvatarUrl || null },
+      }));
       notifySuccess("Profil usaha tersimpan", {
         description: "Nama ini yang muncul di laporan dan berkas yang Anda bagikan.",
       });
