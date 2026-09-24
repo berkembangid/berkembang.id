@@ -5,6 +5,7 @@ import { ReadinessMiniCard } from "@/components/warung/ReadinessMiniCard";
 import Link from "next/link";
 import { AlertCircle, ArrowDownLeft, ArrowRight, ArrowUpRight, CalendarCheck, CheckCircle2, ChevronRight, FileText, Mic, Plus, Sparkles, Type, WalletCards } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { MonthlyTargetCard } from "@/components/warung/MonthlyTargetCard";
 import { ReminderStrip } from "@/components/warung/ReminderStrip";
 import { closingPromptText, closingTargetDate } from "@/modules/ledger/closing-day";
 import { jakartaDate } from "@/modules/ledger/ledger-schema";
@@ -173,6 +174,8 @@ export default function BerandaPage() {
 
           <SetupChecklist readiness={readiness} hasTransactions={hasTransactions} loading={loading} />
 
+          <MonthlyTargetCard />
+
           <ReclassCard />
 
           <section aria-labelledby="activity-mobile-title" className={styles.whiteCard}>
@@ -220,6 +223,7 @@ export default function BerandaPage() {
             <PendingUploadsNotice />
             <ReminderStrip />
             <SetupChecklist readiness={readiness} hasTransactions={hasTransactions} loading={loading} />
+            <MonthlyTargetCard />
           </div>
 
           <section aria-label="Ringkasan hari ini" className={styles.kpiGrid}>

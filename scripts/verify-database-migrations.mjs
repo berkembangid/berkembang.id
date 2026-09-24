@@ -5637,6 +5637,7 @@ async function verifyFreshDatabase() {
   await verifyOnboardingMarker();
   await verifyDinasAuthority();
   await verifyContactMerge();
+  await verifyMonthlyTarget();
 }
 
 // 0113: gabung kontak. Dijalankan paling akhir karena mengubah rincian
@@ -5674,6 +5675,28 @@ async function verifyContactMerge() {
 
   await asAuthenticatedCommitted(userB, "select public.unmerge_contact('sari')");
   assert.deepEqual(await piutang(), ["Bu Sari=100000", "sari=40000"], "unmerging restores the two people");
+}
+
+// 0114: target bulanan -- satu baris per usaha, hanya lewat RPC.
+async function verifyMonthlyTarget() {
+  const userB = "b0000000-0000-4000-8000-000000000001";
+  const userA = "a0000000-0000-4000-8000-000000000001";
+  const businessB = "b1000000-0000-4000-8000-000000000001";
+  await asAuthenticatedCommitted(userB, "select public.set_monthly_target(15000000, 9000000)");
+  await asAuthenticatedCommitted(userB, "select public.set_monthly_target(20000000, null)");
+  const row = (await client.query(`select revenue_target_idr::bigint as revenue, expense_limit_idr as expense from public.monthly_targets where business_id = '${businessB}'`)).rows;
+  assert.equal(row.length, 1, "one target row per business");
+  assert.equal(Number(row[0].revenue), 20000000);
+  assert.equal(row[0].expense, null, "an empty limit clears it");
+  await expectAuthenticatedRejected(userB, "select public.set_monthly_target(-5, null)", "22023");
+  await expectAuthenticatedRejected(userB, "insert into public.monthly_targets (business_id, revenue_target_idr) values ('b1000000-0000-4000-8000-000000000001', 1)", "42501");
+  assert.equal(
+    (await asAuthenticated(userA, "select count(*)::int as value from public.monthly_targets")).rows[0].value,
+    0,
+    "another owner must not see this business's target",
+  );
+  await asAuthenticatedCommitted(userB, "select public.set_monthly_target(null, null)");
+  assert.equal(await scalar(`select count(*)::int as value from public.monthly_targets where business_id = '${businessB}'`), 0, "clearing both removes the row");
 }
 
 async function verifyLegacyBackfill() {

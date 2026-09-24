@@ -54,6 +54,11 @@ export type InstitutionPortalSupplement = {
       };
     };
     Functions: {
+      /** 0114 -- target bulanan. */
+      set_monthly_target: {
+        Args: { p_revenue_target_idr: number | null; p_expense_limit_idr: number | null };
+        Returns: import("@/types/database.generated").Json;
+      };
       /** 0113 -- gabung kontak lewat alias. */
       merge_contact: {
         Args: { p_from: string; p_into: string };
