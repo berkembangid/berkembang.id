@@ -69,6 +69,15 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
   // Dimuat ulang setiap pindah layar, supaya yang baru ikut terbaca.
   const accountNotices = useNotifications(pathname);
 
+  // Tetap terbuka saat sinyal hilang (public/sw.js). Hanya di produksi: di
+  // mode pengembangan salinan halaman akan menahan perubahan kode.
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.register("/sw.js", { scope: "/umkm/" }).catch(() => {
+      // Tanpa service worker aplikasinya tetap berjalan; hanya tidak terbuka tanpa sinyal.
+    });
+  }, []);
+
   // Dialog dan toast dipasang di body, di luar cangkang ini. Penanda di body
   // membuat kotak konfirmasi memakai warna UMKM, bukan nila portal lain.
   useEffect(() => {
@@ -177,6 +186,16 @@ export default function UMKMLayout({ children }: { children: React.ReactNode }) 
     if (!yes) return;
 
     notifyInfo("Sedang keluar…");
+    // Salinan halaman untuk tanpa sinyal ikut dibuang: ponsel yang dipakai
+    // bergantian tidak boleh membuka Ruang Usaha orang lain dari cache.
+    if ("caches" in window) {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter((key) => key.startsWith("berkembang-umkm-pages-")).map((key) => caches.delete(key)));
+      } catch {
+        // Cache yang gagal dibersihkan tidak boleh menahan keluar akun.
+      }
+    }
     const { error } = await supabase.auth.signOut();
     if (error) {
       notifyFailure("Belum berhasil keluar. Coba sekali lagi.");

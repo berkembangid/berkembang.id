@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Mic, Plus, RefreshCw, X,
+  Landmark, Mic, Plus, RefreshCw, X,
   ChevronRight, Repeat, Sparkles, Type, Volume2, PenLine, RotateCcw, AlertCircle, CheckCircle2, Camera,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -1005,6 +1005,18 @@ export default function CatatPage() {
                 <span>
                   <span className="block text-sm font-bold text-umkm-ink">Catatan rutin</span>
                   <span className="block text-xs text-umkm-subtle">Sewa, gaji, listrik — diingatkan pada harinya</span>
+                </span>
+              </span>
+              <ChevronRight size={16} className="text-umkm-subtle" aria-hidden />
+            </Link>
+
+            {/* Mutasi dari internet banking: dibaca di perangkat ini, tidak diunggah. */}
+            <Link href="/umkm/catat/impor" className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-umkm-line bg-white px-4 py-3 hover:bg-umkm-surface">
+              <span className="flex items-center gap-3">
+                <span className="grid size-9 place-items-center rounded-xl bg-umkm-brand-soft text-umkm-brand" aria-hidden><Landmark size={16} /></span>
+                <span>
+                  <span className="block text-sm font-bold text-umkm-ink">Impor mutasi rekening</span>
+                  <span className="block text-xs text-umkm-subtle">Dari CSV internet banking, tanpa mengetik ulang</span>
                 </span>
               </span>
               <ChevronRight size={16} className="text-umkm-subtle" aria-hidden />

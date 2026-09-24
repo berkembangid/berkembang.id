@@ -54,6 +54,29 @@ export type InstitutionPortalSupplement = {
       };
     };
     Functions: {
+      /** 0115 -- daftar produk. */
+      upsert_product: {
+        Args: { p_id: string | null; p_name: string; p_unit: string | null; p_sell_price_idr: number | null; p_cost_price_idr: number };
+        Returns: import("@/types/database.generated").Json;
+      };
+      archive_product: {
+        Args: { p_id: string };
+        Returns: import("@/types/database.generated").Json;
+      };
+      /** 0114 -- target bulanan. */
+      set_monthly_target: {
+        Args: { p_revenue_target_idr: number | null; p_expense_limit_idr: number | null };
+        Returns: import("@/types/database.generated").Json;
+      };
+      /** 0113 -- gabung kontak lewat alias. */
+      merge_contact: {
+        Args: { p_from: string; p_into: string };
+        Returns: import("@/types/database.generated").Json;
+      };
+      unmerge_contact: {
+        Args: { p_name: string };
+        Returns: import("@/types/database.generated").Json;
+      };
       /** 0111 -- alat milik sendiri disetor ke usaha, dengan jurnal. */
       contribute_fixed_asset: {
         Args: { p_name: string; p_value_idr: number; p_useful_life_months: number; p_category?: string; p_contributed_on?: string };

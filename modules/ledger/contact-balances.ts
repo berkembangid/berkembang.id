@@ -47,3 +47,34 @@ export function totalsByKind(balances: readonly ContactBalance[]) {
     utangIdr: balances.filter((row) => row.kind === "UTANG").reduce((sum, row) => sum + row.balanceIdr, 0),
   };
 }
+
+export type ContactDirectory = {
+  /** Nama yang disarankan saat mencatat: sudah memakai nama tujuan penggabungan. */
+  names: string[];
+  /** Nama yang sudah digabung, untuk ditampilkan dan dibatalkan. */
+  aliases: Array<{ name: string; into: string }>;
+};
+
+/** Piutang yang sudah selama ini belum lunas masuk pengingat « Tagih piutang ». */
+export const RECEIVABLE_REMINDER_DAYS = 30;
+
+/**
+ * Piutang yang sudah lama belum dibayar, yang tertua lebih dulu.
+ *
+ * Penjualan tempo tidak punya tanggal jatuh tempo, jadi ukurannya umur:
+ * `since` adalah tanggal utang tertua orang itu yang belum tertutup
+ * pelunasan (0109). Pengingatnya diturunkan, bukan disimpan -- ia hilang
+ * sendiri begitu pelunasannya dicatat.
+ */
+export function overdueReceivables(
+  balances: readonly ContactBalance[],
+  asOf: string,
+  days = RECEIVABLE_REMINDER_DAYS,
+): Array<ContactBalance & { ageDays: number }> {
+  const today = Date.parse(`${asOf}T00:00:00Z`);
+  return balances
+    .filter((row) => row.kind === "PIUTANG" && row.balanceIdr > 0 && row.since)
+    .map((row) => ({ ...row, ageDays: Math.floor((today - Date.parse(`${row.since}T00:00:00Z`)) / 86_400_000) }))
+    .filter((row) => row.ageDays >= days)
+    .sort((a, b) => b.ageDays - a.ageDays);
+}

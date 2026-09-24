@@ -129,3 +129,21 @@ describe("pengingat catatan rutin", () => {
     expect(reminderHref(group.kind)).toBe("/umkm/catat/rutin");
   });
 });
+
+describe("pengingat tagih piutang", () => {
+  const overdue = (subject: string, since: string): ReminderView => ({
+    kind: "TAGIH_PIUTANG", periodMonth: since.slice(0, 7), dueDate: since, daysOverdue: 5, urgent: false, subject,
+  });
+
+  it("menyebut pelanggannya dan membawa ke Utang piutang", () => {
+    const [group] = groupReminders([overdue("Bu Sari", "2026-08-01")]);
+    expect(reminderGroupText(group).title).toBe("Tagih Bu Sari — belum bayar sejak 1 Agu");
+    expect(reminderHref(group.kind)).toBe("/umkm/laporan?tab=utang-piutang");
+  });
+
+  it("beberapa pelanggan menjadi satu kartu", () => {
+    const groups = groupReminders([overdue("Bu Sari", "2026-08-01"), overdue("Pak Budi", "2026-07-15")]);
+    expect(groups).toHaveLength(1);
+    expect(reminderGroupText(groups[0]).title).toBe("2 pelanggan belum bayar lebih dari sebulan");
+  });
+});

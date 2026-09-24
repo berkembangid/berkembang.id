@@ -2176,6 +2176,31 @@ async function verifyAccountingPeriodReports() {
     "proceeds must equal book value plus the gain or loss",
   );
   assert.ok(Number(disposal.rows[0].value.bookValueIdr) <= bookBefore);
+  // 0112: sisa nilai WAJIB ikut mengurangkan penyusutan sebelum pembukuan
+  // mulai. Kulkas ini membawa 31.250 dari jurnal pembuka; tanpanya untung
+  // atau ruginya meleset sebesar itu dan akun 1690 menyisakan saldo untuk
+  // alat yang sudah tidak ada.
+  const kulkasAfter = await client.query(`
+    select asset.cost_idr::bigint as cost, asset.opening_accumulated_depreciation_idr::bigint as opening,
+      coalesce((select sum(amount_idr) from public.depreciation_postings where asset_id = asset.id), 0)::bigint as posted
+    from public.fixed_assets asset where asset.id = '${kulkasId}'
+  `);
+  const { cost: kulkasCost, opening: kulkasOpening, posted: kulkasPosted } = kulkasAfter.rows[0];
+  assert.ok(Number(kulkasOpening) > 0, "the fixture asset must carry opening accumulated depreciation");
+  assert.equal(
+    Number(disposal.rows[0].value.bookValueIdr),
+    Number(kulkasCost) - Number(kulkasOpening) - Number(kulkasPosted),
+    "book value at disposal must subtract opening accumulated depreciation too",
+  );
+  assert.equal(
+    Number(await scalar(`
+      select coalesce(sum(line.debit), 0)::bigint as value from public.journal_lines line
+      join public.journal_entries entry on entry.id = line.entry_id
+      where entry.source = 'ASSET_DISPOSAL' and entry.source_id = '${kulkasId}' and line.account_code = '1690'
+    `)),
+    Number(kulkasOpening) + Number(kulkasPosted),
+    "disposal must clear the whole accumulated depreciation of the asset",
+  );
   await assertBalanced("2026-10-31", "after disposing of an asset");
 
   // Bulan-bulan sesudah alat dilepas tidak boleh disusutkan lagi.
@@ -5611,6 +5636,95 @@ async function verifyFreshDatabase() {
   // menggeser jumlahnya. Yang menambah data paling banyak dijalankan terakhir.
   await verifyOnboardingMarker();
   await verifyDinasAuthority();
+  await verifyContactMerge();
+  await verifyMonthlyTarget();
+  await verifyProducts();
+}
+
+// 0113: gabung kontak. Dijalankan paling akhir karena mengubah rincian
+// piutang kondisi awal usaha B, yang tidak dibaca pemeriksaan lain.
+async function verifyContactMerge() {
+  const userB = "b0000000-0000-4000-8000-000000000001";
+  const userA = "a0000000-0000-4000-8000-000000000001";
+  const businessB = "b1000000-0000-4000-8000-000000000001";
+  await client.query(`
+    update public.opening_balances
+    set receivable_details = '[{"name":"Bu Sari","amountIdr":100000},{"name":" sari ","amountIdr":40000}]'::jsonb
+    where business_id = '${businessB}'
+  `);
+  const piutang = async () => (await asAuthenticated(
+    userB,
+    `select name, balance_idr::bigint as balance from public.fn_contact_balances('${businessB}') where kind = 'PIUTANG' and lower(name) like '%sari%' order by name`,
+  )).rows.map((row) => `${row.name}=${row.balance}`);
+
+  assert.deepEqual(await piutang(), ["Bu Sari=100000", "sari=40000"], "before merging, two spellings are two people");
+  await asAuthenticatedCommitted(userB, "select public.merge_contact('Sari', 'Bu Sari')");
+  assert.deepEqual(await piutang(), ["Bu Sari=140000"], "after merging, the balances add up under the target name");
+
+  // Tidak bisa menggabungkan ke dirinya sendiri, dan usaha lain tidak ikut.
+  await expectAuthenticatedRejected(userB, "select public.merge_contact('Bu Sari', 'bu sari ')", "22023");
+  assert.equal(
+    await scalar(`select count(*)::int as value from public.counterparty_aliases where business_id <> '${businessB}'`),
+    0,
+    "a merge must only touch the caller's business",
+  );
+  assert.equal(
+    (await asAuthenticated(userA, "select count(*)::int as value from public.counterparty_aliases")).rows[0].value,
+    0,
+    "another owner must not see this business's aliases",
+  );
+
+  await asAuthenticatedCommitted(userB, "select public.unmerge_contact('sari')");
+  assert.deepEqual(await piutang(), ["Bu Sari=100000", "sari=40000"], "unmerging restores the two people");
+}
+
+// 0114: target bulanan -- satu baris per usaha, hanya lewat RPC.
+async function verifyMonthlyTarget() {
+  const userB = "b0000000-0000-4000-8000-000000000001";
+  const userA = "a0000000-0000-4000-8000-000000000001";
+  const businessB = "b1000000-0000-4000-8000-000000000001";
+  await asAuthenticatedCommitted(userB, "select public.set_monthly_target(15000000, 9000000)");
+  await asAuthenticatedCommitted(userB, "select public.set_monthly_target(20000000, null)");
+  const row = (await client.query(`select revenue_target_idr::bigint as revenue, expense_limit_idr as expense from public.monthly_targets where business_id = '${businessB}'`)).rows;
+  assert.equal(row.length, 1, "one target row per business");
+  assert.equal(Number(row[0].revenue), 20000000);
+  assert.equal(row[0].expense, null, "an empty limit clears it");
+  await expectAuthenticatedRejected(userB, "select public.set_monthly_target(-5, null)", "22023");
+  await expectAuthenticatedRejected(userB, "insert into public.monthly_targets (business_id, revenue_target_idr) values ('b1000000-0000-4000-8000-000000000001', 1)", "42501");
+  assert.equal(
+    (await asAuthenticated(userA, "select count(*)::int as value from public.monthly_targets")).rows[0].value,
+    0,
+    "another owner must not see this business's target",
+  );
+  await asAuthenticatedCommitted(userB, "select public.set_monthly_target(null, null)");
+  assert.equal(await scalar(`select count(*)::int as value from public.monthly_targets where business_id = '${businessB}'`), 0, "clearing both removes the row");
+}
+
+// 0115: daftar produk -- hanya lewat RPC, nama unik per usaha.
+async function verifyProducts() {
+  const userB = "b0000000-0000-4000-8000-000000000001";
+  const userA = "a0000000-0000-4000-8000-000000000001";
+  const businessB = "b1000000-0000-4000-8000-000000000001";
+  const created = await asAuthenticatedCommitted(userB, "select public.upsert_product(null, 'Nasi kotak', 'kotak', 15000, 9000) as value");
+  const productId = created.rows[0].value.id;
+  await expectAuthenticatedRejected(userB, "select public.upsert_product(null, ' nasi KOTAK ', null, null, 1)", "23505");
+  await asAuthenticatedCommitted(userB, `select public.upsert_product('${productId}', 'Nasi kotak', 'kotak', 16000, 9500)`);
+  assert.equal(
+    Number(await scalar(`select cost_price_idr::bigint as value from public.products where id = '${productId}'`)),
+    9500,
+    "an edit updates the product in place",
+  );
+  await expectAuthenticatedRejected(userB, "select public.upsert_product(null, 'Es teh', null, 0, 1000)", "22023");
+  await expectAuthenticatedRejected(userB, `insert into public.products (business_id, name, cost_price_idr) values ('${businessB}', 'Liar', 1)`, "42501");
+  assert.equal(
+    (await asAuthenticated(userA, "select count(*)::int as value from public.products")).rows[0].value,
+    0,
+    "another owner must not see this business's products",
+  );
+  await expectAuthenticatedRejected(userA, `select public.archive_product('${productId}')`, "P0002");
+  await asAuthenticatedCommitted(userB, `select public.archive_product('${productId}')`);
+  // Nama produk yang diarsipkan boleh dipakai lagi.
+  await asAuthenticatedCommitted(userB, "select public.upsert_product(null, 'Nasi kotak', 'kotak', 17000, 10000)");
 }
 
 async function verifyLegacyBackfill() {

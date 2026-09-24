@@ -58,3 +58,5 @@ next-env.d.ts
 # agents & html
 .agents/
 *.html
+# Halaman tanpa sinyal untuk service worker Ruang Usaha (public/sw.js).
+!public/offline.html

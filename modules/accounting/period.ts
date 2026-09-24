@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { withPortalRpc } from "@/lib/supabase/portal";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { dueRecurring } from "@/modules/ledger/recurring-repository";
+import { overdueReceivables, RECEIVABLE_REMINDER_DAYS } from "@/modules/ledger/contact-balances";
 import { activeBusinessId } from "@/modules/ledger/ledger-repository";
 import { AccountingOperationError, accountingOperationError } from "@/modules/accounting/accounting-errors";
 import {
@@ -720,7 +721,7 @@ export async function getTaxEstimate(userId: string, asOf: string): Promise<TaxE
  * pengingat hilang sendiri pada detik pemilik mengerjakannya, tidak bisa
  * muncul dua kali, dan tidak pernah basi setelah datanya dikoreksi.
  */
-export type ReminderKind = "HITUNG_STOK" | "TUTUP_KAS" | "DOKUMEN_KEDALUWARSA" | "CATATAN_RUTIN";
+export type ReminderKind = "HITUNG_STOK" | "TUTUP_KAS" | "DOKUMEN_KEDALUWARSA" | "CATATAN_RUTIN" | "TAGIH_PIUTANG";
 
 export type ReminderView = {
   kind: ReminderKind;
@@ -728,7 +729,7 @@ export type ReminderView = {
   dueDate: string;
   daysOverdue: number;
   urgent: boolean;
-  /** Nama dokumen, untuk pengingat masa berlaku. */
+  /** Nama dokumen, catatan rutin, atau pelanggan. */
   subject?: string;
 };
 
@@ -770,5 +771,19 @@ export async function getPendingReminders(userId: string, asOf: string): Promise
     urgent: row.next_due < asOf,
     subject: row.description,
   }));
-  return [...ledgerReminders, ...documentReminders, ...recurringReminders];
+  // Piutang yang sudah lama belum dibayar (dari 0109/0113). Sama: gagal
+  // dibaca tidak menjatuhkan pengingat lain. `dueDate` di sini adalah tanggal
+  // utang tertuanya; `daysOverdue` hari lewat dari batas 30 hari.
+  const balances = await withPortalRpc(client).rpc("fn_contact_balances", { p_business_id: businessId });
+  const receivableRows = balances.error || !Array.isArray(balances.data) ? [] : (balances.data as Array<{ kind: "PIUTANG" | "UTANG"; name: string; balance_idr: number; since: string | null }>)
+    .map((row) => ({ kind: row.kind, name: row.name, balanceIdr: Number(row.balance_idr), since: row.since, lastActivity: null, phone: null }));
+  const receivableReminders: ReminderView[] = overdueReceivables(receivableRows, asOf).map((row) => ({
+    kind: "TAGIH_PIUTANG" as const,
+    periodMonth: (row.since ?? asOf).slice(0, 7),
+    dueDate: row.since ?? asOf,
+    daysOverdue: row.ageDays - RECEIVABLE_REMINDER_DAYS,
+    urgent: row.ageDays >= RECEIVABLE_REMINDER_DAYS * 2,
+    subject: row.name,
+  }));
+  return [...ledgerReminders, ...documentReminders, ...recurringReminders, ...receivableReminders];
 }

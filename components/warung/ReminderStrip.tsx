@@ -25,7 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarCheck, ChevronRight, FileWarning, Package, Repeat } from "lucide-react";
+import { CalendarCheck, ChevronRight, FileWarning, HandCoins, Package, Repeat } from "lucide-react";
 import Link from "next/link";
 import { AccountingClientError, getRemindersClient } from "@/modules/accounting/accounting-client";
 import type { ReminderKind, ReminderView } from "@/modules/accounting/period";
@@ -77,6 +77,14 @@ export function reminderGroupText(group: ReminderGroup): { title: string; becaus
       because: "Biaya rutin yang lupa dicatat membuat untung bulan ini terlihat lebih besar dari kenyataan. Satu ketukan, nominalnya boleh diubah.",
     };
   }
+  if (group.kind === "TAGIH_PIUTANG") {
+    return {
+      title: count === 1
+        ? `Tagih ${group.items[0].subject ?? "pelanggan"} — belum bayar sejak ${dayLabel(group.items[0].dueDate)}`
+        : `${count} pelanggan belum bayar lebih dari sebulan`,
+      because: "Makin lama piutang dibiarkan, makin sulit ditagih. Buka Utang piutang untuk menagih lewat WhatsApp atau mencatat pelunasannya.",
+    };
+  }
   if (group.kind === "DOKUMEN_KEDALUWARSA") {
     const first = group.items[0];
     const expired = first.daysOverdue > 0 || first.dueDate < jakartaDate();
@@ -110,13 +118,14 @@ export function reminderHref(kind: ReminderKind, dueDate?: string): string {
   // ditutup adalah dagangan kemarin, dan dialog harus membuka hari itu.
   if (kind === "DOKUMEN_KEDALUWARSA") return "/umkm/profil/dokumen";
   if (kind === "CATATAN_RUTIN") return "/umkm/catat/rutin";
+  if (kind === "TAGIH_PIUTANG") return "/umkm/laporan?tab=utang-piutang";
   return kind === "TUTUP_KAS" && dueDate
     ? `/umkm/laporan?tab=kas&tutup-kas=${dueDate}`
     : "/umkm/laporan";
 }
 
 export function groupReminders(reminders: ReminderView[]): ReminderGroup[] {
-  const order: ReminderKind[] = ["CATATAN_RUTIN", "TUTUP_KAS", "HITUNG_STOK", "DOKUMEN_KEDALUWARSA"];
+  const order: ReminderKind[] = ["CATATAN_RUTIN", "TUTUP_KAS", "TAGIH_PIUTANG", "HITUNG_STOK", "DOKUMEN_KEDALUWARSA"];
   return order
     .map((kind) => {
       const items = reminders.filter((item) => item.kind === kind);
@@ -152,7 +161,7 @@ export function ReminderStrip({ asOf = jakartaDate() }: { asOf?: string }) {
     <section aria-label="Yang perlu dikerjakan" className="space-y-2">
       {groups.map((group) => {
         const { title, because } = reminderGroupText(group);
-        const Icon = group.kind === "HITUNG_STOK" ? Package : group.kind === "DOKUMEN_KEDALUWARSA" ? FileWarning : group.kind === "CATATAN_RUTIN" ? Repeat : CalendarCheck;
+        const Icon = group.kind === "HITUNG_STOK" ? Package : group.kind === "DOKUMEN_KEDALUWARSA" ? FileWarning : group.kind === "CATATAN_RUTIN" ? Repeat : group.kind === "TAGIH_PIUTANG" ? HandCoins : CalendarCheck;
         const shown = group.items.slice(0, maxDatesShown);
         const hidden = group.items.length - shown.length;
         return (
@@ -176,10 +185,10 @@ export function ReminderStrip({ asOf = jakartaDate() }: { asOf?: string }) {
                 <ul className="mt-2 flex flex-wrap gap-1.5">
                   {shown.map((item) => (
                     <li
-                      key={`${item.kind}-${item.dueDate}`}
+                      key={`${item.kind}-${item.dueDate}-${item.subject ?? ""}`}
                       className="rounded-full border border-umkm-line bg-white px-2 py-0.5 text-xs font-bold text-umkm-muted"
                     >
-                      {group.kind === "HITUNG_STOK" ? monthText(item.periodMonth) : group.kind === "DOKUMEN_KEDALUWARSA" || group.kind === "CATATAN_RUTIN" ? `${item.subject ?? "Dokumen"} · ${dayLabel(item.dueDate)}` : dayLabel(item.dueDate)}
+                      {group.kind === "HITUNG_STOK" ? monthText(item.periodMonth) : group.kind === "TAGIH_PIUTANG" ? `${item.subject ?? "Pelanggan"} · sejak ${dayLabel(item.dueDate)}` : group.kind === "DOKUMEN_KEDALUWARSA" || group.kind === "CATATAN_RUTIN" ? `${item.subject ?? "Dokumen"} · ${dayLabel(item.dueDate)}` : dayLabel(item.dueDate)}
                     </li>
                   ))}
                   {hidden > 0 && (

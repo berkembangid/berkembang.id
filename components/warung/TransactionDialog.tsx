@@ -4,6 +4,7 @@ import { CheckCircle2, LoaderCircle } from "lucide-react";
 import { FormDialog } from "@/components/ui/dialog";
 import { CategoryChips, emptySelection, type CategorySelection } from "@/components/warung/CategoryChips";
 import { InlineMoneyInput } from "@/components/warung/MoneyInput";
+import { ContactNameInput } from "@/components/warung/ContactNameInput";
 import type { AccountingPaymentMethod, AccountingSector } from "@/modules/accounting/coa";
 import { normalizeCategory } from "@/modules/accounting/templates";
 import {
@@ -144,7 +145,7 @@ export function TransactionDialog({ open, form, setForm, editing, busy, sector, 
             </select>
           </Field>
           <Field label="Pelanggan / pemasok" htmlFor="manual-pihak">
-            <input id="manual-pihak" value={form.counterparty} onChange={(e) => setForm((f) => ({ ...f, counterparty: e.target.value }))} placeholder="Boleh dikosongkan" className={inputClass} />
+            <ContactNameInput id="manual-pihak" value={form.counterparty} onChange={(value) => setForm((f) => ({ ...f, counterparty: value }))} placeholder="Boleh dikosongkan" className={inputClass} />
           </Field>
         </div>
         {editing && (

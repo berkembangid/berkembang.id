@@ -2,7 +2,8 @@ import type { ZodError } from "zod";
 
 export type LedgerErrorCode = "UNAUTHENTICATED" | "VALIDATION_FAILED" | "BUSINESS_ACCESS_DENIED" |
   "TRANSACTION_ACCESS_DENIED" | "TRANSACTION_NOT_FOUND" | "TRANSACTION_CANCELLED" |
-  "TRANSACTION_DATE_CLOSED" | "CHANGE_REASON_REQUIRED" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";
+  "TRANSACTION_DATE_CLOSED" | "CHANGE_REASON_REQUIRED" | "PRODUCT_NAME_TAKEN" | "PRODUCT_NOT_FOUND" |
+  "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";
 
 const definitions: Record<LedgerErrorCode, { status: number; message: string; retryable: boolean }> = {
   UNAUTHENTICATED: { status: 401, message: "Sesi berakhir. Silakan masuk kembali.", retryable: false },
@@ -13,6 +14,8 @@ const definitions: Record<LedgerErrorCode, { status: number; message: string; re
   TRANSACTION_CANCELLED: { status: 409, message: "Transaksi ini sudah dibatalkan.", retryable: false },
   TRANSACTION_DATE_CLOSED: { status: 409, message: "Kas tanggal ini sudah ditutup. Batalkan transaksi lalu buat koreksi baru.", retryable: false },
   CHANGE_REASON_REQUIRED: { status: 400, message: "Tuliskan alasan perubahan minimal 3 karakter.", retryable: false },
+  PRODUCT_NAME_TAKEN: { status: 409, message: "Nama produk ini sudah ada di daftar. Ubah yang sudah ada, atau pakai nama lain.", retryable: false },
+  PRODUCT_NOT_FOUND: { status: 404, message: "Produk ini tidak ditemukan. Mungkin sudah diarsipkan.", retryable: false },
   SERVICE_UNAVAILABLE: { status: 503, message: "Buku kas sementara belum dapat diakses. Silakan coba lagi.", retryable: true },
   INTERNAL_ERROR: { status: 500, message: "Terjadi gangguan saat memproses buku kas.", retryable: true },
 };

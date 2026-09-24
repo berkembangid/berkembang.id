@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownLeft, ArrowUpRight, BarChart3, Camera, Download, FileText, History, LoaderCircle,
@@ -168,6 +169,11 @@ function TransactionRow({ transaction, locked, busy, onEdit, onCancel, onAttache
         )}
         {!cancelled && (
           <>
+            {income && (
+              <Link href={`/umkm/nota/${transaction.id}`} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-umkm-success hover:bg-umkm-success-soft">
+                <Receipt size={14} aria-hidden /> Nota
+              </Link>
+            )}
             <button type="button" onClick={() => toggle("evidence")} disabled={busy} aria-expanded={panel === "evidence"} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-umkm-brand hover:bg-umkm-brand-soft disabled:opacity-40">
               <Camera size={14} aria-hidden /> Bukti
             </button>
